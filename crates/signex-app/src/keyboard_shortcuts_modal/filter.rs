@@ -85,15 +85,45 @@ impl ShortcutSheet {
     }
 }
 
-/// One category as the sheet shows it: the rows in scope that match.
+/// One command as the sheet lists it (mockup row 13, #3047): one row with
+/// every key the command has in the scope, in profile order. A key bound
+/// in two contexts is listed once.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ShownSection<'a> {
-    pub category: &'a str,
+pub struct ShownEntry<'a> {
     pub rows: Vec<&'a KeymapEditorRow>,
 }
 
-/// The sections the sheet shows, how many rows they hold and how many rows
-/// the scope has without the filter.
+impl<'a> ShownEntry<'a> {
+    /// The command's label, as its first row writes it.
+    pub fn label(&self) -> &'a str {
+        self.rows
+            .first()
+            .copied()
+            .map_or("", |row| row.label.as_str())
+    }
+
+    /// Whether `row` is a key of this entry's command: the same command
+    /// id, or for rows without one the same label.
+    fn takes(&self, row: &KeymapEditorRow) -> bool {
+        self.rows
+            .first()
+            .is_some_and(|first| match (&first.command, &row.command) {
+                (Some(a), Some(b)) => a == b,
+                (None, None) => first.label == row.label,
+                _ => false,
+            })
+    }
+}
+
+/// One category as the sheet shows it: the commands in scope that match.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ShownSection<'a> {
+    pub category: &'a str,
+    pub entries: Vec<ShownEntry<'a>>,
+}
+
+/// The sections the sheet shows, how many commands they hold and how many
+/// commands the scope has without the filter.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Listing<'a> {
     pub sections: Vec<ShownSection<'a>>,
@@ -101,9 +131,10 @@ pub struct Listing<'a> {
     pub total: usize,
 }
 
-/// The rows of `sections` in `sheet`'s scope that match its filter, by
-/// [`KeymapEditorRow::matches_query_in`] (label, key or command id). A
-/// category with no such row is left out.
+/// The commands of `sections` in `sheet`'s scope with a key that matches
+/// its filter, by [`KeymapEditorRow::matches_query_in`] (label, key or
+/// command id). A matching command shows all its keys; a category with no
+/// such command is left out.
 pub fn listing<'a>(
     i18n: &I18n,
     sections: &'a [ShortcutSection],
@@ -112,18 +143,19 @@ pub fn listing<'a>(
     let (mut shown, mut total) = (0, 0);
     let mut out = Vec::new();
     for section in sections {
-        let mut rows = Vec::new();
-        for row in section.rows.iter().filter(|r| sheet.scope.shows(r.context)) {
-            total += 1;
-            if row.matches_query_in(i18n, &sheet.filter) {
-                rows.push(row);
-            }
-        }
-        shown += rows.len();
-        if !rows.is_empty() {
+        let mut entries = commands_in_scope(section, sheet.scope);
+        total += entries.len();
+        entries.retain(|entry| {
+            entry
+                .rows
+                .iter()
+                .any(|row| row.matches_query_in(i18n, &sheet.filter))
+        });
+        shown += entries.len();
+        if !entries.is_empty() {
             out.push(ShownSection {
                 category: &section.category,
-                rows,
+                entries,
             });
         }
     }
@@ -134,17 +166,37 @@ pub fn listing<'a>(
     }
 }
 
+/// The rows of `section` that `scope` shows, one entry per command.
+fn commands_in_scope(section: &ShortcutSection, scope: ShortcutScope) -> Vec<ShownEntry<'_>> {
+    let mut entries: Vec<ShownEntry<'_>> = Vec::new();
+    for row in section.rows.iter().filter(|r| scope.shows(r.context)) {
+        match entries.iter_mut().find(|entry| entry.takes(row)) {
+            Some(entry) => {
+                if !entry
+                    .rows
+                    .iter()
+                    .any(|key| key.trigger_config == row.trigger_config)
+                {
+                    entry.rows.push(row);
+                }
+            }
+            None => entries.push(ShownEntry { rows: vec![row] }),
+        }
+    }
+    entries
+}
+
 /// Where the right column starts: the left column takes whole sections
-/// until it holds at least half the rows, so the two columns end near the
-/// same height.
+/// until it holds at least half the commands, so the two columns end near
+/// the same height.
 pub fn column_split(sections: &[ShownSection<'_>]) -> usize {
-    let total: usize = sections.iter().map(|s| s.rows.len()).sum();
+    let total: usize = sections.iter().map(|s| s.entries.len()).sum();
     let mut left = 0;
     for (index, section) in sections.iter().enumerate() {
         if 2 * left >= total {
             return index;
         }
-        left += section.rows.len();
+        left += section.entries.len();
     }
     sections.len()
 }
@@ -226,12 +278,28 @@ mod tests {
         }
     }
 
+    fn entries<'a>(listing: &'a Listing<'a>) -> Vec<&'a ShownEntry<'a>> {
+        listing.sections.iter().flat_map(|s| &s.entries).collect()
+    }
+
     fn rows<'a>(listing: &'a Listing<'a>) -> Vec<&'a KeymapEditorRow> {
-        listing
-            .sections
-            .iter()
-            .flat_map(|s| s.rows.iter().copied())
+        entries(listing)
+            .into_iter()
+            .flat_map(|e| e.rows.iter().copied())
             .collect()
+    }
+
+    /// How many commands `section` has: rows of one command id, or without
+    /// one of one label, count once.
+    fn commands_of(section: &ShortcutSection) -> usize {
+        let mut seen = std::collections::BTreeSet::new();
+        for row in &section.rows {
+            seen.insert(match &row.command {
+                Some(command) => (command.as_str().to_string(), String::new()),
+                None => (String::new(), row.label.clone()),
+            });
+        }
+        seen.len()
     }
 
     #[test]
@@ -240,7 +308,7 @@ mod tests {
         let listing = listing(en(), &sections, &sheet("undo", ShortcutScope::All));
         let found = rows(&listing);
         assert!(!found.is_empty());
-        assert_eq!(listing.shown, found.len());
+        assert_eq!(listing.shown, entries(&listing).len());
         let undo = found
             .iter()
             .find(|r| r.label.to_lowercase().contains("undo"))
@@ -290,7 +358,7 @@ mod tests {
     fn an_empty_filter_lists_every_row_of_the_scope() {
         let sections = sections();
         let listing = listing(en(), &sections, &sheet("  ", ShortcutScope::All));
-        let every: usize = sections.iter().map(|s| s.rows.len()).sum();
+        let every: usize = sections.iter().map(commands_of).sum();
         assert_eq!(listing.shown, every);
         assert_eq!(listing.total, every);
         assert!(!sheet("  ", ShortcutScope::All).is_filtered());
@@ -399,12 +467,72 @@ mod tests {
             .iter()
             .map(|s| ShownSection {
                 category: &s.category,
-                rows: s.rows.iter().collect(),
+                entries: s
+                    .rows
+                    .iter()
+                    .map(|row| ShownEntry { rows: vec![row] })
+                    .collect(),
             })
             .collect();
         // 10 rows: the 5-row section fills the left half.
         assert_eq!(column_split(&shown), 1);
         assert_eq!(column_split(&shown[1..]), 3);
         assert_eq!(column_split(&[]), 0);
+    }
+
+    /// A section where the first row's command has a second key
+    /// (`F12 F11`), the same key again in another context, and one other
+    /// command.
+    fn two_key_section() -> ShortcutSection {
+        let rows = KeymapEditorModel::built_ins().expect("built-ins").rows();
+        let first = rows
+            .iter()
+            .find(|r| {
+                r.command.is_some()
+                    && r.context == ShortcutContext::Schematic
+                    && !r.trigger_config.trim().is_empty()
+            })
+            .expect("a schematic command")
+            .clone();
+        let other = rows
+            .iter()
+            .find(|r| r.command.is_some() && r.command != first.command)
+            .expect("another command")
+            .clone();
+        let mut second_key = first.clone();
+        second_key.trigger = "F12 F11".into();
+        second_key.trigger_english = "F12 F11".into();
+        second_key.trigger_config = "F12 F11".into();
+        let mut same_key_again = first.clone();
+        same_key_again.context = ShortcutContext::Global;
+        ShortcutSection {
+            category: first.category.clone(),
+            rows: vec![first, second_key, same_key_again, other],
+        }
+    }
+
+    /// Mockup row 13, #3047: a command with two keys is one row showing
+    /// both, a key bound in two contexts shows once, and the count counts
+    /// commands.
+    #[test]
+    fn a_command_with_two_keys_is_one_row_with_both_keys() {
+        let sections = vec![two_key_section()];
+        let first = &sections[0].rows[0];
+        let listed = listing(en(), &sections, &sheet("", ShortcutScope::All));
+        assert_eq!((listed.shown, listed.total), (2, 2));
+        let commands = entries(&listed);
+        assert_eq!(commands[0].label(), first.label);
+        let keys: Vec<&str> = commands[0]
+            .rows
+            .iter()
+            .map(|r| r.trigger_config.as_str())
+            .collect();
+        assert_eq!(keys, [first.trigger_config.as_str(), "F12 F11"]);
+        assert_eq!(commands[1].rows.len(), 1);
+
+        // A filter on the second key lists the command with both keys.
+        let by_key = listing(en(), &sections, &sheet("F12 F11", ShortcutScope::All));
+        assert_eq!((by_key.shown, by_key.total), (1, 2));
+        assert_eq!(entries(&by_key)[0].rows.len(), 2);
     }
 }

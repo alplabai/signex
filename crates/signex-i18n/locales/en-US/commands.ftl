@@ -740,8 +740,8 @@ cmd-category-help = Help
 cmd-category-design = Design
 cmd-category-place = Place
 cmd-category-navigation = Navigation
-cmd-category-pcb-sync = Pcb Sync
-cmd-category-pcb = Pcb
+cmd-category-pcb-sync = PCB Sync
+cmd-category-pcb = PCB
 cmd-category-uncategorized = Uncategorized
 
 # The placeholder label of a command row that has none (never shown for a catalog command).

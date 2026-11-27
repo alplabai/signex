@@ -1,8 +1,7 @@
 //! Keyboard Shortcuts pane handlers — every `PrefMsg::Keymap*` arm.
 //!
 //! Split out of the flat `handlers/preferences.rs` when it crossed the
-//! 1000-line god-file cap (#603). Pure code motion: every arm body below
-//! is byte-identical to what it was in that file.
+//! 1000-line god-file cap (#603). The status line is catalog text (#3050).
 //!
 //! The caller routes here by listing all 19 `PrefMsg::Keymap*` variants
 //! explicitly rather than with a `_ =>` catch-all, so its match stays
@@ -10,10 +9,20 @@
 //! error there instead of a message silently arriving here.
 
 use iced::Task;
-use signex_i18n::ids;
+use signex_i18n::{MessageId, Translatable, ids, shortcut_ids as sids};
 
 use super::super::super::*;
 use crate::preferences::PrefMsg;
+
+/// The status message `id` naming `error` as its reason (#3050).
+pub(super) fn keymap_failure(id: MessageId, error: impl std::fmt::Display) -> Translatable {
+    Translatable::new(id).arg("error", error.to_string())
+}
+
+/// The status message `id` naming the file `path` (#3050).
+pub(super) fn keymap_path_status(id: MessageId, path: &std::path::Path) -> Translatable {
+    Translatable::new(id).arg("path", path.display().to_string())
+}
 
 impl Signex {
     /// The Keyboard shortcuts page's own view state (mockup row 145): the context
@@ -58,8 +67,10 @@ impl Signex {
                         self.recompute_preferences_dirty();
                     }
                     Err(error) => {
-                        self.ui_state.preferences_keymap_status =
-                            format!("Could not switch profile: {error}");
+                        self.ui_state.preferences_keymap_status.set(keymap_failure(
+                            sids::PREF_KEYMAP_STATUS_SWITCH_FAILED,
+                            error,
+                        ));
                     }
                 }
             }
@@ -86,13 +97,16 @@ impl Signex {
                             .create_custom_from_active(id, name)
                         {
                             Ok(()) => {
-                                self.ui_state.preferences_keymap_status =
-                                    "Created a custom profile draft.".to_string();
+                                self.ui_state
+                                    .preferences_keymap_status
+                                    .set(Translatable::new(sids::PREF_KEYMAP_STATUS_CREATED));
                                 self.recompute_preferences_dirty();
                             }
                             Err(error) => {
-                                self.ui_state.preferences_keymap_status =
-                                    format!("Could not create profile: {error}");
+                                self.ui_state.preferences_keymap_status.set(keymap_failure(
+                                    sids::PREF_KEYMAP_STATUS_CREATE_FAILED,
+                                    error,
+                                ));
                             }
                         }
                         break;
@@ -118,19 +132,24 @@ impl Signex {
                         .delete_custom_profile(&id)
                     {
                         Ok(()) => {
-                            self.ui_state.preferences_keymap_status =
-                                "Deleted the custom profile draft.".to_string();
+                            self.ui_state
+                                .preferences_keymap_status
+                                .set(Translatable::new(sids::PREF_KEYMAP_STATUS_DELETED));
                             self.recompute_preferences_dirty();
                         }
                         Err(error) => {
-                            self.ui_state.preferences_keymap_status =
-                                format!("Could not delete profile: {error}");
+                            self.ui_state.preferences_keymap_status.set(keymap_failure(
+                                sids::PREF_KEYMAP_STATUS_DELETE_FAILED,
+                                error,
+                            ));
                         }
                     }
                 }
             }
             PrefMsg::KeymapRestoreFromBackup => {
-                let Some(bak) = self.displayed_keymap_backup("restore from") else {
+                let Some(bak) =
+                    self.displayed_keymap_backup(sids::PREF_KEYMAP_STATUS_NO_BACKUP_RESTORE)
+                else {
                     return Task::none();
                 };
                 // Read it through the normal loader rather than copying
@@ -147,18 +166,19 @@ impl Signex {
                             "the keyboard-shortcuts backup could not be read; both files were \
                              left exactly as they are"
                         );
-                        self.ui_state.preferences_keymap_status = format!(
-                            "Could not restore from the backup: {error}. Both files were left \
-                             as they are."
-                        );
+                        self.ui_state.preferences_keymap_status.set(keymap_failure(
+                            sids::PREF_KEYMAP_STATUS_RESTORE_UNREADABLE,
+                            error,
+                        ));
                         return Task::none();
                     }
                 };
                 let Some(live) = crate::keymap::config_path() else {
-                    self.ui_state.preferences_keymap_status =
-                        "Could not restore from the backup: there is no config directory to \
-                         write to."
-                            .to_string();
+                    self.ui_state
+                        .preferences_keymap_status
+                        .set(Translatable::new(
+                            sids::PREF_KEYMAP_STATUS_RESTORE_NO_CONFIG,
+                        ));
                     return Task::none();
                 };
                 match crate::keymap::restore_profiles_at(&live, &restored.set) {
@@ -170,35 +190,34 @@ impl Signex {
                         self.ui_state.keymap_load_error = None;
                         self.refresh_keymap_backup();
                         self.recompute_preferences_dirty();
-                        let kept = previous
-                            .map(|p| {
-                                format!(
-                                    " The shortcuts file it replaced was kept as {}.",
-                                    p.display()
-                                )
-                            })
-                            .unwrap_or_default();
+                        let kept: signex_i18n::Arg = match previous {
+                            Some(p) => {
+                                keymap_path_status(sids::PREF_KEYMAP_STATUS_RESTORED_KEPT, &p)
+                                    .into()
+                            }
+                            None => String::new().into(),
+                        };
                         // A dangling `active_profile` is the one failure
                         // the restore recovers from rather than refusing,
                         // so say it happened — the user's active profile
                         // is not the one the backup asked for.
-                        let reset = restored
-                            .active_profile_reset
-                            .map(|id| {
-                                format!(
-                                    " The backup's active profile \"{id}\" no longer exists, so \
-                                     a built-in one is active."
-                                )
-                            })
-                            .unwrap_or_default();
+                        let reset: signex_i18n::Arg = match restored.active_profile_reset {
+                            Some(id) => Translatable::new(sids::PREF_KEYMAP_STATUS_RESTORED_RESET)
+                                .arg("profile", id.to_string())
+                                .into(),
+                            None => String::new().into(),
+                        };
                         tracing::info!(
                             target: "signex::keymap",
                             path = %bak.display(),
                             "keyboard-shortcut profiles were restored from the backup on the \
                              user's request"
                         );
-                        self.ui_state.preferences_keymap_status =
-                            format!("Keyboard shortcuts restored from the backup.{kept}{reset}");
+                        self.ui_state.preferences_keymap_status.set(
+                            Translatable::new(sids::PREF_KEYMAP_STATUS_RESTORED)
+                                .arg("kept", kept)
+                                .arg("reset", reset),
+                        );
                     }
                     Err(error) => {
                         tracing::error!(
@@ -207,15 +226,17 @@ impl Signex {
                             error = %error,
                             "the restored profiles could not be written; nothing was changed"
                         );
-                        self.ui_state.preferences_keymap_status = format!(
-                            "Could not restore from the backup: the profiles were read but \
-                             could not be written ({error})."
-                        );
+                        self.ui_state.preferences_keymap_status.set(keymap_failure(
+                            sids::PREF_KEYMAP_STATUS_RESTORE_WRITE_FAILED,
+                            error,
+                        ));
                     }
                 }
             }
             PrefMsg::KeymapDiscardBackup => {
-                let Some(bak) = self.displayed_keymap_backup("discard") else {
+                let Some(bak) =
+                    self.displayed_keymap_backup(sids::PREF_KEYMAP_STATUS_NO_BACKUP_DISCARD)
+                else {
                     return Task::none();
                 };
                 match crate::keymap::discard_profile_backup_at(&bak) {
@@ -226,10 +247,12 @@ impl Signex {
                             path = %bak.display(),
                             "the keyboard-shortcuts backup was deleted on the user's request"
                         );
-                        self.ui_state.preferences_keymap_status = format!(
-                            "Deleted the keyboard-shortcuts backup at {}.",
-                            bak.display()
-                        );
+                        self.ui_state
+                            .preferences_keymap_status
+                            .set(keymap_path_status(
+                                sids::PREF_KEYMAP_STATUS_BACKUP_DELETED,
+                                &bak,
+                            ));
                     }
                     Err(error) => {
                         tracing::error!(
@@ -238,8 +261,10 @@ impl Signex {
                             error = %error,
                             "the keyboard-shortcuts backup could not be deleted"
                         );
-                        self.ui_state.preferences_keymap_status =
-                            format!("Could not delete the backup at {}: {error}.", bak.display());
+                        self.ui_state.preferences_keymap_status.set(
+                            keymap_path_status(sids::PREF_KEYMAP_STATUS_BACKUP_DELETE_FAILED, &bak)
+                                .arg("error", error.to_string()),
+                        );
                     }
                 }
             }
@@ -264,8 +289,10 @@ impl Signex {
                 });
             }
             PrefMsg::KeymapProfileUnreadable(reason) => {
-                self.ui_state.preferences_keymap_status =
-                    format!("Could not import keyboard shortcuts: {reason}");
+                self.ui_state.preferences_keymap_status.set(keymap_failure(
+                    sids::PREF_KEYMAP_STATUS_IMPORT_FAILED,
+                    reason,
+                ));
             }
             PrefMsg::KeymapProfileLoaded(source) => {
                 // #1378 - the recorder holds a slot into the profile it was
@@ -277,13 +304,16 @@ impl Signex {
                         .insert_custom_profile(profile)
                 }) {
                     Ok(()) => {
-                        self.ui_state.preferences_keymap_status =
-                            "Imported a custom keyboard shortcut profile.".to_string();
+                        self.ui_state
+                            .preferences_keymap_status
+                            .set(Translatable::new(sids::PREF_KEYMAP_STATUS_IMPORTED));
                         self.recompute_preferences_dirty();
                     }
                     Err(error) => {
-                        self.ui_state.preferences_keymap_status =
-                            format!("Could not import keyboard shortcuts: {error}");
+                        self.ui_state.preferences_keymap_status.set(keymap_failure(
+                            sids::PREF_KEYMAP_STATUS_IMPORT_FAILED,
+                            error,
+                        ));
                     }
                 }
             }
@@ -336,16 +366,18 @@ impl Signex {
                         });
                     }
                     Err(error) => {
-                        self.ui_state.preferences_keymap_status =
-                            format!("Could not export keyboard shortcuts: {error}");
+                        self.ui_state.preferences_keymap_status.set(keymap_failure(
+                            sids::PREF_KEYMAP_STATUS_EXPORT_FAILED,
+                            error,
+                        ));
                     }
                 }
             }
             PrefMsg::KeymapExportFinished(result) => {
-                self.ui_state.preferences_keymap_status = match result {
-                    Ok(path) => format!("Exported keyboard shortcuts to {}.", path.display()),
-                    Err(detail) => format!("Could not export keyboard shortcuts: {detail}"),
-                };
+                self.ui_state.preferences_keymap_status.set(match result {
+                    Ok(path) => keymap_path_status(sids::PREF_KEYMAP_STATUS_EXPORTED, &path),
+                    Err(detail) => keymap_failure(sids::PREF_KEYMAP_STATUS_EXPORT_FAILED, detail),
+                });
             }
             PrefMsg::KeymapRecorderOpen {
                 slot,
@@ -409,8 +441,9 @@ impl Signex {
                     return Task::none();
                 };
                 if recorder.strokes.is_empty() && recorder.unassigned {
-                    self.ui_state.preferences_keymap_status =
-                        "Record at least one keystroke before applying.".to_string();
+                    self.ui_state
+                        .preferences_keymap_status
+                        .set(Translatable::new(sids::PREF_KEYMAP_STATUS_RECORD_FIRST));
                     return Task::none();
                 }
                 let editor = &mut self.ui_state.preferences_keymap_editor;
@@ -436,8 +469,10 @@ impl Signex {
                         self.ui_state.preferences_keymap_recorder = None;
                     }
                     Err(error) => {
-                        self.ui_state.preferences_keymap_status =
-                            format!("Invalid shortcut: {error}");
+                        self.ui_state.preferences_keymap_status.set(keymap_failure(
+                            sids::PREF_KEYMAP_STATUS_INVALID_SHORTCUT,
+                            error,
+                        ));
                         self.recompute_preferences_dirty();
                     }
                 }

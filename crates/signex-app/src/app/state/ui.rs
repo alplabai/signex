@@ -415,8 +415,8 @@ pub struct UiState {
     /// Status / error line shown under the Keyboard Shortcuts pane —
     /// carries parse failures, save failures and profile actions so no
     /// error is swallowed silently. Empty renders the default conflict
-    /// summary instead.
-    pub preferences_keymap_status: String,
+    /// summary instead. Catalog text, rendered when drawn (#3050).
+    pub preferences_keymap_status: super::KeymapStatus,
     /// Boot-time keyboard-shortcut load failure, carried for the life of
     /// the session (#595). `Some` means a shortcuts file EXISTS on disk
     /// and could not be honoured — unreadable, unparseable, or naming an
@@ -960,6 +960,10 @@ mod tests {
             (
                 "preferences_pcb_defaults",
                 field_size(|ui| &ui.preferences_pcb_defaults),
+            ),
+            (
+                "preferences_keymap_status",
+                field_size(|ui| &ui.preferences_keymap_status),
             ),
         ];
         for (name, size) in sizes {

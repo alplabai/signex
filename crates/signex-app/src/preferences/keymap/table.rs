@@ -6,6 +6,7 @@
 //! table just under the row it edits.
 
 use iced::alignment::Vertical;
+use iced::widget::text::Ellipsis;
 use iced::widget::{Column, Row, Space, column, container, hover, mouse_area, row, stack};
 use iced::{Alignment, Background, Border, Color, Element, Font, Length, Theme, Widget as _};
 use signex_i18n::{I18n, Localized, MessageId, UserText, ids, shortcut_ids as sids, t};
@@ -206,23 +207,15 @@ fn table_row<'a>(
     tokens: &ThemeTokens,
 ) -> Element<'a, PrefMsg> {
     let r = tokens::resolve(tokens);
-    let (ink, ink4) = (ti(tokens.text), r.ink4);
-    let plain = |label: String, color: Color| -> Element<'a, PrefMsg> {
-        // raw: the command label and category title are rendered from the
-        // catalog when the row model is built (#2057).
-        text(raw(label))
-            .size(TS.body)
-            .color(color)
-            .wrapping(iced::widget::text::Wrapping::None)
-            .boxed()
-    };
+    let ink4 = r.ink4;
+    let category: Element<'a, PrefMsg> = plain(category_title(i18n, &row_model.category), ink4)
+        .ellipsis(Ellipsis::End)
+        .width(Length::Fill)
+        .boxed();
     let [command_w, category_w, context_w, shortcut_w, state_w] = COLUMN_SHARES;
     let cells = row![
-        cell(plain(row_model.label.clone(), ink), command_w),
-        cell(
-            plain(category_title(i18n, &row_model.category), ink4),
-            category_w
-        ),
+        cell(command_label(row_model.label.clone(), tokens), command_w),
+        cell(category, category_w),
         cell(
             text(context_label(i18n, row_model.context))
                 .size(TS.body)
@@ -283,6 +276,31 @@ fn table_row<'a>(
         .boxed(),
         None => line,
     }
+}
+
+/// A one-line body label in `color`.
+pub(super) fn plain<'a>(label: String, color: Color) -> iced::widget::Text<'a, Theme> {
+    // raw: the command label and category title are rendered from the
+    // catalog when the row model is built (#2057).
+    text(raw(label))
+        .size(TS.body)
+        .color(color)
+        .wrapping(iced::widget::text::Wrapping::None)
+}
+
+/// The Command cell (#3049): a name too long for the column ends in an
+/// ellipsis, and the full name shows in a tooltip.
+pub(super) fn command_label<'a>(label: String, tokens: &ThemeTokens) -> Element<'a, PrefMsg> {
+    let ink = ti(tokens.text);
+    let name: Element<'a, PrefMsg> = plain(label.clone(), ink)
+        .ellipsis(Ellipsis::End)
+        .width(Length::Fill)
+        .boxed();
+    let full: Element<'a, PrefMsg> = container(plain(label, ink).size(TS.caption))
+        .padding([SP.xs, SP.m])
+        .style(styles::context_menu(tokens))
+        .boxed();
+    tooltip(name, full, tooltip::Position::FollowCursor).boxed()
 }
 
 /// The recorder-open message of a row the user can re-record: a keyboard

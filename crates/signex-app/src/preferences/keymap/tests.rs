@@ -433,3 +433,126 @@ fn the_recorder_popover_keeps_clear_stop_cancel_and_ok() {
     assert_eq!(record.label, sids::PREF_KEYMAP_RECORD);
     assert!(matches!(record.message, PrefMsg::KeymapRecorderStart));
 }
+
+/// #3048: the empty box asks for a keystroke while it records, and once
+/// stopped names Record, the button the popover then shows.
+#[test]
+fn the_empty_recorder_hint_matches_its_state() {
+    use signex_i18n::shortcut_ids as sids;
+    assert_eq!(
+        recorder::empty_hint(true),
+        sids::PREF_KEYMAP_RECORDER_WAITING
+    );
+    assert_eq!(recorder::empty_hint(false), sids::PREF_KEYMAP_RECORDER_HINT);
+    let [_, toggle, _, _] = recorder::recorder_actions(false);
+    assert_eq!(toggle.label, sids::PREF_KEYMAP_RECORD);
+    let en = signex_i18n::I18n::en_us_ref();
+    assert!(
+        en.message_plain(recorder::empty_hint(false), &[])
+            .contains(&en.message_plain(toggle.label, &[])),
+        "the stopped hint names the Record button"
+    );
+}
+
+/// The texts of the overlays `element` opens with the pointer at `at`: a
+/// tooltip's content once hovered.
+fn tooltip_texts<M>(
+    mut element: Element<'_, M>,
+    window: iced::Size,
+    at: iced::Point,
+) -> Vec<String> {
+    use iced::Rectangle;
+    use iced::advanced::shell::{Bus, Waker};
+    use iced::advanced::widget::operation::Text;
+    use iced::advanced::widget::{Id, Operation, Tree};
+    use iced::advanced::{Layout, Shell, layout, mouse};
+
+    struct Texts(Vec<String>);
+    impl<T> Operation<T> for Texts {
+        fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation<T>)) {
+            operate(self);
+        }
+        fn text(&mut self, _id: Option<&Id>, _bounds: Rectangle, text: &mut dyn Text) {
+            self.0.push(text.text().into_owned());
+        }
+    }
+
+    let renderer = crate::layout_probe::headless_renderer();
+    let mut tree = Tree::new(&element);
+    tree.diff(&mut element);
+    element.layout(
+        &mut tree,
+        &renderer,
+        &layout::Limits::new(iced::Size::ZERO, window),
+    );
+    let layout = Layout::new(tree.size);
+    let viewport = Rectangle::with_size(window);
+    let mut bus = Bus::new();
+    let moved = iced::Event::Mouse(mouse::Event::CursorMoved { position: at });
+    element.update(
+        &mut tree,
+        &moved,
+        layout,
+        mouse::Cursor::Available(at),
+        &renderer,
+        &mut Shell::new(&iced::window::Headless, Waker::noop(), &mut bus),
+        &viewport,
+    );
+    let mut texts = Texts(Vec::new());
+    for mut overlay in element.overlay(
+        &mut tree,
+        layout,
+        &renderer,
+        &viewport,
+        iced::Vector::ZERO,
+        window,
+    ) {
+        overlay.as_overlay_mut().operate(&renderer, &mut texts);
+    }
+    texts.0
+}
+
+/// #3049: a command name too long for its column is cut with an ellipsis,
+/// a short one is drawn whole, and hovering the name shows it in full.
+#[test]
+fn a_long_command_name_ends_in_an_ellipsis_with_the_full_name_on_hover() {
+    use iced::widget::container;
+    use signex_types::theme::{ThemeId, theme_tokens};
+    let tokens = theme_tokens(ThemeId::GraphiteLight);
+    let window = iced::Size::new(160.0, 24.0);
+    let long = "Add teardrops where tracks of the selected net meet their pads";
+    let draw = |label: &str| {
+        crate::layout_probe::draw_pixels(table::command_label(label.to_string(), &tokens), window)
+    };
+    let clipped = |label: &str| {
+        let plain: Element<'_, PrefMsg> = container(table::plain(
+            label.to_string(),
+            crate::styles::ti(tokens.text),
+        ))
+        .width(iced::Length::Fill)
+        .clip(true)
+        .into();
+        crate::layout_probe::draw_pixels(plain, window)
+    };
+    assert_eq!(
+        draw(long),
+        draw(&format!("{long} and vias")),
+        "the name is cut at its end"
+    );
+    assert_ne!(draw(long), clipped(long), "the cut ends in an ellipsis");
+    assert_eq!(draw("Undo"), clipped("Undo"), "a short name is drawn whole");
+
+    let on_name = iced::Point::new(20.0, window.height / 2.0);
+    let hovered = tooltip_texts(
+        table::command_label(long.to_string(), &tokens),
+        window,
+        on_name,
+    );
+    assert_eq!(hovered, [long], "the tooltip holds the full name");
+    let away = tooltip_texts(
+        table::command_label(long.to_string(), &tokens),
+        window,
+        iced::Point::new(-1.0, -1.0),
+    );
+    assert!(away.is_empty(), "{away:?}");
+}
