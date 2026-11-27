@@ -2,7 +2,7 @@
 //! section header with "+ Add Parameter", the missing-template-slot offer,
 //! and a boxed dense table Key | Value | Unit | ✕. Template rows carry a
 //! "template" pill and no ✕ (but a slot added in this edit keeps one while
-//! still empty); a measurement's number and its menu are one
+//! untouched); a measurement's number and its menu are one
 //! measurement slot (mockup row 139).
 
 use iced::widget::{Column, Row, Space, column, container, row};
@@ -326,7 +326,7 @@ fn param_row<'a>(
 
 /// The ✕ that removes a row. A template row keeps the column empty, its
 /// parameters come from the class, except a slot added in this edit and
-/// still empty, which can be taken back (#2648).
+/// not yet edited, which can be taken back (#2648).
 fn remove_cell<'a>(
     removable: bool,
     key: String,

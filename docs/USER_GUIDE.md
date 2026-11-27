@@ -484,8 +484,8 @@ cell, and the component editor's **Parameters** tab edits the same way. In the
 modal the number and its prefix list form one field; a unit this version does
 not know is shown as written and kept. Parameters that come from the class
 template are marked **template** and cannot be removed there, except one you
-added in this edit with its **+ name** offer and have not filled in yet, which
-keeps its **✕** until you type a value; your own parameters keep their **✕**. If the **Internal PN** you type is already used by
+added in this edit with its **+ name** offer and have not edited yet, which
+keeps its **✕** until you change its value, unit or prefix; your own parameters keep their **✕**. If the **Internal PN** you type is already used by
 another component in the library, the field turns red, says which table has
 it, and the footer counts the problem; **Save** waits until the PN is unique.
 A save the library refuses shows its reason in the same footer spot. In the

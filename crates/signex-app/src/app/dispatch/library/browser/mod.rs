@@ -459,6 +459,7 @@ impl Signex {
                     }
                 }
                 BrowserEditMsg::SetParamValue { key, value } => {
+                    modal.touch_slot(&key);
                     let entry = modal
                         .param_buf
                         .entry(key.clone())
@@ -481,12 +482,14 @@ impl Signex {
                     }
                 }
                 BrowserEditMsg::SetParamUnit { key, unit } => {
+                    modal.touch_slot(&key);
                     modal.unit_menu_open = None;
                     param_commit::pick_unit(modal, &key, unit, template);
                 }
                 BrowserEditMsg::UnitMenuOpened { key } => modal.unit_menu_open = Some(key),
                 BrowserEditMsg::UnitMenuDismissed => modal.unit_menu_open = None,
                 BrowserEditMsg::ParamPrefixPicked { key, prefix } => {
+                    modal.touch_slot(&key);
                     modal.unit_menu_open = None;
                     modal.param_prefix.insert(key.clone(), prefix);
                     param_commit::drop_pending_prefix_letter(modal, &key, template);
