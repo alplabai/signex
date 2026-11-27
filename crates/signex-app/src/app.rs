@@ -141,6 +141,8 @@ pub(crate) use state::volume_case::probe_directory_case;
 pub(crate) use state::ModalId;
 #[cfg(test)]
 mod draft_save_point_tests;
+#[cfg(test)]
+mod footprint_selection_undo_tests;
 pub(crate) mod stitched_netlist;
 mod symbol_draft;
 mod symbol_history;
