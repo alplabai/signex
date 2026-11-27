@@ -264,8 +264,8 @@ impl Signex {
             };
             self.document_state
                 .document_saves
-                .record_failure(path, reason.clone());
-            self.report_save_failure(context, &anyhow::anyhow!(reason));
+                .record_failure(path.clone(), reason.clone());
+            self.report_write_failure(&path, context, &anyhow::anyhow!(reason));
             // The file is unchanged, so an Undo back to the save point that
             // the write was holding dirty may now read clean.
             self.document_state.sync_history_dirty(&outcome_path);

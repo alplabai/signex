@@ -64,12 +64,13 @@ pub struct DrcPanel {
     /// syntax error (none of it applied); see Messages for which.
     pub rules_not_applied: usize,
     pub rule_text_unparsed: bool,
-    /// Counts for the tiles; track width and via size findings are listed
-    /// as rows but not counted here yet. Keepouts are (#2300).
+    /// Counts for the tiles, keepouts too (#2300); `other` counts every
+    /// kind those four do not, such as a part outside its room (#3058).
     pub clearance: usize,
     pub short: usize,
     pub unconnected: usize,
     pub keepout: usize,
+    pub other: usize,
     /// Items, and keepouts, the run could not check (#2300).
     pub skipped: usize,
     pub skipped_keepouts: usize,
@@ -245,6 +246,28 @@ mod tests {
         assert!(busy_texts.iter().all(|t| t != "Run DRC"), "{busy_texts:?}");
         let busy_section = super::super::drc_results::view(&busy);
         assert!(messages_on_click(busy_section, window, "Checking the board...").is_empty());
+    }
+
+    /// #3057 (mockup row 87): the Run DRC label is in the middle of its
+    /// button, not on its top edge. Laid out alone, the button starts at
+    /// the top of the window.
+    #[test]
+    fn the_run_drc_label_is_centred_in_its_button() {
+        let ctx = context(false);
+        let height = crate::styles::ChromeMetrics::DEFAULT.button;
+        let button = super::super::validation_kit::run_button(
+            t!(ctx.i18n, ids::DRC_RUN),
+            "",
+            Some(PanelMsg::RunDrc),
+            &ctx.tokens,
+        );
+        let laid = crate::layout_probe::lay_out_texts(button, iced::Size::new(300.0, 400.0));
+        let label = crate::layout_probe::find(&laid, "Run DRC").bounds;
+        let centre = label.y + label.height / 2.0;
+        assert!(
+            (centre - height / 2.0).abs() < 1.0,
+            "label centre {centre} in a {height} px button"
+        );
     }
 
     /// #2307, #87: with written rules the default-clearance notice says the

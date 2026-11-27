@@ -52,6 +52,43 @@ fn a_footprint_editor_in_front_opens_the_sheet_on_all() {
     assert_eq!(app.ui_state.shortcut_sheet.scope, ShortcutScope::All);
 }
 
+/// Mockup row 13, #3047: the "wire" filter typed through `update` lists
+/// each command once, with every key it has, and counts commands.
+#[test]
+fn a_filter_lists_each_command_once_with_all_its_keys() {
+    let mut app = app();
+    let _ = app.update(Message::Menu(MenuMessage::OpenKeyboardShortcuts));
+    let _ = app.update(Message::Overlay(OverlayMsg::ShortcutsFilterChanged(
+        "wire".into(),
+    )));
+    let ui = &app.ui_state;
+    let sections =
+        super::build_sections_with(&ui.i18n, &ui.keymap_profiles, &ui.extension_commands);
+    let shown = super::filter::listing(&ui.i18n, &sections, &ui.shortcut_sheet);
+    let entries: Vec<_> = shown.sections.iter().flat_map(|s| &s.entries).collect();
+    assert!(!entries.is_empty(), "wire matches a command");
+    assert_eq!(shown.shown, entries.len(), "the count counts commands");
+    let mut commands = std::collections::BTreeSet::new();
+    for entry in &entries {
+        let id = entry.rows[0]
+            .command
+            .as_ref()
+            .map(|c| c.as_str().to_string());
+        assert!(
+            commands.insert((id, entry.label().to_string())),
+            "{} is listed twice",
+            entry.label()
+        );
+        assert!(
+            entry
+                .rows
+                .iter()
+                .all(|row| row.command == entry.rows[0].command),
+            "one entry holds one command's keys"
+        );
+    }
+}
+
 #[test]
 fn the_filter_and_scope_messages_set_the_sheet() {
     let mut app = app();

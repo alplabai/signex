@@ -89,7 +89,9 @@ so the row marked is the newest logged undoable command of that document.
 - **Follow newest** keeps the newest row in view.
 
 With nothing logged yet every count reads 0, the filters are greyed and the
-panel says what it will list.
+panel says what it will list. The card is centred when it fits; in a shorter
+dock it scrolls from its top, so its last line (the `signex-cli commands`
+key) is never cut off.
 
 ## Panel width
 
@@ -97,7 +99,11 @@ All six table columns stay at any width. Command, Arguments and Result shrink
 together to their least widths, then the table scrolls sideways, header and
 rows together. The detail pane takes at most half the panel; its body
 scrolls and Replay and Jump to stay pinned under it, with a failed row's
-Replay hint, so a short dock never hides them. The filter row holds search,
+Replay hint, so a short dock never hides them. A pane under 20 body sizes
+tall (240 px at the 12 px body; the default bottom dock) has no room for
+both, so it scrolls whole with its scrollbar showing: the heading, then
+Replay and Jump to with the hint, then the error, the facts, the arguments
+and Copy as CLI (#3005). The filter row holds search,
 the Source chips, All / Failed / Undone and Follow newest at its right end;
 the search field shrinks first. Whether they share one line is decided at
 layout time from the parts' measured widths (`FitBar` in signex-widgets):

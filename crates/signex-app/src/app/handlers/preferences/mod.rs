@@ -205,12 +205,17 @@ impl Signex {
     /// Discard act on. They never re-scan the directory, since a newer
     /// backup (the one Apply just wrote) is a different file from the one
     /// the user is looking at. When the shown file is gone the action is
-    /// refused, the row is refreshed, and the status line says so.
-    fn displayed_keymap_backup(&mut self, action: &str) -> Option<std::path::PathBuf> {
+    /// refused, the row is refreshed, and the status line says so; with no
+    /// backup shown it says `none_shown`.
+    fn displayed_keymap_backup(
+        &mut self,
+        none_shown: signex_i18n::MessageId,
+    ) -> Option<std::path::PathBuf> {
         let Some(shown) = self.ui_state.keymap_backup.clone() else {
             self.refresh_keymap_backup();
-            self.ui_state.preferences_keymap_status =
-                format!("There is no keyboard-shortcuts backup to {action}.");
+            self.ui_state
+                .preferences_keymap_status
+                .set(signex_i18n::Translatable::new(none_shown));
             return None;
         };
         let path = std::path::PathBuf::from(shown);
@@ -225,10 +230,12 @@ impl Signex {
                      nothing was changed"
                 );
                 self.refresh_keymap_backup();
-                self.ui_state.preferences_keymap_status = format!(
-                    "The backup at {} is no longer there, so nothing was changed.",
-                    path.display()
-                );
+                self.ui_state
+                    .preferences_keymap_status
+                    .set(keymap::keymap_path_status(
+                        signex_i18n::shortcut_ids::PREF_KEYMAP_STATUS_BACKUP_GONE,
+                        &path,
+                    ));
                 None
             }
         }

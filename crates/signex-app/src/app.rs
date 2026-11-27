@@ -236,7 +236,7 @@ pub use state::pcb_edit::{BoardEditError, CheckedStep};
 pub use state::project_case::CaseProbeOutcome;
 pub use state::{
     CaseFold, DocumentState, DocumentViewState, InteractionState, KeymapRecorderState,
-    LoadedProject, PageSetupInputs, PreviewState, ProjectId, Signex, UiState,
+    KeymapStatus, LoadedProject, PageSetupInputs, PreviewState, ProjectId, Signex, UiState,
 };
 pub use symbol_draft::SymbolDraft;
 pub use symbol_history::SymbolHistorySnapshot;

@@ -26,6 +26,7 @@ mod error_notice_tests;
 mod fast_grids;
 mod interaction;
 mod keymap_recorder;
+mod keymap_status;
 pub(crate) mod library_entry;
 mod link_policy;
 pub(crate) mod navigator_job;
@@ -71,7 +72,7 @@ pub use agent_edits::AgentEdits;
 pub(crate) use agent_edits::JoinedSheet;
 pub use board_3d::{Board3dSession, BuiltScene, CaptureResult, MatteBackdrop};
 pub use board_net_classes::BoardNetClassPanelState;
-pub use board_sketch::BoardSketchSession;
+pub use board_sketch::{BoardSketchRefusalToast, BoardSketchSession, RefusedGap};
 pub use board_sketch_dxf::{
     DXF_LAYER_TARGETS, DxfImportMode, DxfLayerTarget, SketchDxfDialog, SketchDxfMsg,
     SketchDxfProblem, SketchDxfResult, SketchDxfStep,
@@ -84,6 +85,7 @@ pub use error_notice::{
 };
 pub use interaction::{ClickedPin, InteractionState};
 pub use keymap_recorder::KeymapRecorderState;
+pub use keymap_status::KeymapStatus;
 pub use omitted_page::{OmittedPage, OmittedReason};
 pub use parameter_table::{ClosedSheetCopies, ParameterCell, ParameterTableState};
 pub(crate) use pcb_drc::DrcInput;

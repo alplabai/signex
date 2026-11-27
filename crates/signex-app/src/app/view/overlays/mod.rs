@@ -32,6 +32,8 @@ mod panel_list;
 mod placement_paused;
 pub(super) mod read_only_badge;
 #[cfg(test)]
+mod save_failed_file_tests;
+#[cfg(test)]
 mod save_project_as_offer_tests;
 mod symbol_hover;
 mod text_edit;

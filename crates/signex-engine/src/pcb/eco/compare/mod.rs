@@ -105,7 +105,7 @@ impl CompareAction {
     const fn label(self) -> &'static str {
         match self {
             Self::AddToBoard => "Add to board",
-            Self::LinkFootprint => "Link footprint",
+            Self::LinkFootprint => "Link to its part",
             Self::RemoveFromBoard => "Remove from board",
             Self::AddNet => "Add net",
             Self::RemoveNet => "Remove net",
@@ -147,6 +147,9 @@ pub enum CompareValue {
     },
     /// A pad on no net.
     NoNet,
+    /// A footprint on the board with the part's designator but no link to
+    /// the part: what a Missing on board link row lacks (#3059).
+    Unlinked,
 }
 
 /// Where a row's object is, for its jump links: the part on its sheet, the

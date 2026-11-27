@@ -4,6 +4,8 @@
 //! the app runs in `app::handlers::command_log`. Rules: `docs/COMMAND_LOG.md`.
 
 mod detail;
+#[cfg(test)]
+mod fit_tests;
 mod layout;
 mod table;
 mod toolbar;
@@ -330,9 +332,16 @@ fn empty_hint<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
             },
             ..container::Style::default()
         });
-    container(framed)
-        .padding(SP.m)
-        .center_x(Length::Fill)
+    // Centred when it fits; a short dock scrolls it from its top (#3005).
+    let scroll = crate::panels::panel_scrollable(
+        container(framed)
+            .padding([SP.xs, SP.m])
+            .center_x(Length::Fill)
+            .boxed(),
+    )
+    .height(Length::Shrink);
+    container(scroll.boxed())
+        .width(Length::Fill)
         .center_y(Length::Fill)
         .boxed()
 }

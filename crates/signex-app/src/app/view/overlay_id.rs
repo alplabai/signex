@@ -76,6 +76,8 @@ pub(crate) enum OverlayId {
     TabContextMenu,
     ProjectTreeContextMenu,
     ComponentsRowContextMenu,
+    /// The placed part's ⋯ menu in Properties (#3063).
+    PartMenu,
     /// Right-click menu of a Start screen project row (#2305).
     StartRowContextMenu,
     /// Right-click menu of a board layer tab (#2379).
@@ -194,7 +196,7 @@ const PRE_BLOCKING: usize = 5;
 /// behaviour change to both the paint stack and the Esc precedence, and
 /// `paint_order_is_exhaustive_and_unique` keeps it honest about covering
 /// every [`OverlayId`] exactly once.
-pub(crate) const PAINT_ORDER: [OverlayId; 90] = [
+pub(crate) const PAINT_ORDER: [OverlayId; 91] = [
     OverlayId::ErrorNotice,
     OverlayId::NetlistIncompletePrompt,
     OverlayId::PrintPreview,
@@ -222,6 +224,7 @@ pub(crate) const PAINT_ORDER: [OverlayId; 90] = [
     OverlayId::TabContextMenu,
     OverlayId::ProjectTreeContextMenu,
     OverlayId::ComponentsRowContextMenu,
+    OverlayId::PartMenu,
     OverlayId::StartRowContextMenu,
     OverlayId::LayerTabContextMenu,
     OverlayId::GridPicker,
@@ -370,6 +373,7 @@ pub(crate) fn swallows_scroll(id: OverlayId) -> bool {
         | OverlayId::TabContextMenu
         | OverlayId::ProjectTreeContextMenu
         | OverlayId::ComponentsRowContextMenu
+        | OverlayId::PartMenu
         | OverlayId::StartRowContextMenu
         | OverlayId::LayerTabContextMenu
         | OverlayId::GridPicker
@@ -453,6 +457,7 @@ pub(crate) fn has_menu_backdrop(id: OverlayId) -> bool {
             | OverlayId::TabContextMenu
             | OverlayId::ProjectTreeContextMenu
             | OverlayId::ComponentsRowContextMenu
+            | OverlayId::PartMenu
             | OverlayId::StartRowContextMenu
             | OverlayId::LayerTabContextMenu
             | OverlayId::GridPicker
@@ -613,6 +618,7 @@ impl Signex {
             OverlayId::ComponentsRowContextMenu => {
                 layers.extend(self.components_row_context_menu_overlay(window_id))
             }
+            OverlayId::PartMenu => layers.extend(self.part_menu_overlay(window_id)),
             OverlayId::StartRowContextMenu => {
                 layers.extend(self.start_row_context_menu_overlay(window_id))
             }
@@ -794,6 +800,7 @@ mod tests {
             OverlayId::TabContextMenu,
             OverlayId::ProjectTreeContextMenu,
             OverlayId::ComponentsRowContextMenu,
+            OverlayId::PartMenu,
             OverlayId::StartRowContextMenu,
             OverlayId::LayerTabContextMenu,
             OverlayId::GridPicker,

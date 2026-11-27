@@ -2,15 +2,15 @@
 //! text input and its unit suffix, drawn in its [`FieldState`], the reset
 //! button beside an edited box, and the refusal note under it. Pure.
 
-use iced::widget::{Row, container, row};
+use iced::widget::{Row, Space, container, row};
 use iced::{Alignment, Background, Border, Color, Element, Length, Padding, Theme, Widget as _};
-use signex_i18n::{I18n, MessageId, UserText, ids, t};
+use signex_i18n::{I18n, Localized, MessageId, UserText, ids, t};
 use signex_types::project::{SchematicDefaultField, SchematicDefaultOverrides};
 use signex_types::schematic::SCHEMATIC_DEFAULT_FONT;
 use signex_types::theme::ThemeTokens;
 use signex_widgets::{text, text_input};
 
-use super::super::look::{Glyph, glyph, icon_button, mono_font};
+use super::super::look::{Glyph, ICON_BUTTON, glyph, icon_button, mono_font};
 use super::super::table::{SP, TS};
 use super::{FieldState, built_in_value, field_state, refused_range, shown_number, shown_text};
 use crate::app::Message;
@@ -91,12 +91,11 @@ pub(super) fn numeric_field<'a>(
         .padding([SP.s, SP.m])
         .width(Length::Fixed(TS.body * NUMBER_BOX_EMS))
         .style(box_style(tokens, state));
-    let mut line: Row<Element<'a, Message>> =
-        row![field_box].spacing(SP.s).align_y(Alignment::Center);
-    if state != FieldState::BuiltIn {
+    let restore = (state != FieldState::BuiltIn).then(|| {
         let tip = t!(i18n, ids::PROJECT_DEFAULTS_RESET, "value" => built_in);
-        line = line.push(icon_button(Glyph::Restore, tip, Some(reset), tokens));
-    }
+        (tip, reset)
+    });
+    let line = with_reset_slot(field_box.boxed(), restore, tokens);
     let note = refused_range(field, draft).map(|(min, max)| {
         let words = t!(
             i18n,
@@ -106,7 +105,28 @@ pub(super) fn numeric_field<'a>(
         );
         text(words).size(TS.caption).color(ti(tokens.error)).boxed()
     });
-    (line.boxed(), note)
+    (line, note)
+}
+
+/// `field_box` with the reset button after it, or an empty slot of the
+/// button's size, so the box never moves when the button comes and goes
+/// and the row asks for the button's room whether it shows or not (#2996).
+fn with_reset_slot<'a>(
+    field_box: Element<'a, Message>,
+    restore: Option<(Localized, Message)>,
+    tokens: &ThemeTokens,
+) -> Element<'a, Message> {
+    let slot = match restore {
+        Some((tip, reset)) => icon_button(Glyph::Restore, tip, Some(reset), tokens),
+        None => Space::new()
+            .width(Length::Fixed(ICON_BUTTON))
+            .height(Length::Fixed(ICON_BUTTON))
+            .boxed(),
+    };
+    let line: Row<Element<'a, Message>> = row![field_box, slot]
+        .spacing(SP.s)
+        .align_y(Alignment::Center);
+    line.boxed()
 }
 
 /// The note under a refused field, in the field's unit.
@@ -150,13 +170,11 @@ pub(super) fn font_field<'a>(
         .padding([SP.s, SP.m])
         .width(Length::Fixed(TS.body * WIDE_BOX_EMS))
         .style(box_style(tokens, state));
-    let mut line: Row<Element<'a, Message>> =
-        row![field_box].spacing(SP.s).align_y(Alignment::Center);
-    if is_set {
+    let restore = is_set.then(|| {
         let tip = t!(i18n, ids::PROJECT_DEFAULTS_RESET, "value" => SCHEMATIC_DEFAULT_FONT);
-        line = line.push(icon_button(Glyph::Restore, tip, Some(reset), tokens));
-    }
-    line.boxed()
+        (tip, reset)
+    });
+    with_reset_slot(field_box.boxed(), restore, tokens)
 }
 
 /// A borderless, transparent input: the box around it carries the look.

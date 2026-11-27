@@ -288,6 +288,11 @@ pub enum BoardSketchMsg {
     DiscardConfirmed,
     /// The discard was cancelled: keep editing.
     DiscardCancelled,
+    /// The place in the refusal toast was clicked: frame the gap on the
+    /// sketch canvas (mockup row 110).
+    RefusalGapClicked,
+    /// The refusal toast was dismissed; the refusal stays for a held save.
+    RefusalToastDismissed,
 }
 
 /// What the user changed about what a board view shows (#2223): never the

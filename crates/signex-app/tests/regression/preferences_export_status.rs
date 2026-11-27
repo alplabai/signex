@@ -87,8 +87,15 @@ fn keymap_export_success_names_the_written_path() {
 #[test]
 fn opening_preferences_clears_a_stale_export_status() {
     let (mut app, _t) = Signex::new();
-    app.ui_state.preferences_keymap_status =
-        "Could not export keyboard shortcuts: boom".to_string();
+    let _ = app.update(inner(PrefMsg::KeymapExportFinished(
+        Err("boom".to_string()),
+    )));
+    assert!(
+        app.ui_state
+            .preferences_keymap_status
+            .contains("Could not export keyboard shortcuts: boom"),
+        "fixture precondition: a stale status is shown"
+    );
 
     let _ = app.update(Message::Preferences(PreferencesMsg::Open));
 

@@ -2,7 +2,7 @@
 //! length, its pads, and its track length per layer plus vias; and the
 //! selected differential pair under the Pairs list.
 
-use iced::widget::{Column, Space, column, row, scrollable};
+use iced::widget::{Column, Space, column, container, row, scrollable};
 use iced::{Element, Length, Widget as _};
 use signex_i18n::{I18n, UserText, ids, t};
 use signex_types::format::parse_pcb_layer;
@@ -92,15 +92,43 @@ fn pads<'a>(ctx: &'a PanelContext, net: &'a PcbNetRow) -> Column<Element<'a, Pan
     let title = t!(i18n, ids::PANELS_PCB_NETS_DETAIL_PADS, "count" => net.pads.len());
     let mut col: Column<Element<'a, PanelMsg>> = column![caption(ctx, title.into())].spacing(SP.xs);
     for pad in &net.pads {
-        let name = t!(
-            i18n,
-            ids::PANELS_PCB_NETS_DETAIL_PAD,
-            "part" => pad.part.as_str(),
-            "pad" => pad.pad.as_str()
-        );
-        col = col.push(line(ctx, name.into(), pad_layer(i18n, pad)));
+        col = col.push(pad_line(ctx, pad));
     }
     col
+}
+
+/// One pad (mockup row 106): `U1-2` in mono, its part's value as the
+/// descriptor, then its layer. A long value is cut, not wrapped.
+fn pad_line<'a>(ctx: &'a PanelContext, pad: &'a PcbNetPad) -> Element<'a, PanelMsg> {
+    let i18n = &*ctx.i18n;
+    let muted = resolve(&ctx.tokens).ink3;
+    let name = t!(
+        i18n,
+        ids::PANELS_PCB_NETS_DETAIL_PAD,
+        "part" => pad.part.as_str(),
+        "pad" => pad.pad.as_str()
+    );
+    let descriptor = container(
+        text(UserText::new(pad.part_value.as_str()))
+            .size(TS.caption)
+            .color(muted)
+            .wrapping(iced::widget::text::Wrapping::None),
+    )
+    .width(Length::Fill)
+    .clip(true);
+    row![
+        text(name)
+            .size(TS.body)
+            .font(crate::fonts::iced_font_for_family(
+                crate::fonts::CHROME_MONO_FONT
+            ))
+            .color(ti(ctx.tokens.text)),
+        descriptor,
+        text(pad_layer(i18n, pad)).size(TS.caption).color(muted),
+    ]
+    .spacing(SP.s)
+    .align_y(iced::Alignment::Center)
+    .boxed()
 }
 
 fn tracks<'a>(ctx: &'a PanelContext, net: &'a PcbNetRow) -> Column<Element<'a, PanelMsg>> {

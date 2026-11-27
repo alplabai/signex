@@ -34,6 +34,7 @@ define_ids! {
     PANELS_STATUS_BAR_SAVING = "panels-status-bar-saving";
     PANELS_STATUS_BAR_SELECTION_ONE_KIND = "panels-status-bar-selection-one-kind";
     PANELS_STATUS_BAR_SELECTION_KINDS = "panels-status-bar-selection-kinds";
+    PANELS_STATUS_BAR_SELECTION_PIN = "panels-status-bar-selection-pin";
     PANELS_STATUS_BAR_SELECTED_COMPONENTS = "panels-status-bar-selected-components";
     PANELS_STATUS_BAR_SELECTED_WIRES = "panels-status-bar-selected-wires";
     PANELS_STATUS_BAR_SELECTED_LABELS = "panels-status-bar-selected-labels";

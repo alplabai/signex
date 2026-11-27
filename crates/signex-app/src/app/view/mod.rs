@@ -68,9 +68,8 @@ impl Signex {
                 // only difference between main and undocked is the OS
                 // window id they render into.
                 super::state::WindowKind::UndockedTab { .. } => self.view_main_for(window_id),
-                super::state::WindowKind::DetachedPanel(kind) => {
-                    self.view_detached_panel_window(window_id, *kind)
-                }
+                super::state::WindowKind::DetachedPanel(kind) => self
+                    .with_part_menu(window_id, self.view_detached_panel_window(window_id, *kind)),
                 // Detached Component Preview window — render the same
                 // editor surface as the inline tab. The editor state
                 // is keyed by `EditorAddress(library_path, table,

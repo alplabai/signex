@@ -164,7 +164,7 @@ fn recording_box<'a>(
     };
     let then = t!(i18n, ids::PREFERENCES_KEYMAP_THEN);
     let captured: Element<'a, PrefMsg> = if recorder.strokes.is_empty() {
-        text(t!(i18n, sids::PREF_KEYMAP_RECORDER_HINT))
+        text(t!(i18n, empty_hint(recorder.recording)))
             .size(TS.caption)
             .color(r.ink4)
             .boxed()
@@ -209,6 +209,16 @@ fn recording_box<'a>(
         ..container::Style::default()
     })
     .boxed()
+}
+
+/// What the empty recording box says (#3048): while recording it asks for
+/// a keystroke; once stopped it names Record, the button that starts again.
+pub(super) fn empty_hint(recording: bool) -> MessageId {
+    if recording {
+        sids::PREF_KEYMAP_RECORDER_WAITING
+    } else {
+        sids::PREF_KEYMAP_RECORDER_HINT
+    }
 }
 
 /// Clear at the left; Stop or Record, Cancel and OK at the right.

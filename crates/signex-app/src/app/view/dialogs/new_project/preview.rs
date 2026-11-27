@@ -186,6 +186,59 @@ pub(super) fn stack_card<'a>(state: &NewProjectState, i18n: &I18n) -> Element<'a
         .boxed()
 }
 
+/// The board line: the copper layer count in bold, then the thickness, in
+/// `ink`.
+fn board_line<'a>(state: &NewProjectState, i18n: &I18n, ink: Color) -> Element<'a, NewProjectMsg> {
+    let copper = state.setup.pcb.copper_layers;
+    let thickness = format!("{} mm", state.setup.pcb.thickness_mm);
+    let bold = iced::Font {
+        weight: iced::font::Weight::Semibold,
+        ..crate::fonts::iced_font_for_family(crate::fonts::DEFAULT_UI_FONT)
+    };
+    row![
+        text(t!(i18n, ids::DIALOG_NEW_PROJECT_PREVIEW_LAYERS, "count" => u32::from(copper)))
+            .size(TS.label)
+            .font(bold)
+            .color(ink),
+        text(t!(i18n, ids::DIALOG_NEW_PROJECT_PREVIEW_BOARD, "thickness" => thickness))
+            .size(TS.label)
+            .color(ink),
+    ]
+    .spacing(SP.s)
+    .boxed()
+}
+
+/// The Board rules preview of the Project tab's Project setup (mockup row
+/// 37), on the board ground: the tracks and the via with their values
+/// beside the board line and the stack-up. It draws the values shown in
+/// the fields, so a card pick or a layer step redraws it; values are edited
+/// in the fields, not on the drawing.
+pub(crate) fn board_rules_preview<'a>(
+    state: &NewProjectState,
+    i18n: &I18n,
+) -> Element<'a, NewProjectMsg> {
+    let ground = ti(crate::styles::board_canvas_colors().background);
+    let ink = ti(theme_tokens(ThemeId::GraphiteDark).text);
+    let side = column![board_line(state, i18n, ink), stack_card(state, i18n)]
+        .spacing(SP.s)
+        .width(Length::Fill);
+    let body = row![board_rules::values_drawing(&state.setup.pcb, i18n), side]
+        .spacing(SP.l)
+        .align_y(Alignment::Start);
+    container(body)
+        .width(Length::Fill)
+        .padding(SP.m)
+        .style(move |_: &Theme| container::Style {
+            background: Some(ground.into()),
+            border: iced::Border {
+                radius: Radii::GRAPHITE.button.into(),
+                ..iced::Border::default()
+            },
+            ..container::Style::default()
+        })
+        .boxed()
+}
+
 /// The preview column: the board rules drawing, the board line, the
 /// stack-up, the sheet when the dialog makes one, and the note.
 pub(crate) fn pane<'a>(
@@ -195,22 +248,6 @@ pub(crate) fn pane<'a>(
     i18n: &'a I18n,
     tokens: &ThemeTokens,
 ) -> Element<'a, NewProjectMsg> {
-    let copper = state.setup.pcb.copper_layers;
-    let thickness = format!("{} mm", state.setup.pcb.thickness_mm);
-    let bold = iced::Font {
-        weight: iced::font::Weight::Semibold,
-        ..crate::fonts::iced_font_for_family(crate::fonts::DEFAULT_UI_FONT)
-    };
-    let board_line = row![
-        text(t!(i18n, ids::DIALOG_NEW_PROJECT_PREVIEW_LAYERS, "count" => u32::from(copper)))
-            .size(TS.label)
-            .font(bold)
-            .color(ti(tokens.text)),
-        text(t!(i18n, ids::DIALOG_NEW_PROJECT_PREVIEW_BOARD, "thickness" => thickness))
-            .size(TS.label)
-            .color(ti(tokens.text)),
-    ]
-    .spacing(SP.s);
     let fill = tokens::resolve(tokens).sunken;
     let line = ti(tokens.border);
     let mut parts = column![
@@ -218,7 +255,7 @@ pub(crate) fn pane<'a>(
             .size(TS.section)
             .color(tokens::resolve(tokens).ink4),
         board_rules::section(state, i18n, tokens),
-        board_line,
+        board_line(state, i18n, ti(tokens.text)),
         stack_card(state, i18n),
     ]
     .spacing(SP.l)

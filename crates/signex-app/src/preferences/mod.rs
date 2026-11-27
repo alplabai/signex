@@ -459,7 +459,7 @@ pub struct PrefsView<'a> {
     pub panel_tokens: &'a signex_types::theme::ThemeTokens,
     pub draft_component_classes: &'a [crate::fonts::ComponentClassEntry],
     pub keymap_editor: &'a crate::keymap::KeymapEditorModel,
-    pub keymap_status: &'a str,
+    pub keymap_status: &'a crate::app::KeymapStatus,
     /// Boot-time shortcut-file load failure (#595). `Some` renders a
     /// persistent banner under the pane header naming the file and the
     /// error; `None` renders nothing. Distinct from `keymap_status`,

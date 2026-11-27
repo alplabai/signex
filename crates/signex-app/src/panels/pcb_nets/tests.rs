@@ -166,6 +166,7 @@ fn a_drilled_or_multi_layer_pad_reads_multi() {
     let pad = |layers: &[&str], is_through| PcbNetPad {
         part: "U1".to_owned(),
         pad: "1".to_owned(),
+        part_value: String::new(),
         layers: layers.iter().map(|l| (*l).to_owned()).collect(),
         is_through,
     };

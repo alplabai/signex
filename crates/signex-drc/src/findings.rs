@@ -85,11 +85,7 @@ fn finding(
 ) -> Option<Finding> {
     let severity = report.severity_of(v)?;
     let (a, b) = (net_name(net_names, v.nets.0), net_name(net_names, v.nets.1));
-    // A part outside its room is named with its room, not by nets (#2457);
-    // a height or 3D clearance finding by its parts (#2939).
-    let message = crate::rooms::describe_on(pcb, v)
-        .or_else(|| crate::bodies::describe_on(pcb, v))
-        .unwrap_or_else(|| format!("{}, {a} / {b}", describe(v)));
+    let message = worded(Some(pcb), v, net_names, "");
     let mut evidence = evidence(&report.rules, v, &a, &b);
     if matches!(
         v.kind,
@@ -174,18 +170,45 @@ fn gap_text(what: &str, v: &Violation) -> String {
     )
 }
 
-/// Run DRC's Messages line for `v`: what broke, the written rule, the nets
-/// and where, as `DRC: <describe> (<rule>), <a> / <b> at (x, y) mm`.
-pub fn messages_line(v: &Violation, net_names: &BTreeMap<u32, String>) -> String {
+/// What broke and what it involves, followed by `rule`: a part outside its
+/// room names the part and the room (#2457, #3058), a height or 3D
+/// clearance finding its parts (#2939), any other finding its two nets.
+/// Without `pcb` every finding is named by its nets.
+fn worded(
+    pcb: Option<&PcbBoard>,
+    v: &Violation,
+    net_names: &BTreeMap<u32, String>,
+    rule: &str,
+) -> String {
+    pcb.and_then(|pcb| {
+        crate::rooms::describe_on(pcb, v).or_else(|| crate::bodies::describe_on(pcb, v))
+    })
+    .map(|named| format!("{named}{rule}"))
+    .unwrap_or_else(|| {
+        format!(
+            "{}{rule}, {} / {}",
+            describe(v),
+            net_name(net_names, v.nets.0),
+            net_name(net_names, v.nets.1)
+        )
+    })
+}
+
+/// Run DRC's Messages line for `v`, a finding on `pcb`: what broke, the
+/// written rule, the nets (or the part and its room) and where, as
+/// `DRC: <describe> (<rule>), <a> / <b> at (x, y) mm`.
+pub fn messages_line(
+    v: &Violation,
+    pcb: Option<&PcbBoard>,
+    net_names: &BTreeMap<u32, String>,
+) -> String {
     let rule = v
         .rule
         .as_ref()
         .map_or_else(String::new, |id| format!(" ({id})"));
     format!(
-        "DRC: {}{rule}, {} / {} at ({}, {}) mm",
-        describe(v),
-        net_name(net_names, v.nets.0),
-        net_name(net_names, v.nets.1),
+        "DRC: {} at ({}, {}) mm",
+        worded(pcb, v, net_names, &rule),
         mm(v.at.x),
         mm(v.at.y)
     )

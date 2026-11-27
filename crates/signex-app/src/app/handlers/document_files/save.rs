@@ -23,6 +23,13 @@ pub(super) fn file_label(path: &std::path::Path) -> String {
     )
 }
 
+/// The Save Failed sentence for a write of `path` that failed: "<file> could
+/// not be written." (mockup row 11).
+pub(super) fn write_failed_sentence(path: &std::path::Path) -> signex_i18n::Translatable {
+    signex_i18n::Translatable::new(signex_i18n::ids::NOTICE_SAVE_FAILED_FILE)
+        .arg("file", file_label(path))
+}
+
 /// `text` cut to at most `max_bytes`, on a char boundary.
 fn clip_to_bytes(text: &str, max_bytes: usize) -> &str {
     let mut end = text.len().min(max_bytes);
@@ -258,6 +265,26 @@ impl Signex {
                 error,
             );
             self.document_view.error_notice = Some(notice);
+        }
+    }
+
+    /// The write of `path` failed: [`Self::report_save_failure`], with the
+    /// card's sentence naming the file (mockup row 11). The path and the OS
+    /// error stay in its system block; `context` stays the log label.
+    pub(crate) fn report_write_failure(
+        &mut self,
+        path: &std::path::Path,
+        context: &str,
+        error: &anyhow::Error,
+    ) {
+        let raised_here = self.document_view.error_notice.is_none();
+        self.report_save_failure(context, error);
+        if !raised_here || crate::app::read_only_project::ReadOnlyProjectSave::find(error).is_some()
+        {
+            return;
+        }
+        if let Some(notice) = self.document_view.error_notice.as_mut() {
+            notice.detail = write_failed_sentence(path);
         }
     }
 

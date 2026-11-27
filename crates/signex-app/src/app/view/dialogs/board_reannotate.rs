@@ -463,12 +463,16 @@ fn preview<'a>(
     }
     let r = tokens::resolve(tokens);
     let (fill, edge) = (r.field, r.line_soft);
+    // The list runs the full width of the dialog, as the banner under it
+    // does (mockup row 83), however short its rows are.
     let frame = container(
-        scrollable(container(list).padding([SP.s, SP.m]))
+        scrollable(container(list).padding([SP.s, SP.m]).width(Length::Fill))
             .direction(crate::styles::thin_vertical())
             .style(crate::styles::scrollbar_style(tokens))
+            .width(Length::Fill)
             .height(Length::Fill),
     )
+    .width(Length::Fill)
     .height(Length::Fill)
     .clip(true)
     .style(move |_: &Theme| container::Style {
@@ -632,6 +636,51 @@ mod tests {
         assert!((bottom.y - order.y).abs() < 2.0, "{bottom:?} {order:?}");
         assert!(with.y >= after.y + after.height, "{after:?} {with:?}");
         assert!(at("Preview").y > with.y + with.height, "{with:?}");
+    }
+
+    /// Mockup row 83 (#3056): the preview list's frame runs the full width
+    /// of the dialog, as the banner does, with renames listed and with
+    /// none, in Light and Dark. Before, it shrank to its rows (about 60 %).
+    #[test]
+    fn the_preview_list_runs_the_full_width() {
+        use crate::styles::tokens::composite_over;
+        use signex_engine::pcb::designators::Rename;
+        use signex_types::theme::{ThemeId, theme_tokens};
+        let window = iced::Size::new(800.0, 320.0);
+        let i18n = signex_i18n::I18n::en_us();
+        let mut listed = open_dialog();
+        let state = listed
+            .ui_state
+            .board_reannotate
+            .as_mut()
+            .expect("dialog open");
+        state.plan.renames = vec![Rename {
+            footprint: uuid::Uuid::nil(),
+            from: "D2".into(),
+            to: "D1".into(),
+        }];
+        let empty = open_dialog();
+        for (case, app) in [("renames", &listed), ("none", &empty)] {
+            let state = app.ui_state.board_reannotate.as_ref().expect("dialog open");
+            for id in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
+                let tokens = theme_tokens(id);
+                let pixels =
+                    crate::layout_probe::draw_pixels(super::preview(state, &i18n, &tokens), window);
+                // Nine tenths across, low in the frame: past where the rows
+                // end, clear of the right edge and the rounded corners.
+                let (x, y) = (720usize, 250usize);
+                let at = (y * window.width as usize + x) * 4;
+                let fill = crate::styles::tokens::resolve(&tokens).field;
+                let want = composite_over(fill, iced::Color::BLACK);
+                let channel = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
+                let want = [channel(want.r), channel(want.g), channel(want.b)];
+                let drawn = &pixels[at..at + 3];
+                assert!(
+                    drawn.iter().zip(want).all(|(d, w)| d.abs_diff(w) <= 3),
+                    "{case} {id:?}: ({x}, {y}) is {drawn:?}, the list fill is {want:?}"
+                );
+            }
+        }
     }
 
     /// Mockup row 83: the banner names Back Annotate in its own run, the

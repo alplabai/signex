@@ -9,6 +9,8 @@ mod edit_escape;
 mod notebook_escape;
 mod open_overlays;
 
+mod menu_rungs;
+
 /// Which overlays are open, as the Esc ladder sees them.
 ///
 /// **Built in `update`, not in the subscription** (#535). Until then this
@@ -131,6 +133,9 @@ struct OpenOverlays {
     grid_snap_popover_open: bool,
     /// A board counter's popover (#2460): Esc closes it, not the tool.
     board_status_popover_open: bool,
+    /// The Properties part ⋯ menu's close message, for the window whose
+    /// panel holds it (#3063).
+    part_menu: Option<Message>,
 }
 
 // `KeyContext` used to live here — the slice of modal state the
@@ -264,33 +269,15 @@ impl OpenOverlays {
                 .net_color_custom_open
                 .then(|| Message::NetColor(NetColorMsg::CustomShow(false))),
 
-            // ── Right-click menus ───────────────────────────────────
-            // Esc closes the menu, nothing behind it (#2349). The dock-tab,
-            // Components-row, Start-row and board layer tab menus answer in
-            // `dispatch/escape.rs` before this ladder runs.
-            OverlayId::ContextMenu => self
-                .canvas_context_menu_open
-                .then(|| Message::ContextMenu(ContextMenuMsg::Close)),
-            OverlayId::TabContextMenu => self
-                .tab_context_menu_open
-                .then(|| Message::ContextMenu(ContextMenuMsg::CloseTab)),
-            OverlayId::ProjectTreeContextMenu => self
-                .project_tree_context_menu_open
-                .then(|| Message::ContextMenu(ContextMenuMsg::CloseProjectTree)),
-            OverlayId::GridPicker => self
-                .grid_picker_open
-                .then_some(Message::Ui(UiMsg::GridPickerClose)),
-            OverlayId::ZoomPresets => self
-                .zoom_presets_open
-                .then_some(Message::Ui(UiMsg::ZoomPresetsDismissed)),
-            OverlayId::GridSnapPopover => self
-                .grid_snap_popover_open
-                .then_some(Message::Overlay(OverlayMsg::GridSnapPopoverDismissed)),
-            OverlayId::BoardStatusPopover => self.board_status_popover_open.then(|| {
-                Message::Ui(UiMsg::StatusBar(StatusBarRequest::BoardPopover(
-                    crate::status_bar::BoardPopoverEvent::Dismissed,
-                )))
-            }),
+            // ── Right-click menus and popovers: `menu_rungs.rs` ─────
+            OverlayId::ContextMenu
+            | OverlayId::TabContextMenu
+            | OverlayId::ProjectTreeContextMenu
+            | OverlayId::PartMenu
+            | OverlayId::GridPicker
+            | OverlayId::ZoomPresets
+            | OverlayId::GridSnapPopover
+            | OverlayId::BoardStatusPopover => self.menu_rung(id),
 
             // ── Editor chrome, menus, pickers, panels: no rung ───────
             // None of these is a modal. The symbol editor's menu closes from
@@ -995,6 +982,13 @@ mod tests {
         overlays.escape_message()
     }
 
+    /// The close message of a main-window part ⋯ menu.
+    fn part_menu_dismissed() -> Message {
+        Message::Dock(crate::dock::DockMessage::Panel(
+            crate::panels::PanelMsg::Part(crate::panels::PartPanelMsg::MenuDismissed),
+        ))
+    }
+
     #[test]
     fn nothing_open_falls_through_to_the_tool_reset() {
         assert!(
@@ -1140,6 +1134,13 @@ mod tests {
     /// `every_ladder_field_claims_escape` and the ranking tests instead.
     #[test]
     fn every_modal_claims_escape() {
+        // #3063: the Properties part ⋯ menu.
+        assert!(matches!(
+            only(|o| o.part_menu = Some(part_menu_dismissed())),
+            Some(Message::Dock(crate::dock::DockMessage::Panel(
+                crate::panels::PanelMsg::Part(crate::panels::PartPanelMsg::MenuDismissed)
+            )))
+        ));
         assert!(matches!(
             only(|o| o.document_setup_open = true),
             Some(Message::Project(crate::app::ProjectMsg::DocumentSetup(
@@ -1875,6 +1876,7 @@ mod tests {
             zoom_presets_open,
             grid_snap_popover_open,
             board_status_popover_open,
+            part_menu,
         ];
 
         type EscapeSetter = fn(&mut OpenOverlays);
@@ -2017,6 +2019,7 @@ mod tests {
             ("board_status_popover_open", |o| {
                 o.board_status_popover_open = true
             }),
+            ("part_menu", |o| o.part_menu = Some(part_menu_dismissed())),
         ];
 
         // Where a notice lives, not a modal of its own: no rung.

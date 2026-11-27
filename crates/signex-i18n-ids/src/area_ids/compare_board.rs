@@ -31,6 +31,7 @@ define_ids! {
     COMPARE_BOARD_NOT_IN_SCHEMATIC = "compare-board-not-in-schematic";
     COMPARE_BOARD_NOT_ON_BOARD = "compare-board-not-on-board";
     COMPARE_BOARD_NO_NET = "compare-board-no-net";
+    COMPARE_BOARD_NOT_LINKED = "compare-board-not-linked";
     COMPARE_BOARD_PART = "compare-board-part";
     COMPARE_BOARD_PIN = "compare-board-pin";
     COMPARE_BOARD_JUMP_SCHEMATIC = "compare-board-jump-schematic";

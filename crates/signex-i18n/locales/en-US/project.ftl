@@ -47,6 +47,9 @@ project-setup-help = The board rules and sheet defaults the project was created 
 project-setup-pcb-rules = PCB rules
 project-setup-schematic = Schematic
 project-setup-your-profiles = YOUR PROFILES
+# The Board rules preview under the PCB rules and Schematic cards (#2997).
+project-setup-preview = Board rules preview
+project-setup-preview-caption = tracks, via and stack-up
 
 # Row actions shared by the sections' tables.
 project-move-up = Move up

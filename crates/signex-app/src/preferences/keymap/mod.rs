@@ -102,7 +102,7 @@ pub(super) fn content_keyboard_shortcuts<'a>(v: PrefsView<'a>) -> Element<'a, Pr
     items.extend(profile_row::conflict_banner(
         i18n, &conflicts, platform, tokens,
     ));
-    items.extend(status_line(v.keymap_status, tokens));
+    items.extend(status_line(i18n, v.keymap_status, tokens));
     items.push(filters::filter_bar(
         i18n,
         v.keymap_search,
@@ -144,16 +144,20 @@ fn empty_table_message(
     }
 }
 
-/// The transient result of the last profile action, load, save or edit;
-/// nothing when there is none.
-fn status_line<'a>(status: &str, tokens: &ThemeTokens) -> Option<Element<'a, PrefMsg>> {
+/// The transient result of the last profile action, load, save or edit, in
+/// the interface language; nothing when there is none.
+fn status_line<'a>(
+    i18n: &I18n,
+    status: &crate::app::KeymapStatus,
+    tokens: &ThemeTokens,
+) -> Option<Element<'a, PrefMsg>> {
     if status.is_empty() {
         return None;
     }
     let ink3 = tokens::resolve(tokens).ink3;
-    // raw: set by its handler (#2061: handler-worded state text).
+    // raw: a catalog message with its arguments, rendered here (#3050).
     Some(
-        text(raw(status.to_string()))
+        text(raw(status.render(i18n)))
             .size(TS.caption)
             .color(ink3)
             .boxed(),

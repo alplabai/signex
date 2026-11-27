@@ -450,4 +450,100 @@ mod tests {
         let _ = app.update(Message::Ui(UiMsg::GridPickerStepHovered(1.27)));
         assert!(app.interaction_state.grid_picker.is_none());
     }
+
+    /// A Signex with a main window and a footprint editor in the active tab.
+    fn app_with_footprint_tab() -> (Signex, iced::window::Id) {
+        let (mut app, _boot) = Signex::new();
+        let window = iced::window::Id::unique();
+        app.ui_state.main_window_id = Some(window);
+        let path = std::path::PathBuf::from("part.snxfpt");
+        app.document_state.tabs.push(crate::app::TabInfo {
+            title: "part".into(),
+            path: path.clone(),
+            project_id: None,
+            kind: crate::app::TabKind::FootprintEditor(path.clone()),
+        });
+        app.document_state.active_tab = app.document_state.tabs.len() - 1;
+        let file =
+            signex_library::FootprintFile::from_footprint(signex_library::Footprint::empty("fp"));
+        app.document_state
+            .footprint_editors
+            .insert(path.clone(), crate::app::FootprintDocument::new(path, file));
+        (app, window)
+    }
+
+    /// Whether the default diagnostics level would show an INFO record;
+    /// under `SIGNEX_LOG=debug` a debug trace is meant to reach Messages.
+    fn messages_hide_debug() -> bool {
+        let _ = crate::diagnostics::said_on_this_thread();
+        crate::diagnostics::configured_level() < log::LevelFilter::Debug
+    }
+
+    /// Opening the picker shows its ladder and writes no line to the
+    /// Messages panel (#2993, mockup row 63).
+    #[test]
+    fn opening_the_picker_draws_the_ladder_and_says_nothing_in_messages() {
+        let (mut app, window) = app_with_footprint_tab();
+        app.interaction_state.last_mouse_pos = (360.0, 420.0);
+        let before = crate::diagnostics::said_on_this_thread();
+        let _ = app.update(Message::Ui(UiMsg::GridPickerOpen));
+        if messages_hide_debug() {
+            assert_eq!(
+                crate::diagnostics::said_on_this_thread(),
+                before,
+                "opening the grid picker reached the Messages panel"
+            );
+        }
+        let mut overlay = app.grid_picker_overlay(window);
+        assert_eq!(overlay.len(), 2, "backdrop and menu");
+        let size = iced::Size::new(1400.0, 1000.0);
+        let texts = crate::layout_probe::lay_out_texts(overlay.remove(1), size);
+        for shown in ["Imperial", "Metric", "Grid Properties…"] {
+            assert!(
+                texts
+                    .iter()
+                    .any(|t| t.text.to_lowercase() == shown.to_lowercase()),
+                "{shown}"
+            );
+        }
+        assert!(
+            !texts.iter().any(|t| t.text.contains("GridPickerOpen")),
+            "the trace text is drawn"
+        );
+    }
+
+    /// The status bar's Grid caret opens the same picker, also silently.
+    #[test]
+    fn the_grid_caret_opens_the_picker_without_a_messages_line() {
+        let (mut app, window) = app_with_footprint_tab();
+        let before = crate::diagnostics::said_on_this_thread();
+        let caret = crate::app::StatusBarRequest::GridCaretClicked { window: None };
+        let _ = app.update(Signex::status_bar_message(window, None, caret));
+        assert!(app.interaction_state.grid_picker.is_some());
+        if messages_hide_debug() {
+            assert_eq!(crate::diagnostics::said_on_this_thread(), before);
+        }
+    }
+
+    /// Headless, `open_grid_picker` is refused as window UI: no picker
+    /// opens and no line reaches Messages.
+    #[test]
+    fn open_grid_picker_headless_is_refused_without_a_messages_line() {
+        use crate::app::command::{CommandArgs, CommandOutcome};
+        let (mut app, _window) = app_with_footprint_tab();
+        let before = crate::diagnostics::said_on_this_thread();
+        let id = crate::keymap::AppCommandId::new("open_grid_picker").expect("a command id");
+        let (outcome, task) = app.run_headless_command_in_test(&id, CommandArgs::none());
+        crate::task_driver::TaskDriver::new()
+            .settle(&mut app, task)
+            .expect("the task chain settled");
+        assert!(
+            matches!(outcome, CommandOutcome::Disabled { .. }),
+            "{outcome:?}"
+        );
+        assert!(app.interaction_state.grid_picker.is_none());
+        if messages_hide_debug() {
+            assert_eq!(crate::diagnostics::said_on_this_thread(), before);
+        }
+    }
 }

@@ -336,8 +336,16 @@ selection. The summary and the first 20 violations are also logged, which is
 what a headless run reports. A logged violation is worded by
 `signex_drc::findings` (`messages_line`, `describe`), the same words as a
 `check_drc` finding, with lengths divided into mm so a round value reads
-round (`0.2`, #2334). A report is marked stale when the board's revision
-moved after it.
+round (`0.2`, #2334). A part outside its room is named by the part and the
+room, and a height or 3D body finding by its parts, in both (#3058). A
+report is marked stale when the board's revision moved after it.
+
+The DRC panel's four count tiles are clearance, short, unconnected and
+keepout. Any other kind found (a part outside its room, a component height,
+a 3D body clearance, a size rule) is counted in an "other" tile under the
+four, one tile wide, which filters the list like the others (#3058). It is
+drawn only when there is such a finding, so a board without one shows the
+four of mockup row 88.
 
 ## Waivers
 

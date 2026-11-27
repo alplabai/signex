@@ -193,7 +193,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `new_document` | New | file | `Mod+N` | `Mod+N` |
 | `new_project_with_profile` | New project from a profile | file | — | — |
 | `next_document_tab` | Next open document tab | window | `Ctrl+Tab` | — |
-| `next_grid` | Next grid | view | — | `N` |
+| `next_grid` | Next grid | view | `G` | `N` |
 | `notebook_attachments` | List the notebook's attachments and their stale marks | design | — | — |
 | `notebook_badges` | List the Notebook badges and their blocks | design | — | — |
 | `notebook_compile` | Compile the project's Design Notebook and report its pages and problems | reports | — | — |

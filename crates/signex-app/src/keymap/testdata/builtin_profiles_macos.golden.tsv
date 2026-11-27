@@ -101,6 +101,7 @@ signex_standard	bind	Pcb	1	command:board_sketch
 signex_standard	bind	Pcb	3	command:view_board_3d
 signex_standard	bind	Pcb	E O S	command:set_board_origin
 signex_standard	bind	Pcb	F	command:change_footprint
+signex_standard	bind	Pcb	G	command:next_grid
 signex_standard	bind	Pcb	H	command:cycle_board_3d_lighting
 signex_standard	bind	Pcb	L	command:flip_selection
 signex_standard	bind	Pcb	⇧⌘C	command:copy_board_3d_screenshot
@@ -572,7 +573,7 @@ signex_standard	hint	-	⇧G	cycle_snap_grid_backward
 signex_standard	hint	-	G	cycle_snap_grid_forward
 signex_standard	hint	-	-	fast_grid_1
 signex_standard	hint	-	-	fast_grid_2
-signex_standard	hint	-	-	next_grid
+signex_standard	hint	-	G	next_grid
 signex_standard	hint	-	-	previous_grid
 signex_standard	hint	-	-	open_grid_picker
 signex_standard	hint	-	-	open_grid_properties

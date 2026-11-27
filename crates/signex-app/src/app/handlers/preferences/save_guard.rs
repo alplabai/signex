@@ -26,8 +26,11 @@ impl Signex {
             .preferences_keymap_editor
             .has_invalid_trigger_drafts();
         if keymap_invalid {
-            self.ui_state.preferences_keymap_status =
-                "Fix invalid keyboard shortcuts before saving.".to_string();
+            self.ui_state
+                .preferences_keymap_status
+                .set(signex_i18n::Translatable::new(
+                    signex_i18n::shortcut_ids::PREF_KEYMAP_STATUS_FIX_INVALID,
+                ));
         }
         let fast_grid_invalid = self.ui_state.refuse_invalid_fast_grid_drafts();
         // #2868: a PCB Defaults field holding text it refuses shows why.

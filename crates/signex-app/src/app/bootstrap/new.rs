@@ -478,7 +478,7 @@ impl Signex {
                 symbol_pin_selection,
                 preferences_draft_symbol_pin_selection: symbol_pin_selection,
                 preferences_keymap_editor: keymap_editor,
-                preferences_keymap_status: String::new(),
+                preferences_keymap_status: crate::app::KeymapStatus::default(),
                 keymap_load_error,
                 keymap_command_file: None,
                 // #603 — probed independently of `keymap_load_error`,

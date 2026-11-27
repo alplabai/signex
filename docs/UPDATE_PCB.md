@@ -179,7 +179,7 @@ with no board or no root sheet is refused with a notice.
 
 | Kind | From | Update PCB does | Update schematic does |
 |---|---|---|---|
-| Missing on board | Add footprints, Links | Add to board, Link footprint | not available yet |
+| Missing on board | Add footprints, Links | Add to board, Link to its part | not available yet |
 | Extra on board | Remove footprints | Remove from board | not available yet |
 | Net differences | Nets, Pad nets | Add, remove or rename a net; move, connect or disconnect a pin | not available yet |
 | Footprint mismatches | Change footprints (+ Back Annotate's footprint row) | Swap footprint | not available yet (#2653 wires it through Assign Footprints) |
@@ -189,6 +189,11 @@ An Update PCB row and the Back Annotate row that change the same field of
 the same footprint are one row with two possible directions. A side that is
 blocked keeps its reason, shown as the tooltip of its greyed choice, and is
 never chosen. The notes of both lists are listed under the rows.
+
+A Links row is a footprint on the board with the part's designator but no
+link to the part (or a link to another one). Its Board cell reads "not
+linked" in italic, as an absent side does, rather than the designator again,
+and the board jump still finds the footprint (mockup row 162, #3059).
 
 A pad that keeps its net and only gains its lock is not a difference, so
 the report leaves it out and its Apply does not set that lock. Update PCB

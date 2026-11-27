@@ -1,6 +1,7 @@
 //! The drawing illustrations (mockup row 102): a line with its Width and
 //! ends, a circle or arc with its Radius and Width, a rectangle or text
-//! frame with its Width and Height (and a frame's Text Height).
+//! frame with its Width and Height (and a frame's Text Height). The corner
+//! note names the layer, and the ends only for a line (#3000).
 
 use iced::Point;
 use signex_i18n::{I18n, ids, t};
@@ -10,7 +11,9 @@ use signex_widgets::property_illustration::{
     Anchor, Illustration, Ink, Part, Primitive, Style, TextRole, Tint, Weight,
 };
 
-use super::{at, band, callout, canvas, cross, keys, label, layer_label, layer_note};
+use super::{
+    at, band, callout, canvas, cross, keys, label, layer_ends_note, layer_label, layer_note,
+};
 use crate::panels::pcb_primitive_properties::GraphicFacts;
 
 /// The width and radius a mixed selection is drawn with, mm.
@@ -36,7 +39,14 @@ pub(in crate::panels::pcb_primitive_properties) fn illustration(
         BoardGraphicKind::TextFrame => frame(i18n, paint, true),
     };
     let name = f.layer.as_ref().map_or("", |l| l.label.as_str());
-    Some(drawing.part(layer_note(i18n, &layer_label(i18n, layer, None, name))))
+    let layer = layer_label(i18n, layer, None, name);
+    // Only a line has an Ends row, so only its note names the ends.
+    let note = if f.kind == Some(BoardGraphicKind::Line) {
+        layer_ends_note(i18n, &layer)
+    } else {
+        layer_note(layer)
+    };
+    Some(drawing.part(note))
 }
 
 /// A line from Start to End: its band, the two end crosses and labels, and
@@ -228,6 +238,26 @@ fn frame(
     drawing
 }
 
+/// The layer notes of the drawing `f` shows (the labels linked to the
+/// Layer row), without the bidi isolation marks; none for a mixed
+/// selection.
+#[cfg(test)]
+pub(crate) fn corner_notes(i18n: &I18n, f: &GraphicFacts) -> Vec<String> {
+    let Some(drawing) = illustration(i18n, f) else {
+        return Vec::new();
+    };
+    drawing
+        .visible_parts()
+        .filter(|part| part.is_linked_to(&keys::LAYER))
+        .filter_map(|part| match &part.primitive {
+            Primitive::Label(l) if matches!(l.role, TextRole::Note) => {
+                Some(l.text.as_str().replace(['\u{2068}', '\u{2069}'], ""))
+            }
+            _ => None,
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use pcb_geom::ItemRef;
@@ -280,5 +310,31 @@ mod tests {
     #[test]
     fn a_mixed_selection_has_no_illustration() {
         assert!(illustration(&I18n::en_us(), &facts(None)).is_none());
+    }
+
+    /// #3000, mockup row 102: only a line has an Ends row, so only its
+    /// note names the ends; every other kind names the layer alone.
+    #[test]
+    fn only_a_lines_note_names_its_ends() {
+        let i18n = I18n::en_us();
+        let on_notes = |kind| {
+            let mut f = facts(Some(kind));
+            f.layer = Some(crate::panels::pcb_primitive_properties::AreaLayerChoice {
+                layer: PcbLayer::Technical(TechnicalLayer::Notes),
+                label: "Notes".to_owned(),
+            });
+            corner_notes(&i18n, &f)
+        };
+        assert_eq!(on_notes(BoardGraphicKind::Line), ["Notes · round ends"]);
+        for kind in [
+            BoardGraphicKind::Circle,
+            BoardGraphicKind::Arc,
+            BoardGraphicKind::Rectangle,
+            BoardGraphicKind::TextFrame,
+        ] {
+            assert_eq!(on_notes(kind), ["Notes"], "{kind:?}");
+        }
+        let circle = illustration(&i18n, &facts(Some(BoardGraphicKind::Circle))).unwrap();
+        assert!(!lights(&circle, &keys::ENDS), "a circle has no ends");
     }
 }

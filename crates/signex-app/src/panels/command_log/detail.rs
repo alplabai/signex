@@ -2,7 +2,8 @@
 //! time, client, duration and undo state, the arguments as JSON, the result
 //! and the row as a CLI line, scrolling; Replay and Jump to (with a failed
 //! row's Replay hint) stay pinned under them, so a short dock never hides
-//! them (mockup row 161).
+//! them (mockup row 161). A pane too short to pin them and still show the
+//! body scrolls whole, the actions under the heading (#3005).
 
 use iced::widget::scrollable::{Direction, Scrollbar};
 use iced::widget::{Column, Space, container, row, scrollable};
@@ -26,17 +27,73 @@ const MONO_SIZE: f32 = TS.body * 11.5 / 12.0;
 const CLI_SIZE: f32 = TS.body * 11.0 / 12.0;
 /// Space above a section label (the mock's 10 px and 12 px).
 const SECTION_GAP: f32 = SP.m + SP.xs;
+/// The least pane height that pins the actions: below it the pinned block
+/// would leave the body a sliver (the default bottom dock, #3005).
+pub(super) const PIN_MIN_HEIGHT: f32 = TS.body * 20.0;
 
-/// The pane for `row`: the scrolling body over the pinned actions.
+/// Whether a pane `height` tall pins Replay and Jump to under its body.
+pub(super) fn pins_actions(height: f32) -> bool {
+    height >= PIN_MIN_HEIGHT
+}
+
+/// The pane for `row`, `width` wide: the scrolling body over the pinned
+/// actions, or in a short pane one scroll with the actions first.
 pub(super) fn view<'a>(
     ctx: &'a PanelContext,
     state: &'a CommandLogState,
     row: &'a super::LogRow,
     width: f32,
 ) -> Element<'a, PanelMsg> {
+    let edge = ti(ctx.tokens.border);
+    let pane = iced::widget::responsive(move |size: iced::Size| -> Element<'a, PanelMsg> {
+        if pins_actions(size.height) {
+            pinned_pane(ctx, state, row)
+        } else {
+            stacked_pane(ctx, state, row)
+        }
+    });
+    container(pane.boxed())
+        .width(width)
+        .height(Length::Fill)
+        .style(move |_: &Theme| container::Style {
+            border: Border {
+                left: iced::border::Side::default().color(edge).width(HAIRLINE),
+                ..Border::default()
+            },
+            ..container::Style::default()
+        })
+        .boxed()
+}
+
+/// A short pane: the heading, Replay and Jump to with the hint, then the
+/// rest, all in one scroll with its scrollbar showing.
+fn stacked_pane<'a>(
+    ctx: &'a PanelContext,
+    state: &'a CommandLogState,
+    row: &'a super::LogRow,
+) -> Element<'a, PanelMsg> {
+    let col = heading(ctx, row)
+        .push(gap(SP.m))
+        .push(pinned(ctx, row))
+        .push(details(ctx, state, row).boxed());
+    crate::panels::panel_scrollable(
+        container(col)
+            .padding([SP.l, SP.l + SP.xs])
+            .width(Length::Fill)
+            .boxed(),
+    )
+    .boxed()
+}
+
+/// A tall pane: the scrolling body over the pinned actions.
+fn pinned_pane<'a>(
+    ctx: &'a PanelContext,
+    state: &'a CommandLogState,
+    row: &'a super::LogRow,
+) -> Element<'a, PanelMsg> {
     let tokens = &ctx.tokens;
     let scrolled = crate::panels::panel_scrollable(
-        container(body(ctx, state, row))
+        container(heading(ctx, row).push(details(ctx, state, row).boxed()))
             .padding([SP.l, SP.l + SP.xs])
             .width(Length::Fill)
             .boxed(),
@@ -52,27 +109,17 @@ pub(super) fn view<'a>(
             },
             ..container::Style::default()
         });
-    let pane: Column<Element<'a, PanelMsg>> = Column::new()
+    Column::<Element<'a, PanelMsg>>::new()
         .push(scrolled.boxed())
         .push(pinned.boxed())
         .width(Length::Fill)
-        .height(Length::Fill);
-    container(pane)
-        .width(width)
         .height(Length::Fill)
-        .style(move |_: &Theme| container::Style {
-            border: Border {
-                left: iced::border::Side::default().color(edge).width(HAIRLINE),
-                ..Border::default()
-            },
-            ..container::Style::default()
-        })
         .boxed()
 }
 
-/// What scrolls: the heading, a failed row's error, the facts, the
+/// What scrolls under the heading: a failed row's error, the facts, the
 /// arguments, the result and the CLI line.
-fn body<'a>(
+fn details<'a>(
     ctx: &'a PanelContext,
     state: &'a CommandLogState,
     row: &'a super::LogRow,
@@ -81,7 +128,7 @@ fn body<'a>(
     let i18n: &I18n = &ctx.i18n;
     let r = resolve(tokens);
     let failed = row.outcome.is_failed();
-    let mut col = heading(ctx, row);
+    let mut col: Column<Element<'a, PanelMsg>> = Column::new().width(Length::Fill);
     if failed {
         col = col.push(error_section(ctx, state, row));
     }

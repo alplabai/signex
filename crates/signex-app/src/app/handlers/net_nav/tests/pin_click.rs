@@ -425,3 +425,42 @@ fn the_clicked_pin_is_highlighted_on_the_canvas_until_the_selection_changes() {
     click(&mut p, 10.0, 10.0);
     assert_eq!(p.app.interaction_state.active_canvas().focused_pin, None);
 }
+
+/// The status bar texts of the main window, without the bidi isolates.
+fn status_texts(p: &Project) -> Vec<String> {
+    let window = p
+        .app
+        .ui_state
+        .main_window_id
+        .unwrap_or_else(iced::window::Id::unique);
+    crate::layout_probe::lay_out_texts(p.app.view_status_bar(window), iced::Size::new(1440.0, 28.0))
+        .into_iter()
+        .map(|t| t.text.replace(['\u{2068}', '\u{2069}'], ""))
+        .collect()
+}
+
+/// #2998, mockup row 50: while a click has picked a pin of the selected
+/// part, the status bar's selection names that pin; a body click, or any
+/// other selection, drops it.
+#[test]
+fn the_status_bar_names_the_picked_pin_until_the_selection_changes() {
+    let (mut p, _) = project_with_part(false);
+    click(&mut p, 54.9, 50.0);
+    let texts = status_texts(&p);
+    assert!(
+        texts.iter().any(|t| t == "Sel: 1 component · pin 2"),
+        "{texts:#?}"
+    );
+    click(&mut p, 50.0, 50.0);
+    let texts = status_texts(&p);
+    assert!(texts.iter().any(|t| t == "Sel: 1 component"), "{texts:#?}");
+    assert!(!texts.iter().any(|t| t.contains("· pin")), "{texts:#?}");
+    click(&mut p, 45.1, 50.0);
+    assert!(
+        status_texts(&p)
+            .iter()
+            .any(|t| t == "Sel: 1 component · pin 1")
+    );
+    click(&mut p, 10.0, 10.0);
+    assert!(!status_texts(&p).iter().any(|t| t.contains("Sel:")));
+}

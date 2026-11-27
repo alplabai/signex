@@ -14,6 +14,10 @@ const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
 mod buttons;
 mod graphite;
+#[cfg(test)]
+mod keymap_page_tests;
+#[cfg(test)]
+mod preferences_text_tests;
 
 pub(in crate::app::view) use graphite::SearchSlot;
 

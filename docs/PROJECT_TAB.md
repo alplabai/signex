@@ -55,6 +55,13 @@ message. The chrome catalog draws a sample of it.
 
 ## Sections (#1689-#1693)
 
+The section list at the left badges a row with its live state: the sheet,
+variant and library counts (a dot when a listed library is missing), the
+failed count of the last Requirements run, and on Version control the
+repository the last probe found, a green On with one and a neutral Off
+without (#2995). Commit every save does not change that badge, and it
+shows nothing until the first probe answers.
+
 - **Parameters** (#1080) — the values every sheet inherits, in one list
   with two groups, each folded shut by its header: Title block (the fifteen
   title-block fields: title, document number, revision, date, company,
@@ -174,7 +181,9 @@ message. The chrome catalog draws a sample of it.
   again (#2948). The Settings surface, alternate parts, the cell menu and
   the sheet preview are not built yet.
 - **Libraries** — the project's libraries in list order, with the path as
-  stored (cut from the start so the file name stays visible), the kind (in
+  stored (cut from the start so the file name stays visible; Name takes
+  three parts of the free width to Location's two, so a typical name shows
+  whole, #2994), the kind (in
   the project, shared, global) and the mount state read from the app as a
   pill (mounted, mounted read-only with a lock, missing at the last probe,
   not mounted); a missing library shows a warning glyph before its name.
@@ -225,7 +234,10 @@ message. The chrome catalog draws a sample of it.
   Font, Junction diameter (mm), then New shape fill. A number box carries
   its unit as a suffix and shows the built-in value in grey while empty.
   An edited field has an accent border and a reset button, which clears the
-  override exactly as emptying the field does. A typed value is never
+  override exactly as emptying the field does. The button's room is kept
+  beside every number box and the font box, empty while the field is
+  built-in, and a label wraps in a narrow card so the box and its button
+  always fit (#2996). A typed value is never
   clamped: one that is not a usable number or is outside the field's range
   is refused, the stored default stays and the box keeps the text, with an
   error border, a tinted fill and a warning icon; a number outside the range

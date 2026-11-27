@@ -167,15 +167,17 @@ impl Signex {
             &ui.active_keymap,
             &ui.i18n,
         );
-        Self::dismiss_and_centre(
+        let tokens = &self.document_view.panel_ctx.tokens;
+        Self::dismiss_and_centre_dialog(
             Message::Overlay(OverlayMsg::CloseKeyboardShortcuts),
             crate::keyboard_shortcuts_modal::view(
                 &ui.i18n,
-                &self.document_view.panel_ctx.tokens,
+                tokens,
                 sections,
                 &ui.shortcut_sheet,
                 &facts,
             ),
+            tokens,
         )
     }
 
@@ -214,9 +216,11 @@ impl Signex {
         if !ui.about_open || self.modal_detached(crate::app::state::ModalId::About) {
             return Vec::new();
         }
-        Self::dismiss_and_centre(
+        let tokens = &self.document_view.panel_ctx.tokens;
+        Self::dismiss_and_centre_dialog(
             Message::Overlay(OverlayMsg::CloseAbout),
-            crate::about_modal::view(&ui.i18n, &self.document_view.panel_ctx.tokens),
+            crate::about_modal::view(&ui.i18n, tokens),
+            tokens,
         )
     }
 

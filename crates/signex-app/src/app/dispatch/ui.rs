@@ -168,7 +168,8 @@ impl Signex {
                 // tab is a Footprint editor; the schematic / PCB
                 // grid systems aren't wired through this picker yet.
                 let footprint = self.active_footprint_editor_path();
-                tracing::info!(
+                // A developer trace: debug, so it stays out of Messages (#2993).
+                tracing::debug!(
                     target: "signex::ui",
                     footprint_active = footprint.is_some(),
                     last_mouse_pos = ?self.interaction_state.last_mouse_pos,

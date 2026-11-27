@@ -174,6 +174,9 @@ impl Signex {
                 .popover
                 .as_ref()
                 .is_some_and(|p| self.status_board_target(p.window).is_some()),
+            part_menu: self
+                .part_menu_site()
+                .map(|site| self.part_menu_dismissed(site.owner)),
         }
     }
 }

@@ -121,6 +121,7 @@ fn run_action(
             // `EditorMsg::Footprint(FootprintEditorMsg::FitConsumed)` to clear the
             // request so it doesn''t re-trigger every event.
             editor.state.fit_pending = true;
+            editor.state.fit_target_mm = None;
             editor.state.context_menu = None;
             editor.canvas_cache.clear();
         }

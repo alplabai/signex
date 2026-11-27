@@ -20,6 +20,10 @@ pub struct PcbNetPad {
     /// The designator of its part.
     pub part: String,
     pub pad: String,
+    /// The value of its part (`10k`, `7805`), the pad's descriptor in the
+    /// net detail (#3001); empty when the part has none. The board stores
+    /// no pin names to describe a pad by.
+    pub part_value: String,
     /// Its layers as the board names them.
     pub layers: Vec<String>,
     /// A drilled pad reaches every copper layer.
@@ -144,6 +148,7 @@ fn pads_by_net(board: &PcbBoard) -> (HashMap<u32, Vec<PcbNetPad>>, usize) {
                 by_net.entry(net.number).or_default().push(PcbNetPad {
                     part: fp.reference.clone(),
                     pad: pad.number.clone(),
+                    part_value: fp.value.trim().to_owned(),
                     layers: pad.layers.clone(),
                     is_through: pad.drill.is_some(),
                 });

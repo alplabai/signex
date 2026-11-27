@@ -506,6 +506,7 @@ mod tests {
             no_document: false,
             missing_libraries: 0,
             missing_assets: 0,
+            focused_pin: None,
         }
     }
 

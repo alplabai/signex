@@ -37,6 +37,8 @@ define_ids! {
     PROJECT_SETUP_PCB_RULES = "project-setup-pcb-rules";
     PROJECT_SETUP_SCHEMATIC = "project-setup-schematic";
     PROJECT_SETUP_YOUR_PROFILES = "project-setup-your-profiles";
+    PROJECT_SETUP_PREVIEW = "project-setup-preview";
+    PROJECT_SETUP_PREVIEW_CAPTION = "project-setup-preview-caption";
     PROJECT_MOVE_UP = "project-move-up";
     PROJECT_MOVE_DOWN = "project-move-down";
     // Parameters (mockup row 30)

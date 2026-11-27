@@ -120,6 +120,37 @@ fn a_pending_fit_keeps_content_clear_of_the_chrome_too() {
     );
 }
 
+/// Mockup row 110: a pending fit with a target frames that box (a refused
+/// board sketch's gap), clear of the chrome, not the content.
+#[test]
+fn a_pending_fit_with_a_target_frames_the_target() {
+    let mut state = tall_footprint();
+    state.fit_pending = true;
+    state.fit_target_mm = Some((20.0, 30.0, 40.0, 50.0));
+    let cache = canvas::Cache::new();
+    let fpc = canvas_for(&state, &cache);
+    let mut cstate = FootprintCanvasState::with_view(5.0, Point::ORIGIN);
+    fpc.apply_pending_fit(&mut cstate, BOUNDS);
+
+    let insets = chrome_insets();
+    let top_left = cstate.world_to_screen((20.0, 30.0));
+    let bottom_right = cstate.world_to_screen((40.0, 50.0));
+    assert!(top_left.x >= insets.left - 0.5, "{top_left:?}");
+    assert!(top_left.y >= insets.top - 0.5, "{top_left:?}");
+    assert!(
+        bottom_right.x <= BOUNDS.width - insets.right + 0.5,
+        "{bottom_right:?}"
+    );
+    assert!(
+        bottom_right.y <= BOUNDS.height - insets.bottom + 0.5,
+        "{bottom_right:?}"
+    );
+    // The 20 mm box fills the free height: zoomed in on it.
+    assert!(bottom_right.y - top_left.y > BOUNDS.height / 2.0);
+    // The content, 8 mm tall about the origin, is off to the top left.
+    assert!(cstate.world_to_screen((0.0, 0.0)).y < top_left.y);
+}
+
 #[test]
 fn a_zoom_request_zooms_once_about_the_centre() {
     let mut state = tall_footprint();
