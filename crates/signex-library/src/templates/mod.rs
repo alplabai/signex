@@ -14,6 +14,9 @@
 //! This crate reads no template files; the caller parses a
 //! [`ParameterTemplate`] and registers it.
 //!
+//! A template also carries the category's Components panel configuration
+//! (`[view]`, `[[ranges]]`; see `view.rs`).
+//!
 //! `TemplateRegistry::new_with_builtins` ships with five starter classes:
 //! resistor, capacitor, inductor, opamp, generic. Anything else falls through
 //! to "no template" (the `validate` step then trivially passes).
@@ -25,6 +28,10 @@ use uuid::Uuid;
 
 use crate::param::{ParamMap, ParamValue};
 use signex_types::quantity::Unit;
+
+mod view;
+
+pub use view::{CategoryView, ColumnKey, RangeSlot, SortKey};
 
 /// Kind of value a parameter slot accepts.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -73,6 +80,13 @@ pub struct ParameterTemplate {
     pub required_params: Vec<ParamSlot>,
     #[serde(default)]
     pub optional_params: Vec<ParamSlot>,
+    /// Min-to-max parameters, each pairing two measurement slots.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub ranges: Vec<RangeSlot>,
+    /// The Components panel view the category opens with; `None` uses the
+    /// defaults of [`ParameterTemplate::category_view`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub view: Option<CategoryView>,
 }
 
 impl ParameterTemplate {
@@ -170,11 +184,11 @@ pub struct TemplateRegistry {
 
 /// Bundled built-in templates. Slurped at compile time via `include_str!` so
 /// we never depend on filesystem state for default behaviour.
-const BUILTIN_RESISTOR: &str = include_str!("../templates-builtin/resistor.toml");
-const BUILTIN_CAPACITOR: &str = include_str!("../templates-builtin/capacitor.toml");
-const BUILTIN_INDUCTOR: &str = include_str!("../templates-builtin/inductor.toml");
-const BUILTIN_OPAMP: &str = include_str!("../templates-builtin/opamp.toml");
-const BUILTIN_GENERIC: &str = include_str!("../templates-builtin/generic.toml");
+const BUILTIN_RESISTOR: &str = include_str!("../../templates-builtin/resistor.toml");
+const BUILTIN_CAPACITOR: &str = include_str!("../../templates-builtin/capacitor.toml");
+const BUILTIN_INDUCTOR: &str = include_str!("../../templates-builtin/inductor.toml");
+const BUILTIN_OPAMP: &str = include_str!("../../templates-builtin/opamp.toml");
+const BUILTIN_GENERIC: &str = include_str!("../../templates-builtin/generic.toml");
 
 impl TemplateRegistry {
     /// Empty registry — no templates resolved. Mostly useful for tests.
@@ -370,6 +384,7 @@ mod tests {
                 display_plus_minus: false,
             }],
             optional_params: Vec::new(),
+            ..ParameterTemplate::default()
         };
         r.insert_for_library(lib, custom);
         let resolved = r.resolve(lib, "resistor").unwrap();
@@ -630,6 +645,7 @@ display_plus_minus = true
                 allow_negative: false,
                 display_plus_minus: false,
             }],
+            ..ParameterTemplate::default()
         };
         let text = toml::to_string_pretty(&t).unwrap();
         let back = ParameterTemplate::parse(&text).unwrap();

@@ -366,9 +366,13 @@ order; each value is tagged:
 
 A measurement is stored as the value in the **base unit** with the base
 unit's token: `ohm`, `F`, `H`, `V`, `A`, `W`, `Hz`, `%`, `ppm/C`, `V/us`,
-`AWG` (4.7 kilo-ohm is `{"value":4700.0,"unit":"ohm"}`). Signex also reads a
-prefixed form (`{"value":4.7,"unit":"kΩ"}`) as the same quantity but keeps
-it as written, and keeps any other unit text as written. Non-finite numbers
+`AWG`, `bps`, `degC` (4.7 kilo-ohm is `{"value":4700.0,"unit":"ohm"}`, 20
+kbps is `{"value":20000.0,"unit":"bps"}`). Signex also reads a prefixed form
+(`{"value":4.7,"unit":"kΩ"}`) as the same quantity but keeps it as written,
+reads `°C` as `degC`, and keeps any other unit text as written. A min-to-max
+value (supply voltage, operating temperature) is two measurements, one
+parameter per end (`supply_min`, `supply_max`); the class template's
+`[[ranges]]` pairs them for display. Non-finite numbers
 are refused. The parameter `designator_prefix` (`Text`, ASCII letters) sets
 the part's reference prefix.
 
