@@ -73,5 +73,6 @@ pub use harness_connector::{HarnessField, HarnessMismatchRow, HarnessPanel, Harn
 pub(super) use harness_definitions::view_harness_definitions;
 pub use illustrations::footprint_thumb::FootprintThumb;
 pub use no_erc::NoErcRuleEdit;
+pub(crate) use part_panel::open_part_menu;
 pub use part_panel::{PartPanelEffect, PartPanelMsg, PartPanelState};
 pub(super) use selected::view_selected_element_properties;

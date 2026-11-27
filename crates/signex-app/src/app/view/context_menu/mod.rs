@@ -18,6 +18,7 @@ mod items;
 mod layer_set;
 mod layer_tab;
 mod menus;
+mod part_menu;
 mod placement;
 pub(in crate::app::view) use placement::clamp_menu_origin;
 // The editors' Active Bar and sketch menus dim the window with it too.
