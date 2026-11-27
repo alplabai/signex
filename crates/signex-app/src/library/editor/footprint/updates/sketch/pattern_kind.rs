@@ -7,9 +7,12 @@
 //! `signex_bake::array::switch_pattern_kind`; see docs/FOOTPRINT_SKETCH.md,
 //! "Switching a pattern's kind".
 
-use signex_bake::array::{KindSwitched, KindTarget, PatternKind, switch_pattern_kind};
+use signex_bake::array::{
+    KindSwitched, KindTarget, PatternKind, remove_unused_point, switch_pattern_kind,
+};
 use signex_i18n::{I18n, ids};
-use signex_sketch::array::ArrayId;
+use signex_sketch::array::{ArrayId, ArrayKind};
+use signex_sketch::id::SketchEntityId;
 
 use crate::app::FootprintDocument;
 use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
@@ -67,19 +70,30 @@ fn cancel_centre_pick(editor: &mut FootprintDocument, array_id: ArrayId) -> bool
 }
 
 /// Switch `array_id` to `target` and re-solve, naming in the Messages
-/// panel what had no place in the new kind. Records no undo step: the
-/// caller's edit does. Returns whether the pattern changed.
+/// panel what had no place in the new kind. A pattern leaving Polar takes
+/// its centre with it when the switch to Polar minted it and nothing else
+/// uses it. Records no undo step: the caller's edit does. Returns whether
+/// the pattern changed.
 pub(crate) fn switch_kind(
     editor: &mut FootprintDocument,
     array_id: ArrayId,
     target: KindTarget,
 ) -> bool {
+    let minted_centre =
+        polar_centre(editor, array_id).filter(|c| editor.state.switch_minted_centres.contains(c));
     let Some(sketch) = editor.primitive_mut().sketch.as_mut() else {
         return false;
     };
     let Ok(switched) = switch_pattern_kind(sketch, array_id, target) else {
         return false;
     };
+    let removed = minted_centre.filter(|&c| remove_unused_point(sketch, c));
+    if let Some(centre) = removed {
+        editor.state.switch_minted_centres.remove(&centre);
+        if editor.state.selected_sketch == Some(centre) {
+            editor.state.selected_sketch = None;
+        }
+    }
     editor.with_parts(|state, primitive| {
         apply_sketch_edit_with_warnings(state, primitive, SketchEdit::ForceRebuild);
     });
@@ -87,6 +101,15 @@ pub(crate) fn switch_kind(
     editor.canvas_cache.clear();
     report_dropped(target.kind(), &switched);
     true
+}
+
+/// The centre of `array_id` while it is a polar pattern.
+fn polar_centre(editor: &FootprintDocument, array_id: ArrayId) -> Option<SketchEntityId> {
+    let sketch = editor.primitive().sketch.as_ref()?;
+    match &sketch.arrays.iter().find(|a| a.id == array_id)?.kind {
+        ArrayKind::Polar { center, .. } => Some(*center),
+        _ => None,
+    }
 }
 
 /// The Messages lines naming the suppressed instances and pad overrides a

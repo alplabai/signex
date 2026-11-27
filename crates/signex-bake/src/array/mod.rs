@@ -51,7 +51,8 @@ mod walk;
 
 pub use instance_at::instance_at;
 pub use kind_switch::{
-    KindSwitchRefused, KindSwitched, KindTarget, PatternKind, switch_pattern_kind,
+    KindSwitchRefused, KindSwitched, KindTarget, PatternKind, remove_unused_point,
+    switch_pattern_kind,
 };
 pub use numbering::{
     NumberMaskRefusal, instances_numbered, number_mask_entries, suppressed_numbers,

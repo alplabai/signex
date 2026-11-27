@@ -211,7 +211,12 @@ are `updates/sketch/pattern_kind.rs`.
   grid of several rows becomes a line along its row (dY 0), a one-column
   grid a line down its column (dX 0). Polar has no spacing, so a polar
   pattern switched away gets a 5 mm step along X, the Rectangular Pattern
-  default. The polar centre Point stays in the sketch.
+  default. The polar centre Point stays in the sketch, unless the switch
+  to Polar placed it (the centre click minted it) and nothing else uses it:
+  no entity, constraint, pattern or mirror names it and it has no role.
+  Such a centre goes in the same undo step. Which centres the switch
+  minted is known for the session only (`switch_minted_centres` in the
+  editor state); after a reload a centre counts as drawn and stays.
 - **Centre.** Linear and Grid switch at once. Polar first asks for a centre
   through the Re-pick flow: the form shows "Click a Point… (Esc to
   cancel)", and the next click on the canvas, under any tool, picks or
@@ -223,8 +228,8 @@ are `updates/sketch/pattern_kind.rs`.
   the new kind (past the count, past the last row such as a mirrored
   instance, or in a later row of a grid whose width does not resolve) is
   dropped, and a Messages line names the dropped instances. The mask
-  expression and the numbering scheme carry over as written; the numbers
-  follow the new walk.
+  expression carries over as written (the bake warns where it does not
+  fit) and the numbering scheme is kept; the numbers follow the new walk.
 - **Undo.** The switch is one undo step; for Polar it is the step of the
   click, centre Point included.
 

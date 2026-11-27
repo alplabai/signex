@@ -301,3 +301,50 @@ fn the_same_kind_or_a_missing_pattern_changes_nothing() {
     assert_eq!(sketch, before);
     assert_eq!(PatternKind::of(kind(&sketch, id)), PatternKind::Grid);
 }
+
+/// `remove_unused_point` takes a bare Point nothing names, and keeps one a
+/// Line, a pattern or its own pad attribute uses.
+#[test]
+fn only_an_unused_bare_point_is_removed() {
+    use signex_sketch::attr::PadAttr;
+    use signex_sketch::entity::{Entity, EntityKind};
+    use signex_sketch::plane::PlaneId;
+
+    use super::remove_unused_point;
+
+    let plane = PlaneId::new();
+    let point = |id| Entity::new(id, plane, EntityKind::Point { x: 0.0, y: 0.0 });
+    let (free, on_line, padded, end) = (
+        SketchEntityId::new(),
+        SketchEntityId::new(),
+        SketchEntityId::new(),
+        SketchEntityId::new(),
+    );
+    let (mut sketch, _) = sketch_with(polar("4", "", vec![]));
+    let mut pad = point(padded);
+    pad.pad = Some(PadAttr::default());
+    sketch.entities.extend([
+        point(free),
+        point(on_line),
+        pad,
+        point(end),
+        point(CENTRE),
+        Entity::new(
+            SketchEntityId::new(),
+            plane,
+            EntityKind::Line {
+                start: on_line,
+                end,
+            },
+        ),
+    ]);
+    assert!(!remove_unused_point(&mut sketch, on_line));
+    assert!(!remove_unused_point(&mut sketch, padded));
+    assert!(
+        !remove_unused_point(&mut sketch, CENTRE),
+        "the pattern's centre"
+    );
+    assert!(remove_unused_point(&mut sketch, free));
+    assert!(!sketch.entities.iter().any(|e| e.id == free));
+    assert!(!remove_unused_point(&mut sketch, free), "already gone");
+}

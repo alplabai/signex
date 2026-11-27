@@ -336,7 +336,8 @@ fn handle_tool_click(
         centerline_mode,
     );
 
-    if try_consume_repick_polar_center(editor, resolved_id) {
+    let is_minted = effective_snap_id != Some(resolved_id);
+    if try_consume_repick_polar_center(editor, resolved_id, is_minted) {
         editor.canvas_cache.clear();
         editor.mark_dirty();
         return;
@@ -760,6 +761,7 @@ fn resolve_click_point(
 fn try_consume_repick_polar_center(
     editor: &mut crate::app::FootprintDocument,
     resolved_id: SketchEntityId,
+    is_minted: bool,
 ) -> bool {
     use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
     use crate::library::editor::footprint::sketch_mode::SketchEdit;
@@ -774,7 +776,11 @@ fn try_consume_repick_polar_center(
     };
     editor.state.tool_pending = ToolPending::Idle;
     if is_kind_switch {
-        // #2596: the picked Point is the centre of the pattern turned Polar.
+        // #2596: the picked Point is the centre of the pattern turned Polar;
+        // one the click minted goes again when the pattern leaves Polar.
+        if is_minted {
+            editor.state.switch_minted_centres.insert(resolved_id);
+        }
         let target = signex_bake::array::KindTarget::Polar {
             centre: resolved_id,
         };

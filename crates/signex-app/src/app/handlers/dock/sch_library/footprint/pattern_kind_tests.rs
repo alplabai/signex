@@ -240,3 +240,101 @@ fn the_current_kind_cancels_a_waiting_centre_pick() {
     assert_eq!(kind(&app, &path, array_id), &start);
     assert_eq!(editor(&app, &path).history.undo_len(), 0);
 }
+
+fn click(app: &mut Signex, path: &Path, snap_id: Option<SketchEntityId>) {
+    send(
+        app,
+        path,
+        FootprintEditorMsg::SketchToolClick {
+            x_mm: 3.0,
+            y_mm: 4.0,
+            snap_id,
+        },
+    );
+}
+
+fn polar_centre(app: &Signex, path: &Path, array_id: ArrayId) -> SketchEntityId {
+    match kind(app, path, array_id) {
+        ArrayKind::Polar { center, .. } => *center,
+        other => panic!("a polar pattern, not {other:?}"),
+    }
+}
+
+fn has_entity(app: &Signex, path: &Path, id: SketchEntityId) -> bool {
+    sketch(app, path).entities.iter().any(|e| e.id == id)
+}
+
+fn sketch_mut<'a>(app: &'a mut Signex, path: &Path) -> &'a mut SketchData {
+    let doc = app.document_state.footprint_editors.get_mut(path).unwrap();
+    doc.primitive_mut().sketch.as_mut().expect("a sketch")
+}
+
+/// The centre the switch to Polar minted goes again when the pattern
+/// leaves Polar, in the same undo step.
+#[test]
+fn a_minted_centre_goes_when_the_pattern_leaves_polar() {
+    let path = PathBuf::from("kind-minted-centre.snxfpt");
+    let (mut app, array_id) = app_on_a_linear(&path);
+    let entities = sketch(&app, &path).entities.len();
+    app.fp_editor_pattern_kind_picked(array_id, PatternKind::Polar);
+    click(&mut app, &path, None);
+    let centre = polar_centre(&app, &path, array_id);
+    app.fp_editor_pattern_kind_picked(array_id, PatternKind::Grid);
+    assert!(!has_entity(&app, &path, centre));
+    assert_eq!(sketch(&app, &path).entities.len(), entities);
+    assert_eq!(editor(&app, &path).history.undo_len(), 2);
+    let doc = app.document_state.footprint_editors.get_mut(&path).unwrap();
+    assert!(doc.undo());
+    assert_eq!(polar_centre(&app, &path, array_id), centre);
+    assert!(
+        has_entity(&app, &path, centre),
+        "undo brings the centre back"
+    );
+}
+
+/// A centre the user drew and then picked stays.
+#[test]
+fn a_drawn_centre_stays_when_the_pattern_leaves_polar() {
+    let path = PathBuf::from("kind-drawn-centre.snxfpt");
+    let (mut app, array_id) = app_on_a_linear(&path);
+    let drawn = SketchEntityId::new();
+    let sketch = sketch_mut(&mut app, &path);
+    let plane = sketch.planes[0].id;
+    sketch.entities.push(Entity::new(
+        drawn,
+        plane,
+        EntityKind::Point { x: 3.0, y: 4.0 },
+    ));
+    app.fp_editor_pattern_kind_picked(array_id, PatternKind::Polar);
+    click(&mut app, &path, Some(drawn));
+    assert_eq!(polar_centre(&app, &path, array_id), drawn);
+    app.fp_editor_pattern_kind_picked(array_id, PatternKind::Linear);
+    assert!(has_entity(&app, &path, drawn));
+}
+
+/// A minted centre something else now uses (here a Line drawn to it) stays.
+#[test]
+fn a_minted_centre_in_use_stays_when_the_pattern_leaves_polar() {
+    let path = PathBuf::from("kind-used-centre.snxfpt");
+    let (mut app, array_id) = app_on_a_linear(&path);
+    app.fp_editor_pattern_kind_picked(array_id, PatternKind::Polar);
+    click(&mut app, &path, None);
+    let centre = polar_centre(&app, &path, array_id);
+    let source = kind(&app, &path, array_id).source();
+    let sketch = sketch_mut(&mut app, &path);
+    let plane = sketch.planes[0].id;
+    sketch.entities.push(Entity::new(
+        SketchEntityId::new(),
+        plane,
+        EntityKind::Line {
+            start: centre,
+            end: source,
+        },
+    ));
+    app.fp_editor_pattern_kind_picked(array_id, PatternKind::Linear);
+    assert!(matches!(
+        kind(&app, &path, array_id),
+        ArrayKind::Linear { .. }
+    ));
+    assert!(has_entity(&app, &path, centre));
+}

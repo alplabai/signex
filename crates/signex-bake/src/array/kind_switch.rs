@@ -8,6 +8,7 @@ use std::collections::BTreeMap;
 
 use signex_expr::{ExprNode, LiteralContext, UnitFamily};
 use signex_sketch::array::{ArrayId, ArrayKind, GridDepopulation};
+use signex_sketch::entity::{Entity, EntityKind};
 use signex_sketch::expr::eval::{EvalContext, eval};
 use signex_sketch::id::SketchEntityId;
 use signex_sketch::parameter::resolve_quantities;
@@ -154,6 +155,41 @@ pub fn switch_pattern_kind(
         array.kind = new;
     }
     Ok(switched)
+}
+
+/// Remove `point` when nothing uses it: no entity, constraint, pattern or
+/// mirror names it and it carries no role of its own. A centre the switch to
+/// Polar minted goes this way when the pattern leaves Polar. Returns whether
+/// it went.
+pub fn remove_unused_point(sketch: &mut SketchData, point: SketchEntityId) -> bool {
+    let Some(entity) = sketch.entities.iter().find(|e| e.id == point) else {
+        return false;
+    };
+    if !matches!(entity.kind, EntityKind::Point { .. }) {
+        return false;
+    }
+    let mut bare = Entity::new(entity.id, entity.plane, entity.kind.clone());
+    bare.construction = entity.construction;
+    bare.centerline = entity.centerline;
+    let is_named = *entity != bare
+        || sketch
+            .entities
+            .iter()
+            .any(|e| e.point_refs().contains(&point))
+        || sketch
+            .constraints
+            .iter()
+            .any(|c| c.kind.entity_refs().contains(&point))
+        || sketch
+            .arrays
+            .iter()
+            .any(|a| a.kind.entity_refs().contains(&point))
+        || sketch.pattern_mirrors.iter().any(|m| m.line == point);
+    if is_named {
+        return false;
+    }
+    sketch.entities.retain(|e| e.id != point);
+    true
 }
 
 fn depopulation_of(kind: &mut ArrayKind) -> &mut Option<GridDepopulation> {
