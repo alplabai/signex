@@ -114,7 +114,10 @@ fn skip_by_operands_is_the_dialogs_close_and_a_skipped_library_is_raised_again()
         "{outcome:?}"
     );
     assert_eq!(left(&by_command), left(&by_dialog));
-    assert_eq!(by_command.library.missing.skipped(), [gone.clone()]);
+    assert_eq!(
+        by_command.library.missing.skipped(),
+        std::slice::from_ref(&gone)
+    );
 
     let outcome = headless(&mut by_command, &[&arg("path", &gone), "action=remove"]);
     assert!(
