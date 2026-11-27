@@ -79,6 +79,8 @@ pub struct ImportJobOutcome {
     pub local_commits: usize,
     /// The library's id, read from its `.snxlib`.
     pub library_id: Option<uuid::Uuid>,
+    /// The library ids its manifest `requires`, to mount with it.
+    pub requires: Vec<uuid::Uuid>,
 }
 
 impl ImportJob {
@@ -123,6 +125,7 @@ impl ImportJob {
                 commit: None,
                 local_commits,
                 library_id: None,
+                requires: Vec::new(),
             });
         };
         let keep_run = |error: ImportError, run: &RunOutcome| RunFailure {
@@ -136,13 +139,14 @@ impl ImportJob {
         let library_file = find_library_file(&library_dir).map_err(|e| keep_run(e, &run))?;
         let message = self.commit_message(&library_file);
         let commit = record_snapshot(&library_dir, &message).map_err(|e| keep_run(e, &run))?;
-        let library_id = read_library_id(&library_file);
+        let (library_id, requires) = read_library_identity(&library_file);
         Ok(ImportJobOutcome {
             run,
             library_file: Some(library_file),
             commit,
             local_commits,
             library_id,
+            requires,
         })
     }
 
@@ -222,12 +226,19 @@ pub fn commit_message(
     message
 }
 
-/// The `library_id` of the `.snxlib` at `file`, when it parses.
-fn read_library_id(file: &Path) -> Option<uuid::Uuid> {
-    let text = std::fs::read_to_string(file).ok()?;
-    signex_library::library_file::LibraryFile::parse(&text)
+/// The `library_id` of the `.snxlib` at `file` and the ids its manifest
+/// `requires`; nothing when it does not parse.
+fn read_library_identity(file: &Path) -> (Option<uuid::Uuid>, Vec<uuid::Uuid>) {
+    let parsed = std::fs::read_to_string(file)
         .ok()
-        .map(|library| library.manifest.library_id)
+        .and_then(|text| signex_library::library_file::LibraryFile::parse(&text).ok());
+    match parsed {
+        Some(library) => (
+            Some(library.manifest.library_id),
+            library.manifest.library.required_libraries(),
+        ),
+        None => (None, Vec::new()),
+    }
 }
 
 /// The `.snxlib` directly inside `dir`; the first by name when several.

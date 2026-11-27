@@ -34,6 +34,20 @@ pub enum Blocker {
     RunStopping,
     /// A library import this dialog did not start is running.
     OtherRun,
+    /// The folder holds an imported library; the offer to update it
+    /// waits for an answer.
+    UpdateOffered,
+}
+
+/// The offer to update the imported library in the chosen folder.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct UpdateOffer {
+    /// Commits since the last import that are not imports; the offer
+    /// warns that the update replaces their content.
+    pub local_commits: usize,
+    /// Update this library was pressed: Next previews an update and the
+    /// preview's button runs it.
+    pub accepted: bool,
 }
 
 /// Whether an input kind belongs on the `kind` side of the picker.
@@ -185,6 +199,9 @@ impl ImportDialogState {
         if self.target_problem.is_some() {
             return Some(Blocker::TargetRefused);
         }
+        if self.update_offer.is_some_and(|offer| !offer.accepted) {
+            return Some(Blocker::UpdateOffered);
+        }
         if self.checking_target {
             return Some(Blocker::Checking);
         }
@@ -203,6 +220,7 @@ impl ImportDialogState {
         self.sources = paths;
         self.converter = None;
         self.target_problem = None;
+        self.update_offer = None;
         let stem = self
             .sources
             .first()
@@ -220,6 +238,7 @@ impl ImportDialogState {
     pub fn set_name(&mut self, name: String, root: Option<&Path>) {
         self.name = name;
         self.target_problem = None;
+        self.update_offer = None;
         if self.location_edited {
             return;
         }
@@ -234,6 +253,12 @@ impl ImportDialogState {
         self.location = location;
         self.location_edited = true;
         self.target_problem = None;
+        self.update_offer = None;
+    }
+
+    /// The import runs as an update of the library in the chosen folder.
+    pub fn is_update(&self) -> bool {
+        self.update_offer.is_some_and(|offer| offer.accepted)
     }
 
     /// The `library` run for `mode` into `output`, once Next is on (the

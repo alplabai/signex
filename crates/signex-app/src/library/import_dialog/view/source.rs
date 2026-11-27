@@ -13,7 +13,7 @@ use super::{
     ImportDialogContext, SP, TS, caption, chip, form_row, mono, outline_btn, problem, tag,
 };
 use crate::library::create_options::option_card;
-use crate::library::import_dialog::source::Blocker;
+use crate::library::import_dialog::source::{Blocker, UpdateOffer};
 use crate::library::import_dialog::{ImportDialogMsg, ImportDialogState, SourceKind, msg};
 use crate::library::messages::LibraryMessage;
 use crate::library::modal_chrome::{cancel_btn, footer_strip, notice_banner, primary_btn_if};
@@ -54,10 +54,67 @@ pub(super) fn body<'a>(
         let words = text(reason.localized(i18n)).size(TS.body).boxed();
         col = col.push(notice_banner(PillTone::Err, words, Vec::new(), tokens));
     }
+    if let Some(offer) = state.update_offer {
+        col = col.push(update_offer(state, offer, tokens, i18n));
+    }
     if let Some(line) = blocker_line(state, i18n) {
         col = col.push(problem(line, tokens));
     }
     col.boxed()
+}
+
+/// The chosen folder holds an imported library (#3123): what an update
+/// does, the warning when it has commits that are not imports, and Update
+/// this library until the offer is taken.
+fn update_offer<'a>(
+    state: &ImportDialogState,
+    offer: UpdateOffer,
+    tokens: &ThemeTokens,
+    i18n: &I18n,
+) -> Element<'a, LibraryMessage> {
+    let mut words = column![
+        text(t!(
+            i18n,
+            ids::LIBRARY_IMPORT_DIALOG_UPDATE_OFFER,
+            "path" => state.location.clone()
+        ))
+        .size(TS.body)
+    ]
+    .spacing(SP.xs);
+    if offer.local_commits > 0 {
+        words = words.push(
+            text(t!(
+                i18n,
+                ids::LIBRARY_IMPORT_LOCAL_COMMITS,
+                "count" => offer.local_commits
+            ))
+            .size(TS.body),
+        );
+    }
+    let (tone, actions) = if offer.accepted {
+        (
+            PillTone::Info,
+            vec![caption(
+                t!(i18n, ids::LIBRARY_IMPORT_DIALOG_UPDATE_TAKEN),
+                tokens,
+            )],
+        )
+    } else {
+        let tone = if offer.local_commits > 0 {
+            PillTone::Warn
+        } else {
+            PillTone::Info
+        };
+        (
+            tone,
+            vec![outline_btn(
+                t!(i18n, ids::LIBRARY_IMPORT_DIALOG_UPDATE_ACCEPT),
+                Some(msg(ImportDialogMsg::UpdateAccepted)),
+                tokens,
+            )],
+        )
+    };
+    notice_banner(tone, words.boxed(), actions, tokens)
 }
 
 /// The notice when no converter answered (mockup "Converter not
@@ -368,6 +425,7 @@ pub(crate) fn blocker_line(state: &ImportDialogState, i18n: &I18n) -> Option<Loc
         | Blocker::Unreadable(_)
         | Blocker::NoCommonConverter
         | Blocker::TargetRefused
+        | Blocker::UpdateOffered
         | Blocker::Checking => return None,
     })
 }

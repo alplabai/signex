@@ -12,6 +12,7 @@ use signex_i18n::{Translatable, ids};
 use super::*;
 use crate::app::state::ErrorNotice;
 use crate::ignore::IgnoreResult as _;
+use crate::library::import_dialog::result::{Mounted, RequiredLibrary};
 use crate::library::messages::LibraryImportMsg;
 use crate::library::mount::{MountIntent, MountRequest, spawn_pending_mounts};
 use crate::library::refresh::{RefreshFollowUp, refresh_task};
@@ -143,7 +144,7 @@ impl Signex {
 
     /// The first unsaved editor or document inside the library folder
     /// `dir`, named for the refusal; an update would overwrite it.
-    fn unsaved_in_library(&self, dir: &std::path::Path) -> Option<String> {
+    pub(super) fn unsaved_in_library(&self, dir: &std::path::Path) -> Option<String> {
         use crate::app::state::scope::{CaseFold, path_is_under};
         let fold = CaseFold::host_default();
         if let Some(editor) = self
@@ -254,7 +255,14 @@ impl Signex {
                 self.report_library_import_failure(failure);
                 Task::none()
             }
-            Ok(outcome) => self.mount_imported_library(outcome, &finished, shown),
+            Ok(outcome) => {
+                let (task, mounted) = self.mount_imported_library(outcome, &finished, shown);
+                if shown && let Some(mounted) = mounted {
+                    let required = self.required_libraries(&outcome.requires);
+                    self.import_dialog_mounted(mounted, required);
+                }
+                task
+            }
         };
         self.library.import.last = Some(Box::new(finished));
         Task::batch([task, leftover])
@@ -291,33 +299,40 @@ impl Signex {
     }
 
     /// Record and mount a written library; refresh it when it is already
-    /// mounted (a re-import). A preview mounts nothing. A library whose id
-    /// another open library has is neither recorded nor mounted.
+    /// mounted (a re-import). A preview mounts nothing (`None`). A library
+    /// whose id another open library has is neither recorded nor mounted;
+    /// the notice saying so is left to the dialog when it shows the result
+    /// (`shown`).
     fn mount_imported_library(
         &mut self,
         outcome: &ImportJobOutcome,
         finished: &ImportFinished,
         shown: bool,
-    ) -> Task<Message> {
+    ) -> (Task<Message>, Option<Mounted>) {
         let Some(file) = outcome.library_file.clone() else {
-            return Task::none();
+            return (Task::none(), None);
         };
         if let Some(other) = self.library_id_clash(&file, outcome.library_id) {
             let detail = Translatable::new(ids::LIBRARY_IMPORT_ID_CLASH)
                 .arg("path", file.display().to_string())
                 .arg("other", other.display().to_string());
             crate::diagnostics::log_warning(detail.render_en_us());
-            self.document_view.error_notice =
-                Some(ErrorNotice::new(ids::LIBRARY_IMPORT_FAILED_TITLE, detail));
-            return Task::none();
-        }
-        let mut tasks = vec![self.mount_required_libraries(&[])];
-        match &finished.target {
-            MountTarget::Global => tasks.push(record_global_task(file.clone())),
-            MountTarget::Project(project) => {
-                self.add_imported_library_to_project(project, &file, outcome.library_id)
+            if !shown {
+                self.document_view.error_notice =
+                    Some(ErrorNotice::new(ids::LIBRARY_IMPORT_FAILED_TITLE, detail));
             }
+            return (Task::none(), Some(Mounted::Clash(other)));
         }
+        let mut tasks = vec![self.mount_required_libraries(&outcome.requires)];
+        let mounted = match &finished.target {
+            MountTarget::Global => {
+                tasks.push(record_global_task(file.clone()));
+                Mounted::AllProjects
+            }
+            MountTarget::Project(project) => self
+                .add_imported_library_to_project(project, &file, outcome.library_id)
+                .map_or(Mounted::Unrecorded, Mounted::Project),
+        };
         self.log_import_result(outcome, &file, shown);
         tasks.push(
             match self.library.request_mount(&file, MountIntent::Silent) {
@@ -329,7 +344,24 @@ impl Signex {
             },
         );
         self.refresh_panel_ctx();
-        Task::batch(tasks)
+        (Task::batch(tasks), Some(mounted))
+    }
+
+    /// Each of `library_ids` with the name of the open library that has
+    /// it, if one does.
+    fn required_libraries(&self, library_ids: &[uuid::Uuid]) -> Vec<RequiredLibrary> {
+        library_ids
+            .iter()
+            .map(|&id| RequiredLibrary {
+                id,
+                open_as: self
+                    .library
+                    .open_libraries
+                    .iter()
+                    .find(|lib| lib.library_id == id)
+                    .map(|lib| lib.display_name.clone()),
+            })
+            .collect()
     }
 
     /// Another open library with `library_id`; a re-import of the same
@@ -348,16 +380,17 @@ impl Signex {
     }
 
     /// Put `file` on the project's library list (once), so the next save
-    /// records it in the `.snxprj`.
+    /// records it in the `.snxprj`. The project's name, or `None` when the
+    /// library has no readable id or the project closed meanwhile.
     fn add_imported_library_to_project(
         &mut self,
         project: &std::path::Path,
         file: &std::path::Path,
         library_id: Option<uuid::Uuid>,
-    ) {
+    ) -> Option<String> {
         let Some(library_id) = library_id else {
             log::warn!("Library import: {} has no readable id", file.display());
-            return;
+            return None;
         };
         let Some(loaded) = self
             .document_state
@@ -369,20 +402,22 @@ impl Signex {
                 "Library import: project {} closed before the import finished",
                 project.display()
             );
-            return;
+            return None;
         };
+        let name = loaded.data.name.clone();
         if loaded
             .data
             .libraries
             .iter()
             .any(|entry| entry.library_id == Some(library_id))
         {
-            return;
+            return Some(name);
         }
         let fold = loaded.case_fold;
         crate::library::commands::register_library_entry(&mut loaded.data, file, library_id, fold);
         let project_path = loaded.path.clone();
         self.document_state.mark_document_dirty(&project_path);
+        Some(name)
     }
 
     /// Log a written library; a partial import raises a notice unless the
@@ -420,14 +455,17 @@ impl Signex {
         }
     }
 
-    /// HOOK (A8, manifest `requires`): mount the libraries an imported
-    /// library requires, by library id. The manifest's `requires` is not
-    /// read yet (it lands with A8 on another branch), so every caller
-    /// passes an empty list today; once it is read, pass its ids here and
-    /// resolve each against the known libraries.
+    /// The libraries an imported library's manifest `requires` (contract
+    /// §6, step 4), by library id. One already open needs nothing; one that
+    /// is not is noted here, named in the dialog's result card, and listed
+    /// in Messages once the mount settles (`library::requires`). Finding a
+    /// library that is not open by its id is not done: nothing records the
+    /// ids of libraries that are not mounted.
     pub(crate) fn mount_required_libraries(&mut self, library_ids: &[uuid::Uuid]) -> Task<Message> {
         for id in library_ids {
-            log::warn!("Library import: required library {id} is not resolved yet (A8)");
+            if !self.library.open_libraries.iter().any(|lib| lib.library_id == *id) {
+                log::info!("Library import: required library {id} is not open");
+            }
         }
         Task::none()
     }

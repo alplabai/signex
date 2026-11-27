@@ -30,12 +30,42 @@ pub enum ReportNote {
     Failed(Translatable),
 }
 
+/// Where a finished import was mounted (#3123).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Mounted {
+    /// Recorded as a global library.
+    AllProjects,
+    /// Added to this project's libraries, by its name.
+    Project(String),
+    /// Mounted, but the project it was meant for closed before the end, or
+    /// the library has no readable id; it is on no project's list.
+    Unrecorded,
+    /// Not mounted: the open library at this path has the same library id.
+    Clash(PathBuf),
+}
+
+/// A library the imported one's manifest `requires`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RequiredLibrary {
+    pub id: uuid::Uuid,
+    /// The open library that has the id, by its name; `None` when none is
+    /// open.
+    pub open_as: Option<String>,
+}
+
 /// What a finished run did, for the result card.
 #[derive(Debug, Clone, PartialEq)]
 pub struct RunFacts {
     pub mode: RunMode,
     pub exit: ExitKind,
     pub counts: Counts,
+    /// The import commit; `None` when the update changed nothing.
+    pub commit: Option<String>,
+    /// Commits that are not imports, found before an update.
+    pub local_commits: usize,
+    /// Settled once the library is recorded, after the run's own end.
+    pub mounted: Option<Mounted>,
+    pub required: Vec<RequiredLibrary>,
 }
 
 /// A finished import, or a library's stored report.
@@ -69,6 +99,10 @@ impl ImportResult {
                 mode,
                 exit: outcome.run.exit,
                 counts: outcome.run.summary.counts,
+                commit: outcome.commit.clone(),
+                local_commits: outcome.local_commits,
+                mounted: None,
+                required: Vec::new(),
             }),
         }
     }

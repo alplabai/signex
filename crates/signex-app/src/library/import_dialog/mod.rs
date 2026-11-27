@@ -34,6 +34,8 @@ mod view;
 mod report_tests;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod update_tests;
 
 #[cfg(all(test, unix))]
 mod flow_tests;
@@ -71,15 +73,55 @@ pub enum PreviewState {
     Failed(Translatable),
 }
 
+/// What became of the library folder after a run that wrote no library.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FolderAfter {
+    /// The folder the run created was removed.
+    Removed,
+    /// Files the run wrote may remain.
+    Kept,
+    /// An update's library was put back to its last import.
+    Restored,
+    /// An update's library could not be put back; why.
+    NotRestored(String),
+}
+
+impl FolderAfter {
+    pub fn of(failure: &crate::library_import::RunFailure) -> Self {
+        match &failure.restored {
+            Some(Ok(())) => Self::Restored,
+            Some(Err(why)) => Self::NotRestored(why.clone()),
+            None if failure.removed_output => Self::Removed,
+            None => Self::Kept,
+        }
+    }
+}
+
 /// The import of step 3, once it ended without a library.
 #[derive(Debug, Clone, PartialEq)]
 pub enum ImportEnd {
-    /// Cancelled; `removed` when the folder it wrote was removed.
-    Cancelled { removed: bool },
-    /// It failed; the reason, and whether the folder was removed.
-    Failed { reason: Translatable, removed: bool },
+    /// Cancelled, and what became of the folder.
+    Cancelled { folder: FolderAfter },
+    /// It failed; the reason, and what became of the folder.
+    Failed {
+        reason: Translatable,
+        folder: FolderAfter,
+    },
     /// Refused before the converter started: nothing was changed.
     Refused { reason: Translatable },
+}
+
+/// What the folder check behind Next and Import found.
+#[derive(Debug, Clone, PartialEq)]
+pub enum TargetCheck {
+    /// Absent or empty: a new import takes it.
+    Free,
+    /// It cannot take the library; why.
+    Refused(Translatable),
+    /// It holds an imported library with no uncommitted changes, so an
+    /// update can run over it; `local_commits` are commits since the last
+    /// import that are not imports.
+    Imported { local_commits: usize },
 }
 
 /// The open Import Library dialog.
@@ -108,6 +150,9 @@ pub struct ImportDialogState {
     /// Why the chosen folder cannot take the library (from the check Next
     /// runs); cleared by any edit.
     pub target_problem: Option<Translatable>,
+    /// The chosen folder holds an imported library: the update offered,
+    /// and whether it was taken (#3123). Cleared by any edit.
+    pub update_offer: Option<source::UpdateOffer>,
     /// Next ran the folder check and waits for its answer.
     pub checking_target: bool,
     /// The run the folder check leads to.
@@ -159,6 +204,7 @@ impl ImportDialogState {
             project: None,
             include_models: true,
             target_problem: None,
+            update_offer: None,
             checking_target: false,
             pending_run: None,
             preview_dir: None,
@@ -216,12 +262,13 @@ pub enum ImportDialogMsg {
     MountForAllToggled,
     ModelsToggled,
     NextPressed,
-    /// The folder check behind Next finished: `None` when the folder can
-    /// take the library.
+    /// The folder check behind Next or Import finished.
     TargetChecked {
         location: PathBuf,
-        problem: Option<Translatable>,
+        check: TargetCheck,
     },
+    /// Update this library was pressed on the offer in step 1.
+    UpdateAccepted,
     BackPressed,
     ImportPressed,
     FilterEdited(String),

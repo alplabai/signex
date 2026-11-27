@@ -9,7 +9,7 @@ use std::sync::atomic::AtomicBool;
 use signex_i18n::I18n;
 use signex_types::theme::{ThemeId, theme_tokens};
 
-use super::result::{ImportResult, ReportNote, ResultTab, RunFacts};
+use super::result::{ImportResult, Mounted, ReportNote, RequiredLibrary, ResultTab, RunFacts};
 use super::{ImportDialogContext, ImportDialogMsg, ImportDialogState, Step, view};
 use crate::app::{Message, Signex};
 use crate::library::messages::{LibraryImportMsg, LibraryMessage};
@@ -60,6 +60,7 @@ fn job_outcome(exit: ExitKind) -> ImportJobOutcome {
         commit: Some("0123456789abcdef".into()),
         local_commits: 0,
         library_id: None,
+        requires: Vec::new(),
     }
 }
 
@@ -283,6 +284,13 @@ fn the_result_and_the_report_build_in_both_graphite_themes() {
         mode: RunMode::Import,
         exit: ExitKind::Ok,
         counts: Default::default(),
+        commit: None,
+        local_commits: 2,
+        mounted: Some(Mounted::Clash("/l/Other/Other.snxlib".into())),
+        required: vec![RequiredLibrary {
+            id: uuid::Uuid::nil(),
+            open_as: None,
+        }],
     };
     let mut empty = ImportDialogState::new();
     empty.show_result(ImportResult {

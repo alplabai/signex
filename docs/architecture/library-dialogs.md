@@ -159,8 +159,26 @@ open it is forced on and greyed. Include 3D models (embedded) passes
 not built: every import is a git snapshot (see the 2026-11-26 snapshot row in
 DECISIONS.md).
 
-**Next** checks the folder on a worker: absent or empty is accepted, a file
-or a folder that holds anything is refused with a banner and nothing runs.
+**Next** checks the folder on a worker (`import_dialog/target.rs`): absent or
+empty is accepted; a link, a file, or a folder that holds anything is refused
+with a banner and nothing runs, except a folder that holds an imported
+library.
+
+**Updating an import (#3123).** A folder with a `.snxlib` in a git repository
+with no uncommitted changes is offered as an update: a banner says what an
+update does (one new commit; only what the converter wrote is deleted or
+overwritten; parts the user added stay), warns when the library has commits
+that are not imports (`UpdateCheck::local_commits`), and offers Update this
+library; Next stays off until it is taken. Taking it runs the check again and
+the preview; the preview's button reads Update with N parts and runs
+`--update` over the folder. A library with no repository, one with
+uncommitted changes, and one with unsaved editors or documents in the app are
+refused with their own reasons and nothing runs; a part-number clash is the
+converter's own refusal (contract §5) and shows as its failure, with the
+library put back to its last import. Any edit of the sources, name or folder
+drops the offer. On step 3 the silence and Cancel lines say a stopped or
+cancelled update puts the library back to its last import, and a failed one
+says whether it was put back (`FolderAfter`).
 
 **Step 2, preview.** A `--dry-run` into a new temp folder
 (`signex-library-preview-<uuid>` under the system temp folder, removed when the
@@ -196,8 +214,13 @@ whether the folder was removed, with Back and Close.
 
 **Done: result and loss report (#3121).** A finished import stays on step 3
 ("Step 3 of 3 · Done") with two tabs. Result is the result card: the library
-name, tiles for imported parts, approximated, dropped and skipped items, the
-library folder, and View loss report with the counts. Loss report is the
+name ("imported" or "updated"), tiles for imported parts, approximated,
+dropped and skipped items, the library folder, where it was mounted (for all
+projects, for the project, "Mounting…" until that is settled, or not mounted
+when an open library has the same id), its history (the import commit, or
+that an unchanged update added none), the libraries its manifest `requires`
+(by name when open, by id when not), for an update the local-commits warning,
+and View loss report with the counts. Loss report is the
 report the run wrote (`import-report.json`), with the same severity chips and
 filter as step 2, grouped by severity (most severe first, each with what it
 means for the item) and then by code (most items first), each row the item's

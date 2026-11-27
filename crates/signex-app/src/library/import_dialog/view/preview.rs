@@ -378,6 +378,8 @@ pub(super) fn footer<'a>(
     let parts = state.parts_to_import();
     let label = if state.checking_target {
         t!(i18n, ids::LIBRARY_IMPORT_DIALOG_CHECKING)
+    } else if state.is_update() {
+        t!(i18n, ids::LIBRARY_IMPORT_DIALOG_UPDATE_PARTS, "count" => parts)
     } else {
         t!(i18n, ids::LIBRARY_IMPORT_DIALOG_IMPORT_PARTS, "count" => parts)
     };

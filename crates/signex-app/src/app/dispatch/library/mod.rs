@@ -90,7 +90,7 @@ mod row_summary;
 #[cfg(test)]
 mod row_summary_tests;
 #[cfg(test)]
-pub(crate) use import_dialog::target_problem as import_dialog_target_problem;
+pub(crate) use import_dialog::check_target as import_dialog_check_target;
 pub(crate) use rename_guard::LIBRARY_BACKGROUND_WRITE_REFUSAL;
 #[cfg(test)]
 mod component_save_point_tests;

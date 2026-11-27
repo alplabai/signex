@@ -497,5 +497,25 @@ define_ids! {
     LIBRARY_IMPORT_DIALOG_OPEN_IN_BROWSER = "library-import-dialog-open-in-browser";
     LIBRARY_IMPORT_DIALOG_SAVE_REPORT_TITLE = "library-import-dialog-save-report-title";
     LIBRARY_IMPORT_DIALOG_MENU_VIEW_REPORT = "library-import-dialog-menu-view-report";
+    LIBRARY_IMPORT_DIALOG_RESTORED = "library-import-dialog-restored";
+    LIBRARY_IMPORT_DIALOG_NOT_RESTORED = "library-import-dialog-not-restored";
+    LIBRARY_IMPORT_DIALOG_UPDATE_OFFER = "library-import-dialog-update-offer";
+    LIBRARY_IMPORT_DIALOG_UPDATE_ACCEPT = "library-import-dialog-update-accept";
+    LIBRARY_IMPORT_DIALOG_UPDATE_TAKEN = "library-import-dialog-update-taken";
+    LIBRARY_IMPORT_DIALOG_UPDATE_PARTS = "library-import-dialog-update-parts";
+    LIBRARY_IMPORT_DIALOG_SILENCE_UPDATE = "library-import-dialog-silence-update";
+    LIBRARY_IMPORT_DIALOG_CANCEL_RULE_UPDATE = "library-import-dialog-cancel-rule-update";
+    LIBRARY_IMPORT_DIALOG_MOUNTED = "library-import-dialog-mounted";
+    LIBRARY_IMPORT_DIALOG_MOUNTED_ALL = "library-import-dialog-mounted-all";
+    LIBRARY_IMPORT_DIALOG_MOUNTED_PROJECT = "library-import-dialog-mounted-project";
+    LIBRARY_IMPORT_DIALOG_MOUNTED_UNRECORDED = "library-import-dialog-mounted-unrecorded";
+    LIBRARY_IMPORT_DIALOG_MOUNTED_CLASH = "library-import-dialog-mounted-clash";
+    LIBRARY_IMPORT_DIALOG_MOUNTING = "library-import-dialog-mounting";
+    LIBRARY_IMPORT_DIALOG_HISTORY = "library-import-dialog-history";
+    LIBRARY_IMPORT_DIALOG_HISTORY_COMMIT = "library-import-dialog-history-commit";
+    LIBRARY_IMPORT_DIALOG_HISTORY_UNCHANGED = "library-import-dialog-history-unchanged";
+    LIBRARY_IMPORT_DIALOG_REQUIRES = "library-import-dialog-requires";
+    LIBRARY_IMPORT_DIALOG_REQUIRES_OPEN = "library-import-dialog-requires-open";
+    LIBRARY_IMPORT_DIALOG_REQUIRES_MISSING = "library-import-dialog-requires-missing";
     LIBRARY_BROWSER_IMPORT = "library-browser-import";
 }

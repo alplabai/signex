@@ -1095,5 +1095,39 @@ library-import-dialog-open-report = Open report
 library-import-dialog-open-in-browser = Open in Library Browser
 library-import-dialog-save-report-title = Save the loss report
 library-import-dialog-menu-view-report = View import report
+# Import Library dialog, mounting and updating an import (#3123).
+# $path is the library folder.
+library-import-dialog-restored = { $path } was put back to its last import.
+# $reason is why it could not be put back.
+library-import-dialog-not-restored = { $path } could not be put back to its last import ({ $reason }); check the folder before using it.
+# $path is the chosen folder.
+library-import-dialog-update-offer = { $path } holds an imported library. Update it from the source: the update is one new commit, it deletes and overwrites only what the converter wrote, and parts you added stay.
+library-import-dialog-update-accept = Update this library
+library-import-dialog-update-taken = Next previews the update.
+# $count is a whole number.
+library-import-dialog-update-parts = { $count ->
+        [one] Update with 1 part
+       *[other] Update with { $count } parts
+    }
+# $seconds is a whole number, $path the library folder.
+library-import-dialog-silence-update = No progress for { $seconds } s stops the update. A stopped or cancelled update puts { $path } back to its last import.
+library-import-dialog-cancel-rule-update = Cancel stops after the current item and puts the library back to its last import.
+library-import-dialog-mounted = Mounted
+library-import-dialog-mounted-all = For all projects
+# $project is the project's name.
+library-import-dialog-mounted-project = For { $project }
+library-import-dialog-mounted-unrecorded = For this session only: the project it was meant for closed before the import ended.
+# $other is the open library with the same id.
+library-import-dialog-mounted-clash = Not mounted: { $other } has the same library id. Close it, then open this library.
+library-import-dialog-mounting = Mounting…
+library-import-dialog-history = History
+# $commit is the start of a commit id.
+library-import-dialog-history-commit = Commit { $commit }
+library-import-dialog-history-unchanged = Unchanged since the last import; no commit was added.
+library-import-dialog-requires = Requires
+# $name is an open library.
+library-import-dialog-requires-open = { $name } (open)
+# $id is a library id.
+library-import-dialog-requires-missing = Library { $id } (not open; open it so the parts that use it resolve)
 # The Library Browser's LIBRARIES header (#3122).
 library-browser-import = Import…

@@ -11,8 +11,8 @@ use signex_types::theme::{ThemeId, theme_tokens};
 
 use super::source::Blocker;
 use super::{
-    ImportDialogContext, ImportDialogMsg, ImportDialogState, ImportEnd, PreviewState, SourceKind,
-    Step, view,
+    FolderAfter, ImportDialogContext, ImportDialogMsg, ImportDialogState, ImportEnd, PreviewState,
+    SourceKind, Step, view,
 };
 use crate::app::{Message, Signex};
 use crate::library::messages::{LibraryImportMsg, LibraryMessage};
@@ -24,17 +24,17 @@ use crate::library_import::{
     RunFailure, RunMode, RunOutcome, Summary,
 };
 
-const A: &str = r#"{"contract":"1.0","converter":"a-import","version":"1.0","inputs":[
+pub(super) const A: &str = r#"{"contract":"1.0","converter":"a-import","version":"1.0","inputs":[
     {"label":"Integrated library","extensions":["lib1"],"kind":"library"},
     {"label":"Database library","extensions":["dblink"],"kind":"database"}]}"#;
 const B: &str = r#"{"contract":"1.0","converter":"b-import","version":"2.0","inputs":[
     {"label":"Integrated library","extensions":["lib1"],"kind":"library"},
     {"label":"Footprint library","extensions":["fp1"],"kind":"library"}]}"#;
-const REPORT: &str =
+pub(super) const REPORT: &str =
     include_str!("../../../../../docs/fixtures/library-converter/import-report.json");
 const ROOT: &str = "/home/u/Signex/Libraries";
 
-fn converter(path: &str, json: &str) -> DiscoveredConverter {
+pub(super) fn converter(path: &str, json: &str) -> DiscoveredConverter {
     DiscoveredConverter {
         path: PathBuf::from(path),
         command: ConverterCommand::new(PathBuf::from(path)),
@@ -42,7 +42,7 @@ fn converter(path: &str, json: &str) -> DiscoveredConverter {
     }
 }
 
-fn found(converters: Vec<DiscoveredConverter>) -> ImportDialogState {
+pub(super) fn found(converters: Vec<DiscoveredConverter>) -> ImportDialogState {
     ImportDialogState {
         discovery: Some(Discovery {
             converters,
@@ -52,24 +52,24 @@ fn found(converters: Vec<DiscoveredConverter>) -> ImportDialogState {
     }
 }
 
-fn picked(state: &mut ImportDialogState, paths: &[&str]) {
+pub(super) fn picked(state: &mut ImportDialogState, paths: &[&str]) {
     let paths = paths.iter().map(PathBuf::from).collect();
     state.apply_sources(paths, Some(Path::new(ROOT)));
 }
 
-fn d(m: ImportDialogMsg) -> Message {
+pub(super) fn d(m: ImportDialogMsg) -> Message {
     Message::Library(super::msg(m))
 }
 
-fn import(m: LibraryImportMsg) -> Message {
+pub(super) fn import(m: LibraryImportMsg) -> Message {
     Message::Library(LibraryMessage::Import(m))
 }
 
-fn dialog(app: &Signex) -> &ImportDialogState {
+pub(super) fn dialog(app: &Signex) -> &ImportDialogState {
     app.library.import_dialog.as_deref().expect("open")
 }
 
-fn outcome() -> RunOutcome {
+pub(super) fn outcome() -> RunOutcome {
     RunOutcome {
         exit: crate::library_import::ExitKind::Partial,
         summary: Summary {
@@ -291,7 +291,9 @@ fn cancel_stops_after_the_current_item_and_says_what_was_removed() {
     let state = dialog(&app);
     assert_eq!(
         state.import_end,
-        Some(ImportEnd::Cancelled { removed: true })
+        Some(ImportEnd::Cancelled {
+            folder: FolderAfter::Removed
+        })
     );
     assert!(
         app.document_view.error_notice.is_none(),
@@ -390,27 +392,42 @@ fn back_during_a_dry_run_cancels_it_and_its_result_is_ignored() {
 
 #[test]
 fn a_folder_that_holds_files_is_refused_and_the_check_removes_nothing() {
-    use crate::app::dispatch::library::import_dialog_target_problem as problem;
+    use crate::app::dispatch::library::import_dialog_check_target as check;
+    use crate::library::import_dialog::TargetCheck;
+    let refused = |c: TargetCheck| match c {
+        TargetCheck::Refused(why) => Some(why),
+        _ => None,
+    };
     let dir = tempfile::tempdir().unwrap();
     let absent = dir.path().join("new");
-    assert!(problem(&absent).is_none());
+    assert_eq!(check(&absent), TargetCheck::Free);
     let empty = dir.path().join("empty");
     std::fs::create_dir(&empty).unwrap();
-    assert!(problem(&empty).is_none());
+    assert_eq!(check(&empty), TargetCheck::Free);
     assert!(empty.exists(), "the check never removes anything");
     let full = dir.path().join("full");
     std::fs::create_dir(&full).unwrap();
     std::fs::write(full.join("mine.txt"), "x").unwrap();
-    assert!(problem(&full).is_some());
+    assert!(refused(check(&full)).is_some());
     assert!(full.join("mine.txt").exists());
     let file = dir.path().join("file");
     std::fs::write(&file, "x").unwrap();
-    assert!(problem(&file).is_some());
+    assert!(refused(check(&file)).is_some());
+    // A library with no history cannot be updated, and says so.
+    let library = dir.path().join("lib");
+    std::fs::create_dir(&library).unwrap();
+    std::fs::write(library.join("Mine.snxlib"), "x").unwrap();
+    let why = refused(check(&library)).expect("no history, no update");
+    assert_eq!(
+        why.id(),
+        Some(signex_i18n::ids::LIBRARY_IMPORT_NOT_A_REPOSITORY)
+    );
+    assert!(library.join("Mine.snxlib").exists());
     #[cfg(unix)]
     {
         let link = dir.path().join("link");
         std::os::unix::fs::symlink(&empty, &link).unwrap();
-        let why = problem(&link).expect("a link is refused");
+        let why = refused(check(&link)).expect("a link is refused");
         assert_eq!(
             why.id(),
             Some(signex_i18n::ids::LIBRARY_IMPORT_DIALOG_TARGET_LINK)
@@ -453,7 +470,9 @@ fn every_step_builds_in_both_graphite_themes() {
         },
         ImportDialogState {
             step: Step::Import,
-            import_end: Some(ImportEnd::Cancelled { removed: true }),
+            import_end: Some(ImportEnd::Cancelled {
+                folder: FolderAfter::Removed,
+            }),
             ..ImportDialogState::new()
         },
     ];
@@ -582,6 +601,7 @@ fn a_dry_run_nobody_waits_for_leaves_no_temp_folder() {
         commit: None,
         local_commits: 0,
         library_id: None,
+        requires: Vec::new(),
     };
     let task = app.update(import(LibraryImportMsg::Finished(Box::new(
         ImportFinished {
@@ -617,7 +637,7 @@ fn a_refused_folder_says_nothing_was_changed() {
     // A run that wrote and then failed still says what became of it.
     let wrote = ImportEnd::Failed {
         reason: ImportError::Cancelled.to_translatable(),
-        removed: true,
+        folder: FolderAfter::Removed,
     };
     let (_, _, second) = super::view::end_words(&wrote, "/out/P".into(), &i18n);
     assert!(plain(&second.into_string()).starts_with("Nothing was kept"));
@@ -659,7 +679,7 @@ fn a_dialog_opened_for_a_project_mounts_into_that_project() {
         app.library.import_dialog = Some(Box::new(state));
         drop(app.update(d(ImportDialogMsg::TargetChecked {
             location: "/out/P".into(),
-            problem: None,
+            check: super::TargetCheck::Free,
         })));
         let run = app.library.import.running.as_ref().expect("started");
         let expected = if for_all {

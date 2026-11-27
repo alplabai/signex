@@ -10,7 +10,9 @@ use signex_widgets::text;
 
 use super::{ImportDialogContext, SP, TS, caption, mono, tag};
 use crate::library::import_dialog::progress::PhaseLine;
-use crate::library::import_dialog::{ImportDialogMsg, ImportDialogState, ImportEnd, msg};
+use crate::library::import_dialog::{
+    FolderAfter, ImportDialogMsg, ImportDialogState, ImportEnd, msg,
+};
 use crate::library::messages::LibraryMessage;
 use crate::library::modal_chrome::{cancel_btn, footer_strip, notice_banner, secondary_btn};
 use crate::library_import::ProgressEvent;
@@ -147,9 +149,14 @@ pub(super) fn body<'a>(
     if !state.phases.is_empty() {
         col = col.push(phase_list(state, tokens, i18n));
     }
+    let silence = if state.is_update() {
+        ids::LIBRARY_IMPORT_DIALOG_SILENCE_UPDATE
+    } else {
+        ids::LIBRARY_IMPORT_DIALOG_SILENCE
+    };
     let words = t!(
         i18n,
-        ids::LIBRARY_IMPORT_DIALOG_SILENCE,
+        silence,
         "seconds" => SILENCE_LIMIT.as_secs(),
         "path" => state.location.clone()
     );
@@ -228,15 +235,15 @@ pub(in crate::library::import_dialog) fn end_words(
         )
     };
     match end {
-        ImportEnd::Cancelled { removed } => (
+        ImportEnd::Cancelled { folder } => (
             PillTone::Warn,
             t!(i18n, ids::LIBRARY_IMPORT_DIALOG_CANCELLED),
-            folder_after(*removed, path, i18n),
+            folder_after(folder, path, i18n),
         ),
-        ImportEnd::Failed { reason, removed } => (
+        ImportEnd::Failed { reason, folder } => (
             PillTone::Err,
             failed(reason),
-            folder_after(*removed, path, i18n),
+            folder_after(folder, path, i18n),
         ),
         ImportEnd::Refused { reason } => (
             PillTone::Err,
@@ -246,12 +253,18 @@ pub(in crate::library::import_dialog) fn end_words(
     }
 }
 
-/// Whether the folder the run wrote into was removed.
-fn folder_after(removed: bool, path: String, i18n: &I18n) -> Localized {
-    if removed {
-        t!(i18n, ids::LIBRARY_IMPORT_DIALOG_REMOVED, "path" => path)
-    } else {
-        t!(i18n, ids::LIBRARY_IMPORT_DIALOG_KEPT, "path" => path)
+/// What became of the folder the run wrote into.
+fn folder_after(folder: &FolderAfter, path: String, i18n: &I18n) -> Localized {
+    match folder {
+        FolderAfter::Removed => t!(i18n, ids::LIBRARY_IMPORT_DIALOG_REMOVED, "path" => path),
+        FolderAfter::Kept => t!(i18n, ids::LIBRARY_IMPORT_DIALOG_KEPT, "path" => path),
+        FolderAfter::Restored => t!(i18n, ids::LIBRARY_IMPORT_DIALOG_RESTORED, "path" => path),
+        FolderAfter::NotRestored(why) => t!(
+            i18n,
+            ids::LIBRARY_IMPORT_DIALOG_NOT_RESTORED,
+            "path" => path,
+            "reason" => why.as_str()
+        ),
     }
 }
 
@@ -299,12 +312,10 @@ pub(super) fn footer<'a>(
             tokens,
         )
     };
-    footer_strip(
-        vec![caption(
-            t!(i18n, ids::LIBRARY_IMPORT_DIALOG_CANCEL_RULE),
-            tokens,
-        )],
-        vec![cancel],
-        tokens,
-    )
+    let rule = if state.is_update() {
+        ids::LIBRARY_IMPORT_DIALOG_CANCEL_RULE_UPDATE
+    } else {
+        ids::LIBRARY_IMPORT_DIALOG_CANCEL_RULE
+    };
+    footer_strip(vec![caption(t!(i18n, rule), tokens)], vec![cancel], tokens)
 }

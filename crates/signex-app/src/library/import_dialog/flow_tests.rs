@@ -114,7 +114,9 @@ fn discover_preview_and_import_through_the_dialog() {
     settle(&mut app, d(ImportDialogMsg::ImportPressed));
     let state = app.library.import_dialog.as_deref().expect("the result");
     let result = state.finished().expect("finished");
-    assert!(result.run.is_some());
+    let facts = result.run.as_ref().expect("a run's result");
+    assert_eq!(facts.mounted, Some(super::result::Mounted::AllProjects));
+    assert!(facts.commit.is_some(), "the import is the first commit");
     assert_eq!(state.report_items().len(), 3);
     assert!(!preview_dir.exists(), "the temp folder is gone");
     let last = app.library.import.last.as_ref().unwrap();
@@ -128,6 +130,68 @@ fn discover_preview_and_import_through_the_dialog() {
     // Open in Library Browser closes the dialog on the library's tab.
     settle(&mut app, d(ImportDialogMsg::OpenInBrowserPressed));
     assert!(app.library.import_dialog.is_none());
+}
+
+/// The dialog through Import into `out` from `source`, ending on the
+/// result.
+fn import_through_the_dialog(app: &mut Signex, bin: &Path, source: &Path, out: &Path) {
+    drop(app.update(super::requested_message()));
+    let cache = install_fake(bin);
+    drop(app.update(d(ImportDialogMsg::DiscoveryFinished(Some(Box::new(cache))))));
+    drop(app.update(d(ImportDialogMsg::SourcesPicked(Some(vec![
+        source.to_path_buf(),
+    ])))));
+    drop(app.update(d(ImportDialogMsg::LocationEdited(
+        out.display().to_string(),
+    ))));
+    settle(app, d(ImportDialogMsg::NextPressed));
+}
+
+/// #3123: Import into a folder that holds an imported library offers an
+/// update; once taken, the preview's button runs `--update` and the result
+/// says it was updated, with no new commit when nothing changed.
+#[test]
+fn an_import_into_an_imported_library_offers_an_update_and_runs_it() {
+    use crate::library_import::RunMode;
+    signex_library::git_identity::test_identity::install();
+    let dir = tempfile::tempdir().unwrap();
+    let bin = dir.path().join("bin");
+    std::fs::create_dir(&bin).unwrap();
+    let source = dir.path().join("Passives.fakelib");
+    std::fs::write(&source, "source").unwrap();
+    let out = dir.path().join("libs").join("Passives");
+    let (mut app, _boot) = Signex::new();
+    import_through_the_dialog(&mut app, &bin, &source, &out);
+    settle(&mut app, d(ImportDialogMsg::ImportPressed));
+    drop(app.update(d(ImportDialogMsg::Closed)));
+
+    // The same source into the same folder: offered, not run.
+    import_through_the_dialog(&mut app, &bin, &source, &out);
+    let state = app.library.import_dialog.as_deref().unwrap();
+    assert_eq!(state.step, Step::Source);
+    let offer = state.update_offer.expect("an update is offered");
+    assert!(!offer.accepted);
+    assert_eq!(offer.local_commits, 0);
+    assert_eq!(
+        state.blocker(),
+        Some(super::source::Blocker::UpdateOffered)
+    );
+    assert!(app.library.import.running.is_none(), "nothing ran");
+
+    // Taken: the preview, then the update.
+    settle(&mut app, d(ImportDialogMsg::UpdateAccepted));
+    let state = app.library.import_dialog.as_deref().unwrap();
+    assert_eq!(state.step, Step::Preview);
+    assert!(state.is_update());
+    settle(&mut app, d(ImportDialogMsg::ImportPressed));
+    let state = app.library.import_dialog.as_deref().unwrap();
+    let facts = state
+        .finished()
+        .and_then(|r| r.run.as_ref())
+        .expect("the update's result");
+    assert_eq!(facts.mode, RunMode::Update);
+    assert_eq!(facts.commit, None, "an unchanged re-import adds no commit");
+    assert!(out.join("import-report.json").exists());
 }
 
 #[test]
@@ -211,7 +275,9 @@ fn cancel_gives_the_window_back_whatever_the_converter_does() {
         let state = app.library.import_dialog.as_deref().expect("open");
         assert_eq!(
             state.import_end,
-            Some(super::ImportEnd::Cancelled { removed: true }),
+            Some(super::ImportEnd::Cancelled {
+                folder: super::FolderAfter::Removed
+            }),
             "{body}"
         );
         assert!(!out.exists(), "{body}: nothing kept");

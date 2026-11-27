@@ -15,7 +15,7 @@ use super::preview::{filter_row, severity_label, severity_tone};
 use super::{ImportDialogContext, SP, TS, caption, count_tile, mono, tag};
 use crate::library::import_dialog::preview::MAX_ROWS;
 use crate::library::import_dialog::result::{
-    ImportResult, ReportNote, ResultTab, RunFacts, SeverityGroup,
+    ImportResult, Mounted, ReportNote, RequiredLibrary, ResultTab, RunFacts, SeverityGroup,
 };
 use crate::library::import_dialog::{ImportDialogMsg, ImportDialogState, msg};
 use crate::library::messages::LibraryMessage;
@@ -25,6 +25,9 @@ use crate::library::modal_chrome::{
 use crate::library_import::RunMode;
 use crate::library_import::report::Severity;
 use crate::styles::{DialogButtonKind, HAIRLINE, PillTone, Radii, dialog_button, ti};
+
+/// How much of a commit id the History row shows.
+const COMMIT_CHARS: usize = 8;
 
 pub(super) fn body<'a>(
     state: &'a ImportDialogState,
@@ -113,10 +116,30 @@ fn result_card<'a>(
         ),
     ]
     .spacing(SP.m);
-    let rows = vec![(
-        t!(i18n, ids::LIBRARY_IMPORT_DIALOG_LOCATION),
-        mono(result.library_dir.display().to_string(), tokens),
-    )];
+    let line = |words: Localized| -> Element<'a, LibraryMessage> {
+        text(words).size(TS.body).boxed()
+    };
+    let mut rows = vec![
+        (
+            t!(i18n, ids::LIBRARY_IMPORT_DIALOG_LOCATION),
+            mono(result.library_dir.display().to_string(), tokens),
+        ),
+        (
+            t!(i18n, ids::LIBRARY_IMPORT_DIALOG_MOUNTED),
+            line(mounted_words(facts.mounted.as_ref(), i18n)),
+        ),
+        (
+            t!(i18n, ids::LIBRARY_IMPORT_DIALOG_HISTORY),
+            line(history_words(facts, i18n)),
+        ),
+    ];
+    if !facts.required.is_empty() {
+        let mut names = column![].spacing(SP.xs);
+        for required in &facts.required {
+            names = names.push(line(required_words(required, i18n)));
+        }
+        rows.push((t!(i18n, ids::LIBRARY_IMPORT_DIALOG_REQUIRES), names.boxed()));
+    }
     let summary = t!(
         i18n,
         ids::LIBRARY_IMPORT_DIALOG_REPORT_SUMMARY,
@@ -134,14 +157,69 @@ fn result_card<'a>(
     ]
     .spacing(SP.m)
     .align_y(Alignment::Center);
-    column![
+    let mut col = column![
         text(title).size(TS.title).color(ti(tokens.text)),
         tiles,
         key_value_box(rows, tokens),
-        view_report,
     ]
-    .spacing(SP.l)
-    .boxed()
+    .spacing(SP.l);
+    if facts.mode == RunMode::Update && facts.local_commits > 0 {
+        let words = t!(
+            i18n,
+            ids::LIBRARY_IMPORT_LOCAL_COMMITS,
+            "count" => facts.local_commits
+        );
+        let words = text(words).size(TS.body).boxed();
+        col = col.push(notice_banner(PillTone::Warn, words, Vec::new(), tokens));
+    }
+    col.push(view_report).boxed()
+}
+
+/// Where the library was mounted; "Mounting…" until that is settled.
+fn mounted_words(mounted: Option<&Mounted>, i18n: &I18n) -> Localized {
+    match mounted {
+        None => t!(i18n, ids::LIBRARY_IMPORT_DIALOG_MOUNTING),
+        Some(Mounted::AllProjects) => t!(i18n, ids::LIBRARY_IMPORT_DIALOG_MOUNTED_ALL),
+        Some(Mounted::Project(name)) => t!(
+            i18n,
+            ids::LIBRARY_IMPORT_DIALOG_MOUNTED_PROJECT,
+            "project" => name.as_str()
+        ),
+        Some(Mounted::Unrecorded) => t!(i18n, ids::LIBRARY_IMPORT_DIALOG_MOUNTED_UNRECORDED),
+        Some(Mounted::Clash(other)) => t!(
+            i18n,
+            ids::LIBRARY_IMPORT_DIALOG_MOUNTED_CLASH,
+            "other" => other.display().to_string()
+        ),
+    }
+}
+
+/// The commit the run made, or that an update changed nothing.
+fn history_words(facts: &RunFacts, i18n: &I18n) -> Localized {
+    match &facts.commit {
+        Some(commit) => t!(
+            i18n,
+            ids::LIBRARY_IMPORT_DIALOG_HISTORY_COMMIT,
+            "commit" => commit.chars().take(COMMIT_CHARS).collect::<String>()
+        ),
+        None => t!(i18n, ids::LIBRARY_IMPORT_DIALOG_HISTORY_UNCHANGED),
+    }
+}
+
+/// A required library: its name when open, else its id.
+fn required_words(required: &RequiredLibrary, i18n: &I18n) -> Localized {
+    match &required.open_as {
+        Some(name) => t!(
+            i18n,
+            ids::LIBRARY_IMPORT_DIALOG_REQUIRES_OPEN,
+            "name" => name.as_str()
+        ),
+        None => t!(
+            i18n,
+            ids::LIBRARY_IMPORT_DIALOG_REQUIRES_MISSING,
+            "id" => required.id.to_string()
+        ),
+    }
 }
 
 /// What a severity means for an item, under its heading.

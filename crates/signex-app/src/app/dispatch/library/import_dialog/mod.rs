@@ -11,15 +11,19 @@ use signex_i18n::{Translatable, ids};
 
 use super::*;
 use crate::library::import_dialog::progress::{ends_item, item_in_flight};
-use crate::library::import_dialog::result::ImportResult;
+use crate::library::import_dialog::result::{ImportResult, Mounted, RequiredLibrary};
 use crate::library::import_dialog::{
-    self as dialog, ImportDialogMsg, ImportDialogState, ImportEnd, PreviewState, SourceKind, Step,
+    self as dialog, FolderAfter, ImportDialogMsg, ImportDialogState, ImportEnd, PreviewState,
+    SourceKind, Step, TargetCheck,
 };
 use crate::library_import::run_state::{ImportFinished, MountTarget};
 use crate::library_import::snapshot::default_libraries_root;
 use crate::library_import::{MountScope, ProgressEvent, RunMode};
 
 mod report;
+mod target;
+
+pub(crate) use target::check_target;
 
 /// The temp folders of dry runs are named with this prefix; only such a
 /// folder is ever removed by the dialog.
@@ -27,46 +31,6 @@ const PREVIEW_DIR_PREFIX: &str = "signex-library-preview-";
 
 fn dialog_message(m: ImportDialogMsg) -> Message {
     Message::Library(dialog::msg(m))
-}
-
-/// Why `location` cannot take a new library, or `None` when it can: it is
-/// absent, or an empty folder. Only a check: the run itself takes the
-/// folder (`library_import::run::claim_output`). Blocking.
-pub(crate) fn target_problem(location: &Path) -> Option<Translatable> {
-    let path = || location.display().to_string();
-    let meta = match std::fs::symlink_metadata(location) {
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return None,
-        Err(e) => {
-            return Some(
-                Translatable::new(ids::LIBRARY_IMPORT_DIALOG_TARGET_UNREADABLE)
-                    .arg("path", path())
-                    .arg("error", e.to_string()),
-            );
-        }
-        Ok(meta) => meta,
-    };
-    if meta.file_type().is_symlink() {
-        return Some(
-            Translatable::new(ids::LIBRARY_IMPORT_DIALOG_TARGET_LINK).arg("path", path()),
-        );
-    }
-    if !meta.is_dir() {
-        return Some(
-            Translatable::new(ids::LIBRARY_IMPORT_DIALOG_TARGET_NOT_FOLDER).arg("path", path()),
-        );
-    }
-    let empty = std::fs::read_dir(location).map(|mut entries| entries.next().is_none());
-    match empty {
-        Ok(false) => {
-            Some(Translatable::new(ids::LIBRARY_IMPORT_DIALOG_TARGET_NOT_EMPTY).arg("path", path()))
-        }
-        Ok(true) => None,
-        Err(e) => Some(
-            Translatable::new(ids::LIBRARY_IMPORT_DIALOG_TARGET_UNREADABLE)
-                .arg("path", path())
-                .arg("error", e.to_string()),
-        ),
-    }
 }
 
 /// Remove a dry run's temp folder on a worker; anything not named like one
@@ -153,9 +117,10 @@ impl Signex {
                 self.check_import_target(Step::Source, RunMode::Preview)
             }
             ImportDialogMsg::ImportPressed => self.import_pressed(),
-            ImportDialogMsg::TargetChecked { location, problem } => {
-                self.import_target_checked(location, problem)
+            ImportDialogMsg::TargetChecked { location, check } => {
+                self.import_target_checked(location, check)
             }
+            ImportDialogMsg::UpdateAccepted => self.import_update_accepted(),
             ImportDialogMsg::BackPressed => self.import_dialog_back(),
             ImportDialogMsg::FilterEdited(text) => self.edit_import_dialog(|d| d.filter = text),
             ImportDialogMsg::SeverityToggled(severity) => {
@@ -305,20 +270,18 @@ impl Signex {
         Task::perform(
             async move {
                 let checked = location.clone();
-                let problem = tokio::task::spawn_blocking(move || target_problem(&checked))
+                let check = tokio::task::spawn_blocking(move || check_target(&checked))
                     .await
                     .unwrap_or_else(|e| {
-                        Some(
+                        TargetCheck::Refused(
                             Translatable::new(ids::LIBRARY_IMPORT_DIALOG_TARGET_UNREADABLE)
                                 .arg("path", location.display().to_string())
                                 .arg("error", e.to_string()),
                         )
                     });
-                (location, problem)
+                (location, check)
             },
-            |(location, problem)| {
-                dialog_message(ImportDialogMsg::TargetChecked { location, problem })
-            },
+            |(location, check)| dialog_message(ImportDialogMsg::TargetChecked { location, check }),
         )
     }
 
@@ -338,36 +301,6 @@ impl Signex {
             cleanup,
             self.check_import_target(Step::Preview, RunMode::Import),
         ])
-    }
-
-    fn import_target_checked(
-        &mut self,
-        location: PathBuf,
-        problem: Option<Translatable>,
-    ) -> Task<Message> {
-        let Some(d) = self.library.import_dialog.as_deref_mut() else {
-            return Task::none();
-        };
-        d.checking_target = false;
-        let mode = d.pending_run.take();
-        // A check the user has moved on from (an edit, Back) starts nothing.
-        let from = match mode {
-            Some(RunMode::Preview) => Step::Source,
-            _ => Step::Preview,
-        };
-        if location != d.location_path() || d.step != from {
-            return Task::none();
-        }
-        if let Some(problem) = problem {
-            d.target_problem = Some(problem);
-            d.step = Step::Source;
-            d.preview = None;
-            return Task::none();
-        }
-        match mode {
-            Some(mode) => self.start_dialog_run(mode),
-            None => Task::none(),
-        }
     }
 
     /// Start the dry run (into a new temp folder) or the import (into the
@@ -552,6 +485,25 @@ impl Signex {
         }
     }
 
+    /// Where the finished import the dialog shows was mounted, and the
+    /// libraries it requires.
+    pub(super) fn import_dialog_mounted(
+        &mut self,
+        mounted: Mounted,
+        required: Vec<RequiredLibrary>,
+    ) {
+        let facts = self
+            .library
+            .import_dialog
+            .as_deref_mut()
+            .and_then(|d| d.result.as_deref_mut())
+            .and_then(|r| r.run.as_mut());
+        if let Some(facts) = facts {
+            facts.mounted = Some(mounted);
+            facts.required = required;
+        }
+    }
+
     /// A run ended. `mode` is the run's own. Returns whether the dialog
     /// shows the result, so no notice repeats it.
     pub(super) fn import_dialog_run_finished(
@@ -584,7 +536,7 @@ impl Signex {
             }
             (None, Ok(_)) => {}
             (_, Err(failure)) => {
-                let removed = failure.removed_output;
+                let folder = FolderAfter::of(failure);
                 d.import_end = Some(match *failure.error {
                     // Refused before the converter started: the folder,
                     // which may hold the user's files, was not touched.
@@ -592,11 +544,11 @@ impl Signex {
                         reason: error.to_translatable(),
                     },
                     crate::library_import::ImportError::Cancelled => {
-                        ImportEnd::Cancelled { removed }
+                        ImportEnd::Cancelled { folder }
                     }
                     ref error => ImportEnd::Failed {
                         reason: error.to_translatable(),
-                        removed,
+                        folder,
                     },
                 });
             }
