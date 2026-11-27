@@ -102,7 +102,7 @@ Prints one JSON object (schema `#/$defs/describe`) and exits 0:
 | `--json` | Print the summary (§3.2) as the last stdout line. |
 | `--progress` | Print progress events (§3.1) on stdout. Implies `--json`. |
 
-Unknown options are an error (exit 1, summary with `ok: false`). A converter must also turn an internal failure (a crash while reading a malformed file) into a `failed` summary rather than exiting without one. `--help` and `--version` print their text and exit 0 with no summary; Signex never passes them.
+A converter must accept every value option in its joined form, `--option=value`; Signex always passes it that way (`--output=<dir>`, `--db=<value>`), so a value starting with `-` is never read as an option. Unknown options are an error (exit 1, summary with `ok: false`). A converter must also turn an internal failure (a crash while reading a malformed file) into a `failed` summary rather than exiting without one. `--help` and `--version` print their text and exit 0 with no summary; Signex never passes them.
 
 ## 3. Output streams
 
@@ -246,9 +246,9 @@ human-readable `import-report.md` with the same content. Schema
 ## 6. How Signex runs a converter
 
 1. Discovery (§1) and `describe`; refuse a newer contract major.
-2. Preview: `library … --output <temp> --dry-run --progress`; show the
+2. Preview: `library … --output=<temp> --dry-run --progress`; show the
    report.
-3. Import: `library … --output <target> --progress` (plus `--update` when
+3. Import: `library … --output=<target> --progress` (plus `--update` when
    re-importing the same source).
 4. On exit 0 or 2: initialise git, commit, mount the library (and the
    libraries its manifest `requires`), show the report.

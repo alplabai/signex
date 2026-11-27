@@ -19,9 +19,9 @@ pub(super) const FAST: RunLimits = RunLimits {
     poll: Duration::from_millis(10),
 };
 
-/// Finds `--output`'s value and sets `$out`.
-pub(crate) const PREAMBLE: &str = r#"out=""; prev=""
-for a in "$@"; do [ "$prev" = "--output" ] && out="$a"; prev="$a"; done
+/// Finds `--output=`'s value and sets `$out`.
+pub(crate) const PREAMBLE: &str = r#"out=""
+for a in "$@"; do case "$a" in --output=*) out="${a#--output=}";; esac; done
 "#;
 
 pub(crate) fn sh(dir: &Path, body: &str) -> ConverterCommand {
@@ -100,7 +100,8 @@ fn the_silence_rule_counts_from_the_last_event() {
 #[test]
 fn arguments_follow_the_contract() {
     let mut req = request(PathBuf::from("/o/P"), RunMode::Update);
-    req.db = Some("Driver=x".into());
+    // A value starting with "-" stays joined to its option.
+    req.db = Some("-Driver=x".into());
     req.search_paths = vec![PathBuf::from("/s1"), PathBuf::from("/s2")];
     req.models = ModelsMode::Skip;
     let args: Vec<String> = req
@@ -113,18 +114,12 @@ fn arguments_follow_the_contract() {
         [
             "library",
             "/in/Passives.lib1",
-            "--output",
-            "/o/P",
-            "--name",
-            "Passives",
-            "--db",
-            "Driver=x",
-            "--search-path",
-            "/s1",
-            "--search-path",
-            "/s2",
-            "--models",
-            "skip",
+            "--output=/o/P",
+            "--name=Passives",
+            "--db=-Driver=x",
+            "--search-path=/s1",
+            "--search-path=/s2",
+            "--models=skip",
             "--update",
             "--progress"
         ]

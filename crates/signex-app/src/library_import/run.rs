@@ -94,28 +94,25 @@ impl LibraryRunRequest {
         Ok(())
     }
 
-    /// The contract arguments, after `library`.
+    /// The contract arguments, after `library`. Every value is joined to
+    /// its option (`--db=<v>`), so a value starting with `-` is never read
+    /// as an option.
     pub fn args(&self) -> Vec<OsString> {
         let mut args: Vec<OsString> = vec!["library".into()];
         args.extend(self.inputs.iter().map(OsString::from));
-        args.push("--output".into());
-        args.push(self.output.clone().into());
+        args.push(joined("--output", self.output.as_os_str()));
         if let Some(name) = &self.name {
-            args.push("--name".into());
-            args.push(name.into());
+            args.push(joined("--name", name.as_ref()));
         }
         if let Some(db) = &self.db {
-            args.push("--db".into());
-            args.push(db.into());
+            args.push(joined("--db", db.as_ref()));
         }
         for dir in &self.search_paths {
-            args.push("--search-path".into());
-            args.push(dir.into());
+            args.push(joined("--search-path", dir.as_os_str()));
         }
-        args.push("--models".into());
         args.push(match self.models {
-            ModelsMode::Include => "include".into(),
-            ModelsMode::Skip => "skip".into(),
+            ModelsMode::Include => "--models=include".into(),
+            ModelsMode::Skip => "--models=skip".into(),
         });
         match self.mode {
             RunMode::Preview => args.push("--dry-run".into()),
@@ -125,6 +122,14 @@ impl LibraryRunRequest {
         args.push("--progress".into());
         args
     }
+}
+
+/// `--option=value`.
+fn joined(option: &str, value: &std::ffi::OsStr) -> OsString {
+    let mut arg = OsString::from(option);
+    arg.push("=");
+    arg.push(value);
+    arg
 }
 
 /// The timing rules of a run; tests shorten them.
