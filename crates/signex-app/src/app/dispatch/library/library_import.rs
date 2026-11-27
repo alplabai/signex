@@ -49,10 +49,10 @@ impl Signex {
     /// import runs. `ThisProject` with no project open mounts for all
     /// projects instead, and says so.
     #[cfg_attr(
-        not(test),
+        not(all(test, unix)),
         expect(
             dead_code,
-            reason = "the entry point of the Import Library dialog (batch D); tests call it"
+            reason = "the entry point of the Import Library dialog (batch D); only the unix tests call it so far"
         )
     )]
     pub(crate) fn start_library_import(
