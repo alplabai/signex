@@ -84,30 +84,20 @@ pub(super) fn set_text_note_size(app: &mut Signex, args: &CommandArgs) -> Ran {
     })
 }
 
-/// `apply_rich_note_edit id=.. [source=..] [document=..]`: with `source`,
-/// the note's text becomes it (an agent's edit); without, the open editor's
-/// text is applied (the person's Apply). One undo step either way.
+/// `apply_rich_note_edit id=.. source=.. [document=..]`: the note's text
+/// becomes `source`, one undo step. A call without `source` is refused and
+/// reads nothing from the editor: only the editor's own Apply (its button
+/// and key) applies the person's typing (Caner, 2026-11-27).
 pub(super) fn apply_rich_note_edit(app: &mut Signex, args: &CommandArgs) -> Ran {
+    let Some(OperandValue::Text(source)) = args.operand("source") else {
+        let reason =
+            signex_i18n::Translatable::new(signex_i18n::ids::OVERLAY_RICH_NOTE_NEEDS_SOURCE);
+        return (CommandOutcome::Disabled { reason }, Task::none());
+    };
+    let source = source.clone();
     run_edit(app, args, |app| {
         let item = app.placed_item_operand(args)?;
-        let source = match args.operand("source") {
-            Some(OperandValue::Text(source)) => Some(source.clone()),
-            _ => None,
-        };
-        let answer = match source {
-            Some(source) => app.set_rich_note_source(item, &source),
-            None => {
-                let open = app.ui_state.rich_notes.editor.as_ref().map(|e| e.note);
-                if open != Some(item.uuid) {
-                    return Err(format!(
-                        "no editor is open on the note {}; pass `source` to set its text",
-                        item.uuid
-                    ));
-                }
-                app.apply_rich_note_editor()
-            }
-        };
-        answered(answer)
+        answered(app.set_rich_note_source(item, &source))
     })
 }
 

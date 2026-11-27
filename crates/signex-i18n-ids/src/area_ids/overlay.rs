@@ -32,4 +32,5 @@ define_ids! {
     OVERLAY_RICH_NOTE_WRAP_TABLE = "overlay-rich-note-wrap-table";
     OVERLAY_RICH_NOTE_COMPILE_ERROR = "overlay-rich-note-compile-error";
     OVERLAY_RICH_NOTE_LINK_FAILED = "overlay-rich-note-link-failed";
+    OVERLAY_RICH_NOTE_NEEDS_SOURCE = "overlay-rich-note-needs-source";
 }

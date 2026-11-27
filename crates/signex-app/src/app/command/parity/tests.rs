@@ -226,9 +226,6 @@ fn the_kill_list_is_in_progress_edit_or_render_cache_only() {
 /// left it when it stopped reading the GUI's style cache (#2549, Hakan
 /// 2026-11-19).
 const KILL_LIST: &[(&str, &str)] = &[
-    // #1114: Apply without `source` takes the note editor's typing, an
-    // in-progress edit; kept out of edit lists (Caner, 2026-11-27).
-    ("apply_rich_note_edit", "operand_handler"),
     ("close_active_document", "bridge"),
     ("close_active_document", "operand_handler"),
     ("close_all_documents", "bridge"),

@@ -108,7 +108,7 @@ fn set_text_note_size_sets_the_section_and_refuses_a_bad_word() {
 }
 
 #[test]
-fn apply_rich_note_edit_sets_the_source_or_applies_the_editor() {
+fn apply_rich_note_edit_sets_the_source() {
     let dir = tempfile::tempdir().expect("tempdir");
     let mut app = app_with(dir.path(), rich_note(SOURCE));
     let answer = answered(run(&mut app, "apply_rich_note_edit", &["source=*new*"]));
@@ -116,19 +116,58 @@ fn apply_rich_note_edit_sets_the_source_or_applies_the_editor() {
     assert_eq!(note(&app).text, "*new*");
     undo(&mut app);
     assert_eq!(note(&app).text, SOURCE);
+}
 
+/// Caner (2026-11-27): a CLI or agent call without `source` is refused and
+/// reads nothing from the editor, which keeps the person's typing.
+#[test]
+fn apply_rich_note_edit_without_source_is_refused_and_the_note_is_unchanged() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let mut app = app_with(dir.path(), rich_note(SOURCE));
     let reason = refusal(run(&mut app, "apply_rich_note_edit", &[]));
-    assert!(reason.contains("no editor is open"), "{reason}");
+    assert!(reason.contains("needs the operand `source`"), "{reason}");
+
     answered(run(&mut app, "edit_rich_note", &[]));
     answered(run(
         &mut app,
         "wrap_rich_note_selection",
         &["style=heading"],
     ));
-    let applied = answered(run_headless(&mut app, "apply_rich_note_edit", &[]));
-    assert_eq!(applied["applied"], true);
-    assert!(note(&app).text.starts_with("= "), "{}", note(&app).text);
-    assert!(app.ui_state.rich_notes.editor.is_none());
+    let typed = app
+        .ui_state
+        .rich_notes
+        .editor
+        .as_ref()
+        .expect("the editor is open")
+        .text();
+    assert_ne!(typed, SOURCE, "the editor holds typing");
+    for outcome in [
+        run(&mut app, "apply_rich_note_edit", &[]),
+        run_headless(&mut app, "apply_rich_note_edit", &[]),
+    ] {
+        let reason = refusal(outcome);
+        assert!(reason.contains("needs the operand `source`"), "{reason}");
+    }
+    assert_eq!(note(&app).text, SOURCE, "nothing applied");
+    let editor = app.ui_state.rich_notes.editor.as_ref().expect("still open");
+    assert_eq!(editor.text(), typed, "the typing is kept");
+}
+
+/// With `source` the note takes exactly that text, whatever the open editor
+/// holds.
+#[test]
+fn apply_rich_note_edit_with_source_applies_it_over_the_editors_typing() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let mut app = app_with(dir.path(), rich_note(SOURCE));
+    answered(run(&mut app, "edit_rich_note", &[]));
+    answered(run(
+        &mut app,
+        "wrap_rich_note_selection",
+        &["style=heading"],
+    ));
+    let answer = answered(run(&mut app, "apply_rich_note_edit", &["source=*exact*"]));
+    assert_eq!(answer["text"], "*exact*");
+    assert_eq!(note(&app).text, "*exact*");
 }
 
 #[test]

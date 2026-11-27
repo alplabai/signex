@@ -545,9 +545,8 @@ const NOT_YET_IN_LISTS: &[&str] = &[
     // #1261: a schematic swap is its own step until a list is decided.
     "swap_schematic_pins",
     "swap_schematic_gates",
-    // #1114: without `source` Apply takes the person's typing in the editor,
-    // an in-progress edit an agent's list must not carry (the parity kill
-    // list, ADR-0006 slice C).
+    // #1114: a rich note's Apply runs as its own step until a list carrying
+    // it is decided (Caner, 2026-11-27).
     "apply_rich_note_edit",
 ];
 

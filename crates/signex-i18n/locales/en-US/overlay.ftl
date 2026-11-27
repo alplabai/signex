@@ -104,3 +104,6 @@ overlay-rich-note-wrap-table = Table
 overlay-rich-note-compile-error = The rich text note at { $x }, { $y } does not compile: line { $line }: { $message }
 # A Messages line: a note's link did not open.
 overlay-rich-note-link-failed = The link { $target } did not open: { $why }
+# The refusal of apply_rich_note_edit from a CLI or agent call without
+# `source`: such a call never takes the person's typing in the editor.
+overlay-rich-note-needs-source = `apply_rich_note_edit` needs the operand `source`, the note's full text; a command never applies the typing in the note editor

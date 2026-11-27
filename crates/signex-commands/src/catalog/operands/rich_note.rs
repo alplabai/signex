@@ -22,7 +22,8 @@ pub const TEXT_NOTE_SIZE: &[Operand] = &[
     optional("height", OperandKind::Text),
     optional("document", OperandKind::Document),
 ];
-/// Apply to the note `id`: its text becomes `source`, or the open editor's.
+/// Apply to the note `id`: its text becomes `source`. Optional in the schema
+/// so the call without it reaches the handler's refusal, which names it.
 pub const RICH_NOTE_APPLY: &[Operand] = &[
     required("id", OperandKind::Text),
     optional("source", OperandKind::Text),

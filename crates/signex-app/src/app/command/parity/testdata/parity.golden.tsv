@@ -65,7 +65,7 @@ apply_layout_schematic	headless_refusal	headless_refusal	gui	none	routing
 apply_library_updates	operand_handler	run_operands: named document	core	origin	handler
 apply_library_updates	refusal_needs_operands	needs_operands_reason	gui	none	routing
 apply_library_updates	headless_missing_operand	needs `document`	core	none	routing
-apply_rich_note_edit	operand_handler	run_operands: active-tab gate unless a document is named	core	active document,in-progress edit,origin	handler
+apply_rich_note_edit	operand_handler	run_operands: active-tab gate unless a document is named	core	active document,origin	handler
 apply_rich_note_edit	refusal_needs_operands	needs_operands_reason	gui	none	routing
 apply_rich_note_edit	headless_missing_operand	needs `id`	core	none	routing
 apply_selection_filter_preset	operand_handler	run_operands: active-tab gate unless a document is named	gui	settings	handler

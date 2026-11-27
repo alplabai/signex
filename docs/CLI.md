@@ -850,7 +850,7 @@ act on a note of the sheet in view. Rules:
 ```
 set_text_note_frame id=<uuid> frame=none|border|filled [border=<mm>|auto] [padding=<mm>] [document=..]
 set_text_note_size id=<uuid> sizing=fit_text|fixed_width|fixed_box [width=<mm>] [height=<mm>] [document=..]
-apply_rich_note_edit id=<uuid> [source=..] [document=..]
+apply_rich_note_edit id=<uuid> source=.. [document=..]
 edit_rich_note id=<uuid> [line=<n>] [column=<n>]
 cancel_rich_note_edit id=<uuid>
 wrap_rich_note_selection id=<uuid> style=bold|italic|heading|list|math|link|table
@@ -862,9 +862,10 @@ compile_rich_note id=<uuid>
   undo step; a length is in mm, a finite number at or above zero. The answer
   is the placed-object answer plus `frame`, `border_mm` (`null` is Auto),
   `padding_mm`, `sizing`, `width_mm` and `height_mm`.
-- `apply_rich_note_edit` with `source` makes it the note's text; without, it
-  applies the text typed in the open editor. One undo step; a plain note is
-  refused. The answer adds `text` and `applied`.
+- `apply_rich_note_edit` makes `source`, the note's full text, its text, one
+  undo step. A call without `source` is refused and reads nothing from the
+  editor; only the editor's own Apply applies the person's typing. A plain
+  note is refused. The answer adds `text` and `applied`.
 - `edit_rich_note` opens the editor, the cursor at 1-based `line` and
   `column` (characters); the answer is `{"id", "editing", "source",
   "edited", "cursor": {"line", "byte"}}`. `wrap_rich_note_selection` is a
