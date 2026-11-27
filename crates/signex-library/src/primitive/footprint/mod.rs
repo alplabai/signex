@@ -27,6 +27,8 @@ mod load_repair;
 mod models;
 #[cfg(test)]
 mod models_tests;
+#[cfg(test)]
+mod pour_corner_format_tests;
 mod mount_style;
 mod pad;
 mod pad_columns;

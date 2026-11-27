@@ -150,6 +150,8 @@ fn pour() -> PourAttr {
         clearance_expr: None,
         min_thickness_expr: None,
         priority: 2,
+        corners: Default::default(),
+        corner_size: 0.0,
     }
 }
 

@@ -137,6 +137,8 @@ fn closed_profile_seed_attrs_stay_on_line_a_only() {
             clearance_expr: None,
             min_thickness_expr: None,
             priority: 0,
+            corners: Default::default(),
+            corner_size: 0.0,
         });
         e.keepout = Some(KeepoutAttr {
             layer: PcbLayer::Copper(CopperLayer::Top),

@@ -363,6 +363,8 @@ pub(super) fn build_footprint_editor_panel_ctx(
                         fill_type: p.fill_type,
                         priority: p.priority,
                         layer: p.layer,
+                        corners: p.corners,
+                        corner_size: p.corner_size,
                     });
                     let keepout = e.keepout.as_ref().map(|k| crate::panels::KeepoutSummary {
                         no_routing: k.kinds.no_routing,

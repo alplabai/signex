@@ -418,6 +418,8 @@ mod tests {
             clearance_expr: Some("0.3mm".into()),
             min_thickness_expr: None,
             priority: 3,
+            corners: Default::default(),
+            corner_size: 0.0,
         }
     }
 

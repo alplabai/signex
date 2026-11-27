@@ -918,6 +918,12 @@ editors-role-pour-fill-outline = Outline
 # Drawing label; $fill is one of the fill names above.
 editors-role-pour-fill-callout = Fill: { $fill }
 editors-role-pour-priority-callout = Priority { $priority }
+# Corners and Corner size of a footprint pour, the board pour's model (#2598).
+editors-role-pour-corners = Corners
+editors-role-pour-corner-sharp = Sharp
+editors-role-pour-corner-rounded = Rounded
+editors-role-pour-corner-chamfer = Chamfer
+editors-role-pour-corner-size = Corner size (mm)
 editors-role-keepout-title = Keepout
 editors-role-keepout-kinds = Keepout kinds
 editors-role-keepout-no-copper = No copper

@@ -308,6 +308,11 @@ define_ids! {
     EDITORS_ROLE_POUR_FILL_OUTLINE = "editors-role-pour-fill-outline";
     EDITORS_ROLE_POUR_FILL_CALLOUT = "editors-role-pour-fill-callout";
     EDITORS_ROLE_POUR_PRIORITY_CALLOUT = "editors-role-pour-priority-callout";
+    EDITORS_ROLE_POUR_CORNERS = "editors-role-pour-corners";
+    EDITORS_ROLE_POUR_CORNER_SHARP = "editors-role-pour-corner-sharp";
+    EDITORS_ROLE_POUR_CORNER_ROUNDED = "editors-role-pour-corner-rounded";
+    EDITORS_ROLE_POUR_CORNER_CHAMFER = "editors-role-pour-corner-chamfer";
+    EDITORS_ROLE_POUR_CORNER_SIZE = "editors-role-pour-corner-size";
     EDITORS_ROLE_KEEPOUT_TITLE = "editors-role-keepout-title";
     EDITORS_ROLE_KEEPOUT_KINDS = "editors-role-keepout-kinds";
     EDITORS_ROLE_KEEPOUT_NO_COPPER = "editors-role-keepout-no-copper";

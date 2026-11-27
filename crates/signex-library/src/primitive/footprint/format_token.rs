@@ -84,14 +84,15 @@ impl FootprintFile {
     }
 
     /// Whether the file holds content only [`SNXFPT_FORMAT_V1_5`] carries. One rule
-    /// for every 1.5 trigger; today a footprint sketch whose linear pattern
-    /// has a suppression list (#2688). A file without any keeps its lower
-    /// token, byte for byte.
+    /// for every 1.5 trigger: a footprint sketch whose linear pattern has a
+    /// suppression list (#2688), or a sketch pour with corners other than
+    /// Sharp (#2598). A file without any keeps its lower token, byte for
+    /// byte.
     fn needs_1_5(&self) -> bool {
         self.footprints
             .iter()
             .filter_map(|fp| fp.sketch.as_ref())
-            .any(|sketch| sketch.has_linear_suppression())
+            .any(|sketch| sketch.has_linear_suppression() || sketch.has_pour_corners())
     }
 }
 

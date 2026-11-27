@@ -1,7 +1,7 @@
 # Signex library format
 
 Status: normative for `snxlib/2`, `snxsym/v1` to `v4` and `snxfpt/1.1` to
-`1.5` (#3105, #2688). Section 8 describes the embedded 3D models of `snxfpt/1.4`
+`1.5` (#3105, #2688, #2598). Section 8 describes the embedded 3D models of `snxfpt/1.4`
 (#3107, #3108).
 
 This is the byte-level specification of a Signex component library, written
@@ -782,7 +782,7 @@ footprint is saved; it never deletes the `step/` file.
 
 | Token | When |
 |---|---|
-| `snxfpt/1.5` | any 1.5 content: today a sketch linear pattern with a suppression list (#2688) |
+| `snxfpt/1.5` | any 1.5 content: a sketch linear pattern with a suppression list (#2688), or a sketch pour with corners other than Sharp (#2598) |
 | `snxfpt/1.4` | else, the file embeds a STEP model (section 8) |
 | `snxfpt/1.3` | else, any footprint has generated features or a sketch pattern numbered other than row by row |
 | `snxfpt/1.2` | else, any sketch holds reference dimensions, pattern links or per-instance pad overrides |

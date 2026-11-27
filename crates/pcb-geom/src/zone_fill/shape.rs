@@ -8,6 +8,7 @@
 //! origin, inside a border that follows every edge of the fill. Rules:
 //! `docs/PCB_TOOLS.md`, "Polygon Pour".
 
+use signex_types::pcb::Point;
 use signex_types::zone_pour_shape::{PourCorners, PourHatch};
 
 use crate::region::{OFFSET_ARC_POINTS, Polygon, difference, intersection, offset, union};
@@ -28,6 +29,32 @@ pub(super) fn shaped_area(area: &Polygon, corners: PourCorners, size: i64) -> Ve
         &[Polygon::new(outer, area.holes.clone())],
         std::slice::from_ref(area),
     )
+}
+
+/// `outline` (mm) with its convex corners shaped as `corners` of `size_mm`,
+/// by the rule a board pour's fill follows ([`shaped_area`]); a footprint
+/// sketch pour bakes its outline with it (#2598). Sharp, or a size that is
+/// not a positive number, gives the outline as drawn. `None` when a point
+/// or the size is past what the geometry holds, or nothing is left.
+pub fn shaped_outline_mm(
+    outline: &[Point],
+    corners: PourCorners,
+    size_mm: f64,
+) -> Option<Vec<Point>> {
+    if corners == PourCorners::Sharp || !(size_mm.is_finite() && size_mm > 0.0) {
+        return Some(outline.to_vec());
+    }
+    let ring = outline
+        .iter()
+        .map(|&p| PointNm::from_mm(p, "pour.outline"))
+        .collect::<Result<Vec<_>, _>>()
+        .ok()?;
+    let size = mm_to_nm(size_mm, "pour.corner_size").ok()?;
+    let area = Polygon::new(ring, Vec::new());
+    shaped_area(&area, corners, size)
+        .into_iter()
+        .max_by_key(Polygon::twice_area)
+        .map(|piece| piece.outer.into_iter().map(PointNm::to_mm).collect())
 }
 
 /// `ring` with each convex corner cut back by `size` along its edges

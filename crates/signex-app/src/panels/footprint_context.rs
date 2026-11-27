@@ -297,6 +297,9 @@ pub struct PourSummary {
     pub priority: u32,
     /// The copper layer of the pour: the sub-form header names it.
     pub layer: signex_types::pcb_layer::PcbLayer,
+    /// Corners and Corner size, the board pour's model (#2598).
+    pub corners: signex_types::zone_pour_shape::PourCorners,
+    pub corner_size: f64,
 }
 
 /// v0.16.4 — Keepout role properties surfaced on the Properties panel.

@@ -57,6 +57,8 @@ fn sketch() -> SketchData {
         clearance_expr: None,
         min_thickness_expr: None,
         priority: 0,
+        corners: Default::default(),
+        corner_size: 0.0,
     });
     let mut drawing = edge(DRAWING);
     drawing.mechanical = Some(MechanicalAttr::default());

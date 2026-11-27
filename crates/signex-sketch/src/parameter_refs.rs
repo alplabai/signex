@@ -427,6 +427,8 @@ macro_rules! expression_walker {
                     clearance_expr,
                     min_thickness_expr,
                     priority: _,
+                    corners: _,
+                    corner_size: _,
                 }) = pour
                 {
                     let ThermalRelief {

@@ -165,6 +165,19 @@ then a line-art illustration, then its sections. The forms live in
 `app/handlers/dock/sch_library/footprint/role.rs`. Every edit is one undo
 step, re-solves and re-bakes the sketch, and dirties the tab.
 
+- **Pour.** Net, Priority and Fill, then **Corners** (Sharp, Rounded,
+  Chamfer) and **Corner size (mm)**, the rows of a board pour (#2598): the
+  model is the board pour's, used as is (`PourAttr::corners` and
+  `PourAttr::corner_size`, as `Zone::corners` and `Zone::corner_size`,
+  #2578). A new pour is Sharp. Corner size takes a number from 0; other
+  text is kept in the editor's field buffers, outlined in red, without
+  touching the pour, and the field is greyed at 0 while Sharp. The bake
+  shapes the pour's convex corners with the rule a board pour fills with
+  (`pcb_geom::shaped_outline_mm`, `docs/PCB_TOOLS.md`, "Corners and hatched
+  fill"), so the canvas and the baked `pours` show the shaped outline;
+  Sharp, or a size of 0, bakes the outline as drawn. A board sketch pour
+  shows no Corners rows: its board pour has its own. A pour with corners
+  other than Sharp saves as `snxfpt/1.5` (`docs/FORMAT_VERSIONS.md`).
 - **Keepout.** The **Layer** dropdown writes `KeepoutAttr::layer`. It offers
   Top Layer and Bottom Layer, plus the stored layer when a file names
   another one. A keepout on all layers or on the inner layers only cannot

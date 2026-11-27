@@ -101,6 +101,8 @@ fn a_board_pour_round_trips_and_writes_1_7() {
             clearance_expr: None,
             min_thickness_expr: None,
             priority: 2,
+            corners: Default::default(),
+            corner_size: 0.0,
         });
     });
     assert_round_trips_under_1_7(&board);

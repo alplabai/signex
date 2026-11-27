@@ -5,7 +5,8 @@
 //! polygon boundary + all PourAttr metadata (layer, net, fill_type,
 //! thermal_relief, clearance, min_thickness, priority). Actual fill
 //! generation (polygon offset + raster fill + thermal-relief geometry)
-//! lands with the PCB Routing plan (Copper Pour).
+//! lands with the PCB Routing plan (Copper Pour). The pour's Corners shape
+//! the baked outline as a board pour's fill shapes its own (#2598).
 
 use signex_library::primitive::footprint::{
     FpPour, NetRef, Polygon, PourFillType as LibPourFill, ThermalReliefStyle as LibThermal,
@@ -15,6 +16,7 @@ use signex_sketch::attr::PourFillType as SkPourFill;
 use signex_sketch::entity::EntityKind;
 use signex_sketch::sketch::SketchData;
 use signex_sketch::solver::FullSolveOutput;
+use signex_types::pcb::Point;
 use std::collections::HashMap;
 
 use crate::eval_util::{build_ctx, opt_eval_mm};
@@ -100,6 +102,13 @@ pub fn bake_pours(
             }
         };
 
+        let Some(vertices) = shaped(vertices, attr) else {
+            warnings.push(format!(
+                "entity {}: PourAttr corners cannot be shaped at this size; pour skipped",
+                entity.id
+            ));
+            continue;
+        };
         out.push(FpPour {
             boundary: Polygon::new(vertices),
             layer: layer_id(attr.layer),
@@ -115,6 +124,22 @@ pub fn bake_pours(
         warn_open_profiles(sketch, solve, "Pour", |e| e.pour.is_some(), warnings);
     }
     Ok(())
+}
+
+/// The traced outline with its convex corners shaped by the pour's Corners
+/// (#2598), through the rule a board pour fills with (#2578,
+/// `pcb_geom::shaped_outline_mm`). Sharp, or no positive size, keeps the
+/// outline as traced; `None` when the geometry cannot hold it.
+fn shaped(
+    vertices: Vec<[f64; 2]>,
+    attr: &signex_sketch::attr::PourAttr,
+) -> Option<Vec<[f64; 2]>> {
+    let Some((corners, size)) = attr.corner_shape() else {
+        return Some(vertices);
+    };
+    let outline: Vec<Point> = vertices.iter().map(|&[x, y]| Point::new(x, y)).collect();
+    let shaped = pcb_geom::shaped_outline_mm(&outline, corners, size)?;
+    Some(shaped.into_iter().map(|p| [p.x, p.y]).collect())
 }
 
 fn map_fill(s: SkPourFill) -> LibPourFill {
@@ -139,6 +164,7 @@ fn map_thermal(t: &signex_sketch::attr::ThermalRelief) -> LibThermal {
 mod tests {
     use super::*;
     use signex_sketch::attr::{PourAttr, PourFillType, ThermalRelief};
+    use signex_types::zone_pour_shape::PourCorners;
     use signex_sketch::entity::Entity;
     use signex_sketch::id::SketchEntityId;
     use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
@@ -203,6 +229,8 @@ mod tests {
             clearance_expr: Some("0.2mm".into()),
             min_thickness_expr: Some("0.15mm".into()),
             priority: 3,
+            corners: Default::default(),
+            corner_size: 0.0,
         };
         let data = rectangle_with_pour(attr);
         let solved = solve(&data);
@@ -232,6 +260,8 @@ mod tests {
             clearance_expr: None,
             min_thickness_expr: None,
             priority: 0,
+            corners: Default::default(),
+            corner_size: 0.0,
         };
         attr.thermal_relief.enabled = false;
         let data = rectangle_with_pour(attr);
@@ -253,6 +283,8 @@ mod tests {
             clearance_expr: None,
             min_thickness_expr: None,
             priority: 0,
+            corners: Default::default(),
+            corner_size: 0.0,
         };
         let data = rectangle_with_pour(attr);
         let solved = solve(&data);
@@ -273,6 +305,8 @@ mod tests {
             clearance_expr: None,
             min_thickness_expr: None,
             priority: 0,
+            corners: Default::default(),
+            corner_size: 0.0,
         };
         let mut data = rectangle_with_pour(attr.clone());
         for e in data
@@ -299,6 +333,8 @@ mod tests {
             clearance_expr: clearance.map(String::from),
             min_thickness_expr: None,
             priority: 0,
+            corners: Default::default(),
+            corner_size: 0.0,
         }
     }
 
@@ -349,5 +385,79 @@ mod tests {
                 .any(|w| w.contains("clearance_expr") && w.contains("skipped")),
             "{warnings:?}"
         );
+    }
+
+    /// The pour of the 5 mm square with `corners` of `size` mm, baked.
+    fn baked_with(corners: PourCorners, size: f64) -> Vec<[f64; 2]> {
+        let mut attr = pour_attr(PcbLayer::Copper(CopperLayer::Top), None);
+        attr.corners = corners;
+        attr.corner_size = size;
+        let data = rectangle_with_pour(attr);
+        let solved = solve(&data);
+        let (mut out, mut warnings) = (Vec::new(), Vec::new());
+        bake_pours(&data, &solved, &HashMap::new(), &mut out, &mut warnings).unwrap();
+        assert!(warnings.is_empty(), "{warnings:?}");
+        assert_eq!(out.len(), 1);
+        out.remove(0).boundary.points
+    }
+
+    fn area(points: &[[f64; 2]]) -> f64 {
+        let n = points.len();
+        let twice: f64 = (0..n)
+            .map(|i| {
+                let ([x0, y0], [x1, y1]) = (points[i], points[(i + 1) % n]);
+                x0 * y1 - x1 * y0
+            })
+            .sum();
+        twice.abs() / 2.0
+    }
+
+    fn has_point(points: &[[f64; 2]], x: f64, y: f64) -> bool {
+        points
+            .iter()
+            .any(|p| (p[0] - x).abs() < 1e-6 && (p[1] - y).abs() < 1e-6)
+    }
+
+    /// #2598, decision 4 (Sharp default): a new pour bakes its outline as
+    /// traced, and Rounded or Chamfer with no size does too.
+    #[test]
+    fn a_sharp_pour_bakes_its_outline_as_drawn() {
+        let attr = pour_attr(PcbLayer::Copper(CopperLayer::Top), None);
+        assert_eq!(attr.corners, PourCorners::Sharp);
+        let sharp = baked_with(PourCorners::Sharp, 0.0);
+        assert_eq!(sharp.len(), 4);
+        assert!(has_point(&sharp, 0.0, 0.0) && has_point(&sharp, 5.0, 5.0));
+        assert_eq!(baked_with(PourCorners::Rounded, 0.0), sharp);
+        assert_eq!(baked_with(PourCorners::Chamfer, 0.0), sharp);
+        assert_eq!(baked_with(PourCorners::Sharp, 1.0), sharp, "a size alone");
+    }
+
+    /// #2598: Chamfer cuts each corner back by the size along both edges.
+    #[test]
+    fn a_chamfered_pour_cuts_each_corner_by_its_size() {
+        let points = baked_with(PourCorners::Chamfer, 1.0);
+        for (x, y) in [(1.0, 0.0), (0.0, 1.0), (4.0, 5.0), (5.0, 4.0)] {
+            assert!(has_point(&points, x, y), "({x}, {y}) in {points:?}");
+        }
+        assert!(!has_point(&points, 0.0, 0.0));
+        assert!((area(&points) - 23.0).abs() < 1e-6, "{}", area(&points));
+    }
+
+    /// #2598: Rounded replaces each corner by an arc of the size, tangent
+    /// to both edges, every point on the true circle, as on the board.
+    #[test]
+    fn a_rounded_pour_bakes_an_arc_of_its_radius_at_each_corner() {
+        let points = baked_with(PourCorners::Rounded, 1.0);
+        assert!(points.len() > 8, "{points:?}");
+        assert!(has_point(&points, 1.0, 0.0) && has_point(&points, 0.0, 1.0));
+        assert!(!has_point(&points, 0.0, 0.0));
+        let near_origin = points.iter().filter(|p| p[0] < 1.0 && p[1] < 1.0);
+        for p in near_origin {
+            let r = (p[0] - 1.0).hypot(p[1] - 1.0);
+            assert!((r - 1.0).abs() < 1e-5, "{p:?} is {r} from the centre");
+        }
+        let full = 25.0 - 4.0 * (1.0 - std::f64::consts::FRAC_PI_4);
+        let got = area(&points);
+        assert!(got < 25.0 && got > 23.0 && (got - full).abs() < 0.01, "{got}");
     }
 }

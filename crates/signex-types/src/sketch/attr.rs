@@ -490,6 +490,41 @@ pub struct PourAttr {
     pub min_thickness_expr: Option<String>,
     #[serde(default)]
     pub priority: u32,
+    /// How the bake shapes the convex corners of the outline: the board
+    /// pour's model (#2578, `Zone::corners`), used as is (#2598). Not
+    /// written when Sharp.
+    #[serde(
+        default,
+        skip_serializing_if = "crate::zone_pour_shape::PourCorners::is_sharp"
+    )]
+    pub corners: crate::zone_pour_shape::PourCorners,
+    /// The radius of a Rounded corner or the cut of a Chamfer, in mm, as
+    /// `Zone::corner_size`. Not written when 0.
+    #[serde(default, skip_serializing_if = "is_zero_mm")]
+    pub corner_size: f64,
+}
+
+impl PourAttr {
+    /// Whether the pour stores corners other than Sharp: what a footprint
+    /// file needs `snxfpt/1.5` for (`FootprintFile::needs_1_5`, #2598). A
+    /// size alone, with Sharp corners, shapes nothing and raises nothing.
+    pub fn has_corner_shape(&self) -> bool {
+        !self.corners.is_sharp()
+    }
+
+    /// The corner shape and size, in mm, the bake gives the outline; `None`
+    /// for Sharp corners or a size that is not a positive number, which
+    /// bake the outline as drawn, as on the board (`Zone::pour_corner_shape`).
+    pub fn corner_shape(&self) -> Option<(crate::zone_pour_shape::PourCorners, f64)> {
+        let size = self.corner_size;
+        (self.has_corner_shape() && size.is_finite() && size > 0.0)
+            .then_some((self.corners, size))
+    }
+}
+
+/// Whether a stored length is 0, so its key is left out.
+fn is_zero_mm(value: &f64) -> bool {
+    *value == 0.0
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
