@@ -303,7 +303,7 @@ impl Signex {
             project_dirty: self.active_project_is_dirty(),
             document_has_file: own.has_file,
             has_dirty_documents: !self.unsaved_set().is_empty()
-                || self.document_view.live_drawing_edit.is_some(),
+                || (document.engines.values()).any(|e| e.live_edit_drawing().is_some()),
             has_document: !document.tabs.is_empty(),
             has_open_project: document.active_project.is_some(),
             has_parent_sheet: self.active_sheet_has_parent(),
@@ -467,6 +467,46 @@ mod tests {
         app.document_state.engines.insert(path.clone(), engine);
         app.document_state.active_path = Some(path.clone());
         push_tab(&mut app, &path, TabKind::Schematic);
+        app
+    }
+
+    /// A saved sheet with a rectangle selected and "45" typed into its Width
+    /// box without leaving it: a preview in the engine, nothing dirty.
+    fn with_typed_drawing_value() -> Signex {
+        use signex_types::schematic::{FillType, Point, SchDrawing, SelectedItem, SelectedKind};
+        let rect = SchDrawing::Rect {
+            uuid: uuid::Uuid::now_v7(),
+            start: Point::new(10.0, 10.0),
+            end: Point::new(30.0, 20.0),
+            width: 0.2,
+            fill: FillType::None,
+            stroke_color: None,
+            locked: false,
+        };
+        let id = rect.uuid();
+        let sheet = signex_types::schematic::SchematicSheet {
+            drawings: vec![rect],
+            ..Default::default()
+        };
+        let mut app = with_schematic();
+        let path = PathBuf::from("enablement.snxsch");
+        let mut engine = signex_engine::Engine::new(sheet).unwrap();
+        engine.mark_saved();
+        app.document_state.engines.insert(path.clone(), engine);
+        app.interaction_state.active_canvas_mut().selected =
+            vec![SelectedItem::new(id, SelectedKind::Drawing)];
+        app.update_selection_info();
+        let typed = crate::panels::PanelMsg::DrawingFieldTyping(
+            crate::panels::DrawingFieldId::RectWidth,
+            "45".into(),
+        );
+        let _ = app.update(Message::Dock(crate::dock::DockMessage::Panel(typed)));
+        assert!(
+            app.document_state.engines[&path]
+                .live_edit_drawing()
+                .is_some()
+        );
+        assert!(!app.document_state.is_document_dirty(&path));
         app
     }
 
@@ -1254,29 +1294,34 @@ mod tests {
         }
     }
 
-    /// ADR-0006 slice 7: no `CoreContext` fact is read from a panel or from
-    /// the interaction state; resetting both leaves the core half as it was.
-    /// The one exception is the board sketch session (decision 8), pinned by
-    /// the next test.
+    /// ADR-0006 slice 7: no `CoreContext` fact is read from a panel, from the
+    /// rest of the document view or from the interaction state; resetting
+    /// them leaves the core half as it was. The one exception is the board
+    /// sketch session (decision 8), pinned by the next test.
     #[test]
     fn core_facts_ignore_panel_and_interaction_state() {
-        let fixtures: [fn() -> Signex; 4] = [
+        let fixtures: [fn() -> Signex; 5] = [
             || with_hierarchy(true),
             with_schematic,
             with_board,
             || with_footprint_editor().0,
+            with_typed_drawing_value,
         ];
         for build in fixtures {
             let mut app = Box::new(build());
             let before = app.command_context(None);
             let fresh = Box::new(Signex::new().0);
-            app.document_view.panel_ctx = fresh.document_view.panel_ctx;
+            app.document_view = fresh.document_view;
             app.interaction_state = fresh.interaction_state;
             assert_eq!(app.command_context(None).core(), before.core());
         }
         assert!(
             with_hierarchy(true).command_context(None).has_parent_sheet,
             "the hierarchy fixture reads a panel fact, so the check has teeth"
+        );
+        assert!(
+            (with_typed_drawing_value().command_context(None)).has_dirty_documents,
+            "a value being typed is unsaved work, so the reset has teeth"
         );
     }
 

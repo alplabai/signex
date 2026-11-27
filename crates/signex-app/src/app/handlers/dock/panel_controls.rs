@@ -128,9 +128,9 @@ impl Signex {
     }
 
     /// Commit the pending drafts (title-block fields, sheet variables, typed
-    /// note text) of the document `anchor` and of the other sheets of its
-    /// project: the scope of an export or a project close. Another project's
-    /// drafts stay pending.
+    /// note text, a drawing value being typed) of the document `anchor` and
+    /// of the other sheets of its project: the scope of an export or a
+    /// project close. Another project's drafts stay pending.
     pub(crate) fn commit_drafts_in_scope_of(&mut self, anchor: Option<&std::path::Path>) {
         let Some(anchor) = anchor else {
             return;

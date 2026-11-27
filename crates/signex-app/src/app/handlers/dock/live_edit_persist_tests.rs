@@ -223,6 +223,60 @@ fn close_project_then_save_all_writes_the_typed_value() {
     assert_eq!(written_width(&recorder), 45.0);
 }
 
+/// Project ▸ Close Project (`MenuMessage::CloseProject`), up to its gate.
+fn close_from_the_menu_to_gate(app: &mut Signex, id: ProjectId) {
+    use crate::app::ProjectMsg;
+    let _ = app.update(Message::Menu(MenuMessage::CloseProject));
+    let result = app.resolve_sheet_refs_blocking();
+    let _ = app.update(Message::Project(ProjectMsg::CloseRefsResolved {
+        project_id: id,
+        result,
+    }));
+}
+
+/// The menu's Close Project goes through the same settle as the tree's.
+#[test]
+fn close_project_from_the_menu_prompts_with_the_typed_value_committed() {
+    let (mut app, sheet, id, _recorder) = typing_in_project();
+    close_from_the_menu_to_gate(&mut app, id);
+    assert!(app.ui_state.project_close_confirm.is_some(), "the prompt");
+    assert!(app.document_state.is_document_dirty(&sheet));
+    assert_eq!(width_in_engine(&app, &sheet), 45.0);
+    assert_eq!(app.document_state.engines[&sheet].live_edit_drawing(), None);
+}
+
+/// Text the box cannot store was never a value: the close takes the preview
+/// back, the sheet is clean, the project closes and nothing is written.
+#[test]
+fn close_project_on_a_typo_cancels_the_preview_and_writes_nothing() {
+    let (mut app, sheet, id, recorder) = typing_in_project();
+    type_width(&mut app, "45x");
+    close_from_the_menu_to_gate(&mut app, id);
+    assert!(app.ui_state.project_close_confirm.is_none(), "no prompt");
+    assert!(app.document_state.projects.is_empty(), "closed");
+    assert!(!app.document_state.is_document_dirty(&sheet));
+    assert!(recorder.0.lock().unwrap().is_empty(), "the file keeps 20");
+}
+
+/// Cancel at the prompt keeps the project open with the typed value as one
+/// committed undo step.
+#[test]
+fn cancel_at_the_close_prompt_keeps_the_typed_value_as_one_step() {
+    use crate::app::{ProjectCloseChoice, ProjectMsg};
+    let (mut app, sheet, id, recorder) = typing_in_project();
+    close_from_the_menu_to_gate(&mut app, id);
+    assert!(app.ui_state.project_close_confirm.is_some(), "the prompt");
+    let task = app.update(Message::Project(ProjectMsg::CloseConfirm(
+        ProjectCloseChoice::Cancel,
+    )));
+    settle(&mut app, task);
+    assert!(app.document_state.projects.iter().any(|p| p.id == id));
+    assert!(app.document_state.is_document_dirty(&sheet));
+    assert!(recorder.0.lock().unwrap().is_empty(), "nothing written");
+    assert_eq!(width_in_engine(&app, &sheet), 45.0);
+    assert_settled_as_one_step(&mut app, &sheet);
+}
+
 /// Closing the sheet's tab parks the typed value as an edit; Save All then
 /// writes it.
 #[test]
