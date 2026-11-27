@@ -5,6 +5,8 @@
 
 use std::path::{Path, PathBuf};
 
+use signex_i18n::RenderTranslatable;
+
 use super::{CommandArgs, CommandOutcome};
 use crate::app::{FootprintDocument, Message, Signex};
 use crate::keymap::AppCommandId;

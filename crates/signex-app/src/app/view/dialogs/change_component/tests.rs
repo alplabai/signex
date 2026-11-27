@@ -469,6 +469,32 @@ fn next_acts_only_on_the_read_row_the_list_shows() {
     assert!(!next_pressed(&clicks(&hidden, "Next")), "a hidden part");
 }
 
+/// Caner (2026-11-27), DECISIONS: a default pin mapping the sheet cannot
+/// follow leaves Next enabled, since the pins are remapped on the compare
+/// step, while Change there stays inert until the mapping can be followed.
+#[test]
+fn next_leads_on_from_a_refused_default_mapping_and_change_waits() {
+    let refuse = |change: &mut ChangePreview| {
+        change.pin_map = None;
+        change.preview.refused = Some("old pin 1 has no new pin".into());
+    };
+    let pick = compared_with(|change| {
+        refuse(change);
+        change.step = ChangeStep::Pick;
+    });
+    assert!(next_pressed(&clicks(&pick, "Next")), "Next leads on");
+    let compare = compared_with(refuse);
+    let shown = texts(&compare);
+    assert!(shown.iter().any(|t| t == "Change 1 part"), "{shown:#?}");
+    let confirmed = clicks(&compare, "Change 1 part").into_iter().any(|m| {
+        matches!(
+            m,
+            LibraryMessage::PlacedPart(PlacedPartMsg::ChangeConfirmed)
+        )
+    });
+    assert!(!confirmed, "Change waits for a mapping it can follow");
+}
+
 /// Mockup row 129, step 2: the comparison with Back, Cancel and Change;
 /// the list, its chips and the tiles are gone, and Back says so.
 #[test]
