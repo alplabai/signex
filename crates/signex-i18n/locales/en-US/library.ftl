@@ -1057,3 +1057,5 @@ library-import-dialog-severity-chip = { $label } { $count }
 library-import-dialog-detail-line = { $key }: { $value }
 library-import-dialog-stop-now = Stop now
 library-import-dialog-run-stopping = The previous run is stopping…
+# $path is the library folder.
+library-import-dialog-unchanged = The import was refused before it started, so nothing was changed in { $path }.

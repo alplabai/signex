@@ -533,17 +533,13 @@ impl Signex {
             }
             (_, Ok(_)) => self.library.import_dialog = None,
             (_, Err(failure)) => {
-                // A folder the run was refused before taking holds nothing
-                // of the run's.
-                use crate::library_import::ImportError as E;
-                let removed = failure.removed_output
-                    || matches!(
-                        *failure.error,
-                        E::OutputNotEmpty { .. }
-                            | E::OutputUnusable { .. }
-                            | E::PathNotAbsolute { .. }
-                    );
+                let removed = failure.removed_output;
                 d.import_end = Some(match *failure.error {
+                    // Refused before the converter started: the folder,
+                    // which may hold the user's files, was not touched.
+                    ref error if failure.refused => ImportEnd::Refused {
+                        reason: error.to_translatable(),
+                    },
                     crate::library_import::ImportError::Cancelled => {
                         ImportEnd::Cancelled { removed }
                     }

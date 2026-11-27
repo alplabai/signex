@@ -96,13 +96,13 @@ impl ImportJob {
                 let output = &self.request.output;
                 // Lock first: an edit landing after the clean check would
                 // otherwise be wiped by a failed update's reset.
-                let file = find_library_file(output).map_err(RunFailure::new)?;
+                let file = find_library_file(output).map_err(RunFailure::refused)?;
                 let lock = signex_library::hold_library_write_lock(&file).map_err(|e| {
-                    RunFailure::new(ImportError::Git {
+                    RunFailure::refused(ImportError::Git {
                         detail: e.to_string(),
                     })
                 })?;
-                let check = check_update(output).map_err(RunFailure::new)?;
+                let check = check_update(output).map_err(RunFailure::refused)?;
                 (check.local_commits, Some(lock))
             }
             RunMode::Import | RunMode::Preview => (0, None),
@@ -131,6 +131,7 @@ impl ImportJob {
             stderr_tail: run.stderr_tail.clone(),
             removed_output: false,
             restored: None,
+            refused: false,
         };
         let library_file = find_library_file(&library_dir).map_err(|e| keep_run(e, &run))?;
         let message = self.commit_message(&library_file);
@@ -146,9 +147,11 @@ impl ImportJob {
     }
 
     /// An update failed after `check_update` found the tree clean: whatever
-    /// the converter wrote is undone. Only reached for an update.
+    /// the converter wrote is undone. Only reached for an update; a refusal
+    /// before the converter started is left as it is.
     fn restore_after_failed_update(&self, mut failure: RunFailure) -> RunFailure {
-        if self.request.mode == RunMode::Update {
+        // A refused run wrote nothing, so there is nothing to undo.
+        if self.request.mode == RunMode::Update && !failure.refused {
             let restored = signex_library::import_snapshot::restore_to_head(&self.request.output)
                 .map_err(|e| e.to_string());
             if let Err(why) = &restored {

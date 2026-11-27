@@ -194,6 +194,8 @@ pub struct RunFailure {
     /// For an update over a clean tree: whether the tree was put back to
     /// its last import.
     pub restored: Option<Result<(), String>>,
+    /// Refused before the converter started, so nothing on disk changed.
+    pub refused: bool,
 }
 
 impl RunFailure {
@@ -204,6 +206,15 @@ impl RunFailure {
             stderr_tail: String::new(),
             removed_output: false,
             restored: None,
+            refused: false,
+        }
+    }
+
+    /// A refusal before the converter started: nothing was written.
+    pub fn refused(error: ImportError) -> Self {
+        Self {
+            refused: true,
+            ..Self::new(error)
         }
     }
 }
@@ -233,8 +244,8 @@ pub fn run_library_in(
     group: &ProcessGroup,
     on_event: &mut dyn FnMut(&ProgressEvent),
 ) -> Result<RunOutcome, RunFailure> {
-    request.validate().map_err(RunFailure::new)?;
-    let owned = claim_output(request).map_err(RunFailure::new)?;
+    request.validate().map_err(RunFailure::refused)?;
+    let owned = claim_output(request).map_err(RunFailure::refused)?;
     let mut args = command.leading_args.clone();
     args.extend(request.args());
     let cwd = neutral_dir(Some(&request.output));
@@ -403,6 +414,7 @@ fn finish(request: &LibraryRunRequest, finished: Finished) -> Result<RunOutcome,
         stderr_tail: stderr_tail.clone(),
         removed_output: false,
         restored: None,
+        refused: false,
     };
     let Some(summary) = summary else {
         return Err(fail(

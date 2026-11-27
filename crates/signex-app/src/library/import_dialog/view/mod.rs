@@ -20,6 +20,9 @@ mod preview;
 mod progress;
 mod source;
 
+#[cfg(test)]
+pub(super) use progress::end_words;
+
 pub(super) const TS: TypeScale = TypeScale::DEFAULT;
 pub(super) const SP: Spacing = Spacing::DEFAULT;
 

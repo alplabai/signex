@@ -74,6 +74,8 @@ pub enum ImportEnd {
     Cancelled { removed: bool },
     /// It failed; the reason, and whether the folder was removed.
     Failed { reason: Translatable, removed: bool },
+    /// Refused before the converter started: nothing was changed.
+    Refused { reason: Translatable },
 }
 
 /// The open Import Library dialog.

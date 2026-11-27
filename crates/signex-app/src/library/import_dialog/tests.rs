@@ -558,9 +558,9 @@ fn a_dry_run_nobody_waits_for_leaves_no_temp_folder() {
 }
 
 #[test]
-fn a_refused_folder_says_nothing_was_kept() {
+fn a_refused_folder_says_nothing_was_changed() {
     let (mut app, _cancel) = importing();
-    let failed = RunFailure::new(ImportError::OutputNotEmpty {
+    let failed = RunFailure::refused(ImportError::OutputNotEmpty {
         path: "/out/P".into(),
     });
     drop(app.update(import(LibraryImportMsg::Finished(Box::new(
@@ -569,10 +569,27 @@ fn a_refused_folder_says_nothing_was_kept() {
             target: MountTarget::Global,
         },
     )))));
-    assert!(matches!(
-        dialog(&app).import_end,
-        Some(ImportEnd::Failed { removed: true, .. })
-    ));
+    let end = dialog(&app).import_end.clone().expect("ended");
+    assert!(matches!(end, ImportEnd::Refused { .. }), "{end:?}");
+    let i18n = I18n::en_us();
+    let (_, _, second) = super::view::end_words(&end, "/out/P".into(), &i18n);
+    let second = plain(&second.into_string());
+    assert!(second.contains("nothing was changed in /out/P"), "{second}");
+    assert!(!second.contains("Nothing was kept"), "{second}");
+    // A run that wrote and then failed still says what became of it.
+    let wrote = ImportEnd::Failed {
+        reason: ImportError::Cancelled.to_translatable(),
+        removed: true,
+    };
+    let (_, _, second) = super::view::end_words(&wrote, "/out/P".into(), &i18n);
+    assert!(plain(&second.into_string()).starts_with("Nothing was kept"));
+}
+
+/// `text` without Fluent's isolation marks.
+fn plain(text: &str) -> String {
+    text.chars()
+        .filter(|c| !matches!(c, '\u{2068}' | '\u{2069}'))
+        .collect()
 }
 
 #[test]

@@ -198,40 +198,61 @@ fn phase_list<'a>(
         .boxed()
 }
 
-/// A cancelled or failed import: what happened and whether its folder
-/// was removed.
+/// A cancelled, failed or refused import: what happened and what became
+/// of its folder.
 fn ended<'a>(
     end: &ImportEnd,
     state: &ImportDialogState,
     tokens: &ThemeTokens,
     i18n: &I18n,
 ) -> Element<'a, LibraryMessage> {
-    let path = state.location.clone();
-    let (tone, first, removed) = match end {
-        ImportEnd::Cancelled { removed } => (
-            PillTone::Warn,
-            t!(i18n, ids::LIBRARY_IMPORT_DIALOG_CANCELLED),
-            *removed,
-        ),
-        ImportEnd::Failed { reason, removed } => (
-            PillTone::Err,
-            t!(
-                i18n,
-                ids::LIBRARY_IMPORT_DIALOG_FAILED,
-                "error" => reason.localized(i18n).into_string()
-            ),
-            *removed,
-        ),
-    };
-    let second = if removed {
-        t!(i18n, ids::LIBRARY_IMPORT_DIALOG_REMOVED, "path" => path)
-    } else {
-        t!(i18n, ids::LIBRARY_IMPORT_DIALOG_KEPT, "path" => path)
-    };
+    let (tone, first, second) = end_words(end, state.location.clone(), i18n);
     let words = column![text(first).size(TS.body), text(second).size(TS.body)]
         .spacing(SP.xs)
         .boxed();
     notice_banner(tone, words, Vec::new(), tokens)
+}
+
+/// The tone and the two lines of how the import ended, for the folder
+/// `path`.
+pub(in crate::library::import_dialog) fn end_words(
+    end: &ImportEnd,
+    path: String,
+    i18n: &I18n,
+) -> (PillTone, Localized, Localized) {
+    let failed = |reason: &signex_i18n::Translatable| {
+        t!(
+            i18n,
+            ids::LIBRARY_IMPORT_DIALOG_FAILED,
+            "error" => reason.localized(i18n).into_string()
+        )
+    };
+    match end {
+        ImportEnd::Cancelled { removed } => (
+            PillTone::Warn,
+            t!(i18n, ids::LIBRARY_IMPORT_DIALOG_CANCELLED),
+            folder_after(*removed, path, i18n),
+        ),
+        ImportEnd::Failed { reason, removed } => (
+            PillTone::Err,
+            failed(reason),
+            folder_after(*removed, path, i18n),
+        ),
+        ImportEnd::Refused { reason } => (
+            PillTone::Err,
+            failed(reason),
+            t!(i18n, ids::LIBRARY_IMPORT_DIALOG_UNCHANGED, "path" => path),
+        ),
+    }
+}
+
+/// Whether the folder the run wrote into was removed.
+fn folder_after(removed: bool, path: String, i18n: &I18n) -> Localized {
+    if removed {
+        t!(i18n, ids::LIBRARY_IMPORT_DIALOG_REMOVED, "path" => path)
+    } else {
+        t!(i18n, ids::LIBRARY_IMPORT_DIALOG_KEPT, "path" => path)
+    }
 }
 
 pub(super) fn footer<'a>(
