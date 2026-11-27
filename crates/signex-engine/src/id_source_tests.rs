@@ -69,6 +69,7 @@ fn payload() -> PlacementPayload {
         justify_v: Default::default(),
         locked: false,
         format: Default::default(),
+        rich: Default::default(),
     });
     PlacementPayload::new(f)
 }

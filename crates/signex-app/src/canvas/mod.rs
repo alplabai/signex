@@ -667,6 +667,8 @@ pub struct CanvasViewPrefs<'a> {
     pub unions: crate::schematic_runtime::unions::UnionView<'a>,
     /// The Notebook badges of the sheet's design and their inks (mockup row 197).
     pub notebook_badges: crate::schematic_runtime::notebook_badges::NotebookBadgeView<'a>,
+    /// The compiled rich text notes (#1114, mockup row 203).
+    pub rich_notes: Option<&'a crate::schematic_runtime::rich_note::RichNoteRenders>,
     /// Device pixels per logical pixel in the window this canvas draws in
     /// (`UiState::device_px_per_logical_px`): the stroke floor and the
     /// hairline snap work on that grid (#1887).
@@ -682,6 +684,7 @@ impl CanvasViewPrefs<'_> {
             defaults: self.schematic_defaults,
             designator_standard: self.designator_standard,
             special_strings: None,
+            rich_notes: self.rich_notes,
         }
     }
 
@@ -739,6 +742,7 @@ impl<'a> SchematicCanvas<'a> {
             special_strings: self.slot.special_strings.as_ref(),
             defaults: self.prefs.schematic_defaults,
             designator_standard: self.prefs.designator_standard,
+            rich_notes: self.prefs.rich_notes,
         }
     }
 
@@ -1152,6 +1156,7 @@ mod tests {
                 ),
             },
             notebook_badges: Default::default(),
+            rich_notes: None,
             device_px_per_logical_px: 1.0,
         }
     }

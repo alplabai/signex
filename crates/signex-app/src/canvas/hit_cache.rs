@@ -20,6 +20,8 @@ pub(super) struct SheetKey {
     /// Value fields are boxed on their drawn text (#1986).
     special_strings: Option<super::SpecialStrings>,
     designators: Designators,
+    /// Rich notes are boxed as they draw (#1114): a landed compile re-boxes.
+    rich_notes: Option<u64>,
 }
 
 impl SheetKey {
@@ -36,6 +38,7 @@ impl SheetKey {
             designator_standard: widths.designator_standard,
             special_strings: widths.special_strings.cloned(),
             designators: designators.clone(),
+            rich_notes: widths.rich_notes.map(|r| r.revision()),
         }
     }
 
@@ -54,6 +57,7 @@ impl SheetKey {
             && self.designator_standard == widths.designator_standard
             && self.special_strings.as_ref() == widths.special_strings
             && self.designators == *designators
+            && self.rich_notes == widths.rich_notes.map(|r| r.revision())
     }
 }
 

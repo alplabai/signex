@@ -102,6 +102,7 @@ pub(in crate::app) fn sheet(id: u128) -> SchematicSheet {
             justify_v: VAlign::Bottom,
             locked: false,
             format: Default::default(),
+            rich: Default::default(),
         }],
         child_sheets: vec![ChildSheet {
             uuid: uid(CHILD),

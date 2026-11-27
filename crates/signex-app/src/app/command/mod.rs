@@ -96,6 +96,7 @@ pub(crate) mod queries;
 mod repair_reset_operand_tests;
 mod repair_reset_operands;
 mod replay;
+mod rich_note_operands;
 mod routing;
 #[cfg(test)]
 mod selection_filter_operand_tests;

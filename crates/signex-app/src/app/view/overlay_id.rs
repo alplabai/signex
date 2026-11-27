@@ -577,7 +577,11 @@ impl Signex {
             OverlayId::SymbolContextMenu => {
                 layers.extend(self.symbol_context_menu_overlay(window_id))
             }
-            OverlayId::TextEdit => layers.extend(self.text_edit_overlay(window_id)),
+            OverlayId::TextEdit => {
+                layers.extend(self.text_edit_overlay(window_id));
+                // The rich note editor is the in-place editor of a rich note.
+                layers.extend(self.rich_note_editor_overlay(window_id));
+            }
             OverlayId::ActiveBarMenu => layers.extend(scoped_to_window(
                 self.active_bar_menu_overlay(window_id),
                 self.overlay_owner(window_id),

@@ -150,7 +150,11 @@ pub(super) fn push_text_note_sections<'a>(
             &ctx.collapsed_sections,
             move || {
                 let c = Column::new().spacing(0).width(Length::Fill);
-                let c = c.push(format_row(i18n, note_format, picked, st, read_only));
+                let mut c = c.push(format_row(i18n, note_format, picked, st, read_only));
+                // A rich note is edited in place over the sheet (mockup row 203).
+                if note_format == TextNoteFormat::Typst {
+                    c = c.push(super::rich_note::edit_row(ctx, item));
+                }
                 let Some(draft) = draft else {
                     // The box is seeded on the next selection refresh.
                     return c.push(form_input_row(
@@ -167,7 +171,7 @@ pub(super) fn push_text_note_sections<'a>(
     );
 
     // ── Text Properties ──: Justify H / V, Text Size and Font.
-    col.push(
+    col = col.push(
         ctx.collapsible(
             "sel_text",
             ids::PROPERTIES_SECTION_TEXT,
@@ -218,7 +222,12 @@ pub(super) fn push_text_note_sections<'a>(
             },
         )
         .boxed(),
-    )
+    );
+    // ── Frame, Size ──: a rich note's own sections (mockup row 203).
+    if note_format == TextNoteFormat::Typst {
+        return super::rich_note::push_sections(col, ctx, item, st);
+    }
+    col
 }
 
 /// The field values the illustration's callouts repeat, as the fields show
@@ -365,7 +374,7 @@ fn note_binding(key: KeyPress, item: SelectedItem) -> Option<Binding<PanelMsg>> 
 
 /// A label and a segmented control over `options`, `current` on. Read-only
 /// rows (a locked note) are veiled and take no input.
-fn segmented_row<'a, V, const N: usize>(
+pub(super) fn segmented_row<'a, V, const N: usize>(
     label: Localized,
     options: [(V, Localized); N],
     current: V,
@@ -485,6 +494,7 @@ mod tests {
             justify_v: VAlign::Center,
             locked: false,
             format: Default::default(),
+            rich: Default::default(),
         };
         let id = note.uuid;
         let sheet = signex_types::schematic::SchematicSheet {
@@ -570,6 +580,7 @@ mod tests {
             justify_v: VAlign::Top,
             locked: false,
             format: Default::default(),
+            rich: Default::default(),
         };
         let sheet = signex_types::schematic::SchematicSheet {
             paper_size: "A4".into(),

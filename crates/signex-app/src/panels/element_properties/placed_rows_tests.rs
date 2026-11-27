@@ -254,6 +254,7 @@ fn wire_port_note_sheet() -> SchematicSheet {
             justify_v: VAlign::Top,
             locked: false,
             format: Default::default(),
+            rich: Default::default(),
         }],
         ..Default::default()
     }

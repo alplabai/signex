@@ -164,6 +164,10 @@ pub struct TextNote {
     /// Plain or rich (Typst) text (#1114); the text is the source either way.
     #[serde(default, skip_serializing_if = "TextNoteFormat::is_plain")]
     pub format: TextNoteFormat,
+    /// The Frame and Size sections of a rich note (#1114, mockup row 203);
+    /// kept when the note goes back to plain, which ignores them.
+    #[serde(default, skip_serializing_if = "RichNoteLayout::is_default")]
+    pub rich: RichNoteLayout,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]

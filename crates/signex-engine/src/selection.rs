@@ -912,6 +912,7 @@ mod tests {
             justify_v: VAlign::Top,
             locked: false,
             format: Default::default(),
+            rich: Default::default(),
         };
         let engine = Engine::new(SchematicSheet {
             text_notes: vec![note],

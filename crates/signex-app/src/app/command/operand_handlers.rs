@@ -27,6 +27,7 @@ use super::placed_operands as placed;
 use super::placement_extras_operands as extras;
 use super::placement_operands as place;
 use super::repair_reset_operands as repair_reset;
+use super::rich_note_operands as rich_note;
 use super::selection_filter_operands as filter;
 use super::selection_operands as selection;
 use super::sheet_sync_operands as sheet_sync;
@@ -121,6 +122,27 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("set_symbol_parameter", placed::set_symbol_parameter),
     ("set_sheet_variable", placed::set_sheet_variable),
     ("set_text_note_format", placed::set_text_note_format),
+    // #1114, mockup row 203: a rich text note and its in-place editor.
+    ("set_text_note_frame", rich_note::set_text_note_frame),
+    ("set_text_note_size", rich_note::set_text_note_size),
+    ("apply_rich_note_edit", rich_note::apply_rich_note_edit),
+    ("edit_rich_note", crate::app::rich_note::edit_rich_note),
+    (
+        "cancel_rich_note_edit",
+        crate::app::rich_note::cancel_rich_note_edit,
+    ),
+    (
+        "wrap_rich_note_selection",
+        crate::app::rich_note::wrap_rich_note_selection,
+    ),
+    (
+        "open_rich_note_link",
+        crate::app::rich_note::open_rich_note_link,
+    ),
+    (
+        "compile_rich_note",
+        crate::app::rich_note::compile_rich_note,
+    ),
     ("repair_pin_junctions", repair_reset::repair_pin_junctions),
     ("reset_board_origin", repair_reset::reset_board_origin),
     ("reset_layer_colors", repair_reset::reset_layer_colors),
@@ -498,6 +520,21 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
         "set_text_note_format" => Some(
             "`set_text_note_format` needs the operands `id` and `format` — \
              use the Format row of the note in Properties",
+        ),
+        // #1114, mockup row 203: a person sets these in the Frame and Size
+        // sections and works the editor with its buttons and keys.
+        "set_text_note_frame" | "set_text_note_size" => Some(
+            "the Frame and Size of a rich text note need the operand `id` — \
+             use the Frame and Size sections of the note in Properties",
+        ),
+        "apply_rich_note_edit"
+        | "edit_rich_note"
+        | "cancel_rich_note_edit"
+        | "wrap_rich_note_selection"
+        | "open_rich_note_link"
+        | "compile_rich_note" => Some(
+            "the rich text note commands need the operand `id` — \
+             double-click the note to edit it in place",
         ),
         // #2424: a person draws with the Graphics tools and edits in
         // Properties.

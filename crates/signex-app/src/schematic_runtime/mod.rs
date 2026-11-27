@@ -40,6 +40,7 @@ pub mod lock_indicator;
 pub mod notebook_badges;
 pub mod overlay;
 mod repeat_stack;
+pub mod rich_note;
 mod scene_cache;
 pub mod selection;
 mod snapshot;
@@ -324,6 +325,8 @@ pub struct SceneOverrides<'a> {
     /// The project's designator standard: a reference draws as
     /// `signex_types::designator::display_reference` shows it (#1416).
     pub designator_standard: Option<signex_types::designator::DesignatorStandard>,
+    /// The compiled rich text notes (#1114); `None` draws them as text.
+    pub rich_notes: Option<&'a rich_note::RichNoteRenders>,
 }
 
 pub fn render_schematic(
@@ -699,7 +702,10 @@ fn collect_item_bounds_with(
     for note in &snapshot.text_notes {
         out.push(ItemBound {
             item: SelectedItem::new(note.uuid, SelectedKind::TextNote),
-            bbox: note_aabb_with(Some(WidthSources::of(snapshot)), note, document_family),
+            // A compiled rich note is boxed as it draws (#1114).
+            bbox: rich_note::rich_note_aabb(note, widths.rich_notes).unwrap_or_else(|| {
+                note_aabb_with(Some(WidthSources::of(snapshot)), note, document_family)
+            }),
             anchor: note.position,
         });
     }

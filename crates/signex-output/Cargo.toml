@@ -10,6 +10,9 @@ repository.workspace = true
 [dependencies]
 pcb-geom = { path = "../pcb-geom" }
 signex-bom = { path = "../signex-bom" }
+# Rich text notes (#1114): compiled and drawn as vector paths in the SVG and
+# PDF export, the same paths the canvas draws.
+signex-notebook = { path = "../signex-notebook" }
 signex-types = { path = "../signex-types" }
 thiserror = { workspace = true }
 serde = { workspace = true }

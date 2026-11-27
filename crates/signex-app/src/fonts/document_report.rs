@@ -155,6 +155,7 @@ mod tests {
             justify_v: VAlign::Bottom,
             locked: false,
             format: Default::default(),
+            rich: Default::default(),
         }
     }
 

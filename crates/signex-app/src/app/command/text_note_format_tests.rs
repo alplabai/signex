@@ -38,6 +38,7 @@ fn sheet(locked: bool) -> SchematicSheet {
             justify_v: VAlign::Top,
             locked,
             format: TextNoteFormat::Plain,
+            rich: Default::default(),
         }],
         ..Default::default()
     }

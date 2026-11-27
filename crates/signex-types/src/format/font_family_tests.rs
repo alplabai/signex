@@ -36,6 +36,7 @@ fn note(n: u128, family: Option<&str>) -> TextNote {
         justify_v: VAlign::Bottom,
         locked: false,
         format: Default::default(),
+        rich: Default::default(),
     }
 }
 

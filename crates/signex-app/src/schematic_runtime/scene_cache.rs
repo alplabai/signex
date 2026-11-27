@@ -45,6 +45,8 @@ pub(crate) struct SceneInputs {
     designators: Option<HashMap<uuid::Uuid, String>>,
     defaults: signex_types::schematic::SchematicDefaults,
     designator_standard: Option<signex_types::designator::DesignatorStandard>,
+    /// The rich note renders' revision (#1114): a landed compile rebuilds.
+    rich_notes: Option<u64>,
 }
 
 struct Entry {
@@ -197,6 +199,7 @@ impl SceneInputs {
             designators: overrides.designators.cloned(),
             defaults: overrides.defaults,
             designator_standard: overrides.designator_standard,
+            rich_notes: overrides.rich_notes.map(|r| r.revision()),
         }
     }
 
@@ -218,6 +221,7 @@ impl SceneInputs {
             && self.designators.as_ref() == overrides.designators
             && self.defaults == overrides.defaults
             && self.designator_standard == overrides.designator_standard
+            && self.rich_notes == overrides.rich_notes.map(|r| r.revision())
     }
 
     /// Like [`Self::fits`] but a pan of a pixel does not fit: for geometry

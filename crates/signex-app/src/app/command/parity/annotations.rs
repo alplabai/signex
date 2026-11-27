@@ -197,6 +197,8 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "set_sheet_symbol_size",
             "set_symbol_parameter",
             "set_text_note_format",
+            "set_text_note_frame",
+            "set_text_note_size",
             "project_move_sheet",
             "project_add_variant",
             "project_rename_variant",
@@ -260,6 +262,20 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
     // insert lands at the tab's cursor unless `line` names one.
     (&["notebook_compile", "notebook_view"], Operand, &[]),
     (&["notebook_insert"], Operand, &[Cursor]),
+    // #1114, mockup row 203: the editor and the compile act on a note of the
+    // sheet in view; Cancel, a toolbar button and Apply without `source`
+    // read the editor's typing.
+    (
+        &["edit_rich_note", "compile_rich_note", "open_rich_note_link"],
+        Operand,
+        &[ActiveDocument],
+    ),
+    (
+        &["cancel_rich_note_edit", "wrap_rich_note_selection"],
+        Operand,
+        &[ActiveDocument, InProgressEdit],
+    ),
+    (&["apply_rich_note_edit"], Operand, &[InProgressEdit]),
     // Mockup rows 196 and 197: each reads the project it names first and
     // answers from that read; a fix edits the notebook tab's text.
     (

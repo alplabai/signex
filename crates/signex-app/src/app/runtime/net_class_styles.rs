@@ -383,6 +383,7 @@ impl Signex {
                 .active_canvas()
                 .special_strings
                 .as_ref(),
+            rich_notes: Some(&self.ui_state.rich_notes.renders),
         }
     }
 

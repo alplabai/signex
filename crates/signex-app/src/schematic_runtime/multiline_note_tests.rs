@@ -14,6 +14,7 @@ fn note(text: &str, v_align: VAlign, rotation: f64) -> TextNote {
         justify_v: v_align,
         locked: false,
         format: Default::default(),
+        rich: Default::default(),
     }
 }
 

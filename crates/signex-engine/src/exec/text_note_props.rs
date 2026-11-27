@@ -47,6 +47,12 @@ impl Engine {
             note.format = format;
             changed = true;
         }
+        if let Some(rich) = props.rich.filter(lengths_are_valid)
+            && note.rich != rich
+        {
+            note.rich = rich;
+            changed = true;
+        }
         if !changed {
             return CommandResult::unchanged();
         }
@@ -57,6 +63,15 @@ impl Engine {
         self.record_history(before, patch_pair);
         CommandResult::changed(patch_pair)
     }
+}
+
+/// Every length of `rich` is a finite number at or above zero.
+fn lengths_are_valid(rich: &signex_types::schematic::RichNoteLayout) -> bool {
+    let length = |mm: f64| mm.is_finite() && mm >= 0.0;
+    rich.border_mm.is_none_or(length)
+        && length(rich.padding_mm)
+        && length(rich.width_mm)
+        && length(rich.height_mm)
 }
 
 #[cfg(test)]
@@ -76,6 +91,7 @@ mod tests {
             justify_v: VAlign::Top,
             locked: false,
             format: Default::default(),
+            rich: Default::default(),
         };
         let id = note.uuid;
         let sheet = SchematicSheet {
@@ -140,6 +156,48 @@ mod tests {
             engine.document().text_notes[0].format,
             TextNoteFormat::Plain
         );
+        assert!(!engine.can_undo(), "one step only");
+    }
+
+    /// #1114, mockup row 203: the Frame and Size sections are one undo step;
+    /// a length that is not a finite length is refused whole.
+    #[test]
+    fn the_frame_and_size_are_one_undo_step_and_a_bad_length_is_refused() {
+        use signex_types::schematic::{NoteFrame, NoteSize, RichNoteLayout};
+        let (mut engine, id) = engine_with_note();
+        let layout = RichNoteLayout {
+            frame: NoteFrame::Border,
+            size: NoteSize::FixedWidth,
+            width_mm: 40.0,
+            ..RichNoteLayout::default()
+        };
+        let props = TextNoteProps {
+            rich: Some(layout),
+            ..Default::default()
+        };
+        let done = engine
+            .execute(Command::UpdateTextNoteProps { note_id: id, props })
+            .expect("applied");
+        assert!(done.changed);
+        assert_eq!(engine.document().text_notes[0].rich, layout);
+        assert_eq!(engine.document().text_notes[0].text, "n");
+        let bad = TextNoteProps {
+            rich: Some(RichNoteLayout {
+                width_mm: f64::INFINITY,
+                ..layout
+            }),
+            ..Default::default()
+        };
+        let refused = engine
+            .execute(Command::UpdateTextNoteProps {
+                note_id: id,
+                props: bad,
+            })
+            .expect("ran");
+        assert!(!refused.changed);
+        assert_eq!(engine.document().text_notes[0].rich, layout);
+        engine.undo().expect("one step back");
+        assert!(engine.document().text_notes[0].rich.is_default());
         assert!(!engine.can_undo(), "one step only");
     }
 

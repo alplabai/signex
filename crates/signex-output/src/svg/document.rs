@@ -298,6 +298,20 @@ impl SvgRenderContext {
         // from the export when the user unchecks the Notes toggle.
         if opts.include_notes {
             for note in &sheet.schematic.text_notes {
+                // A rich note draws as vector paths (#1114); one that does
+                // not compile prints its source as a plain note does.
+                if note.format == signex_types::schematic::TextNoteFormat::Typst
+                    && let Some(rich) = super::rich_note::rich_note_elements(
+                        note,
+                        &xform,
+                        palette.note_text,
+                        palette.paper,
+                        &opts.schematic_defaults,
+                    )
+                {
+                    elements.extend(rich);
+                    continue;
+                }
                 let font_alias =
                     alias_for_family(note.font_family.as_deref(), document_family, "F1");
                 let size_pt =

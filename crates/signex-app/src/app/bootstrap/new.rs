@@ -532,6 +532,7 @@ impl Signex {
                 paste_array: None,
                 paste_array_opens: 0,
                 text_edit_opens: 0,
+                rich_notes: Default::default(),
                 selection_filter_custom: None,
                 erc_violations: Vec::new(),
                 erc_violations_by_path: std::collections::HashMap::new(),

@@ -1,7 +1,10 @@
 //! A command's operands besides its id (#1934), for a CLI or an agent, in one
-//! naming convention (`OPERAND_CONVENTION`); the notebook's are in `notebook`.
+//! naming convention (`OPERAND_CONVENTION`); the notebook's are in `notebook`,
+//! a rich text note's in `rich_note`.
 mod notebook;
 pub use notebook::*;
+mod rich_note;
+pub use rich_note::*;
 
 /// The shape of one operand's value, as written in text.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

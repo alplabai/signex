@@ -46,6 +46,7 @@ fn note(n: u128, locked: bool) -> TextNote {
         justify_v: VAlign::Bottom,
         locked,
         format: Default::default(),
+        rich: Default::default(),
     }
 }
 

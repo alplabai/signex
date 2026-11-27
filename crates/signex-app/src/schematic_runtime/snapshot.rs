@@ -446,21 +446,36 @@ pub fn build_renderer_snapshot(
 
     for note in &snapshot.text_notes {
         let pos = transform.world_to_screen((note.position.x, note.position.y));
-        if !text_anchor_visible(
-            pos,
-            bounds,
-            28.0,
-            &note_aabb_with(Some(WidthSources::of(snapshot)), note, document_family),
-            transform.scale,
-        ) {
+        let aabb = rich_note::rich_note_aabb(note, overrides.rich_notes).unwrap_or_else(|| {
+            note_aabb_with(Some(WidthSources::of(snapshot)), note, document_family)
+        });
+        if !text_anchor_visible(pos, bounds, 28.0, &aabb, transform.scale) {
             continue;
         }
 
+        let color = focus_color(to_iced(&colors.value), focus_set, note.uuid);
+        // A compiled rich note draws as vector paths above the circuit
+        // (#1114); one with no drawing yet shows its source as text.
+        let inks = rich_note::NoteInks {
+            ink: to_rgba(color),
+            paper: to_rgba(to_iced(&colors.paper)),
+            mark: to_rgba(to_iced(&colors.erc_error)),
+        };
+        if note.format == signex_types::schematic::TextNoteFormat::Typst
+            && rich_note::push_rich_note(
+                note,
+                overrides.rich_notes.and_then(|r| r.get(note.uuid)),
+                inks,
+                &overrides.defaults,
+                &mut drawings_front,
+            )
+        {
+            continue;
+        }
         let content = match overrides.special_strings {
             Some(special) => special.resolve_text(&note.text),
             None => note.text.clone(),
         };
-        let color = focus_color(to_iced(&colors.value), focus_set, note.uuid);
         parameter_texts.push(text::note_text_input(note, content, color, document_family));
     }
 
