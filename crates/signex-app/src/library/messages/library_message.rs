@@ -658,6 +658,8 @@ pub enum LibraryMessage {
     },
     /// The Copy to Library dialog, or the copy it started (#813).
     StockCopy(crate::library::stock_copy::StockCopyMsg),
+    /// A library import run through a converter (#3113, #3114).
+    Import(super::LibraryImportMsg),
     /// The Components panel's "Previews" switch was flipped (#2535): the
     /// row style picked, remembered as a preference.
     ComponentsPanelRowStylePicked(super::super::state::ComponentsRowStyle),

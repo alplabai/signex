@@ -42,6 +42,7 @@ fn add_git_library(app: &mut Signex, dir: &Path) -> (EditorAddress, PathBuf) {
         library: LibrarySection {
             name: "Lib".into(),
             description: None,
+            ..Default::default()
         },
         mode: LibraryMode::default(),
         workflow: WorkflowConfig::default(),
@@ -93,6 +94,7 @@ fn open_library(
         own_edit_stamp: None,
         display: LibraryDisplaySettings::default(),
         pricing: Default::default(),
+        provenance: Default::default(),
     });
 }
 

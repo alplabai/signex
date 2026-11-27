@@ -49,6 +49,7 @@ fn new_library(path: &Path, name: &str) {
         library: LibrarySection {
             name: name.into(),
             description: None,
+            ..Default::default()
         },
         mode: LibraryMode::default(),
         workflow: WorkflowConfig::default(),
@@ -659,6 +660,55 @@ fn a_footprint_copy_keeps_its_3d_model() {
         b"STEP-DATA",
         "the model file comes along"
     );
+}
+
+/// #3107: a stock model kept in `step/` is embedded in the copy, so the
+/// target library gets no `step/` file; the stock file stays.
+#[test]
+fn a_footprint_copy_embeds_a_step_folder_model() {
+    let mut w = world();
+    let step = b"ISO-10303-21;\nDATA;\nENDSEC;\nEND-ISO-10303-21;\n".to_vec();
+    let hash = signex_library::step_model_hash(&step);
+    let mut footprint = Footprint::empty("Embedded");
+    footprint.step_attachment = Some(StepAttachment {
+        content_hash: hash.clone(),
+        filename: "m.step".into(),
+        offset_xyz: [0.0; 3],
+        rotation_xyz: [0.0; 3],
+    });
+    let stock_fpt = w.stock_file("footprints", "embedded.snxfpt");
+    std::fs::write(
+        &stock_fpt,
+        FootprintFile::from_footprint(footprint)
+            .to_toml_string()
+            .unwrap(),
+    )
+    .unwrap();
+    let stock_step = w.stock.parent().unwrap().join(format!("step/{hash}.step"));
+    std::fs::create_dir_all(stock_step.parent().unwrap()).unwrap();
+    std::fs::write(&stock_step, &step).unwrap();
+
+    w.open(&stock_fpt);
+    let target = w.target.clone();
+    w.pick(&target);
+
+    let copy = std::fs::read_dir(w.target_dir().join("footprints"))
+        .unwrap()
+        .next()
+        .unwrap()
+        .unwrap()
+        .path();
+    let copied = FootprintFile::from_bytes(&std::fs::read(&copy).unwrap()).unwrap();
+    assert_eq!(copied.format_token(), "snxfpt/1.4");
+    assert_eq!(
+        copied.step_model(&copied.footprints[0]).unwrap(),
+        Some(step)
+    );
+    assert!(
+        !w.target_dir().join("step").exists(),
+        "no step/ file in the target"
+    );
+    assert!(stock_step.exists(), "the stock file stays");
 }
 
 #[test]

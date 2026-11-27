@@ -98,6 +98,7 @@ mod tests {
             own_edit_stamp: None,
             display: Default::default(),
             pricing: Default::default(),
+            provenance: Default::default(),
         });
         let mut browser = LibraryBrowserState::new(root.clone());
         browser.active_table = Some(TABLE.to_string());

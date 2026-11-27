@@ -43,6 +43,9 @@ pub(super) struct PrimitiveWrite {
     /// row of one of them may use a primitive of the library saved in, so the
     /// cascade moves those rows too (#2004).
     pub others: Vec<(std::path::PathBuf, crate::library::writes::Turn)>,
+    /// Save As: the file the editor was re-keyed from. Models its library
+    /// keeps only in `step/` are embedded before the write (#3107).
+    pub origin: Option<std::path::PathBuf>,
 }
 
 /// What both container kinds' writes share.
@@ -57,6 +60,8 @@ struct WriteContext<'a> {
     /// write holds a place in its order.
     own: Option<&'a crate::library::writes::OwnRevisions>,
     others: Vec<OtherLibrary<'a>>,
+    /// See [`PrimitiveWrite::origin`].
+    origin: Option<&'a std::path::Path>,
 }
 
 impl PrimitiveWrite {
@@ -166,6 +171,7 @@ impl PrimitiveWrite {
                     ready: Box::new(move || wait(turn)),
                 })
                 .collect(),
+            origin: self.origin.as_deref(),
         };
         let written = match self.snapshot {
             Snapshot::Symbol {
@@ -242,6 +248,11 @@ fn write_footprint(
     name: &str,
     owed: &[Uuid],
 ) -> Result<PrimitiveWritten, LibraryError> {
+    // #3107: a Save As carries the models the origin library keeps only in
+    // `step/`; the target library's `step/` does not hold them.
+    if let Some(step_dir) = context.origin.and_then(container_save::step_dir_of_file) {
+        file.embed_models_from_step_dir(&step_dir);
+    }
     let save = container_save::save_footprint_container(
         context.library,
         context.path,
@@ -265,6 +276,8 @@ fn write_footprint(
         |uuid| name_in(baseline, uuid),
     );
     cascade::apply_footprint_versions(&mut file, &save.versions);
+    // The models the written file holds, those embedded from `step/` too.
+    file.models.absorb(&save.models);
     let outcome = cascade::cascade_after_container_save(
         context.library,
         context.options.mode,

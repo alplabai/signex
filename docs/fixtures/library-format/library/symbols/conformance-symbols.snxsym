@@ -1,0 +1,176 @@
+format = "snxsym/v3"
+file_uuid = "01940000-0000-7000-8000-000000000010"
+display_name = "Conformance Symbols"
+created = "2026-01-01T00:00:00Z"
+updated = "2026-01-02T03:04:05Z"
+
+[[symbols]]
+uuid = "01940000-0000-7000-8000-000000000011"
+name = "Resistor"
+anchor = [
+    0.0,
+    0.0,
+]
+pins_tsv = '''
+number	name	electrical	pos_x	pos_y	orientation	length	description	function	pin_package_length	propagation_delay_ns	designator_visible	name_visible	inside_symbol	inside_edge_symbol	outside_edge_symbol	outside_symbol	hidden	locked	part_number
+1	1	Passive	-5.08	0	Right	2.54					true	false	None	None	None	None	false	false	1
+2	2	Passive	5.08	0	Left	2.54					true	false	None	None	None	None	false	false	1
+'''
+designator = "R?"
+comment = "*"
+designator_pos = [
+    0.0,
+    2.54,
+]
+comment_pos = [
+    0.0,
+    -2.54,
+]
+description = "Resistor"
+component_type = "Standard"
+mirrored = false
+version = "1.0.0"
+released = true
+part_count = 1
+created = "2026-01-01T00:00:00Z"
+updated = "2026-01-02T03:04:05Z"
+
+[[symbols.graphics]]
+stroke_width = 0.254
+part_number = 0
+
+[symbols.graphics.kind]
+kind = "rectangle"
+from = [
+    -2.54,
+    1.016,
+]
+to = [
+    2.54,
+    -1.016,
+]
+
+[symbols.schematic_params]
+
+[[symbols]]
+uuid = "01940000-0000-7000-8000-000000000012"
+name = "Dual NAND"
+anchor = [
+    0.0,
+    0.0,
+]
+pins_tsv = '''
+number	name	electrical	pos_x	pos_y	orientation	length	description	function	pin_package_length	propagation_delay_ns	designator_visible	name_visible	inside_symbol	inside_edge_symbol	outside_edge_symbol	outside_symbol	hidden	locked	part_number	body_style
+1	A	Input	-7.62	10.16	Right	2.54		A1|SCL			true	true	None	None	None	None	false	false	1	0
+2	B	Input	-7.62	5.08	Right	2.54			1.5	0.25	true	true	None	None	None	None	false	false	1	0
+3	Y	Output	7.62	7.62	Left	2.54					true	true	None	None	None	None	false	false	1	1
+3	Y	Output	10.16	7.62	Left	2.54					true	true	None	None	Dot	None	false	false	1	2
+4	A	Input	-7.62	-5.08	Right	2.54					true	true	None	None	None	None	false	false	2	0
+5	B	Input	-7.62	-10.16	Right	2.54					true	true	None	None	None	None	false	false	2	0
+6	Y	Output	7.62	-7.62	Left	2.54					true	true	None	None	None	None	false	false	2	1
+6	Y	Output	10.16	-7.62	Left	2.54					true	true	None	None	Dot	None	false	false	2	2
+7	GND	Power	0	-15.24	Up	2.54					true	true	None	None	None	None	true	false	0	0
+14	VCC	Power	0	15.24	Down	2.54					true	true	None	None	None	None	true	false	0	0
+'''
+designator = "U?"
+comment = "*"
+description = 'Dual 2-input "NAND" gate, De Morgan bodies'
+component_type = "Standard"
+mirrored = false
+local_line_color = [
+    0,
+    0,
+    128,
+    255,
+]
+version = "1.0.0"
+released = false
+part_count = 2
+created = "2026-01-01T00:00:00Z"
+updated = "2026-01-02T03:04:05Z"
+
+[[symbols.graphics]]
+stroke_width = 0.254
+fill = [
+    255,
+    255,
+    194,
+    255,
+]
+part_number = 1
+
+[symbols.graphics.kind]
+kind = "rectangle"
+from = [
+    -5.08,
+    12.7,
+]
+to = [
+    5.08,
+    2.54,
+]
+
+[[symbols.graphics]]
+stroke_width = 0.254
+part_number = 1
+body_style = 2
+
+[symbols.graphics.kind]
+kind = "circle"
+center = [
+    0.0,
+    7.62,
+]
+radius = 5.08
+
+[[symbols.graphics]]
+stroke_width = 0.254
+fill = [
+    255,
+    255,
+    194,
+    255,
+]
+part_number = 2
+
+[symbols.graphics.kind]
+kind = "rectangle"
+from = [
+    -5.08,
+    -2.54,
+]
+to = [
+    5.08,
+    -12.7,
+]
+
+[[symbols.graphics]]
+stroke_width = 0.254
+part_number = 2
+body_style = 2
+
+[symbols.graphics.kind]
+kind = "circle"
+center = [
+    0.0,
+    -7.62,
+]
+radius = 5.08
+
+[[symbols.graphics]]
+stroke_width = 0.254
+part_number = 0
+body_style = 0
+
+[symbols.graphics.kind]
+kind = "text"
+position = [
+    0.0,
+    0.0,
+]
+content = "&"
+size = 1.27
+
+[symbols.schematic_params.logic_family]
+kind = "Text"
+value = "HC"

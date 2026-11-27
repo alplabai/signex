@@ -52,7 +52,8 @@ fn a_snxfpt_1_file_reads_and_its_next_save_writes_1_1() {
 
 #[test]
 fn a_newer_snxfpt_format_is_refused_by_name() {
-    // 1.4 is this build's own since #2593 (a pad's own thermal relief).
+    // 1.4 is this build's own since #2593 (a pad's own thermal relief) and
+    // #3107/#3108 (embedded STEP models).
     for newer in ["snxfpt/1.5", "snxfpt/2"] {
         match FootprintFile::from_toml_str(&file_text(newer)) {
             Err(error @ FootprintFileError::UnsupportedFormat { .. }) => {

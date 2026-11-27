@@ -76,6 +76,7 @@ fn init_library(dir: &std::path::Path) -> (PathBuf, Uuid) {
         library: LibrarySection {
             name: "priced".into(),
             description: None,
+            ..Default::default()
         },
         mode: LibraryMode::default(),
         workflow: WorkflowConfig::default(),

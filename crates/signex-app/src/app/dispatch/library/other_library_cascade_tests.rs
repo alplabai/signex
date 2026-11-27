@@ -39,6 +39,7 @@ fn make_library(dir: &Path, name: &str) -> (PathBuf, Uuid, LocalGitAdapter) {
         library: LibrarySection {
             name: name.into(),
             description: None,
+            ..Default::default()
         },
         mode: LibraryMode::default(),
         workflow: WorkflowConfig::default(),

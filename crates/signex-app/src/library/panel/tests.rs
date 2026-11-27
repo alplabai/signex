@@ -126,6 +126,7 @@ fn passives() -> OpenLibrary {
         pricing: Default::default(),
         own_edit_stamp: None,
         display: Default::default(),
+        provenance: Default::default(),
     }
 }
 

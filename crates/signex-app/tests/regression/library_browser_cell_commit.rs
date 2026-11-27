@@ -77,6 +77,7 @@ fn library_with_stored(
         library: LibrarySection {
             name: "cells".into(),
             description: None,
+            ..Default::default()
         },
         mode: LibraryMode::default(),
         workflow: WorkflowConfig::default(),

@@ -37,6 +37,7 @@ fn fixture() -> Fixture {
         library: LibrarySection {
             name: "Lib".into(),
             description: None,
+            ..Default::default()
         },
         mode: LibraryMode::default(),
         workflow: WorkflowConfig::default(),
@@ -70,6 +71,7 @@ fn fixture() -> Fixture {
         pricing: Default::default(),
         own_edit_stamp: None,
         display: LibraryDisplaySettings::default(),
+        provenance: Default::default(),
     });
 
     // A symbol editor on a symbol that is renamed and saved.
@@ -324,6 +326,7 @@ fn a_nested_library_owns_the_paths_under_it() {
         pricing: Default::default(),
         own_edit_stamp: None,
         display: LibraryDisplaySettings::default(),
+        provenance: Default::default(),
     });
     let inside = dir.join("Inner").join("symbols").join("S.snxsym");
     let beside = dir.join("symbols").join("S.snxsym");

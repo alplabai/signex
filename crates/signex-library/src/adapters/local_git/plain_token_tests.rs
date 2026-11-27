@@ -34,6 +34,7 @@ fn warnings_of_reopened_library(auth: &str) -> (usize, usize) {
         library: LibrarySection {
             name: "L".into(),
             description: None,
+            ..Default::default()
         },
         mode: LibraryMode::Database {
             url: "https://lib.example/api".into(),

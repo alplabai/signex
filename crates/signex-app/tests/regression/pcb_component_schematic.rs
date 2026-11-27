@@ -184,6 +184,7 @@ fn open_library(app: &mut Signex) {
         display: LibraryDisplaySettings::default(),
         dangling: Default::default(),
         pricing: Default::default(),
+        provenance: Default::default(),
     });
 }
 

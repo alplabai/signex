@@ -742,7 +742,7 @@ impl LibraryAdapter for LocalGitAdapter {
 /// Refuse a table name that is empty or holds a character a file browser
 /// or the `.snxlib` table header cannot carry; shared by every table
 /// write so a bad name fails the same way everywhere.
-fn check_table_name(name: &str) -> Result<(), LibraryError> {
+pub(crate) fn check_table_name(name: &str) -> Result<(), LibraryError> {
     let trimmed = name.trim();
     if trimmed.is_empty() {
         return Err(LibraryError::Backend("table name cannot be empty".into()));

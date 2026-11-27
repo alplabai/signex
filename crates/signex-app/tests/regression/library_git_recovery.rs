@@ -30,6 +30,7 @@ fn valid_snxlib_bytes(scratch: &std::path::Path) -> Vec<u8> {
         library: LibrarySection {
             name: "seed".into(),
             description: None,
+            ..Default::default()
         },
         mode: LibraryMode::default(),
         workflow: WorkflowConfig::default(),

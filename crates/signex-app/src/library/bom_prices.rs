@@ -155,6 +155,7 @@ mod tests {
             pricing,
             own_edit_stamp: None,
             display: LibraryDisplaySettings::default(),
+            provenance: Default::default(),
         });
         (state, library_id)
     }

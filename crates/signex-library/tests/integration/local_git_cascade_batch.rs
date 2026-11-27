@@ -27,6 +27,7 @@ fn init(dir: &tempfile::TempDir) -> (LocalGitAdapter, Uuid) {
         library: LibrarySection {
             name: "Lib".into(),
             description: None,
+            ..Default::default()
         },
         mode: LibraryMode::default(),
         workflow: WorkflowConfig::default(),

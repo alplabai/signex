@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-2.575 -1.775 5.15 3.55" width="5.15mm" height="3.55mm">
+<rect x="-2.575" y="-1.775" width="5.15" height="3.55" fill="#141518"/>
+<line x1="-0.8" y1="-0.4" x2="0.8" y2="-0.4" stroke-width="0.1" stroke-linecap="round" stroke="#6dd1f2"/>
+<line x1="0.8" y1="-0.4" x2="0.8" y2="0.4" stroke-width="0.1" stroke-linecap="round" stroke="#6dd1f2"/>
+<line x1="0.8" y1="0.4" x2="-0.8" y2="0.4" stroke-width="0.1" stroke-linecap="round" stroke="#6dd1f2"/>
+<line x1="-0.8" y1="0.4" x2="-0.8" y2="-0.4" stroke-width="0.1" stroke-linecap="round" stroke="#6dd1f2"/>
+<line x1="-1.55" y1="-0.75" x2="1.55" y2="-0.75" stroke-width="0.05" stroke-linecap="round" stroke="#6df2c6"/>
+<line x1="1.55" y1="-0.75" x2="1.55" y2="0.75" stroke-width="0.05" stroke-linecap="round" stroke="#6df2c6"/>
+<line x1="1.55" y1="0.75" x2="-1.55" y2="0.75" stroke-width="0.05" stroke-linecap="round" stroke="#6df2c6"/>
+<line x1="-1.55" y1="0.75" x2="-1.55" y2="-0.75" stroke-width="0.05" stroke-linecap="round" stroke="#6df2c6"/>
+<path d="M-1.275 -0.5L-0.325 -0.5L-0.325 0.5L-1.275 0.5Z" fill-rule="evenodd" fill="#d04040"/>
+<path d="M0.325 -0.5L1.275 -0.5L1.275 0.5L0.325 0.5Z" fill-rule="evenodd" fill="#d04040"/>
+<text x="-0.8" y="0.1662" font-size="0.475" font-family="Iosevka, sans-serif" text-anchor="middle" fill="#0d0d0d">1</text>
+<text x="0.8" y="0.1662" font-size="0.475" font-family="Iosevka, sans-serif" text-anchor="middle" fill="#0d0d0d">2</text>
+</svg>

@@ -61,6 +61,7 @@ fn state() -> LibraryState {
         own_edit_stamp: None,
         display: Default::default(),
         pricing: Default::default(),
+        provenance: Default::default(),
     });
     state.touch_data();
     let target = PlacedPartTarget {

@@ -83,6 +83,7 @@ fn open_library_total_rows_sums_tables() {
         pricing: Default::default(),
         own_edit_stamp: None,
         display: LibraryDisplaySettings::default(),
+        provenance: Default::default(),
     };
     assert_eq!(lib.total_rows(), 0);
     lib.tables.insert("resistors".into(), Vec::new());
@@ -270,6 +271,7 @@ fn library_with_cached_primitives(root: &Path, library_id: Uuid) -> OpenLibrary 
         pricing: Default::default(),
         own_edit_stamp: None,
         display: LibraryDisplaySettings::default(),
+        provenance: Default::default(),
     }
 }
 
@@ -380,6 +382,7 @@ fn primitive_file_resolves_through_the_ref_library_id() {
             pricing: Default::default(),
             own_edit_stamp: None,
             display: Default::default(),
+            provenance: Default::default(),
         });
     }
     let prim = Uuid::now_v7();
@@ -461,6 +464,7 @@ fn bare_library(root: &str) -> OpenLibrary {
         pricing: Default::default(),
         own_edit_stamp: None,
         display: LibraryDisplaySettings::default(),
+        provenance: Default::default(),
     }
 }
 

@@ -571,8 +571,10 @@ mesh, `signex_gfx::scene3d::Scene3d`):
   clipped to the board and kept out of mask openings and holes.
 - **Parts.** One per footprint whose face's 3D Body layer is shown. The
   model is the library footprint's (`library_ref`), read off the update
-  thread: its attached model file (`step/<hash>.step`; a `.wrl` or `.vrml`
-  name reads VRML), in the file's units taken as mm, the model's y up the
+  thread: its attached model, the STEP its footprint file embeds
+  (`[[models]]`, #3107), else the file `step/<hash>.step` beside a library
+  written before (a `.wrl` or `.vrml` name there reads VRML), in the file's
+  units taken as mm, the model's y up the
   board, turned by the attachment's x, y, z angles and moved by its offset;
   else its 3D Body (outline, height, offset, colours; a neutral body colour
   when it has none). A footprint with no

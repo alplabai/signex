@@ -107,6 +107,7 @@ fn edit_symbol_fixture(dir: &std::path::Path) -> (Fixture, PathBuf) {
             pricing: Default::default(),
             own_edit_stamp: None,
             display: Default::default(),
+            provenance: Default::default(),
         });
     let part = uuid::Uuid::from_u128(77);
     f.app

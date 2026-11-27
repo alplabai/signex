@@ -334,6 +334,7 @@ mod tests {
                 library: LibrarySection {
                     name: "J".into(),
                     description: None,
+                    ..Default::default()
                 },
                 mode: LibraryMode::default(),
                 workflow: WorkflowConfig::default(),

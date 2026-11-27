@@ -9,6 +9,9 @@ use signex_library::primitive::footprint::FpGraphicKind;
 use super::super::super::layers::{FpLayer, LayerPalette};
 use super::super::FootprintCanvasState;
 
+/// Kept in step with `PreviewFootprint::scene` (canvas/preview_scene.rs),
+/// the headless export of the same geometry (#3116).
+///
 /// v0.18.16 — render the silk-layer graphics list. Each `FpGraphic`
 /// becomes a single Path stroke / fill in the layer's colour.
 pub(super) fn draw_silk_graphics(

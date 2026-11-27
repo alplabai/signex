@@ -43,6 +43,7 @@ fn fixture(dir: &Path) -> Fixture {
         library: LibrarySection {
             name: "cells".into(),
             description: None,
+            ..Default::default()
         },
         mode: LibraryMode::default(),
         workflow: WorkflowConfig::default(),

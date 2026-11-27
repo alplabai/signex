@@ -93,6 +93,7 @@ fn library(rows: Vec<ComponentRow>) -> OpenLibrary {
         own_edit_stamp: None,
         display: Default::default(),
         pricing: Default::default(),
+        provenance: Default::default(),
     }
 }
 

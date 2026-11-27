@@ -55,8 +55,8 @@ impl SymbolFile {
 impl FootprintFile {
     /// A copy of this container for another library; see
     /// [`SymbolFile::copy_for_library`]. A footprint's STEP attachment is
-    /// kept: it is addressed by content hash, so the copy points at the
-    /// same model file, which the caller copies into the target library.
+    /// kept, and so is the model this file embeds (`[[models]]`); a model
+    /// the source keeps only in `step/` the caller embeds or copies.
     pub fn copy_for_library(&self, taken_names: &HashSet<String>, now: DateTime<Utc>) -> Self {
         let mut copy = self.clone();
         let mut taken = taken_names.clone();
