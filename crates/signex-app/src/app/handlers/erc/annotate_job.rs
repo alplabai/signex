@@ -189,7 +189,7 @@ impl Signex {
 
     /// The error notice a refusal just raised, as one en-US line.
     pub(super) fn notice_line(&self, label: &str) -> String {
-        self.document_state.error_notice.as_ref().map_or_else(
+        self.document_view.error_notice.as_ref().map_or_else(
             || format!("{label}: nothing was changed"),
             crate::app::state::ErrorNotice::detail_line_en_us,
         )
@@ -242,7 +242,7 @@ impl Signex {
             .arg("label", label)
             .arg("reason", why);
         crate::diagnostics::log_warning(detail.render_en_us());
-        self.document_state.error_notice = Some(crate::app::state::ErrorNotice::annotate(detail));
+        self.document_view.error_notice = Some(crate::app::state::ErrorNotice::annotate(detail));
     }
 
     /// Take the run's own job when `generation` is the live one.
@@ -331,9 +331,9 @@ impl Signex {
             PassKind::Annotate(mode) => Some(mode),
             PassKind::ResetDuplicates | PassKind::Reprefix => None,
         };
-        let notice = self.document_state.error_notice.clone();
+        let notice = self.document_view.error_notice.clone();
         let (before, task) = self.number_read_sheets(job, result);
-        let raised = self.document_state.error_notice != notice;
+        let raised = self.document_view.error_notice != notice;
         let refused = |line: String| super::annotate_command::annotate_refused(line);
         let Some(before) = before else {
             return (refused(self.notice_line(label)), task);

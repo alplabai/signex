@@ -355,7 +355,7 @@ impl Signex {
                 state.target_path.display(),
                 detail.render_en_us()
             ));
-            self.document_state.error_notice = Some(crate::app::state::ErrorNotice::rename(detail));
+            self.document_view.error_notice = Some(crate::app::state::ErrorNotice::rename(detail));
             self.ui_state.rename_dialog = None;
             return iced::Task::none();
         }

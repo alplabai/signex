@@ -18,14 +18,13 @@ use crate::panels::compiled_design::{
 impl Signex {
     /// Put a fresh view of the multi-channel surfaces in the panel context.
     pub(crate) fn sync_compiled_design_view(&mut self) {
-        *self.document_state.panel_ctx.compiled_design = self.compiled_design_view();
+        *self.document_view.panel_ctx.compiled_design = self.compiled_design_view();
     }
 
     /// Point the sheet symbol's Repeat rows at the current selection. A
     /// selection change refreshes only this part of the view.
     pub(crate) fn sync_sheet_symbol_repeat_view(&mut self) {
-        self.document_state.panel_ctx.compiled_design.sheet_symbol =
-            self.sheet_symbol_repeat_view();
+        self.document_view.panel_ctx.compiled_design.sheet_symbol = self.sheet_symbol_repeat_view();
     }
 
     /// The view of the multi-channel surfaces for the active document.
@@ -72,6 +71,13 @@ impl Signex {
         };
         let needle = ui.find.trim().to_lowercase();
         view.rows = tree_rows(result, &needle, &ui.folded, &ui.expanded, ui.selected);
+        if let Some(variant) = self.channel_view_variant() {
+            for row in &mut view.rows {
+                if self.channel_row_left_out(result, row.index, &variant) {
+                    row.not_fitted_in = Some(variant.clone());
+                }
+            }
+        }
         view.nets = design
             .nets
             .iter()
@@ -333,6 +339,7 @@ fn tree_rows(
             parts: sheet.parts,
             nets: sheet.nets,
             is_stale,
+            not_fitted_in: None,
             is_selected: selected == Some(index),
             has_children,
             is_expanded,

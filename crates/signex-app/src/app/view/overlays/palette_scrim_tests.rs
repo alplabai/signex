@@ -15,7 +15,7 @@ const THEMES: [ThemeId; 2] = [ThemeId::GraphiteLight, ThemeId::GraphiteDark];
 /// probe's black background.
 fn drawn_backdrop(id: ThemeId) -> [u8; 3] {
     let (mut app, _task) = Signex::new();
-    app.document_state.panel_ctx.tokens = theme_tokens(id);
+    app.document_view.panel_ctx.tokens = theme_tokens(id);
     app.ui_state.command_palette.open = true;
     let window = iced::window::Id::unique();
     let backdrop = app
@@ -55,7 +55,7 @@ fn the_palette_backdrop_is_the_theme_scrim() {
 fn the_backdrop_leaves_the_title_bar_field_undimmed() {
     let id = ThemeId::GraphiteLight;
     let (mut app, _task) = Signex::new();
-    app.document_state.panel_ctx.tokens = theme_tokens(id);
+    app.document_view.panel_ctx.tokens = theme_tokens(id);
     app.ui_state.command_palette.open = true;
     app.ui_state.window_size = (1400.0, 900.0);
     let crate::app::view::chrome::SearchSlot::Field { x, w } = app.chrome_search_slot() else {

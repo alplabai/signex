@@ -392,7 +392,7 @@ fn run() {
     );
     driver.settle(&mut app, task).expect("open settled");
     let notice = app
-        .document_state
+        .document_view
         .error_notice
         .take()
         .expect("the open was tried");

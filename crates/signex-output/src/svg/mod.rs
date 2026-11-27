@@ -11,6 +11,7 @@ use tiny_skia::Color;
 
 use crate::pdf::ColourMode;
 
+pub mod block_diagram;
 pub mod board;
 #[cfg(test)]
 mod bus_entry_tests;
@@ -114,6 +115,9 @@ pub struct SvgEvaluatorInputs<'a> {
     /// the BOM decides it (`ExpressionTables::placed_fits`). `None` decides
     /// each page on its own.
     pub placed_fits: Option<&'a crate::PlacedFits>,
+    /// The values the printed variant gives parts in place of their own
+    /// (#2948), found at the page's placement. `None` draws the sheets'.
+    pub drawn_values: Option<&'a crate::DrawnValues>,
 }
 
 fn fill_to_rgb(

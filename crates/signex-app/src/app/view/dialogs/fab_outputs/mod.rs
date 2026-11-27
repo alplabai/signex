@@ -38,7 +38,7 @@ impl Signex {
         let Some(state) = self.ui_state.fab_outputs.as_ref() else {
             return container(Space::new()).boxed();
         };
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let i18n = self.ui_state.i18n.as_ref();
         let header = super::header::graphite_header_closing(
             t!(i18n, ids::FAB_OUTPUTS_TITLE).into_string(),

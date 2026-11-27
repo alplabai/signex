@@ -31,7 +31,7 @@ fn builds() -> (usize, usize, usize) {
 /// editor open, every mirror built once.
 fn app() -> (Signex, iced::window::Id) {
     let (mut app, main) = graphite_app_with_selected_wire();
-    app.document_state.dock.show_panel(PanelKind::Unions);
+    app.document_view.dock.show_panel(PanelKind::Unions);
     let path = PathBuf::from(FOOTPRINT);
     app.document_state.footprint_editors.insert(
         path.clone(),
@@ -111,7 +111,7 @@ fn a_placed_harness_connector_reaches_the_harness_panel() {
         true,
     ));
     app.replace_selection(vec![SelectedItem::new(id, SelectedKind::HarnessConnector)]);
-    let shown = app.document_state.panel_ctx.harness.connector.as_ref();
+    let shown = app.document_view.panel_ctx.harness.connector.as_ref();
     assert_eq!(shown.map(|c| c.uuid), Some(id));
 }
 
@@ -120,7 +120,7 @@ fn the_unions_panel_follows_a_sheet_change() {
     let (mut app, _) = app();
     let wire = app.interaction_state.active_canvas().selected[0].uuid;
     let rows = |app: &Signex| -> Vec<String> {
-        let view = &app.document_state.panel_ctx.unions;
+        let view = &app.document_view.panel_ctx.unions;
         view.groups
             .iter()
             .flat_map(|g| g.rows.iter().map(|r| r.name.clone()))

@@ -54,7 +54,7 @@ impl Signex {
             }
             _ => None,
         };
-        let placed = &mut self.document_state.panel_ctx.placed;
+        let placed = &mut self.document_view.panel_ctx.placed;
         placed.run_net = run_net;
         if placed.draft.as_ref().is_some_and(|d| Some(d.item) != item) {
             placed.draft = None;

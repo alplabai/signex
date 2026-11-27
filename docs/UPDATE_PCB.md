@@ -136,6 +136,11 @@ Validate and Execute say why, the dialog stays open and nothing is applied.
   `pad_locks` ([CLI.md](CLI.md), "Update PCB from schematic").
 - A footprint with a 3D body or a STEP model converts; the board reaches the
   model through `library_ref`.
+- A net-tie part (#1277; Caner, 2026-11-25) is added, or replaced, as a
+  net-tie footprint: Net Tie (in BOM) when the part is in the BOM, else Net
+  Tie, unless its library footprint is a tie already. DRC then allows the
+  copper bridge between its pads. A footprint already on the board keeps its
+  type until a change row replaces it (`docs/NET_TIES.md`).
 
 ## New PCB
 

@@ -120,7 +120,7 @@ fn the_line_cap_is_stored_when_it_is_a_number_in_range_and_kept_as_typed_otherwi
     assert_eq!(settings(&app).max_lines, 2_500);
     let id = app.document_state.projects[0].id;
     assert_eq!(
-        app.document_state.project_tabs[&id]
+        app.document_view.project_tabs[&id]
             .journal_lines_draft
             .as_deref(),
         Some("5")

@@ -126,7 +126,7 @@ fn heading<'a>(m: &Manager<'_>, cell: &VariantCell, part: &VariantRow) -> Elemen
     column![title, facts].spacing(SP.xs).boxed()
 }
 
-/// Fitted / Not fitted for a variant's cell, Alternate (not built yet), and
+/// Fitted / Not fitted for a variant's cell, Alternate (the picker), and
 /// As on the sheets while the cell sets a fit of its own. Base's cell shows
 /// its fit greyed: Base is what the sheets say.
 fn fitting<'a>(
@@ -162,10 +162,14 @@ fn fitting<'a>(
     }
     let send = fit_message(m, cell);
     let switch = segmented(options, fitted, style, move |fitted| send(Some(fitted)));
+    // The canvas's Alternate part picker for this part (mockup row 208).
     let alternate = text_button(
         None,
         t!(m.i18n, ids::VARIANT_MANAGER_ALTERNATE),
-        None,
+        Some(tab_message(ProjectTabMsg::VariantManager {
+            project_id: m.project_id,
+            msg: VariantManagerMsg::AlternateRequested { cell: cell.clone() },
+        })),
         ButtonKind::Small,
         m.tokens,
     );

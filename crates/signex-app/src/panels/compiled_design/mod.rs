@@ -9,6 +9,9 @@ mod nets;
 #[cfg(test)]
 mod tests;
 mod tree;
+mod variant_summary;
+
+pub use variant_summary::{ChannelCopies, ChannelVariantSummary, MixedPart};
 
 use std::path::PathBuf;
 
@@ -75,6 +78,9 @@ pub struct CompiledRow {
     pub nets: usize,
     /// Its sheet changed since the compile.
     pub is_stale: bool,
+    /// The active variant, on a channel row that variant leaves out
+    /// entirely: the grey "Not fitted (<variant>)" tag (#2662).
+    pub not_fitted_in: Option<String>,
     pub is_selected: bool,
     /// The row lists parts or nets, so it has a fold chevron.
     pub has_children: bool,

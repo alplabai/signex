@@ -39,7 +39,7 @@ fn quit_save_all(app: &mut Signex) -> bool {
     assert!(app.ui_state.app_quit_confirm.is_some(), "quit must prompt");
     let task = app.handle_app_quit_confirm(ProjectCloseChoice::SaveAll);
     settle(app, task);
-    app.document_state.error_notice.is_none()
+    app.document_view.error_notice.is_none()
 }
 
 /// Run a Save All's writes to completion and feed the completions, ending
@@ -67,7 +67,7 @@ fn close_save_all(app: &mut Signex) -> bool {
 
 fn assert_refused(app: &Signex, still_dirty: &[&Path]) {
     assert!(
-        app.document_state.error_notice.is_some(),
+        app.document_view.error_notice.is_some(),
         "the failure must be reported"
     );
     for path in still_dirty {
@@ -274,7 +274,7 @@ mod read_only_sheet {
         assert_ne!(std::fs::read(&free).unwrap(), b"free");
         assert_refused(&app, &[&locked]);
         assert!(!app.document_state.is_document_dirty(&free));
-        let notice = format!("{:?}", app.document_state.error_notice);
+        let notice = format!("{:?}", app.document_view.error_notice);
         assert!(notice.contains("X.snxsch"), "names the file: {notice}");
         assert!(notice.contains("read-only"), "says why: {notice}");
     }

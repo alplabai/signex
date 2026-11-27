@@ -127,7 +127,7 @@ fn a_dirty_tree_refuses_the_update_before_the_converter_runs() {
         .unwrap_err();
 
     assert!(
-        matches!(&failure.error, ImportError::UncommittedChanges { paths } if paths == &["symbols/mine.snxsym"]),
+        matches!(&*failure.error, ImportError::UncommittedChanges { paths } if paths == &["symbols/mine.snxsym"]),
         "{:?}",
         failure.error
     );
@@ -176,7 +176,7 @@ fn an_update_of_a_folder_without_history_is_refused() {
         .run(&AtomicBool::new(false), &mut |_| {})
         .unwrap_err();
     assert!(matches!(
-        failure.error,
+        *failure.error,
         ImportError::NotAnImportedLibrary { .. }
     ));
     assert!(!dir.path().join("Conformance.ran").exists(), "not run");
@@ -224,7 +224,7 @@ fn a_silent_update_is_restored_too() {
     let failure = update_with(dir.path(), body)
         .run(&AtomicBool::new(false), &mut |_| {})
         .unwrap_err();
-    assert_eq!(failure.error, ImportError::Silent { seconds: 1 });
+    assert_eq!(*failure.error, ImportError::Silent { seconds: 1 });
     assert_eq!(failure.restored, Some(Ok(())));
     assert!(!out.join("symbols/added.snxsym").exists());
 }
@@ -270,7 +270,7 @@ fn an_update_is_refused_while_the_library_has_unsaved_work() {
         .unwrap();
 
     assert!(app.library.import.last.is_none(), "nothing ran");
-    let card = app.document_state.error_notice.as_ref().expect("refused");
+    let card = app.document_view.error_notice.as_ref().expect("refused");
     use signex_i18n::RenderTranslatable as _;
     assert!(
         card.detail.render_en_us().contains("conformance-symbols"),
@@ -300,7 +300,7 @@ fn a_library_id_already_open_elsewhere_is_not_recorded() {
             .any(|e| e.path == second_file),
         "no dangling global entry"
     );
-    let card = app.document_state.error_notice.as_ref().expect("reported");
+    let card = app.document_view.error_notice.as_ref().expect("reported");
     use signex_i18n::RenderTranslatable as _;
     assert!(card.detail.render_en_us().contains("same library id"));
 }

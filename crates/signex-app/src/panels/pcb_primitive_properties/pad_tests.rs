@@ -105,7 +105,7 @@ fn tooltip_texts(
 #[test]
 fn the_layer_says_moving_a_pad_is_not_supported_here_yet() {
     let (app, _boot) = Signex::new();
-    let ctx = app.document_state.panel_ctx.clone();
+    let ctx = app.document_view.panel_ctx.clone();
     let look = Look::of(&ctx);
     let shown = (NAME.to_string(), Some(PcbLayer::Copper(CopperLayer::Top)));
     let texts: Vec<_> = lay_out_texts(layer_value(look, Some(&shown)), WINDOW)
@@ -129,7 +129,7 @@ fn the_layer_says_moving_a_pad_is_not_supported_here_yet() {
 #[test]
 fn the_layer_is_sunken_with_a_round_dot_and_takes_no_typing() {
     let (app, _boot) = Signex::new();
-    let ctx = app.document_state.panel_ctx.clone();
+    let ctx = app.document_view.panel_ctx.clone();
     let look = Look::of(&ctx);
     let layer = PcbLayer::Copper(CopperLayer::Top);
     let shown = (NAME.to_string(), Some(layer));
@@ -165,7 +165,7 @@ const MASK_WINDOW: Size = Size::new(300.0, 400.0);
 
 fn context() -> PanelContext {
     let (app, _boot) = Signex::new();
-    app.document_state.panel_ctx.clone()
+    app.document_view.panel_ctx.clone()
 }
 
 /// One pad, surface or through-hole.

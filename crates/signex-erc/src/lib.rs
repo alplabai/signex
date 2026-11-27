@@ -32,6 +32,7 @@ mod fixtures;
 mod group;
 mod harness_snapshot;
 mod hierarchy;
+pub mod live;
 mod net_finding;
 mod overrides;
 pub mod pin_matrix;
@@ -165,6 +166,9 @@ pub enum RuleKind {
     /// Two directives (Net Parameters, Net Blanket) give one net different
     /// net classes; the net takes the class of the higher-ranked one (#2656).
     NetClassConflict,
+    /// One half of a differential pair (`USB_D_P`, or a net a pair
+    /// directive marks) whose partner net is not on the sheet (#2951).
+    DiffPairPartnerMissing,
 }
 
 impl RuleKind {
@@ -209,6 +213,7 @@ impl RuleKind {
             RuleKind::HarnessEntryMismatch => "Harness entry mismatch",
             RuleKind::HarnessTypeConflict => "Harness type conflict",
             RuleKind::NetClassConflict => "Net class conflict",
+            RuleKind::DiffPairPartnerMissing => "Differential pair partner missing",
         }
     }
 
@@ -232,7 +237,7 @@ impl RuleKind {
     }
 
     /// Every built-in rule, in the order the ERC dialog lists them.
-    pub const ALL: [RuleKind; 38] = [
+    pub const ALL: [RuleKind; 39] = [
         RuleKind::UnusedPin,
         RuleKind::DuplicateRefDesignator,
         RuleKind::HierPortDisconnected,
@@ -271,6 +276,7 @@ impl RuleKind {
         RuleKind::HarnessEntryMismatch,
         RuleKind::HarnessTypeConflict,
         RuleKind::NetClassConflict,
+        RuleKind::DiffPairPartnerMissing,
     ];
 
     /// The one source of truth for a rule's severity: [`Diagnostic::new`]
@@ -312,7 +318,8 @@ impl RuleKind {
             | RuleKind::SheetPinDirectionConflict
             | RuleKind::HarnessEntryMismatch
             | RuleKind::HarnessTypeConflict
-            | RuleKind::NetClassConflict => Severity::Warning,
+            | RuleKind::NetClassConflict
+            | RuleKind::DiffPairPartnerMissing => Severity::Warning,
             RuleKind::NetMultipleNames => Severity::Info,
             RuleKind::MissingPowerFlag | RuleKind::SymbolOutsideSheet => Severity::Info,
             RuleKind::PartWithoutFootprint | RuleKind::PartWithoutValue | RuleKind::OffGrid => {

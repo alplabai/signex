@@ -33,7 +33,7 @@ pub enum TabKind {
     Pcb,
     /// The Gerber Viewer (mockup rows 193 and 193f), one tab at a time, on
     /// the main window only. State lives in
-    /// [`crate::app::DocumentState::gerber_viewer`]; `TabInfo.path` is the
+    /// [`crate::app::DocumentViewState::gerber_viewer`]; `TabInfo.path` is the
     /// package's first path, read only, never saved.
     GerberViewer,
     ComponentEditor(ComponentEditorTab),
@@ -53,7 +53,7 @@ pub enum TabKind {
     /// keyed by the same path that lives on `TabInfo.path`.
     LibraryBrowser(PathBuf),
     /// The project's `.snxprj` opened as a Project tab (#1202). Tab state
-    /// lives in [`crate::app::DocumentState::project_tabs`] keyed by this
+    /// lives in [`crate::app::DocumentViewState::project_tabs`] keyed by this
     /// id; `TabInfo.path` is the `.snxprj` path.
     Project(super::state::ProjectId),
     /// The project's design rules as a Rules tab (#2398). Tab state lives
@@ -75,6 +75,10 @@ pub enum TabKind {
     /// is the `.snxsym` path, which Save writes; it sits after the symbol's
     /// own tab (`app/pin_table_tab`).
     PinTable,
+    /// A `.snxblk` block diagram (mockup row 171). State lives in
+    /// [`crate::app::DocumentState::block_diagrams`] keyed by this path,
+    /// which `TabInfo.path` also holds; drawn in the main window only.
+    BlockDiagram(PathBuf),
     /// The project's Design Notebook (mockup row 195), one tab per project.
     /// Tab state lives in [`crate::app::DocumentState::notebooks`] keyed by
     /// this id; `TabInfo.path` is the notebook file, which its Save writes
@@ -83,6 +87,11 @@ pub enum TabKind {
 }
 
 impl TabKind {
+    /// A block diagram tab.
+    pub fn is_block_diagram(&self) -> bool {
+        matches!(self, TabKind::BlockDiagram(_))
+    }
+
     /// The Gerber Viewer tab: no document, never undocked, nothing to
     /// save or restore from History.
     pub fn is_gerber_viewer(&self) -> bool {
@@ -344,12 +353,6 @@ pub struct SymbolEditorView {
     /// The pin type picked in the Place Pin dropdown, stamped on every
     /// following placed pin; `None` places unclassified pins (mockup row 141).
     pub pin_type: Option<signex_types::schematic::PinDirection>,
-    /// Set to `true` on the first `Move`/`MoveAll`/`MoveGraphicHandle`
-    /// in a drag sequence so subsequent move events in the same drag do
-    /// NOT push additional snapshots (the pre-drag snapshot is already
-    /// on the undo stack). Cleared by `SymbolDragCommit` (emitted on
-    /// `ButtonReleased`).
-    pub mid_drag: bool,
     /// `(graphic, radius at drag start, radius last written)` while a grip
     /// drags a Round Rectangle, so its clamp depends only on the current
     /// size. A stored radius other than the last written one is a new start.
@@ -491,7 +494,6 @@ impl SymbolEditorView {
             active_bar_menu: None,
             placement_paused: false,
             pin_type: None,
-            mid_drag: false,
             drag_corner_radius: None,
             graphic_fill_picker: None,
             local_color_picker: None,

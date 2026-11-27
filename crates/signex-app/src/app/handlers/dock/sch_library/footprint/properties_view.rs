@@ -88,7 +88,7 @@ mod tests {
         );
 
         let ctx = app
-            .document_state
+            .document_view
             .panel_ctx
             .footprint_editor
             .as_ref()

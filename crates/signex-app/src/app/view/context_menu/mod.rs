@@ -25,6 +25,9 @@ pub(crate) use placement::{menu_scrim, menu_scrim_fill};
 mod project_tree;
 mod start_row;
 mod submenu;
+mod variant_fit;
+#[cfg(test)]
+mod variant_fit_tests;
 
 #[cfg(test)]
 mod catalog_agreement_tests;

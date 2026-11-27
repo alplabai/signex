@@ -252,7 +252,7 @@ fn app_with_child(symbol_name: &str, child: Vec<Symbol>) -> (Signex, tempfile::T
     };
     open_with(&mut app.document_state, &path, sheet);
     let placed = node(symbol_name, Some(SHEET_SYMBOL), path.clone(), Vec::new());
-    app.document_state.panel_ctx.navigator.hierarchy = Some(SheetHierarchy {
+    app.document_view.panel_ctx.navigator.hierarchy = Some(SheetHierarchy {
         root: Some(node("top", None, top, vec![placed])),
         ..Default::default()
     });

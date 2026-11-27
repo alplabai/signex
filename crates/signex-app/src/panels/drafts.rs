@@ -3,7 +3,7 @@
 //!
 //! A draft belongs to a (sheet, field) or (sheet, edge), not to the window it
 //! was typed in, so there is exactly one of each whichever window typed it.
-//! `DocumentState` owns the store; every `PanelContext` (the main window's and
+//! `DocumentViewState` owns the store; every `PanelContext` (the main window's and
 //! each undocked window's) holds a clone of the same handle only so the
 //! Properties view can read it. Nothing keeps a copy of a draft, so a context
 //! that is cloned, swapped out for a window action or dropped can neither hide

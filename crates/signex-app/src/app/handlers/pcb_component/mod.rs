@@ -86,7 +86,7 @@ impl Signex {
                 let state = &mut self.interaction_state.pcb_component;
                 state.illustration_hover.update(hover.clone());
                 let hover = state.illustration_hover.clone();
-                let shown = self.document_state.panel_ctx.pcb_board.as_mut();
+                let shown = self.document_view.panel_ctx.pcb_board.as_mut();
                 if let Some(facts) = shown.and_then(|b| b.component.as_mut()) {
                     facts.illustration_hover = hover;
                 }

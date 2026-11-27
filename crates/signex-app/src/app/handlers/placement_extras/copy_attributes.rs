@@ -227,7 +227,7 @@ impl Signex {
         self.interaction_state.pending_port = look.port;
         let tool_name = format!("{}", self.interaction_state.current_tool);
         let cursor_mm = (self.ui_state.cursor_x, self.ui_state.cursor_y);
-        let mut pre = match self.document_state.panel_ctx.pre_placement.take() {
+        let mut pre = match self.document_view.panel_ctx.pre_placement.take() {
             Some(pre) => pre,
             None => self.document_state.new_pre_placement(
                 tool_name.clone(),
@@ -240,7 +240,7 @@ impl Signex {
         pre.tool_name = tool_name;
         pre.label_text = look.text;
         pre.set_style(look.style);
-        self.document_state.panel_ctx.pre_placement = Some(pre);
+        self.document_view.panel_ctx.pre_placement = Some(pre);
         let canvas = self.interaction_state.active_canvas_mut();
         match look.ghost {
             CopiedGhost::Label(label) => canvas.ghost_label = Some(label),

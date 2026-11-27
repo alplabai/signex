@@ -170,13 +170,13 @@ fn a_tab_switch_after_the_board_is_dropped_says_why() {
             app.document_state.take_tab_board_engine(idx);
         }
     }
-    app.document_state.error_notice = None;
+    app.document_view.error_notice = None;
     let _ = output(
         &mut app,
         BoardOutputMsg::ReportPicked(BoardReportKind::Netlist),
     );
     assert!(
-        app.document_state.error_notice.is_some(),
+        app.document_view.error_notice.is_some(),
         "the click is answered with a notice"
     );
     assert_eq!(shown_kind(&app), Some(BoardReportKind::Bom), "table kept");

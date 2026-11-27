@@ -126,7 +126,7 @@ impl ImportJob {
             });
         };
         let keep_run = |error: ImportError, run: &RunOutcome| RunFailure {
-            error,
+            error: Box::new(error),
             report: run.report.clone().map(Box::new),
             stderr_tail: run.stderr_tail.clone(),
             removed_output: false,

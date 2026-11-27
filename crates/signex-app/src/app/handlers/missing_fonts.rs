@@ -2,7 +2,7 @@
 //!
 //! The document keeps the name its author chose; these only tell the user
 //! that the canvas and the exports draw the bundled default instead. Each
-//! family is reported once per document (`DocumentState::missing_fonts`).
+//! family is reported once per document (`DocumentViewState::missing_fonts`).
 
 use std::path::Path;
 
@@ -20,7 +20,7 @@ impl Signex {
             return;
         };
         let messages =
-            self.document_state
+            self.document_view
                 .missing_fonts
                 .new_messages(path, engine.document(), catalog);
         for message in messages {
@@ -36,7 +36,7 @@ impl Signex {
 
     /// Forget what was reported for `path`, so opening it again reports again.
     pub(crate) fn forget_missing_font_reports(&mut self, path: &Path) {
-        self.document_state.missing_fonts.forget(path);
+        self.document_view.missing_fonts.forget(path);
     }
 
     /// The scan finished: text that names an installed family now draws

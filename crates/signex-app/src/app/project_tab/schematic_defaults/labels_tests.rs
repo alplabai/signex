@@ -86,7 +86,7 @@ fn a_refused_value_stays_open_and_shows_in_the_field() {
         ui.labels_of(id).editing_index(),
         Some(index(Field::JunctionDiameter))
     );
-    let draft = app.document_state.project_tabs[&id]
+    let draft = app.document_view.project_tabs[&id]
         .default_drafts
         .get(&Field::JunctionDiameter);
     assert_eq!(draft.map(String::as_str), Some("5"));
@@ -110,7 +110,7 @@ fn esc_cancels_and_takes_a_refused_text_back_out_of_the_field() {
             .is_none()
     );
     assert!(
-        !app.document_state.project_tabs[&id]
+        !app.document_view.project_tabs[&id]
             .default_drafts
             .contains_key(&Field::JunctionDiameter)
     );

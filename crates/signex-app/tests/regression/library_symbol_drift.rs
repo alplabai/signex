@@ -65,7 +65,7 @@ pub(crate) fn select_first(app: &mut Signex) -> Uuid {
 }
 
 pub(crate) fn info(app: &Signex, key: &str) -> Option<String> {
-    app.document_state
+    app.document_view
         .panel_ctx
         .selection_info
         .iter()

@@ -8,6 +8,7 @@
 //! (`preview`, #2661).
 //! Design note: `docs/SCHEMATIC_DIRECTIVES.md`, "Differential pairs".
 
+mod list;
 pub(crate) mod preview;
 mod update;
 pub use preview::{PairPreview, PairPreviewMsg};

@@ -26,16 +26,21 @@ use super::footprint_place_operands as fp_place;
 use super::footprint_text_operands as fp_text;
 use super::hierarchy_operands as hierarchy;
 use super::layer_strip_operands as strip;
+use super::live_erc_operands as live_erc;
 use super::part_height_operands as part_heights;
 use super::part_operands as part;
 use super::placed_operands as placed;
 use super::placement_extras_operands as extras;
 use super::placement_operands as place;
 use super::repair_reset_operands as repair_reset;
+use super::reuse_operands as snippet;
 use super::selection_filter_operands as filter;
 use super::selection_operands as selection;
+use super::sheet_swap_operands as sheet_swap;
 use super::sheet_sync_operands as sheet_sync;
+use super::smart_paste_operands as smart_paste;
 use super::{CommandArgs, CommandOutcome, enablement};
+use crate::app::block_diagram as diagram;
 use crate::app::board_output as output;
 use crate::app::board_reuse as reuse;
 use crate::app::board_tools as tools;
@@ -132,7 +137,12 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("place_parameter_set", directive::net_parameters),
     ("autoplace_fields", extras::autoplace_fields),
     ("place_design_block", extras::place_design_block),
+    // #1283: snippets, kept per project and in the user's library.
+    ("save_snippet", snippet::save_snippet),
+    ("place_snippet", snippet::place_snippet),
     ("import_graphics", extras::import_graphics),
+    // #2665: the Smart Paste dialog's choices, placed at once.
+    ("smart_paste", smart_paste::smart_paste),
     ("place_component", part::place_component),
     ("place_sheet_symbol", hierarchy::place_sheet_symbol),
     ("place_sheet_entry", hierarchy::place_sheet_entry),
@@ -143,12 +153,25 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
         sheet_sync::create_sheet_symbol_from_sheet,
     ),
     ("sync_sheet_entries", sheet_sync::sync_sheet_entries),
+    // #2968: a block diagram from the sheet hierarchy.
+    (
+        "generate_block_diagram",
+        crate::app::block_diagram_sync::generate_block_diagram,
+    ),
+    (
+        "regenerate_block_diagram",
+        crate::app::block_diagram_sync::regenerate_block_diagram,
+    ),
     ("set_object_position", placed::set_object_position),
     ("set_object_rotation", placed::set_object_rotation),
     ("set_sheet_symbol_size", placed::set_sheet_symbol_size),
     ("set_symbol_parameter", placed::set_symbol_parameter),
+    ("set_object_text", placed::set_object_text),
     ("set_sheet_variable", placed::set_sheet_variable),
+    ("set_net_tie", placed::set_net_tie),
     ("repair_pin_junctions", repair_reset::repair_pin_junctions),
+    // #1288: the live ERC preference.
+    ("toggle_live_erc", live_erc::toggle_live_erc),
     ("reset_board_origin", repair_reset::reset_board_origin),
     ("reset_layer_colors", repair_reset::reset_layer_colors),
     ("view_rotate", view_rotate),
@@ -179,6 +202,11 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("export_assembly_svg", output::export_assembly_svg),
     ("board_assembly_drawing", output::board_assembly_drawing),
     ("export_board_step", output::export_board_step),
+    // #2796: a block diagram's saved file as SVG or PDF.
+    (
+        "export_block_diagram",
+        crate::app::block_diagram_export::export_block_diagram,
+    ),
     // Mockup row 202: the project's notebook as PDF.
     (
         "export_notebook_pdf",
@@ -204,6 +232,11 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("set_footprint_side", fp_place::set_footprint_side),
     ("assign_footprint", fp_assign::assign_footprint),
     ("change_footprint", fp_assign::change_footprint),
+    // #2470: a dock panel by its layout key.
+    (
+        "set_dock_panel",
+        crate::app::handlers::dock::panel_command::set_dock_panel,
+    ),
     ("set_selection_filters", filter::set_selection_filters),
     (
         "apply_selection_filter_preset",
@@ -306,6 +339,9 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("layout_plan_set", crate::app::layout_plan::layout_plan_set),
     ("swap_pins", swap::swap_pins),
     ("swap_gates", swap::swap_gates),
+    // #1261: the same swaps started on the named sheet.
+    ("swap_schematic_pins", sheet_swap::swap_schematic_pins),
+    ("swap_schematic_gates", sheet_swap::swap_schematic_gates),
     ("save_board_reuse_block", reuse::save_board_reuse_block),
     ("place_board_reuse_block", reuse::place_board_reuse_block),
     // #2326: the drawing order and Delete on the `document` named.
@@ -339,12 +375,37 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
         crate::app::project_tab::project_set_active_variant,
     ),
     (
+        "project_set_default_variant",
+        crate::app::project_tab::project_set_default_variant,
+    ),
+    // #3038: the Variant Manager's part edits and Duplicate.
+    (
+        "project_set_variant_fit",
+        crate::app::project_tab::project_set_variant_fit,
+    ),
+    (
+        "project_set_variant_alternate",
+        crate::app::project_tab::project_set_variant_alternate,
+    ),
+    (
+        "project_set_variant_override",
+        crate::app::project_tab::project_set_variant_override,
+    ),
+    (
+        "project_duplicate_variant",
+        crate::app::project_tab::project_duplicate_variant,
+    ),
+    (
         "project_move_library",
         crate::app::project_tab::project_move_library,
     ),
     (
         "project_set_annotate_undo",
         crate::app::project_tab::project_set_annotate_undo,
+    ),
+    (
+        "project_set_annotate_numbering",
+        crate::app::project_tab::project_set_annotate_numbering,
     ),
     (
         "project_set_version_control",
@@ -376,6 +437,19 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
         "project_run_requirements",
         crate::app::project_tab::project_run_requirements,
     ),
+    // #2796: the block diagram document (mockup row 171).
+    ("new_block_diagram", diagram::new_block_diagram),
+    ("block_add", diagram::block_add),
+    ("block_set", diagram::block_set),
+    ("block_remove", diagram::block_remove),
+    ("block_port_add", diagram::block_port_add),
+    ("block_port_remove", diagram::block_port_remove),
+    ("block_link", diagram::block_link),
+    ("block_link_set", diagram::block_link_set),
+    ("block_unlink", diagram::block_unlink),
+    ("block_group", diagram::block_group),
+    ("block_group_set", diagram::block_group_set),
+    ("block_ungroup", diagram::block_ungroup),
     // #2795: the Design Notebook tab, on the project `document` names.
     (
         "notebook_compile",
@@ -405,7 +479,8 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
         "bom_set_alternate_order",
         crate::app::project_tab::bom_set_alternate_order,
     ),
-    // #1297: the placed part `id` names swapped for a library row.
+    // #1297, #2954: the placed part `id` names swapped for a library row,
+    // the pins mapped by hand if given.
     (
         "change_component",
         super::change_component_operands::change_component,
@@ -488,9 +563,10 @@ pub(crate) fn operand_handler(command: &AppCommandId) -> Option<OperandHandler> 
 /// it for the missing `path` rather than the picker's refusal reading as run.
 /// `repair_pin_junctions` goes there too, so a headless run on the sheet in
 /// view answers how many dots it added (0 when nothing needed one) instead of
-/// a bare `Ran`. `update_pcb_from_schematic` (#2470) goes there so a bare
-/// headless run is refused for `apply=true` or `dry_run=true` rather than
-/// opening a dialog nobody sees.
+/// a bare `Ran`. `toggle_live_erc` too, so a headless flip answers with the
+/// preference it left. `update_pcb_from_schematic` (#2470) goes there so a
+/// bare headless run is refused for `apply=true` or `dry_run=true` rather
+/// than opening a dialog nobody sees.
 pub(crate) fn runs_headless_without_operands(command: &AppCommandId) -> bool {
     matches!(
         command.as_str(),
@@ -498,6 +574,8 @@ pub(crate) fn runs_headless_without_operands(command: &AppCommandId) -> bool {
             | "new_schematic_sheet"
             | "create_sheet_symbol_from_sheet"
             | "repair_pin_junctions"
+            | "new_block_diagram"
+            | "toggle_live_erc"
             | "update_pcb_from_schematic"
     )
 }
@@ -543,6 +621,11 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
         "set_layer_tab_names" => Some(
             "`set_layer_tab_names` needs the operand `style` — \
              right-click a layer tab under the board",
+        ),
+        // #2470: for agents and scripts; a person uses the dock itself.
+        "set_dock_panel" => Some(
+            "`set_dock_panel` needs the operands `panel` and `state` — \
+             use the panel list, a tab's close button or the region's arrow",
         ),
         // #2363: a person uses the Layers panel.
         "set_layer_visible" | "set_active_layer" | "set_layer_color" => Some(
@@ -596,9 +679,19 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
             "`set_symbol_parameter` needs the operands `id` and `name` — \
              use the Parameters rows in Properties",
         ),
+        "set_object_text" => Some(
+            "`set_object_text` needs the operands `id` and `field` — \
+             use Properties or double-click the cell in the Object List",
+        ),
         "set_sheet_variable" => Some(
             "`set_sheet_variable` needs the operand `name` — \
              use the Sheet Variables rows in Properties",
+        ),
+        // #1277: no Properties row yet; a part placed from a Net Tie library
+        // symbol is a tie already.
+        "set_net_tie" => Some(
+            "`set_net_tie` needs the operands `id` and `on` — \
+             place the part from a Net Tie library symbol, or run it with them",
         ),
         // #2424: a person draws with the Graphics tools and edits in
         // Properties.
@@ -712,8 +805,14 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
         | "project_rename_variant"
         | "project_remove_variant"
         | "project_set_active_variant"
+        | "project_set_default_variant"
+        | "project_set_variant_fit"
+        | "project_set_variant_alternate"
+        | "project_set_variant_override"
+        | "project_duplicate_variant"
         | "project_move_library"
         | "project_set_annotate_undo"
+        | "project_set_annotate_numbering"
         | "project_set_version_control"
         | "project_add_requirement"
         | "project_set_requirement"
@@ -722,6 +821,13 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
         | "project_run_requirements" => Some(
             "the `project_*` edits need their operands — \
              use the Project tab (Project ▸ Project Options...)",
+        ),
+        // #2796: a person edits on the block diagram's tab.
+        "block_add" | "block_set" | "block_remove" | "block_port_add" | "block_port_remove"
+        | "block_link" | "block_link_set" | "block_unlink" | "block_group" | "block_group_set"
+        | "block_ungroup" => Some(
+            "the `block_*` edits need their operands, `document` first — \
+             use the toolbar, the canvas and Properties of the block diagram's tab",
         ),
         "notebook_compile" | "notebook_insert" | "notebook_view" => Some(
             "the `notebook_*` commands need their operands — \

@@ -432,11 +432,11 @@ impl Signex {
     /// from changed. Cheap when the panel is closed: nothing is read.
     pub(crate) fn sync_unions_panel(&mut self) {
         if !self.is_panel_open(crate::panels::PanelKind::Unions) {
-            self.document_state.panel_ctx.unions.built_from = None;
+            self.document_view.panel_ctx.unions.built_from = None;
             return;
         }
         let key = self.unions_panel_key();
-        if self.document_state.panel_ctx.unions.built_from == Some(key) {
+        if self.document_view.panel_ctx.unions.built_from == Some(key) {
             return;
         }
         #[cfg(test)]
@@ -480,6 +480,6 @@ impl Signex {
         let selected = &self.interaction_state.active_canvas().selected;
         let mut view = panel_view(state, &sheets, active.as_deref(), selected);
         view.built_from = Some(key);
-        *self.document_state.panel_ctx.unions = view;
+        *self.document_view.panel_ctx.unions = view;
     }
 }

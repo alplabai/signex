@@ -110,7 +110,7 @@ fn shelf(
 
 /// The symbol line as shown, without Fluent's isolation marks.
 fn symbol_summary(app: &Signex) -> String {
-    app.document_state
+    app.document_view
         .panel_ctx
         .library_row_detail
         .as_ref()

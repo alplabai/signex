@@ -65,7 +65,7 @@ impl Signex {
         let Some(state) = self.ui_state.diff_pair_classes.as_deref() else {
             return container(Space::new()).boxed();
         };
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let i18n = self.ui_state.i18n.as_ref();
         let cancel = Some(dpc(DiffPairClassesMsg::CancelRequested));
         let pairs = state.members.len() as u32;

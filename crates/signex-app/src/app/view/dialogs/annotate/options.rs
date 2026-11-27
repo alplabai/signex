@@ -28,14 +28,14 @@ impl Signex {
         .width(Length::Fill);
         scrollable(blocks)
             .height(Length::Fill)
-            .style(scroll_style(&self.document_state.panel_ctx.tokens))
+            .style(scroll_style(&self.document_view.panel_ctx.tokens))
             .boxed()
     }
 
     /// Order of Processing: the dropdown with what the order does under it,
     /// beside the traversal diagram.
     fn annotate_order_block(&self) -> Element<'_, Message> {
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let i18n = self.ui_state.i18n.as_ref();
         let faint = crate::styles::tokens::resolve(tokens).ink4;
         let order = self.ui_state.annotate_order;
@@ -63,7 +63,7 @@ impl Signex {
     /// Schematic Sheets To Annotate: every project sheet (a reused sheet once
     /// per placement) with a tick, the read-only Start, and the count ticked.
     fn annotate_sheets_block(&self) -> Element<'_, Message> {
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let i18n = self.ui_state.i18n.as_ref();
         let faint = crate::styles::tokens::resolve(tokens).ink4;
         let preview = &self.ui_state.annotate_preview;
@@ -109,7 +109,7 @@ impl Signex {
     /// The four options that cannot change yet, folded into one group with a
     /// one-line digest; opening it lists them.
     fn annotate_fixed_options_block(&self) -> Element<'_, Message> {
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let i18n = self.ui_state.i18n.as_ref();
         let r = crate::styles::tokens::resolve(tokens);
         let ink = crate::styles::ti(tokens.text);

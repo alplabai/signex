@@ -593,7 +593,7 @@ fn netlist_export_refuses_to_write_an_incomplete_netlist() {
         out.display()
     );
     let prompt = app
-        .document_state
+        .document_view
         .netlist_incomplete_prompt
         .clone()
         .expect("the refusal must be raised through the incomplete-export prompt");
@@ -606,9 +606,9 @@ fn netlist_export_refuses_to_write_an_incomplete_netlist() {
         prompt.messages
     );
     assert!(
-        app.document_state.error_notice.is_none(),
+        app.document_view.error_notice.is_none(),
         "the default path raises the prompt, not a dead-end error: {:?}",
-        app.document_state.error_notice
+        app.document_view.error_notice
     );
     std::fs::remove_file(&out).ok();
 }
@@ -630,7 +630,7 @@ fn export_anyway_writes_a_clean_netlist_and_warns_in_the_messages_panel() {
     crate::app::handlers::menu::export::settle(&mut app, task);
     assert!(!out.exists(), "nothing is written until the user acts");
     assert!(
-        app.document_state.netlist_incomplete_prompt.is_some(),
+        app.document_view.netlist_incomplete_prompt.is_some(),
         "the prompt must be up before the user chooses"
     );
 
@@ -639,7 +639,7 @@ fn export_anyway_writes_a_clean_netlist_and_warns_in_the_messages_panel() {
     crate::app::handlers::menu::export::settle(&mut app, task);
 
     assert!(
-        app.document_state.netlist_incomplete_prompt.is_none(),
+        app.document_view.netlist_incomplete_prompt.is_none(),
         "the prompt is cleared once the choice is made"
     );
     assert!(out.exists(), "Export anyway writes the partial .net");
@@ -681,7 +681,7 @@ fn export_anyway_writes_from_the_prompt_snapshot_not_a_fresh_re_derivation() {
     );
     crate::app::handlers::menu::export::settle(&mut app, task);
     assert!(
-        app.document_state.netlist_incomplete_prompt.is_some(),
+        app.document_view.netlist_incomplete_prompt.is_some(),
         "the prompt must be raised on the default path"
     );
 
@@ -708,9 +708,9 @@ fn export_anyway_writes_from_the_prompt_snapshot_not_a_fresh_re_derivation() {
         "the warning names the page omitted at prompt time"
     );
     assert!(
-        app.document_state.error_notice.is_none(),
+        app.document_view.error_notice.is_none(),
         "the snapshot made the write succeed — no re-derivation error: {:?}",
-        app.document_state.error_notice
+        app.document_view.error_notice
     );
     std::fs::remove_file(&out).ok();
 }
@@ -728,14 +728,14 @@ fn cancel_on_the_incomplete_prompt_writes_nothing() {
     );
     crate::app::handlers::menu::export::settle(&mut app, task);
     assert!(
-        app.document_state.netlist_incomplete_prompt.is_some(),
+        app.document_view.netlist_incomplete_prompt.is_some(),
         "precondition: the prompt is up"
     );
 
     app.handle_netlist_cancel_incomplete();
 
     assert!(
-        app.document_state.netlist_incomplete_prompt.is_none(),
+        app.document_view.netlist_incomplete_prompt.is_none(),
         "Cancel clears the prompt"
     );
     assert!(!out.exists(), "Cancel writes nothing: {}", out.display());
@@ -753,7 +753,7 @@ pub(super) fn pdf_request_all_sheets(
     crate::app::state::PdfExportRequest {
         source: source.to_path_buf(),
         options: Default::default(),
-        descended_placement: app.document_state.tab_placements.get(source).cloned(),
+        descended_placement: app.document_view.tab_placements.get(source).cloned(),
         files: ctx
             .sheets
             .iter()
@@ -780,9 +780,9 @@ fn pdf_export_proceeds_and_warns_once_per_user_action() {
     crate::app::handlers::menu::export::settle(&mut app, task);
 
     assert!(
-        app.document_state.error_notice.is_none(),
+        app.document_view.error_notice.is_none(),
         "a partial PDF proceeds: {:?}",
-        app.document_state.error_notice
+        app.document_view.error_notice
     );
     assert!(out.exists(), "the PDF must still be written");
     assert_eq!(
@@ -884,7 +884,7 @@ fn a_flat_projects_second_page_no_longer_vanishes_from_the_netlist() {
         out.display()
     );
     assert!(
-        app.document_state.netlist_incomplete_prompt.is_none(),
+        app.document_view.netlist_incomplete_prompt.is_none(),
         "nothing is incomplete, so the prompt must not be raised"
     );
     let bytes = std::fs::read_to_string(&out).expect("read exported netlist");
@@ -1013,6 +1013,9 @@ mod net_text_hierarchy;
 mod bom_hierarchy;
 mod channel_outputs;
 pub(crate) mod current_placement;
+mod exit_fixture_classes;
+pub(crate) mod exit_fixtures;
+mod exit_fixtures_not_fitted;
 
 mod export_status;
 mod lazy_preview;

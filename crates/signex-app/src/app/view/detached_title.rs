@@ -63,7 +63,7 @@ impl Signex {
             ModalId::NetColorPalette => Some(self.net_color_palette_subtitle()),
             ModalId::NetColorCustom => self.ui_state.net_color_custom.net.clone(),
             ModalId::PrintPreview => self
-                .document_state
+                .document_view
                 .preview
                 .as_ref()
                 .map(|preview| self.pdf_dialog_subtitle(preview)),

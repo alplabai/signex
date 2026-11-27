@@ -179,9 +179,10 @@ impl Signex {
                 let Some(state) = ui.new_project.as_mut() else {
                     return Task::none();
                 };
-                match super::store_profile(state, &mut ui.setup_profiles, &setup) {
+                let users = &mut self.document_state.setup_profiles;
+                match super::store_profile(state, users, &setup) {
                     super::ProfileStored::NotAStore => {
-                        state.apply_setup(setup, &ui.setup_profiles);
+                        state.apply_setup(setup, users);
                         Task::none()
                     }
                     stored => self.after_profile_store(stored),
@@ -238,6 +239,8 @@ impl Signex {
         let plan = NewProjectPlan {
             layout,
             setup: Some(state.setup.clone()),
+            // The dialog has no template picker yet (#1283).
+            template: None,
         };
         let chosen = location.join(format!("{name}.snxprj"));
         // A Create that would not start says why in the dialog instead of

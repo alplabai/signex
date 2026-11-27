@@ -61,6 +61,9 @@ bom-column-currency = Currency
 bom-column-stock = Stock
 bom-column-distributor = Distributor
 bom-column-price-age = Price Age
+# A computed column's cell on a grouped line whose parts give different
+# results (#1988).
+bom-computed-differs = Members differ
 bom-column-alternates = Alternates
 bom-no-issues-found = No issues found.
 # Issue list heading; $count is how many errors (a whole number).

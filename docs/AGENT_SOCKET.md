@@ -118,9 +118,11 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
   (#1689-#1693), and the board against the schematic
   `check_board_against_schematic` (#2462) and the board's counters
   `board_status` (#2460), each answered once its reads land
-  ([CLI.md](CLI.md), "Board against schematic" and "Board status"), and
+  ([CLI.md](CLI.md), "Board against schematic" and "Board status"),
   `query_rail_budget` (#2943), answered once its parts are read
-  ([CLI.md](CLI.md), "Rail budgets");
+  ([CLI.md](CLI.md), "Rail budgets"), the BOM's `bom_lines` (#1988;
+  [CLI.md](CLI.md), "BOM lines"), and `query_power_tree` (#1313), answered
+  once its run lands ([CLI.md](CLI.md), "Power tree");
 - a command that names its document with a required `document` operand and
   takes no file path (the placements' optional `document` does not count; they
   stay reachable through `apply_edits`): today `apply_edits`, `revert`, `color_net`,
@@ -178,7 +180,11 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
   "Update PCB from schematic"; its `document` is optional in the catalog,
   for a script's call on the active project, but the channel keeps it required, by
   hand in `DOCUMENT_NAMED_ON_CHANNEL`, since its gate acts only on a named
-  document), and the
+  document), and `annotate_schematic_quietly` (#2470; numbers the project of
+  the named sheet as Annotate Schematics Quietly does, answered with each
+  designator it changed once the project's sheets are read; also kept
+  required by hand in `DOCUMENT_NAMED_ON_CHANNEL`; the Annotate dialog
+  `annotate_schematic` is refused with a reason that names this form), and the
   routing tools `place_board_route`, `place_board_track`,
   `place_board_quick_route`, `place_board_diff_pair`,
   `place_board_multi_route` and `place_board_via` (#2470; one undo step on
@@ -193,7 +199,10 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
   file in the project's `reuse-blocks` folder, and a place may wait for the
   project's blocks to be read like an edit waiting for its reads; a swap or
   a place names its component by `ids`, its uuid, or by `designator`,
-  exactly one), and the drawing order `bring_drawings_forward`,
+  exactly one), and the same swaps on a sheet, `swap_schematic_pins` and
+  `swap_schematic_gates` (#1261; one undo step on the named sheet, the
+  board left for Update PCB, the part named by `ids`, one placed unit's
+  uuid, or by `designator`), and the drawing order `bring_drawings_forward`,
   `bring_drawings_to_front`, `send_drawings_backward` and
   `send_drawings_to_back` and `delete_selection` (#2326; one undo step on
   the items `ids` names by uuid on the named sheet, or for a delete the named
@@ -222,11 +231,35 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
   `{"tiled", "layout": "stacked" | "side_by_side" | null, "panes"}`, each
   pane `{"focused", "document", "name"}` in pane order (`document` and
   `name` are null for a pane outside an open project). They never change the
-  active tab.
-  The CSV, PDF, SVG and STEP writers `export_board_report`,
-  `export_board_pdf`, `export_assembly_svg` and `export_board_step`, and
-  `fabrication_outputs` with its operands (#2470), take a `path`, so they
-  are CLI only.
+  active tab. Two more name no document and act on the main window
+  (#2470): `zoom_to_fit` runs View ▸ Fit on the active tab's view and
+  answers `{"fitted": {"document", "name"}}`, and `set_dock_panel
+  panel=<key> state=open|close|collapse|expand` opens or closes a dock
+  panel by its layout key (`messages`, `properties`, `projects`, ...) or
+  collapses or expands the region it is docked in, answering
+  `{"panel", "open", "place", "collapsed"}` (`place` is `left`, `right`,
+  `bottom`, `floating`, `window` or null). Both change what the person sees;
+  neither changes the active tab. `signex-cli run --attach` lets these
+  window-layout commands through though they only work in a window.
+  The board writers `export_board_report`, `export_board_pdf` and
+  `fabrication_outputs` (#2470) take a `path`, which on this channel must
+  lie inside the folder of the named board's project. The gate refuses a
+  path that is not absolute or holds `..` by its text (`write_target.rs`);
+  whether it lies in the project is decided when the file is written, with
+  the folder and the target both resolved and links followed
+  (`confined_write`, the rule an agent's notebook export follows), so a
+  folder in the project that links out of it writes nothing, and a project
+  reached through a link (macOS `/var`, a linked home) is not refused for
+  its spelling. The CSV and the PDF follow the one export rule
+  (`export_target`, as the notebook exports do): the right extension, never
+  a Signex document (`.snx*`), never inside a `.git` folder, on Windows no
+  name ending in a dot or a space or holding `:`, and an existing file only
+  with `overwrite=true`; the fabrication folder may not be inside `.git`
+  either. All three are answered once their files are written, so a write
+  that is refused is refused on the socket too. They need the `export`
+  capability in `signex-cli`. `export_assembly_svg`, `export_board_step`
+  and `export_block_diagram` still take a path the channel does not check,
+  so they are CLI only.
 
 The last three are open to agents by the maintainer's decision (#1924):
 
@@ -291,11 +324,17 @@ rows in Properties still follow their preference.
 Refused with a reason: `undo` and `redo` (`PERSON_ONLY`, the one hand-kept
 constant, checked against the catalog by a test; the agent takes back its own
 step with `revert`), a command with a file path operand (`save_document_as`,
-`open_document`, `new_document`), a window-only command (`headless_refusal`,
-#2170), and every tool, selection or view command, which names no document.
+`open_document`, `new_document`) other than the board writers above, a
+window-only command (`headless_refusal`, #2170) other than the window-layout
+commands, `annotate_schematic` (the dialog; its reason names
+`annotate_schematic_quietly`), and every tool, selection or view command,
+which names no document.
 
 `open_document` and `new_document` are refused on this channel: they take a
-path, and opening a tab changes what the person sees. A document that is not
+path, and opening a tab changes what the person sees. `new_pcb_document`
+stays off it too: its board tab is brought to the front, which moves the
+person's tab. All three are left for a later form that opens behind the
+person's tab (#2470). A document that is not
 part of a project open in this app (a loose sheet) is refused too, and while
 an agent's request runs `document_entries` lists only project-owned documents,
 so `list_documents`, `find_items` and `resolve` never show a loose sheet

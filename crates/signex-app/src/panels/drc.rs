@@ -202,7 +202,7 @@ mod tests {
 
     fn context(running: bool) -> PanelContext {
         let (app, _boot) = crate::app::Signex::new();
-        let mut ctx = app.document_state.panel_ctx.clone();
+        let mut ctx = app.document_view.panel_ctx.clone();
         ctx.pcb_drc = Some(DrcPanel {
             running,
             ..DrcPanel::default()

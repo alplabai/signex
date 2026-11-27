@@ -23,6 +23,7 @@ use super::surface::PdfSurface;
 use super::{MM_TO_PT, PageSize, PdfError};
 use crate::assembly::{assembly_drawing, assembly_ink};
 
+pub(crate) use draw::{TitleBlock, fill, label, stroke, title_block};
 pub(crate) use frame::PageFrame;
 
 /// A group of board layers printed together.
@@ -361,7 +362,7 @@ fn render_pages(
 
 /// The document: catalog, page tree, one page and content stream per
 /// page, then the fonts the pages use.
-fn assemble(
+pub(crate) fn assemble(
     contents: &[Vec<u8>],
     fonts: &FontUsage,
     page_w_mm: f64,

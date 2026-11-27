@@ -118,7 +118,7 @@ fn saving_twice_in_a_row_moves_the_base_revision_on() {
     let task = app.handle_save_row(&address);
 
     run_write(&mut app, task);
-    assert!(app.document_state.error_notice.is_none());
+    assert!(app.document_view.error_notice.is_none());
     assert_eq!(editor(&app, &address).row.server_revision, Some(2));
 
     app.library
@@ -129,7 +129,7 @@ fn saving_twice_in_a_row_moves_the_base_revision_on() {
     let task = app.handle_save_row(&address);
     run_write(&mut app, task);
     assert!(
-        app.document_state.error_notice.is_none(),
+        app.document_view.error_notice.is_none(),
         "our own earlier save must not make the next one stale"
     );
     assert_eq!(editor(&app, &address).row.server_revision, Some(3));
@@ -144,7 +144,7 @@ fn a_stale_preview_save_is_refused_visibly_and_keeps_the_edit() {
     run_write(&mut app, task);
 
     let notice = app
-        .document_state
+        .document_view
         .error_notice
         .as_ref()
         .expect("a refused save raises the Save Failed card");
@@ -241,7 +241,7 @@ fn a_dirty_preview_cannot_overwrite_a_browser_cell_commit() {
 
     run_write(&mut app, task);
 
-    assert!(app.document_state.error_notice.is_some(), "save refused");
+    assert!(app.document_view.error_notice.is_some(), "save refused");
     assert_eq!(stored_pn(&app, &address), "R-115b", "browser edit survives");
     assert!(editor(&app, &address).dirty, "the draft is kept");
     assert!(editor(&app, &address).stale_base);
@@ -280,11 +280,11 @@ fn reload_from_server_confirms_before_it_drops_a_dirty_draft() {
     assert!(!preview.dirty && !preview.stale_base);
 
     app.library.editors.get_mut(&address).unwrap().dirty = true;
-    app.document_state.error_notice = None;
+    app.document_view.error_notice = None;
     let task = app.handle_save_row(&address);
     run_write(&mut app, task);
     assert!(
-        app.document_state.error_notice.is_none(),
+        app.document_view.error_notice.is_none(),
         "saves after reload"
     );
 }
@@ -330,7 +330,7 @@ fn a_cascade_refreshes_a_clean_preview_and_rebases_a_dirty_one() {
     assert_eq!(editor(&app, &address).row.server_revision, Some(2));
     let task = app.handle_save_row(&address);
     run_write(&mut app, task);
-    assert!(app.document_state.error_notice.is_none());
+    assert!(app.document_view.error_notice.is_none());
 
     // Clean: follows the cascade.
     app.library.editors.get_mut(&address).unwrap().dirty = false;
@@ -490,7 +490,7 @@ fn an_off_thread_save_refreshes_the_previews_of_the_rows_it_cascaded() {
     assert_eq!(preview.row.symbol_version, "9.9.9");
     let task = app.handle_save_row(&address);
     run_write(&mut app, task);
-    assert!(app.document_state.error_notice.is_none(), "not refused");
+    assert!(app.document_view.error_notice.is_none(), "not refused");
     let stored = app.library.set.get(library_id).unwrap();
     let stored = stored.read_row(TABLE, address.row_id).expect("stored row");
     assert_eq!(stored.description, "Mine");
@@ -717,13 +717,13 @@ fn a_reload_of_a_row_whose_library_is_gone_warns_in_the_messages_panel() {
         .expect("open")
         .library_id;
     app.library.set.unmount(library_id);
-    app.document_state.panel_ctx.diagnostics.clear();
+    app.document_view.panel_ctx.diagnostics.clear();
 
     drop(app.reload_editor_from_server(&address, false));
 
     let needle = format!("Row {} could not be reloaded", address.row_id);
     assert!(
-        app.document_state
+        app.document_view
             .panel_ctx
             .diagnostics
             .iter()

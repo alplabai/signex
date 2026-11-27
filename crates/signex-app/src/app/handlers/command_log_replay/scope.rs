@@ -59,7 +59,8 @@ pub(super) fn acts_on_all_when_empty(id: &str) -> bool {
 /// `undo_last_segment`), a pick at the pointer's position
 /// (`select_node_or_connection_item`, `toggle_selection`), the Find Similar
 /// dialog, whose result is a selection the person makes in it, and
-/// `save_board_reuse_block`, which writes a named file and edits no document.
+/// `save_board_reuse_block` and `save_snippet`, which write a named file and
+/// edit no document.
 pub(in crate::app::handlers) fn replay_scope(id: &str) -> ReplayScope {
     if finishes_on_targets(id) {
         return ReplayScope::OnTargets;
@@ -85,7 +86,8 @@ pub(in crate::app::handlers) fn replay_scope(id: &str) -> ReplayScope {
         | "select_node_or_connection_item"
         | "toggle_selection"
         | "find_similar_objects"
-        | "save_board_reuse_block" => ReplayScope::NothingToRepeat,
+        | "save_board_reuse_block"
+        | "save_snippet" => ReplayScope::NothingToRepeat,
         _ => ReplayScope::NoTarget,
     }
 }

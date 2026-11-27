@@ -93,7 +93,10 @@ impl Signex {
     /// project's stored rule set, else this machine's preferences; and the
     /// warnings Run ERC says about them (an unreadable stored set, an
     /// unrecognised entry), in its words.
-    fn erc_rule_settings_quiet(&self, project: Option<&LoadedProject>) -> QuietRuleSettings {
+    pub(super) fn erc_rule_settings_quiet(
+        &self,
+        project: Option<&LoadedProject>,
+    ) -> QuietRuleSettings {
         match project.and_then(|p| p.data.rules.as_ref()) {
             Some(rules) => {
                 let resolved = signex_erc::project_rules::resolve(&rules.erc);

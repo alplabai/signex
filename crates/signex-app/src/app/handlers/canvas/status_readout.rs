@@ -46,6 +46,7 @@ impl Signex {
                 || tab.kind.as_library_browser().is_some()
                 || tab.kind.is_project_page()
                 || tab.kind.is_gerber_viewer()
+                || tab.kind.is_block_diagram()
             {
                 return Surface::NoCamera;
             }
@@ -99,7 +100,7 @@ impl Signex {
     pub(crate) fn shows_footprint_layer_strip(&self, window_id: iced::window::Id) -> bool {
         self.ui_state.main_window_id != Some(window_id)
             || self
-                .document_state
+                .document_view
                 .dock
                 .locate(crate::panels::PanelKind::Layers)
                 .is_none()
@@ -124,7 +125,7 @@ impl Signex {
     pub(crate) fn grid_caret_anchor(&self, window: Option<iced::window::Id>) -> (f32, f32) {
         let ui = &self.ui_state;
         let (_, height) = window.map_or(ui.window_size, |window| ui.size_of_window(window));
-        let status_h = crate::status_bar::status_bar_height(&self.document_state.panel_ctx.tokens);
+        let status_h = crate::status_bar::status_bar_height(&self.document_view.panel_ctx.tokens);
         (
             crate::status_bar::grid_readout_x(),
             height - status_h - crate::status_bar::POPUP_GAP,

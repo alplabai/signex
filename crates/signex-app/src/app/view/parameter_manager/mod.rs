@@ -168,7 +168,7 @@ impl Signex {
     }
 
     pub(super) fn view_parameter_manager_body(&self) -> Element<'_, Message> {
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let area: Element<'_, Message> = if self.document_state.active_engine().is_some() {
             // The column widths share the free width, so the table is laid
             // out per size.
@@ -224,7 +224,7 @@ impl Signex {
 
     /// The no-match card with Clear filter inside it (#2900).
     fn view_parameter_no_match(&self, filter: &str) -> Element<'_, Message> {
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let i18n = &self.ui_state.i18n;
         let query = filter.trim().to_string();
         let body = if self.is_all_parameter_sheets() {
@@ -256,7 +256,7 @@ impl Signex {
     /// with All sheets a note counting the project's sheets left out
     /// because they are not open.
     fn view_parameter_scope_bar(&self) -> Element<'_, Message> {
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let i18n = &self.ui_state.i18n;
         let r = resolve(tokens);
         let switch = signex_widgets::segmented(
@@ -286,7 +286,7 @@ impl Signex {
     /// name and Add column on the right, as one group that folds under the
     /// filter when the dialog is narrow.
     fn view_parameter_toolbar(&self) -> Element<'_, Message> {
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let i18n = &self.ui_state.i18n;
         let table = &self.ui_state.parameter_table;
         let r = resolve(tokens);
@@ -369,7 +369,7 @@ impl Signex {
     /// How edits apply, Export… and Import… (#1295), the changed-cell count,
     /// Revert changes and Done.
     fn view_parameter_footer(&self) -> Element<'_, Message> {
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let i18n = &self.ui_state.i18n;
         let r = resolve(tokens);
         let changed = self.parameter_session_changes().len();
@@ -505,14 +505,14 @@ mod toolbar_tests {
         use signex_types::theme::{ThemeId, theme_tokens};
         for id in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
             let (mut app, _task) = Signex::new();
-            app.document_state.panel_ctx.tokens = theme_tokens(id);
+            app.document_view.panel_ctx.tokens = theme_tokens(id);
             app.ui_state.parameter_table.new_key = "MPN".to_string();
             let window = Size::new(TS.body * 100.0, TS.body * 10.0);
             let key = find(&lay_out_inputs(app.view_parameter_toolbar(), window), "MPN").bounds;
             let texts = lay_out_texts(app.view_parameter_toolbar(), window);
             let label = find(&texts, "Add column").bounds;
             let pixels = draw_pixels(app.view_parameter_toolbar(), window);
-            let ink = crate::styles::ti(app.document_state.panel_ctx.tokens.text).into_rgba8();
+            let ink = crate::styles::ti(app.document_view.panel_ctx.tokens.text).into_rgba8();
             let from = (key.x + key.width + SP.s + SP.xs) as usize;
             let rows = label.y as usize..(label.y + label.height) as usize;
             let glyph = rows.into_iter().any(|y| {
@@ -549,12 +549,12 @@ mod no_match_tests {
     fn clear_filter_sits_inside_the_no_match_card() {
         for id in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
             let (mut app, _task) = Signex::new();
-            app.document_state.panel_ctx.tokens = theme_tokens(id);
+            app.document_view.panel_ctx.tokens = theme_tokens(id);
             let window = Size::new(TS.body * 60.0, TS.body * 30.0);
             let texts = lay_out_texts(app.view_parameter_no_match("QFN-32"), window);
             let label = find(&texts, "Clear filter").bounds;
             let pixels = draw_pixels(app.view_parameter_no_match("QFN-32"), window);
-            let tokens = &app.document_state.panel_ctx.tokens;
+            let tokens = &app.document_view.panel_ctx.tokens;
             let card = crate::styles::tokens::resolve(tokens).raised.into_rgba8();
             let x = (label.x + 1.0) as usize;
             let y = (label.y + label.height + SP.xs + 3.0) as usize;

@@ -424,7 +424,7 @@ impl Signex {
             .arg("path", project_root.display().to_string())
             .arg("reason", reason);
         crate::diagnostics::log_warning(format!("[git] {}", message.render_en_us()));
-        self.document_state.error_notice = Some(
+        self.document_view.error_notice = Some(
             crate::app::state::ErrorNotice::version_control_paused(message),
         );
     }

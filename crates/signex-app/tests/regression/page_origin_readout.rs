@@ -71,7 +71,7 @@ fn panel(app: &mut Signex, msg: PanelMsg) {
 }
 
 fn position_row(app: &Signex) -> String {
-    app.document_state
+    app.document_view
         .panel_ctx
         .selection_info
         .iter()
@@ -134,7 +134,7 @@ fn position_matches_paper(app: &Signex, path: &PathBuf, raw_y: f64) {
     let doc = app.document_state.engines[path].document();
     let want = format!("10.00, {:.2}", doc.page_y(raw_y));
     if let Some((_, shown)) = app
-        .document_state
+        .document_view
         .panel_ctx
         .selection_info
         .iter()
@@ -179,7 +179,7 @@ fn the_position_row_follows_a_paper_change() {
 }
 
 fn buffered(app: &Signex) -> bool {
-    !app.document_state.panel_ctx.drawing_edit_buf.is_empty()
+    !app.document_view.panel_ctx.drawing_edit_buf.is_empty()
 }
 
 /// Review of #2034: a typed Y box is read under one origin and paper, so a

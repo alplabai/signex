@@ -213,6 +213,7 @@ impl super::super::super::Signex {
         msg: &NetClassMsg,
     ) {
         let document = &mut self.document_state;
+        let document_view = &mut self.document_view;
         let target = match msg {
             NetClassMsg::AssignNet { project, .. } => Some(*project),
             _ => document.active_project,
@@ -226,7 +227,7 @@ impl super::super::super::Signex {
             return;
         };
         let history = document.net_class_history.entry(id).or_default();
-        let mut panel = std::mem::take(&mut document.panel_ctx.net_classes);
+        let mut panel = std::mem::take(&mut document_view.panel_ctx.net_classes);
         let borrowed_panel = panel.project != Some(id);
         let mut scratch = NetClassPanel::default();
         // The panel's selection and drafts belong to the project that was
@@ -254,7 +255,7 @@ impl super::super::super::Signex {
         if borrowed_panel && matches!(msg, NetClassMsg::AssignNet { .. }) {
             panel.notice = scratch.notice;
         }
-        document.panel_ctx.net_classes = panel;
+        document_view.panel_ctx.net_classes = panel;
         if changed {
             document.sync_project_history_dirty(id, false);
         }
@@ -277,7 +278,8 @@ impl super::super::super::Signex {
         before: &[NetClass],
     ) {
         let document = &mut self.document_state;
-        let panel = &mut document.panel_ctx.net_classes;
+        let document_view = &mut self.document_view;
+        let panel = &mut document_view.panel_ctx.net_classes;
         if panel.project != Some(id) {
             return;
         }

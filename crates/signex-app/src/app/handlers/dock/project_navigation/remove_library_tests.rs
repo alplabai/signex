@@ -298,7 +298,7 @@ fn delete_is_refused_while_a_primitive_draft_is_unsaved() {
 
     assert!(f.manifest.exists());
     assert!(draft.exists());
-    assert!(f.app.document_state.error_notice.is_some());
+    assert!(f.app.document_view.error_notice.is_some());
     assert!(f.app.document_state.is_document_dirty(&draft));
 }
 
@@ -310,7 +310,7 @@ fn delete_is_refused_while_a_library_write_is_queued() {
     remove(&mut f, RemoveChoice::DeleteFile);
 
     assert!(f.manifest.exists());
-    assert!(f.app.document_state.error_notice.is_some());
+    assert!(f.app.document_view.error_notice.is_some());
 }
 
 #[test]
@@ -324,7 +324,7 @@ fn delete_is_refused_while_the_library_is_still_mounting() {
     remove(&mut f, RemoveChoice::DeleteFile);
 
     assert!(f.manifest.exists());
-    assert!(f.app.document_state.error_notice.is_some());
+    assert!(f.app.document_view.error_notice.is_some());
 }
 
 #[test]
@@ -396,7 +396,7 @@ fn delete_with_a_dirty_component_editor_is_refused() {
         f.manifest.exists(),
         "unsaved row edits dropped without asking"
     );
-    assert!(f.app.document_state.error_notice.is_some());
+    assert!(f.app.document_view.error_notice.is_some());
 }
 
 #[test]

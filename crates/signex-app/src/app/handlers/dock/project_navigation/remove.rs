@@ -101,7 +101,7 @@ impl Signex {
             crate::diagnostics::log_warning(format!(
                 "[remove] refused: {library} is open read-only without its Git history"
             ));
-            self.document_state.error_notice = Some(ErrorNotice::history_missing(&library));
+            self.document_view.error_notice = Some(ErrorNotice::history_missing(&library));
             self.refresh_panel_ctx();
             return true;
         }
@@ -130,7 +130,7 @@ impl Signex {
         };
         let why = why.arg("name", state.display_name.as_str());
         crate::diagnostics::log_warning(why.render_en_us());
-        self.document_state.error_notice = Some(notice(why));
+        self.document_view.error_notice = Some(notice(why));
         // Into the Messages panel snapshot now, whichever path asked.
         self.refresh_panel_ctx();
         true
@@ -215,7 +215,7 @@ impl Signex {
                 });
             if let Some(refusal) = busy {
                 crate::diagnostics::log_warning(refusal.render_en_us());
-                self.document_state.error_notice =
+                self.document_view.error_notice =
                     Some(crate::app::state::ErrorNotice::delete(refusal));
                 return iced::Task::none();
             }
@@ -317,7 +317,7 @@ impl Signex {
             }
             DeleteIo::Refused => {
                 self.prune_removed_entry(&request.dialog, true);
-                self.document_state.error_notice = Some(crate::app::state::ErrorNotice::delete(
+                self.document_view.error_notice = Some(crate::app::state::ErrorNotice::delete(
                     signex_i18n::Translatable::new(signex_i18n::ids::NOTICE_DELETE_OUTSIDE_PROJECT)
                         .arg("name", request.display_name.as_str()),
                 ));
@@ -339,7 +339,7 @@ impl Signex {
                     "Failed to delete project file",
                     &anyhow::anyhow!("{}: {e}", target.display()),
                 );
-                self.document_state.error_notice = Some(crate::app::state::ErrorNotice::delete(
+                self.document_view.error_notice = Some(crate::app::state::ErrorNotice::delete(
                     signex_i18n::Translatable::new(signex_i18n::ids::NOTICE_DELETE_FAILED)
                         .arg("name", request.display_name.as_str())
                         .arg("error", e.to_string()),
@@ -350,7 +350,7 @@ impl Signex {
                     "Could not check whether the project file exists",
                     &anyhow::anyhow!("{}: {e}", target.display()),
                 );
-                self.document_state.error_notice = Some(crate::app::state::ErrorNotice::delete(
+                self.document_view.error_notice = Some(crate::app::state::ErrorNotice::delete(
                     signex_i18n::Translatable::new(signex_i18n::ids::NOTICE_DELETE_FAILED)
                         .arg("name", request.display_name.as_str())
                         .arg("error", e.to_string()),
@@ -486,7 +486,7 @@ impl Signex {
                     .arg("path", opening.display().to_string())
                     .arg("name", dialog.display_name.as_str());
             crate::diagnostics::log_warning(detail.render_en_us());
-            self.document_state.error_notice = Some(crate::app::state::ErrorNotice::delete(detail));
+            self.document_view.error_notice = Some(crate::app::state::ErrorNotice::delete(detail));
             return iced::Task::none();
         }
 
@@ -504,7 +504,7 @@ impl Signex {
                     .arg("path", restoring.display().to_string())
                     .arg("name", dialog.display_name.as_str());
             crate::diagnostics::log_warning(detail.render_en_us());
-            self.document_state.error_notice = Some(crate::app::state::ErrorNotice::delete(detail));
+            self.document_view.error_notice = Some(crate::app::state::ErrorNotice::delete(detail));
             return iced::Task::none();
         }
 
@@ -543,7 +543,7 @@ impl Signex {
         // owns it: refuse before closing anything.
         if let Err(refusal) = self.refuse_start_while_path_op(&state.target_path, "deleted") {
             crate::diagnostics::log_warning(refusal.to_string());
-            self.document_state.error_notice = Some(crate::app::state::ErrorNotice::delete(
+            self.document_view.error_notice = Some(crate::app::state::ErrorNotice::delete(
                 crate::app::state::untranslated(refusal.to_string()),
             ));
             return iced::Task::none();
@@ -556,7 +556,7 @@ impl Signex {
         {
             let refusal = crate::app::dispatch::library::LIBRARY_BACKGROUND_WRITE_REFUSAL;
             crate::diagnostics::log_warning(format!("[delete] refused: {refusal}"));
-            self.document_state.error_notice = Some(crate::app::state::ErrorNotice::delete(
+            self.document_view.error_notice = Some(crate::app::state::ErrorNotice::delete(
                 crate::app::state::untranslated(refusal.to_string()),
             ));
             return iced::Task::none();
@@ -569,7 +569,7 @@ impl Signex {
                 self.library_delete_refusal(&state.target_path, self.dialog_fold(&state))
         {
             crate::diagnostics::log_warning(format!("[delete] refused: {refusal}"));
-            self.document_state.error_notice = Some(crate::app::state::ErrorNotice::delete(
+            self.document_view.error_notice = Some(crate::app::state::ErrorNotice::delete(
                 crate::app::state::untranslated(refusal),
             ));
             return iced::Task::none();
@@ -581,7 +581,7 @@ impl Signex {
             && let Err(refusal) = self.refuse_while_project_moves(&state.target_path, "delete")
         {
             crate::diagnostics::log_warning(refusal.to_string());
-            self.document_state.error_notice = Some(crate::app::state::ErrorNotice::delete(
+            self.document_view.error_notice = Some(crate::app::state::ErrorNotice::delete(
                 crate::app::state::untranslated(refusal.to_string()),
             ));
             return iced::Task::none();

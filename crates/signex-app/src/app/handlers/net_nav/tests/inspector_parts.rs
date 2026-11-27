@@ -39,7 +39,7 @@ fn inspector(p: &mut Project, msg: NetInspectorMsg) {
 }
 
 fn view(p: &Project) -> &NetInspectorView {
-    &p.app.document_state.panel_ctx.net_inspector
+    &p.app.document_view.panel_ctx.net_inspector
 }
 
 #[test]
@@ -127,6 +127,6 @@ fn clicking_a_pin_selects_its_part_and_highlights_its_net() {
     crate::app::path_ops::settle_task(&mut p.app, task);
 
     assert_eq!(p.selected(), [SelectedItem::new(r1, SelectedKind::Symbol)]);
-    let highlight = p.app.document_state.net_nav.highlight.as_ref();
+    let highlight = p.app.document_view.net_nav.highlight.as_ref();
     assert_eq!(highlight.map(|h| h.name.as_str()), Some("VCC"));
 }

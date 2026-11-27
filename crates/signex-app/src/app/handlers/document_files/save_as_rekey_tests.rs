@@ -30,7 +30,7 @@ fn app_with_dirty_sheet(dir: &Path) -> (Signex, PathBuf, PathBuf, u64) {
     app.document_state.active_tab = 0;
     app.document_state.active_path = Some(from.clone());
     app.document_state.mark_document_dirty(&from);
-    app.document_state.page_setup_memory.insert(
+    app.document_view.page_setup_memory.insert(
         from.clone(),
         RememberedPageSetup::capture(&signex_output::PdfOptions::default()),
     );
@@ -86,8 +86,8 @@ fn a_save_as_rekey_moves_engine_tab_dirty_mark_and_windows_together() {
         kind,
         WindowKind::UndockedTab { path, .. } if *path == to
     )));
-    assert!(app.document_state.page_setup_memory.contains_key(&to));
-    assert!(!app.document_state.page_setup_memory.contains_key(&from));
+    assert!(app.document_view.page_setup_memory.contains_key(&to));
+    assert!(!app.document_view.page_setup_memory.contains_key(&from));
     assert_eq!(
         app.document_state.active_path.as_deref(),
         Some(to.as_path())

@@ -170,3 +170,59 @@ fn no_part_copy_for_an_unknown_id() {
             .is_none()
     );
 }
+
+/// #1283: a selection saved as a snippet holds the circuit and the bodies it
+/// uses around the origin, and places again as a design block.
+#[test]
+fn a_snippet_sheet_is_the_selection_centred_and_places_as_a_design_block() {
+    use signex_types::schematic::{SelectedItem, SelectedKind};
+    let sheet = sheet_with_a_part();
+    let engine = Engine::new(sheet.clone()).unwrap();
+    let items = [
+        SelectedItem::new(sheet.symbols[0].uuid, SelectedKind::Symbol),
+        SelectedItem::new(sheet.wires[0].uuid, SelectedKind::Wire),
+    ];
+    let mut ids = SequentialIds::default();
+    let snippet = engine.snippet_sheet(&items, &mut ids).unwrap().unwrap();
+    assert_eq!(
+        snippet.uuid,
+        Uuid::from_u128(1),
+        "the sheet id comes from `ids`"
+    );
+    assert_eq!(snippet.symbols.len(), 1);
+    assert_eq!(snippet.wires.len(), 1);
+    assert!(snippet.drawings.is_empty(), "only what was selected");
+    assert!(
+        snippet.body_of(&snippet.symbols[0]).is_some(),
+        "the body goes along"
+    );
+    let wire = &snippet.wires[0];
+    assert!(
+        wire.start.x < 0.0 && wire.end.x > 0.0,
+        "centred on the origin: {wire:?}"
+    );
+
+    let block = DesignBlock::from_sheet(&snippet, 1.27, &mut SequentialIds::default())
+        .unwrap()
+        .unwrap();
+    let commands = block
+        .copied
+        .payload
+        .place_commands(Point::new(50.8, 50.8), &mut SequentialIds::default())
+        .unwrap();
+    let mut target = Engine::new(test_sheet()).unwrap();
+    target.execute_batch(commands).unwrap();
+    assert_eq!(target.document().symbols.len(), 1);
+    assert_eq!(target.document().wires.len(), 1);
+}
+
+#[test]
+fn nothing_selected_is_no_snippet() {
+    let engine = Engine::new(sheet_with_a_part()).unwrap();
+    assert!(
+        engine
+            .snippet_sheet(&[], &mut SequentialIds::default())
+            .unwrap()
+            .is_none()
+    );
+}

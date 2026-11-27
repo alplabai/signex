@@ -538,12 +538,12 @@ impl Signex {
                 use crate::library_import::ImportError as E;
                 let removed = failure.removed_output
                     || matches!(
-                        failure.error,
+                        *failure.error,
                         E::OutputNotEmpty { .. }
                             | E::OutputUnusable { .. }
                             | E::PathNotAbsolute { .. }
                     );
-                d.import_end = Some(match failure.error {
+                d.import_end = Some(match *failure.error {
                     crate::library_import::ImportError::Cancelled => {
                         ImportEnd::Cancelled { removed }
                     }

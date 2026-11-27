@@ -107,7 +107,7 @@ fn the_highlight_commands_set_step_and_clear_the_highlight() {
     p.select(ROOT_VCC, SelectedKind::Label);
 
     run(&mut p, "highlight_net_under_cursor");
-    assert!(p.app.document_state.net_nav.highlight.is_some());
+    assert!(p.app.document_view.net_nav.highlight.is_some());
 
     run(&mut p, "next_highlighted_net_item");
     assert_eq!(p.selected().first().map(|i| i.uuid), Some(id(ROOT_R1)));
@@ -119,8 +119,8 @@ fn the_highlight_commands_set_step_and_clear_the_highlight() {
     );
 
     run(&mut p, "highlight_related_net_objects");
-    assert!(p.app.document_state.net_nav.highlight.is_some());
+    assert!(p.app.document_view.net_nav.highlight.is_some());
 
     run(&mut p, "clear_net_highlighting");
-    assert!(p.app.document_state.net_nav.highlight.is_none());
+    assert!(p.app.document_view.net_nav.highlight.is_none());
 }

@@ -99,11 +99,12 @@ fn the_tab_shows_its_symbol_and_saves_and_undoes_on_it() {
     let (mut app, path) = app_with(opamp());
     props(&mut app, SymbolPropsMsg::EditPinsInTablePressed);
     let docs = &app.document_state;
+    let document_view = &app.document_view;
     assert_eq!(
         DocumentKey::of(&docs.tabs[docs.active_tab]),
         Some(DocumentKey::Symbol(path.clone()))
     );
-    let shown = docs
+    let shown = document_view
         .panel_ctx
         .symbol_editor
         .as_ref()

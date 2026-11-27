@@ -635,7 +635,7 @@ mod tests {
 
     fn texts(kind: &str, info: &[(&str, &str)]) -> Vec<String> {
         let (app, _boot) = crate::app::Signex::new();
-        let mut ctx = app.document_state.panel_ctx.clone();
+        let mut ctx = app.document_view.panel_ctx.clone();
         ctx.selection_info = std::iter::once(("Type".to_string(), kind.to_string()))
             .chain(info.iter().map(|(k, v)| (k.to_string(), v.to_string())))
             .collect();
@@ -697,7 +697,7 @@ mod tests {
             ("Border", "0.2"),
         ];
         let (app, _boot) = crate::app::Signex::new();
-        let mut ctx = app.document_state.panel_ctx.clone();
+        let mut ctx = app.document_view.panel_ctx.clone();
         ctx.selection_info = (info.iter())
             .map(|(k, v)| (k.to_string(), v.to_string()))
             .collect();
@@ -766,7 +766,7 @@ mod tests {
     #[test]
     fn the_axis_and_unit_sit_inside_each_field() {
         let (app, _boot) = crate::app::Signex::new();
-        let mut ctx = app.document_state.panel_ctx.clone();
+        let mut ctx = app.document_view.panel_ctx.clone();
         ctx.selection_info = std::iter::once(("Type", "Rectangle"))
             .chain(RECTANGLE)
             .map(|(k, v)| (k.to_string(), v.to_string()))

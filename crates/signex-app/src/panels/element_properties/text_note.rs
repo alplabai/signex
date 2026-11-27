@@ -445,7 +445,7 @@ mod tests {
         };
         let mut app = app_showing(sheet);
         click(&mut app, (60.0, 60.0));
-        let ctx = &app.document_state.panel_ctx;
+        let ctx = &app.document_view.panel_ctx;
         assert_eq!(ctx.selected_kind, Some(SelectedKind::TextNote));
         let draft = ctx.placed.note.as_ref().expect("the Text box is seeded");
         assert_eq!(draft.item, SelectedItem::new(id, SelectedKind::TextNote));
@@ -528,7 +528,7 @@ mod tests {
         };
         let mut app = app_showing(sheet);
         click(&mut app, (60.0, 60.0));
-        let ctx = &app.document_state.panel_ctx;
+        let ctx = &app.document_view.panel_ctx;
         let view = || {
             super::super::selected::view_selected_element_properties(
                 ctx,

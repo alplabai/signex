@@ -160,7 +160,7 @@ fn a_size_that_is_not_a_positive_number_is_refused_with_the_text_kept() {
             );
             assert_eq!(doc(&app).harness.connectors[0], before, "{field:?} {bad}");
             assert_eq!(
-                app.document_state.panel_ctx.harness.draft,
+                app.document_view.panel_ctx.harness.draft,
                 Some((field, bad.to_string())),
                 "the box keeps {bad}"
             );
@@ -187,7 +187,7 @@ fn a_position_that_is_not_finite_is_refused_with_the_text_kept() {
             );
             assert_eq!(doc(&app).harness.connectors[0], before, "{field:?} {bad}");
             assert_eq!(
-                app.document_state.panel_ctx.harness.draft,
+                app.document_view.panel_ctx.harness.draft,
                 Some((field, bad.to_string())),
                 "the box keeps {bad}"
             );
@@ -289,7 +289,7 @@ fn a_sheet_entry_takes_a_harness_type_from_properties() {
 fn the_definitions_view_opens_and_closes() {
     let mut app = app_with(empty());
     harness(&mut app, HarnessPanelMsg::DefinitionsOpened);
-    assert!(app.document_state.panel_ctx.harness.definitions_open);
+    assert!(app.document_view.panel_ctx.harness.definitions_open);
     harness(&mut app, HarnessPanelMsg::DefinitionsClosed);
-    assert!(!app.document_state.panel_ctx.harness.definitions_open);
+    assert!(!app.document_view.panel_ctx.harness.definitions_open);
 }

@@ -202,7 +202,7 @@ impl Signex {
             // the omitted-page warning then always describe the same project
             // state, even if the document changes while the prompt is up (#431
             // review).
-            self.document_state.netlist_incomplete_prompt =
+            self.document_view.netlist_incomplete_prompt =
                 Some(crate::app::state::NetlistIncompletePrompt {
                     save_path,
                     messages: issues.messages(),
@@ -247,7 +247,7 @@ impl Signex {
     /// one per line) in the Messages panel and the log, so a partial `.net`
     /// never reaches disk without the user having been told.
     pub(crate) fn handle_netlist_export_anyway(&mut self) -> Task<Message> {
-        let Some(prompt) = self.document_state.netlist_incomplete_prompt.take() else {
+        let Some(prompt) = self.document_view.netlist_incomplete_prompt.take() else {
             return Task::none();
         };
         let save_path = prompt.save_path;
@@ -300,7 +300,7 @@ impl Signex {
     /// #431 — "Cancel" on the netlist-incomplete prompt (or click-outside).
     /// Writes nothing; just clears the pending prompt.
     pub(crate) fn handle_netlist_cancel_incomplete(&mut self) {
-        self.document_state.netlist_incomplete_prompt = None;
+        self.document_view.netlist_incomplete_prompt = None;
     }
 }
 

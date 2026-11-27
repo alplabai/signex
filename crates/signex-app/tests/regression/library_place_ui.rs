@@ -62,7 +62,7 @@ fn the_picker_place_action_places_on_the_active_schematic() {
     assert_eq!(doc(&app).symbols.len(), 1);
     assert_eq!(doc(&app).symbols[0].row_id, Some(f.row_id));
     assert!(app.library.picker.is_none(), "the picker closes");
-    assert!(app.document_state.error_notice.is_none());
+    assert!(app.document_view.error_notice.is_none());
 }
 
 #[test]
@@ -162,10 +162,10 @@ fn a_library_skipped_to_read_only_still_places() {
         doc(&app).symbols.len(),
         1,
         "the part lands, notice: {:?}",
-        app.document_state.error_notice
+        app.document_view.error_notice
     );
     assert_eq!(doc(&app).symbols[0].row_id, Some(f.row_id));
-    assert!(app.document_state.error_notice.is_none());
+    assert!(app.document_view.error_notice.is_none());
 }
 
 #[test]
@@ -184,7 +184,7 @@ fn a_components_panel_row_place_action_places_on_the_active_schematic() {
     click(&mut app, PLACE_AT);
 
     assert_eq!(doc(&app).symbols.len(), 1);
-    assert!(app.document_state.error_notice.is_none());
+    assert!(app.document_view.error_notice.is_none());
 }
 
 #[test]
@@ -199,7 +199,7 @@ fn placing_without_an_active_schematic_shows_the_notice() {
     place_selected(&mut app);
 
     let notice = app
-        .document_state
+        .document_view
         .error_notice
         .as_ref()
         .expect("placing with nothing open must say so");

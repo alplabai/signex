@@ -89,6 +89,7 @@ fn drawn_with(
         cell: "",
         variant_settings: settings,
         placed_fits,
+        drawn_values: None,
     };
     let page = SvgRenderContext::from_sheet(sheet, opts, 297.0, 210.0, 1.0, Some(&inputs));
     // Each path as (closed, command count, style).
@@ -247,6 +248,7 @@ fn a_dnp_part_whose_library_is_missing_prints_its_box_crossed() {
         cell: "",
         variant_settings: None,
         placed_fits: None,
+        drawn_values: None,
     };
     let page = SvgRenderContext::from_sheet(&sheet, &opts, 297.0, 210.0, 1.0, Some(&inputs));
     let palette = opts.palette;

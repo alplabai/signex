@@ -14,6 +14,11 @@ pub struct ExpressionTables {
     /// [`build_expression_tables`] leaves it `None`; see
     /// [`ExpressionTables::with_placed_fits`].
     pub placed_fits: Option<crate::PlacedFits>,
+    /// The values the printed variant gives parts in place of their own,
+    /// decided once per export across every sheet (#2948); `None` draws the
+    /// sheets' values. [`build_expression_tables`] leaves it `None`; see
+    /// [`ExpressionTables::with_drawn_values`].
+    pub drawn_values: Option<crate::DrawnValues>,
 }
 
 impl ExpressionTables {
@@ -26,6 +31,14 @@ impl ExpressionTables {
         draw_not_fitted: bool,
     ) -> Self {
         self.placed_fits = draw_not_fitted.then(|| crate::PlacedFits::of_context(ctx, variant));
+        self
+    }
+
+    /// These tables with the values `variant` (the printed one) gives the
+    /// parts of `ctx`'s sheets.
+    pub fn with_drawn_values(mut self, ctx: &crate::ExportContext, variant: Option<&str>) -> Self {
+        let values = crate::DrawnValues::of_context(ctx, variant);
+        self.drawn_values = (!values.is_empty()).then_some(values);
         self
     }
 }
@@ -43,6 +56,7 @@ pub fn build_expression_tables(
         global_refdes: build_global_refdes_lookup(sheets),
         net_name_by_symbol_pin: build_pin_net_lookup(netlist),
         placed_fits: None,
+        drawn_values: None,
     }
 }
 

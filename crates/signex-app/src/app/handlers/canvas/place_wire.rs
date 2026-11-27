@@ -113,7 +113,7 @@ impl Signex {
     /// The width and colour the next wire is placed with: what the Tab form
     /// of the Wire tool holds, else the default width and no colour.
     pub(crate) fn wire_placement_style(&self) -> (f64, Option<signex_types::theme::Color>) {
-        match &self.document_state.panel_ctx.pre_placement {
+        match &self.document_view.panel_ctx.pre_placement {
             Some(pp) if pp.kind == crate::panels::PrePlacementKind::Wire => {
                 (pp.wire_width.stroke_mm(), pp.wire_color)
             }

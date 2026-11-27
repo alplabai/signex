@@ -20,7 +20,7 @@ pub(super) fn apply_symbol_move(editor: &mut SymEditor, msg: SymbolEditorMsg) {
     {
         return;
     }
-    if !editor.gui.mid_drag {
+    if !editor.draft.is_moving() {
         editor.gui.drag_corner_radius = None;
     }
     begin_drag_if_needed(editor);

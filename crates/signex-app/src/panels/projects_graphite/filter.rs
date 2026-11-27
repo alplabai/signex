@@ -237,7 +237,7 @@ mod tests {
     #[test]
     fn the_filtered_panel_draws_right_aligned_positions() {
         let (app, _boot) = crate::app::Signex::new();
-        let mut ctx = app.document_state.panel_ctx.clone();
+        let mut ctx = app.document_view.panel_ctx.clone();
         ctx.project_tree = two_sheet_project();
         ctx.projects_view.filter = "channel".to_string();
         let shown = crate::layout_probe::lay_out_texts(

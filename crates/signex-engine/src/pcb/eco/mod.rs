@@ -68,11 +68,15 @@ mod group_tests;
 #[cfg(test)]
 mod net_tests;
 #[cfg(test)]
+mod net_tie_tests;
+#[cfg(test)]
 mod pad_lock_tests;
 #[cfg(test)]
 mod reannotate_tests;
 #[cfg(test)]
 mod relink_tests;
+#[cfg(test)]
+mod swap_tests;
 #[cfg(test)]
 mod sync_guard_tests;
 #[cfg(test)]
@@ -183,7 +187,7 @@ fn eco_parts_of(
                 Some(first) => EcoPart {
                     value: first.value.clone(),
                     on_board: first.on_board,
-                    footprint: resolve(&part, first),
+                    footprint: resolve(&part, first).map(|r| tie_footprint(r, first)),
                     read: true,
                     part,
                 },
@@ -197,6 +201,22 @@ fn eco_parts_of(
             }
         })
         .collect()
+}
+
+/// The board footprint of a net-tie part (#1277; Caner, 2026-11-25) is a
+/// net tie, so DRC allows its copper bridge: Net Tie (in BOM) when the part
+/// is listed in the BOM, else Net Tie. A footprint the library already types
+/// as a tie keeps its type; a part that is not a tie keeps the library's.
+fn tie_footprint(mut resolved: ResolvedFootprint, first: &Symbol) -> ResolvedFootprint {
+    let kind = &mut resolved.footprint.component.component_type;
+    if first.net_tie && !kind.is_net_tie() {
+        *kind = if first.in_bom {
+            signex_types::pcb::ComponentType::NetTieInBom
+        } else {
+            signex_types::pcb::ComponentType::NetTie
+        };
+    }
+    resolved
 }
 
 /// A uuid that depends only on `parts`, so a recomputed list mints the same

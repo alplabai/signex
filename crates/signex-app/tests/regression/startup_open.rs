@@ -53,7 +53,7 @@ fn project_path_argument_opens_the_project() {
 
     assert_eq!(app.document_state.projects.len(), 1);
     assert_eq!(app.document_state.projects[0].path, prj);
-    assert!(app.document_state.error_notice.is_none());
+    assert!(app.document_view.error_notice.is_none());
 }
 
 #[test]
@@ -81,7 +81,7 @@ fn unsupported_file_argument_raises_the_open_failed_notice() {
     dispatch_startup(&mut app, &[txt.as_path()], tmp.path());
 
     let notice = app
-        .document_state
+        .document_view
         .error_notice
         .as_ref()
         .expect("an unsupported file must surface an error notice");
@@ -103,7 +103,7 @@ fn missing_project_argument_raises_the_open_failed_notice() {
     let (mut app, _t) = Signex::new();
     dispatch_startup(&mut app, &[missing.as_path()], tmp.path());
 
-    assert!(app.document_state.error_notice.is_some());
+    assert!(app.document_view.error_notice.is_some());
     assert!(app.document_state.projects.is_empty());
 }
 
@@ -118,7 +118,7 @@ fn an_upper_case_sheet_extension_opens_as_a_schematic() {
     let (mut app, _t) = Signex::new();
     dispatch_startup(&mut app, &[sheet.as_path()], tmp.path());
 
-    let notice = app.document_state.error_notice.as_ref();
+    let notice = app.document_view.error_notice.as_ref();
     assert!(
         notice.is_none_or(|n| !n.detail.render_en_us().contains("unsupported file type")),
         "{:?}",
@@ -135,7 +135,7 @@ fn failed_async_schematic_read_raises_the_open_failed_notice() {
         result: Err("read gone.snxsch: not found".to_string()),
         disk: None,
     }));
-    let notice = app.document_state.error_notice.as_ref().expect("notice");
+    let notice = app.document_view.error_notice.as_ref().expect("notice");
     assert_eq!(notice.title.render_en_us(), "Open Failed");
     assert!(notice.detail.render_en_us().contains("not found"));
 }

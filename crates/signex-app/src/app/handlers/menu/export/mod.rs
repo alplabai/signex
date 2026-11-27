@@ -73,7 +73,7 @@ fn build_bom_export_scope(
 
 /// [`build_bom_export_scope`] for an explicit source document (#852): the BOM
 /// completion path, where the dialog may have outlived the originating tab.
-fn build_bom_export_scope_for_source(
+pub(crate) fn build_bom_export_scope_for_source(
     document_state: &crate::app::state::DocumentState,
     source: &std::path::Path,
 ) -> Option<(ExportContext, ExportIssues)> {
@@ -644,7 +644,7 @@ impl Signex {
         if !matches!(range, signex_output::PageRange::Current) {
             return;
         }
-        let Some(placement) = self.document_state.tab_placements.get(source) else {
+        let Some(placement) = self.document_view.tab_placements.get(source) else {
             return;
         };
         if issues.live.contains(source, placement) {
@@ -655,7 +655,7 @@ impl Signex {
              exists; printing the first placement instead",
             source.display()
         ));
-        self.document_state.tab_placements.forget(source);
+        self.document_view.tab_placements.forget(source);
     }
 }
 

@@ -160,7 +160,7 @@ impl Signex {
     /// tooltip says.
     fn autosave_recovery_header<'a>(&self, later: Message) -> Element<'a, Message> {
         let i18n = self.ui_state.i18n.as_ref();
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let tip = container(
             text(t!(i18n, ids::DIALOG_RECOVERY_CLOSE_TOOLTIP))
                 .size(TS.caption)
@@ -197,7 +197,7 @@ impl Signex {
         library: Option<String>,
     ) -> Element<'a, Message> {
         let i18n = self.ui_state.i18n.as_ref();
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let code: Option<MessageId> = if library.is_some() {
             Some(ids::PANELS_TAB_KIND_COMPONENT)
         } else {
@@ -247,7 +247,7 @@ impl Signex {
         library: Option<String>,
     ) -> Element<'a, Message> {
         let i18n = self.ui_state.i18n.as_ref();
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         if let Some(library) = library {
             return caption(UserText::new(library), false, tokens);
         }
@@ -306,7 +306,7 @@ impl Signex {
     /// (and so Esc) is explained.
     fn recovery_notes(&self, offer: &RecoveryOffer, name: &str) -> Element<'_, Message> {
         let i18n = self.ui_state.i18n.as_ref();
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let ink4 = crate::styles::tokens::resolve(tokens).ink4;
         let hint = |label: Localized| {
             text(label)
@@ -339,7 +339,7 @@ impl Signex {
     /// Esc keeps meaning Decide later.
     fn recovery_footer(&self) -> Element<'_, Message> {
         let i18n = self.ui_state.i18n.as_ref();
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let choose = |choice| Some(Message::Autosave(AutosaveMsg::Recovery(choice)));
         dialog_footer_split(
             vec![
@@ -371,7 +371,7 @@ impl Signex {
         windowed: bool,
     ) -> Element<'_, Message> {
         let i18n = self.ui_state.i18n.as_ref();
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let header: Element<'_, Message> = if windowed {
             super::widgets::os_title_bar_slot()
         } else {

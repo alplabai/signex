@@ -245,7 +245,7 @@ fn deleting_a_dirty_sheet_logs_the_discarded_edits_to_the_messages_panel() {
     delete_file(&mut app, &sheet);
 
     assert!(
-        app.document_state
+        app.document_view
             .panel_ctx
             .diagnostics
             .iter()
@@ -456,7 +456,7 @@ fn an_unreadable_sibling_sheet_is_logged_to_the_messages_panel() {
     close_first_project(&mut app);
 
     assert!(
-        app.document_state.panel_ctx.diagnostics.iter().any(|e| {
+        app.document_view.panel_ctx.diagnostics.iter().any(|e| {
             e.message.contains("b.snxsch") && e.message.contains("Discard All is disabled")
         }),
         "an unparsable sibling sheet must reach the Messages panel and say why",
@@ -570,7 +570,7 @@ fn an_unreadable_sheet_disables_discard_all_and_a_forced_discard_is_refused() {
         .expect("the modal must not offer Discard All");
     assert!(reason.contains("failclosed_b.snxsch"), "{reason}");
     assert!(
-        app.document_state.panel_ctx.diagnostics.iter().any(|e| {
+        app.document_view.panel_ctx.diagnostics.iter().any(|e| {
             e.message.contains("failclosed_b.snxsch")
                 && e.message.contains("Discard All is disabled")
         }),
@@ -588,7 +588,7 @@ fn an_unreadable_sheet_disables_discard_all_and_a_forced_discard_is_refused() {
     assert!(app.document_state.engines.contains_key(&unknown));
     assert_eq!(app.document_state.projects.len(), 2, "A is still open");
     assert!(
-        app.document_state
+        app.document_view
             .panel_ctx
             .diagnostics
             .iter()
@@ -621,7 +621,7 @@ fn a_dotdot_reference_cycle_terminates_without_a_warning() {
         "the cycle must fold, took {elapsed:?}"
     );
     assert!(
-        !app.document_state
+        !app.document_view
             .panel_ctx
             .diagnostics
             .iter()
@@ -741,7 +741,7 @@ fn every_dirty_document_of_the_closing_project_is_saved_or_kept_and_named() {
     }
     assert!(!modal.dirty_paths.contains(&b_sheet) && !modal.kept_paths.contains(&b_sheet));
     assert!(
-        app.document_state
+        app.document_view
             .panel_ctx
             .diagnostics
             .iter()
@@ -787,7 +787,7 @@ fn a_library_draft_and_a_tab_only_file_under_the_closing_projects_folder_are_kep
     expected_kept.sort();
     assert_eq!(modal.kept_paths, expected_kept);
     assert!(
-        app.document_state
+        app.document_view
             .panel_ctx
             .diagnostics
             .iter()
@@ -936,7 +936,7 @@ fn confirm_aborts_with_a_log_line_when_the_project_is_gone() {
         "nothing discarded",
     );
     assert!(
-        app.document_state
+        app.document_view
             .panel_ctx
             .diagnostics
             .iter()
@@ -1212,7 +1212,7 @@ fn an_engine_edit_made_while_the_modal_is_up_re_prompts_instead_of_discarding() 
 
 /// Messages-panel lines of the current diagnostics.
 fn panel_messages(app: &Signex) -> Vec<String> {
-    app.document_state
+    app.document_view
         .panel_ctx
         .diagnostics
         .iter()
@@ -1382,5 +1382,5 @@ fn failed_disk_delete_keeps_the_project_entry() {
 
     assert!(sheet.exists());
     assert_eq!(app.document_state.projects[0].data.sheets.len(), 1);
-    assert!(app.document_state.error_notice.is_some());
+    assert!(app.document_view.error_notice.is_some());
 }

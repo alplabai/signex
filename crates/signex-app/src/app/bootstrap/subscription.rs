@@ -1,18 +1,14 @@
 //! `Signex::subscription` — keyboard / window / tick event wiring.
-//! Split from `app/bootstrap.rs` as pure code motion.
 
 use super::super::*;
 
 use super::window_subscriptions;
 use crate::app::view::overlay_id::OverlayId;
 use iced::Subscription;
+mod edit_escape;
 mod notebook_escape;
 
 /// Which overlays are open, as the Esc ladder sees them.
-///
-/// A named struct rather than the positional tuple this used to be: with
-/// twelve same-typed `bool`s, swapping two of them silently routed Esc to
-/// the wrong modal, with nothing to catch it.
 ///
 /// **Built in `update`, not in the subscription** (#535). Until then this
 /// was baked into `Subscription::with`, which forced `Hash` and — by
@@ -34,6 +30,7 @@ struct OpenOverlays {
     union_popover_open: bool,
     /// The Smart Paste dialog (mockup row 155).
     smart_paste_open: bool,
+    variant_part_edit_open: bool,
     kbd_shortcuts_open: bool,
     about_open: bool,
     first_run_tour_open: bool,
@@ -339,23 +336,10 @@ impl OpenOverlays {
                     ),
                 )
             }),
-            OverlayId::PasteArray => self.paste_array_open.then(|| {
-                Message::Edit(crate::app::EditMsg::PasteArray(
-                    crate::paste_array::PasteArrayMsg::EscapePressed,
-                ))
-            }),
-            OverlayId::UnionPopover => self.union_popover_open.then(|| {
-                Message::Edit(crate::app::EditMsg::Unions(
-                    crate::app::unions::UnionsMsg::Popover(
-                        crate::app::unions::UnionPopoverMsg::Cancelled,
-                    ),
-                ))
-            }),
-            OverlayId::SmartPaste => self.smart_paste_open.then(|| {
-                Message::Edit(crate::app::EditMsg::SmartPasteDialog(
-                    crate::smart_paste::SmartPasteMsg::Cancelled,
-                ))
-            }),
+            OverlayId::PasteArray
+            | OverlayId::UnionPopover
+            | OverlayId::SmartPaste
+            | OverlayId::VariantPartEdit => self.edit_escape(id),
             OverlayId::KeyboardShortcuts => self
                 .kbd_shortcuts_open
                 .then(|| Message::Overlay(OverlayMsg::CloseKeyboardShortcuts)),
@@ -749,6 +733,7 @@ impl Signex {
             paste_array_open: self.ui_state.paste_array.is_some(),
             union_popover_open: self.ui_state.unions.popover.is_some(),
             smart_paste_open: self.ui_state.smart_paste.is_some(),
+            variant_part_edit_open: self.ui_state.variant_part_edit.is_some(),
             kbd_shortcuts_open: self.ui_state.keyboard_shortcuts_open
                 && !modal_detached(crate::app::state::ModalId::KeyboardShortcuts),
             about_open: self.ui_state.about_open
@@ -827,7 +812,7 @@ impl Signex {
             close_library_confirm_open: self.library.close_library_confirm.is_some(),
             // The same read `symbol_delete_confirm_overlay` paints from.
             symbol_delete_open: self
-                .document_state
+                .document_view
                 .panel_ctx
                 .symbol_editor
                 .as_ref()
@@ -847,15 +832,15 @@ impl Signex {
                         RecoveryKind::BrokenBinding
                     }
                 }),
-            error_notice_open: self.document_state.error_notice.is_some(),
+            error_notice_open: self.document_view.error_notice.is_some(),
             error_notice_detached: modal_detached(crate::app::state::ModalId::ErrorNotice),
-            netlist_incomplete_prompt_open: self.document_state.netlist_incomplete_prompt.is_some(),
+            netlist_incomplete_prompt_open: self.document_view.netlist_incomplete_prompt.is_some(),
             netlist_prompt_detached: modal_detached(
                 crate::app::state::ModalId::NetlistIncompletePrompt,
             ),
-            print_preview_open: self.document_state.preview.is_some()
+            print_preview_open: self.document_view.preview.is_some()
                 && !modal_detached(crate::app::state::ModalId::PrintPreview),
-            bom_preview_open: self.document_state.bom_preview.is_some()
+            bom_preview_open: self.document_view.bom_preview.is_some()
                 && !modal_detached(crate::app::state::ModalId::BomPreview),
             net_color_custom_open: self.ui_state.net_color_custom.show
                 && !modal_detached(crate::app::state::ModalId::NetColorCustom),
@@ -915,11 +900,10 @@ impl Signex {
     pub fn is_pointer_drag_active(&self) -> bool {
         self.interaction_state.dragging.is_some()
             || self.library.components_panel.drag.is_some()
-            || self.document_state.dock.tab_drag.is_some()
+            || self.document_view.dock.tab_drag.is_some()
             || self.ui_state.modal_dragging.is_some()
             || self.ui_state.tab_dragging.is_some()
-            || self
-                .document_state
+            || self.document_view
                 .dock
                 .floating
                 .iter()
@@ -927,8 +911,7 @@ impl Signex {
             // A BOM column resize, docked or detached: its handle is 4 px
             // wide, so the release usually lands elsewhere and only the
             // global `DragEnd` can end it.
-            || self
-                .document_state
+            || self.document_view
                 .bom_preview
                 .as_ref()
                 .is_some_and(|preview| preview.column_resize.is_some())
@@ -1102,7 +1085,7 @@ impl Signex {
 
         // Net hover dwell (#1270): ticks only while a candidate waits for its
         // dwell to pass, so an idle or hover-off session costs nothing.
-        let net_hover_tick = if self.document_state.net_nav.hover.needs_ticks() {
+        let net_hover_tick = if self.document_view.net_nav.hover.needs_ticks() {
             iced::time::every(std::time::Duration::from_millis(100))
                 .map(|_| Message::Ui(UiMsg::NetNav(NetNavMsg::HoverDwellTicked)))
         } else {
@@ -1175,6 +1158,8 @@ impl Signex {
             hover_tick,
             hover_tooltip_tick,
             net_hover_tick,
+            // Live ERC's wait after an edit (#1288); none while nothing is owed.
+            self.live_erc_subscription(),
             library_poll,
             autosave_tick,
             self.edge_pan_subscription(),
@@ -1386,6 +1371,12 @@ mod tests {
             only(|o| o.smart_paste_open = true),
             Some(Message::Edit(crate::app::EditMsg::SmartPasteDialog(
                 crate::smart_paste::SmartPasteMsg::Cancelled
+            )))
+        ));
+        assert!(matches!(
+            only(|o| o.variant_part_edit_open = true),
+            Some(Message::Project(crate::app::ProjectMsg::VariantPartEdit(
+                crate::app::VariantPartEditMsg::CancelPressed
             )))
         ));
         assert!(matches!(
@@ -1998,6 +1989,7 @@ mod tests {
             paste_array_open,
             union_popover_open,
             smart_paste_open,
+            variant_part_edit_open,
             kbd_shortcuts_open,
             about_open,
             first_run_tour_open,
@@ -2076,6 +2068,9 @@ mod tests {
             ("paste_array_open", |o| o.paste_array_open = true),
             ("union_popover_open", |o| o.union_popover_open = true),
             ("smart_paste_open", |o| o.smart_paste_open = true),
+            ("variant_part_edit_open", |o| {
+                o.variant_part_edit_open = true
+            }),
             ("kbd_shortcuts_open", |o| o.kbd_shortcuts_open = true),
             ("about_open", |o| o.about_open = true),
             ("first_run_tour_open", |o| o.first_run_tour_open = true),

@@ -251,18 +251,18 @@ fn clear_and_select_all_move_the_count_the_thumbnails_and_the_footer() {
     settle(&mut app, task);
 
     let footer = |app: &Signex| {
-        let preview = app.document_state.preview.as_ref().expect("preview");
+        let preview = app.document_view.preview.as_ref().expect("preview");
         app.pdf_footer_caption(preview)
             .as_str()
             .replace(['\u{2068}', '\u{2069}'], "")
     };
     let count = |app: &Signex| {
-        let preview = app.document_state.preview.as_ref().expect("preview");
+        let preview = app.document_view.preview.as_ref().expect("preview");
         let texts = texts_of(app.view_pdf_settings_column(preview), COLUMN);
         (sheets_summary(preview), texts)
     };
     let dimmed = |app: &Signex| {
-        let preview = app.document_state.preview.as_ref().expect("preview");
+        let preview = app.document_view.preview.as_ref().expect("preview");
         rail_entries(preview)
             .iter()
             .map(|e| !e.ticked)
@@ -414,6 +414,35 @@ fn the_watermark_layer_row_is_disabled_while_the_watermark_is_off() {
             PrintPreviewMsg::PdfOption(PdfOptionMsg::PdfLayerVisibilityToggled(
                 PdfLayer::Watermark,
                 _
+            ))
+        )
+    };
+    assert!(sent(&live, row), "{live:?}");
+    assert!(!sent(&veiled, row), "{veiled:?}");
+}
+
+/// #2690: Signal harnesses is a layer row of its own, right under Wires and
+/// buses, named from the catalog; unticking it hides that group on open.
+#[test]
+fn signal_harnesses_have_their_own_layer_row() {
+    let (app, _task) = Signex::new();
+    let mut on = four_sheets();
+    on.dialog.layers.is_on = true;
+    let texts = texts_of(app.view_pdf_settings_column(&on), COLUMN);
+    let wires = texts.iter().position(|t| t == "Wires and buses");
+    let harnesses = texts.iter().position(|t| t == "Signal harnesses");
+    assert!(
+        wires.is_some() && harnesses == wires.map(|at| at + 1),
+        "{texts:#?}"
+    );
+    let off = four_sheets();
+    let (live, veiled) = click_on_and_off(&app, &on, &off, "Signal harnesses");
+    let row = |m: &PrintPreviewMsg| {
+        matches!(
+            m,
+            PrintPreviewMsg::PdfOption(PdfOptionMsg::PdfLayerVisibilityToggled(
+                PdfLayer::SignalHarnesses,
+                false
             ))
         )
     };
@@ -588,7 +617,7 @@ fn the_dialog_window_names_the_file_and_its_sheets() {
     assert_eq!(app.detached_modal_subtitle(ModalId::PrintPreview), None);
     let mut preview = four_sheets();
     preview.source = PathBuf::from("/w/dcdc.snxsch");
-    app.document_state.preview = Some(preview);
+    app.document_view.preview = Some(preview);
     let subtitle = app
         .detached_modal_subtitle(ModalId::PrintPreview)
         .map(|s| s.replace(['\u{2068}', '\u{2069}'], ""));

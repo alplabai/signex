@@ -302,7 +302,7 @@ fn select(app: &mut Signex, x: f64) {
 }
 
 fn facts(app: &Signex) -> PcbComponentFacts {
-    app.document_state
+    app.document_view
         .panel_ctx
         .pcb_board
         .as_ref()
@@ -447,7 +447,7 @@ fn a_mechanical_type_on_the_board_leaves_the_part_out_of_the_bom() {
     send(&mut f.app, Message::Menu(MenuMessage::ExportBom));
     let preview = f
         .app
-        .document_state
+        .document_view
         .bom_preview
         .as_ref()
         .expect("the BOM preview");

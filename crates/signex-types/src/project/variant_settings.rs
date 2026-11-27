@@ -21,6 +21,10 @@ pub const VALUE_PARAMETER: &str = "Value";
 /// The parameter name of a part's footprint in [`VariantPart::parameters`].
 pub const FOOTPRINT_PARAMETER: &str = "Footprint";
 
+/// The field an alternate part's part number is set in (#3038): the BOM's
+/// `MPN` field.
+pub const MPN_PARAMETER: &str = "MPN";
+
 /// One placed part as the settings find it: the designator the BOM lists it
 /// under and, when known, the placed part itself, which a re-annotation or a
 /// designator edit does not change.
@@ -238,6 +242,54 @@ impl ProjectData {
                 part.parameters.remove(parameter);
             }
         })
+    }
+
+    /// [`Self::set_variant_part_parameter`] for each of `parameters` on one
+    /// part, as one edit: an alternate part's value, footprint and part
+    /// number together (#3038). A refusal comes before any value changes;
+    /// an empty parameter name is skipped.
+    pub fn set_variant_part_parameters<'p>(
+        &mut self,
+        variant: &str,
+        placed: impl Into<PlacedPart<'p>>,
+        parameters: &[(String, Option<String>)],
+    ) -> Result<(), VariantProblem> {
+        self.edit_variant_part(variant, placed.into(), |part| {
+            for (parameter, value) in parameters {
+                let parameter = parameter.trim();
+                if parameter.is_empty() {
+                    continue;
+                }
+                match value {
+                    Some(value) => {
+                        part.parameters.insert(parameter.to_string(), value.clone());
+                    }
+                    None => {
+                        part.parameters.remove(parameter);
+                    }
+                }
+            }
+        })
+    }
+
+    /// [`Self::set_variant_part_parameters`] for each of `parts` as one
+    /// edit: every channel's copy of a repeated part (mockup rows 208 and
+    /// 209). Refused for Base or an unknown variant before any part changes.
+    pub fn set_variant_parts_parameters(
+        &mut self,
+        variant: &str,
+        parts: &[PartRef],
+        parameters: &[(String, Option<String>)],
+    ) -> Result<(), VariantProblem> {
+        self.check_settings_readable()?;
+        if is_base_variant(variant) {
+            return Err(VariantProblem::Reserved);
+        }
+        self.defined_variant(variant)?;
+        for part in parts {
+            self.set_variant_part_parameters(variant, part.placed(), parameters)?;
+        }
+        Ok(())
     }
 
     /// Add `name` as a copy of `from`: what `from` changes on its parts,

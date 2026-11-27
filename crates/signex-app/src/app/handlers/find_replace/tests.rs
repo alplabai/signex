@@ -1115,9 +1115,9 @@ fn a_rename_of_another_projects_open_sheet_does_not_refuse_the_replace() {
     ));
 
     assert!(
-        app.document_state.error_notice.is_none(),
+        app.document_view.error_notice.is_none(),
         "refused: {:?}",
-        app.document_state.error_notice
+        app.document_view.error_notice
     );
     assert!(
         app.ui_state.find_replace.is_busy(),

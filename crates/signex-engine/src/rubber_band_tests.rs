@@ -817,8 +817,10 @@ fn move_each_with_different_deltas_bends_and_keeps_the_nets() {
     assert_clean(&mut engine, &before);
 }
 
+/// #2540: a pin on a junction of two wires leaves them and their dot where
+/// they are; a stub grows from the junction to the moved pin.
 #[test]
-fn a_junction_on_the_tip_moves_with_it() {
+fn a_junction_on_the_tip_stays_and_a_stub_grows() {
     let mut sheet = test_sheet();
     let r1 = add_resistor(&mut sheet, "R1", Point::new(50.0, 50.0));
     add_wire(&mut sheet, (30.0, 50.0), (45.0, 50.0));
@@ -833,10 +835,18 @@ fn a_junction_on_the_tip_moves_with_it() {
             .document()
             .junctions
             .iter()
-            .any(|j| j.position == Point::new(45.0, 60.0)),
+            .any(|j| j.position == Point::new(45.0, 50.0)),
         "{:?}",
         engine.document().junctions
     );
+    let segs = segments(&engine);
+    for (a, b) in [
+        ((30.0, 50.0), (45.0, 50.0)),
+        ((45.0, 30.0), (45.0, 50.0)),
+        ((45.0, 50.0), (45.0, 60.0)),
+    ] {
+        assert!(has(&segs, a, b), "missing {a:?}-{b:?} in {segs:?}");
+    }
 }
 
 // --- property test -------------------------------------------------------

@@ -487,7 +487,7 @@ mod tests {
         }
         m.rebuild_tree(None, &[]);
         let (app, _boot) = crate::app::Signex::new();
-        let mut ctx = app.document_state.panel_ctx.clone();
+        let mut ctx = app.document_view.panel_ctx.clone();
         ctx.navigator = m;
         ctx.i18n = std::sync::Arc::new(signex_i18n::I18n::new(&signex_i18n::LanguagePref::Locale(
             "en-XA".into(),

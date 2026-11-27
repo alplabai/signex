@@ -108,6 +108,8 @@ mod library_link_tests;
 #[cfg(test)]
 mod net_colors_tests;
 #[cfg(test)]
+mod net_tie_tests;
+#[cfg(test)]
 mod no_erc_tests;
 #[cfg(test)]
 mod non_finite_tests;
@@ -186,6 +188,7 @@ pub use sch_token::{
 };
 pub use text_size_repair::MAX_TEXT_SIZE_MM;
 pub use tsv::{parse_tsv_block, write_tsv_block};
+pub(crate) use units::nm_to_mm;
 pub use units::{NonFiniteField, mm_as_stored_nm};
 pub use unknown::{BoardUnknown, SheetUnknown, UnknownFields};
 pub use unknown_columns::{MAX_FOREIGN_COLUMN_NAME_BYTES, MAX_FOREIGN_COLUMNS, UnknownColumns};

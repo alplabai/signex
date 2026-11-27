@@ -382,7 +382,7 @@ fn reset_and_renumber_refuses_the_run_when_a_sheet_would_be_skipped() {
     settle_task(&mut app, task);
     let refs = all_refs(&app, &dir);
     let notice = app
-        .document_state
+        .document_view
         .error_notice
         .as_ref()
         .map(|n| n.detail.render_en_us())
@@ -464,7 +464,7 @@ fn reset_and_renumber_refuses_the_run_when_a_sheet_cannot_be_read() {
     settle_task(&mut app, task);
     let root = refs_of(app.document_state.engines[&dir.join("b_root.snxsch")].document());
     let notice = app
-        .document_state
+        .document_view
         .error_notice
         .as_ref()
         .map(|n| n.detail.render_en_us())

@@ -55,6 +55,11 @@ pub struct SymbolDraft {
     /// it belonged to, so a run of keystrokes in one text input shares
     /// one undo step. Cleared by every other history push, undo and redo.
     pub(in crate::app) last_edit_key: Option<(FieldEditKey, usize)>,
+    /// A drag's undo step is recorded and its later ticks join it. Opened by
+    /// the first movement tick, closed by the drag commit or an Undo / Redo
+    /// step; another history push leaves it open. It groups undo steps, like
+    /// `last_edit_key`, so it is history state, not a front-end operand.
+    move_run_open: bool,
 }
 
 impl SymbolDraft {
@@ -72,7 +77,23 @@ impl SymbolDraft {
             history: signex_history::History::at_start(history_depth),
             history_generation: 0,
             last_edit_key: None,
+            move_run_open: false,
         }
+    }
+
+    /// Is a drag's undo step open, so a movement tick records nothing?
+    pub(crate) fn is_moving(&self) -> bool {
+        self.move_run_open
+    }
+
+    /// Open the move run. The caller records the drag's undo step first.
+    pub(crate) fn begin_move_run(&mut self) {
+        self.move_run_open = true;
+    }
+
+    /// Close the move run: the next movement tick records a new step.
+    pub(crate) fn end_move_run(&mut self) {
+        self.move_run_open = false;
     }
 
     /// Does this draft hold edits that are not on disk?

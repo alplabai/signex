@@ -151,7 +151,7 @@ fn make_child_newer_minor(dir: &std::path::Path) -> String {
 }
 
 pub(super) fn notice_detail(app: &Signex) -> String {
-    app.document_state
+    app.document_view
         .error_notice
         .as_ref()
         .map(|n| n.detail.render_en_us())

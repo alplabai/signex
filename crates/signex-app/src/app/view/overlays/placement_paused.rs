@@ -41,7 +41,7 @@ impl Signex {
         if !(canvas_paused || footprint_paused || board_paused) {
             return None;
         }
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let banner = placement_paused_banner(tokens, &self.ui_state.i18n);
         Some(
             column![

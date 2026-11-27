@@ -113,12 +113,12 @@ fn a_kind_chip_filters_the_sections_and_leaves_the_selection_alone() {
         PanelMsg::SelectionForm(SelectionFormMsg::KindChipPicked(Some(MultiKind::Wires))),
     );
     assert_eq!(
-        app.document_state.panel_ctx.selection_form.kind_filter,
+        app.document_view.panel_ctx.selection_form.kind_filter,
         Some(MultiKind::Wires)
     );
     assert_eq!(app.interaction_state.active_canvas().selected, before);
-    let groups = &app.document_state.panel_ctx.multi_groups;
-    let form = &app.document_state.panel_ctx.selection_form;
+    let groups = &app.document_view.panel_ctx.multi_groups;
+    let form = &app.document_view.panel_ctx.selection_form;
     assert!(form.shows(MultiKind::Wires, groups));
     assert!(!form.shows(MultiKind::Parts, groups));
 }

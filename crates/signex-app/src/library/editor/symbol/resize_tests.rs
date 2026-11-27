@@ -66,7 +66,7 @@ fn redraw(app: &mut Signex, path: &Path, bounds: Rectangle) -> bool {
         let editor = &app.document_state.symbol_editors[path];
         let canvas = symbol_canvas(
             editor,
-            &app.document_state.panel_ctx,
+            &app.document_view.panel_ctx,
             LibraryDisplaySettings::default(),
             1.0,
         );

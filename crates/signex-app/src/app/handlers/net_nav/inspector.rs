@@ -139,7 +139,7 @@ impl Signex {
             // A schematic net row's hover and its Highlight (mockup row 58).
             NetInspectorMsg::NetRowEntered(net) => self.hover_net_row(Some(net)),
             NetInspectorMsg::NetRowLeft(net) => {
-                let held = &self.document_state.panel_ctx.net_inspector.hovered_net;
+                let held = &self.document_view.panel_ctx.net_inspector.hovered_net;
                 if held.as_ref() == Some(&net) {
                     self.hover_net_row(None);
                 }
@@ -152,7 +152,7 @@ impl Signex {
     /// The net row the pointer is over, which shows its Highlight. View
     /// state of the panel alone: the rows are not rebuilt for it.
     fn hover_net_row(&mut self, net: Option<String>) {
-        self.document_state.panel_ctx.net_inspector.hovered_net = net;
+        self.document_view.panel_ctx.net_inspector.hovered_net = net;
     }
 
     /// The project the panel lists: the active document's.
@@ -176,7 +176,7 @@ impl Signex {
         else {
             return (NetListStatus::NoProject, None);
         };
-        let cache = &self.document_state.net_nav.index;
+        let cache = &self.document_view.net_nav.index;
         if let Some(data) = cache.fresh(project, &planned.key) {
             return (NetListStatus::Ready, Some(data));
         }
@@ -213,27 +213,27 @@ impl Signex {
     /// closed, and rebuilds the rows only when their source changed.
     pub(super) fn sync_net_inspector(&mut self) -> Task<Message> {
         if !self.is_panel_open(PanelKind::NetInspector) {
-            self.document_state.net_nav.inspector_source = None;
-            self.document_state.net_nav.inspector_stamp = None;
-            let held = &mut self.document_state.panel_ctx.net_inspector;
+            self.document_view.net_nav.inspector_source = None;
+            self.document_view.net_nav.inspector_stamp = None;
+            let held = &mut self.document_view.panel_ctx.net_inspector;
             if *held != NetInspectorView::default() {
                 *held = NetInspectorView::default();
             }
             return Task::none();
         }
         let stamp = self.net_inspector_stamp();
-        if self.document_state.net_nav.inspector_stamp == Some(stamp) {
+        if self.document_view.net_nav.inspector_stamp == Some(stamp) {
             return Task::none();
         }
-        self.document_state.net_nav.inspector_stamp = Some(stamp);
+        self.document_view.net_nav.inspector_stamp = Some(stamp);
         // With a board in view the panel lists the board's nets (#2403).
         if let Some(board) = self.active_pcb() {
             let rows = crate::app::handlers::pcb_query::board_net_rows(
                 board,
                 &self.ui_state.net_inspector,
             );
-            self.document_state.net_nav.inspector_source = None;
-            self.document_state.panel_ctx.net_inspector = NetInspectorView {
+            self.document_view.net_nav.inspector_source = None;
+            self.document_view.panel_ctx.net_inspector = NetInspectorView {
                 filter: self.ui_state.net_inspector.filter.clone(),
                 status: NetListStatus::Ready,
                 total: rows.total,
@@ -245,27 +245,27 @@ impl Signex {
         let warm = self.warm_net_index_for_pin_rows();
         let (status, data) = self.net_inspector_source();
         let state = (*self.ui_state.net_inspector).clone();
-        let same_source = match (&data, &self.document_state.net_nav.inspector_source) {
+        let same_source = match (&data, &self.document_view.net_nav.inspector_source) {
             (Some(data), Some((built, built_state))) => {
                 Arc::ptr_eq(data, built) && *built_state == state
             }
             _ => false,
         };
-        if same_source && self.document_state.panel_ctx.net_inspector.status == status {
+        if same_source && self.document_view.panel_ctx.net_inspector.status == status {
             return warm;
         }
         // The row under the pointer stays hovered through a rebuild.
         let hovered = self
-            .document_state
+            .document_view
             .panel_ctx
             .net_inspector
             .hovered_net
             .take();
-        self.document_state.panel_ctx.net_inspector = NetInspectorView {
+        self.document_view.panel_ctx.net_inspector = NetInspectorView {
             hovered_net: hovered,
             ..self.schematic_view(data.as_deref(), &state, status)
         };
-        self.document_state.net_nav.inspector_source = data.map(|data| (data, state));
+        self.document_view.net_nav.inspector_source = data.map(|data| (data, state));
         warm
     }
 
@@ -337,7 +337,7 @@ impl Signex {
             .net(net)
             .map(|n| n.name.clone())
             .unwrap_or_default();
-        self.document_state.net_nav.highlight = Some(NetHighlight {
+        self.document_view.net_nav.highlight = Some(NetHighlight {
             project,
             name: name.clone(),
             anchor: anchor.clone(),

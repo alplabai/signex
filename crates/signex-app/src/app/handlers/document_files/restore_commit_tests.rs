@@ -295,7 +295,7 @@ fn assert_failed_reload_blocks_save(
     log_before: usize,
 ) {
     let card = app
-        .document_state
+        .document_view
         .error_notice
         .as_ref()
         .expect("restore card");
@@ -389,7 +389,7 @@ fn a_schematic_restore_that_cannot_be_read_says_to_reopen_and_saves_nothing() {
     app.reload_active_tab_from_disk();
     let card = format!(
         "{:?}",
-        app.document_state.error_notice.as_ref().expect("card")
+        app.document_view.error_notice.as_ref().expect("card")
     );
     assert!(
         card.contains("Close and reopen the tab once the file can be read"),
@@ -612,7 +612,7 @@ fn a_restore_that_fails_in_git_reports_the_card_and_keeps_the_tab() {
     finish_restore(&mut app, messages);
     let card = format!(
         "{:?}",
-        app.document_state.error_notice.as_ref().expect("card")
+        app.document_view.error_notice.as_ref().expect("card")
     );
     assert!(
         card.contains(&format!("Could not restore {} to 0000", file_name(&path))),
@@ -729,7 +729,7 @@ fn description(app: &Signex, path: &Path) -> String {
 fn restore_card(app: &Signex) -> String {
     format!(
         "{:?}",
-        app.document_state.error_notice.as_ref().expect("card")
+        app.document_view.error_notice.as_ref().expect("card")
     )
 }
 

@@ -86,3 +86,21 @@ pub(super) fn section<'a>(
     );
     Some(container(list).padding([SP.m, SP.xl]).boxed())
 }
+
+/// The one summary line of the net classes Execute puts into the board's
+/// net classes (exit criterion 3; no mockup row): nothing when none.
+pub(super) fn classes_line<'a>(
+    count: usize,
+    i18n: &I18n,
+    theme: &ThemeTokens,
+) -> Option<Element<'a, Message>> {
+    (count > 0).then(|| {
+        container(
+            text(t!(i18n, ids::UPDATE_PCB_SCHEMATIC_CLASSES, "count" => count))
+                .size(TS.body)
+                .color(ti(theme.text)),
+        )
+        .padding([SP.m, SP.xl])
+        .boxed()
+    })
+}

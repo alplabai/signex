@@ -6,6 +6,6 @@ selection_payload.rs:copy_selection 0
 sheet.rs:reconcile_child_sheet_pins 1
 transform/autoplace.rs:junction_at 2
 transform/rubber_band/env/follow.rs:apply_plan 1
-transform/rubber_band/env/overlap.rs:merge_overlaps 2
+transform/rubber_band/env/new_path.rs:add_path 1
+transform/rubber_band/env/overlap.rs:merge_overlaps 1
 transform/rubber_band/env/overlap.rs:trim_off_locked 1
-transform/rubber_band/env/route.rs:add_path 1

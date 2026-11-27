@@ -221,7 +221,7 @@ fn a_notice_raised_over_a_detached_dialog_gets_its_own_window() {
         name_clash: None,
     }));
     let _ = app.sync_detached_modals();
-    app.document_state.error_notice = Some(crate::app::state::ErrorNotice::create(
+    app.document_view.error_notice = Some(crate::app::state::ErrorNotice::create(
         crate::app::state::verbatim("it failed"),
     ));
     let _ = app.sync_detached_modals();
@@ -293,6 +293,7 @@ fn a_lock_closes_the_menus_and_the_palette_behind_it() {
         x: 10.0,
         y: 10.0,
         world: None,
+        hit_object: false,
         window: None,
     });
     let _ = app.sync_detached_modals();

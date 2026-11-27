@@ -847,6 +847,16 @@ library-change-component-datasheet = Datasheet
 library-change-component-kept = Kept
 # What the change keeps; $matched and $total are whole numbers of pins.
 library-change-component-kept-summary = Designator { $reference } · position and rotation · pins matched by number, { $matched } of { $total }
+# The same with the pins that keep a net (mockup row 155); $pins is a comma-separated list of kept-pin lines.
+library-change-component-kept-summary-pins = Designator { $reference } · position and rotation · { $pins } (pins matched by number, { $matched } of { $total })
+# The same when the pins were mapped by hand.
+library-change-component-kept-summary-mapped = Designator { $reference } · position and rotation · { $pins } (pins as mapped, { $matched } of { $total })
+# One pin of the new part and the net it keeps; $pin is a pin number, $net a net name.
+library-change-component-kept-pin = pin { $pin } on { $net }
+# One pin of the new part on a net no label names.
+library-change-component-kept-pin-unnamed = pin { $pin } on an unnamed net
+# The pin list of a hand mapping that keeps no pin on a net.
+library-change-component-kept-no-nets = no pin on a net
 # Section heading of the scope choice.
 library-change-component-apply-to = Apply to
 # Scope choice: only the part the change started on.
@@ -868,6 +878,10 @@ library-change-component-warn-unit = The new part has no drawing for unit { $uni
 library-change-component-warn-dangling = Connected pins with no match, their wires will dangle: { $pins }
 library-change-component-warn-moved = Connected pins that sit elsewhere on the new part, their wires will no longer reach them: { $pins }
 library-change-component-warn-gained = New pins landing on a wire they were not mapped to: { $pins }
+# A hand pin mapping carries these connected pins' wires to their new pins.
+library-change-component-warn-carried = Connected pins whose wires move with them to the new pin: { $pins }
+# A hand pin mapping the sheet cannot follow; $reason says why. Change is refused.
+library-change-component-warn-refused = The pin mapping cannot be followed: { $reason }
 # range-filter-chip glyph
 # The × that removes an applied range filter chip.
 library-range-filter-remove = ✕

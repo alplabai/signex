@@ -40,7 +40,7 @@ impl Signex {
             self.open_polygon_manager();
             return Task::none();
         }
-        self.document_state.panel_ctx.pcb_panel.polygons.apply(&msg);
+        self.document_view.panel_ctx.pcb_panel.polygons.apply(&msg);
         self.act_on_polygons(&msg);
         Task::none()
     }
@@ -57,7 +57,7 @@ impl Signex {
             return;
         };
         if !picked.is_empty() {
-            let ui = &mut self.document_state.panel_ctx.pcb_panel.polygons;
+            let ui = &mut self.document_view.panel_ctx.pcb_panel.polygons;
             ui.follow(&board);
             ui.current = picked.iter().next().copied();
             ui.selected = picked;
@@ -138,7 +138,7 @@ impl Signex {
 
     /// Enter in a cell: its draft, read as a number, goes to that pour.
     fn submit_field(&mut self, board: &Path, zone: Uuid, field: PourField) {
-        let ui = &mut self.document_state.panel_ctx.pcb_panel.polygons;
+        let ui = &mut self.document_view.panel_ctx.pcb_panel.polygons;
         let Some(text) = ui.drafts.remove(&(zone, field)) else {
             return;
         };
@@ -147,7 +147,7 @@ impl Signex {
 
     /// Enter in a bulk field: its draft goes to every ticked pour.
     fn submit_bulk(&mut self, board: &Path, field: PourField) {
-        let ui = &mut self.document_state.panel_ctx.pcb_panel.polygons;
+        let ui = &mut self.document_view.panel_ctx.pcb_panel.polygons;
         let Some(text) = ui.bulk_drafts.remove(&field) else {
             return;
         };
@@ -209,7 +209,7 @@ impl Signex {
 
     /// The ticked rows that are still pours of `board`.
     fn ticked_pours(&self, board: &Path) -> Vec<Uuid> {
-        let ui = &self.document_state.panel_ctx.pcb_panel.polygons;
+        let ui = &self.document_view.panel_ctx.pcb_panel.polygons;
         let Some(pcb) = self
             .document_state
             .pcb_board(board)
@@ -245,7 +245,7 @@ impl Signex {
     /// revision when its fills are not, then read the rows again.
     pub(crate) fn refresh_polygon_facts(&mut self) {
         self.fill_polygon_manager_board();
-        self.document_state.panel_ctx.polygons = self.polygon_facts();
+        self.document_view.panel_ctx.polygons = self.polygon_facts();
     }
 
     /// On a Polygon Manager tab no canvas fills the board, so the tab fills

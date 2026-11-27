@@ -1,0 +1,84 @@
+format = "snxsch/1.3"
+schematic_id = "00000000-0000-a5b2-0000-00000000002b"
+version = 0
+generator = ""
+generator_version = ""
+paper_size = "A4"
+root_sheet_page = "1"
+
+
+[sheets.components]
+content = """
+uuid  ref  library  pos_x  pos_y  rotation  value  mpn
+"""
+
+[sheets.wires]
+content = """
+uuid  start_x  start_y  end_x  end_y  stroke_width
+"""
+
+[sheets.junctions]
+content = """
+uuid  pos_x  pos_y  diameter
+"""
+
+[sheets.labels]
+content = """
+uuid                                  text   pos_x     pos_y     rotation  kind          shape  font_size  justify  justify_v
+00000000-0000-a5b2-0000-00000000002d  DEBUG  10000000  20000000  0         hierarchical  ""     1.27       left     bottom
+"""
+
+[extras.sheet]
+no_connects = []
+text_notes = []
+buses = []
+bus_entries = []
+drawings = []
+no_erc_directives = []
+
+[[extras.sheet.child_sheets]]
+uuid = "00000000-0000-a5b2-0000-00000000002f"
+name = "connectors"
+filename = "connectors.snxsch"
+size = [
+    20.0,
+    20.0,
+]
+stroke_width = 0.0
+fill = "none"
+fields_autoplaced = false
+instances = []
+
+[extras.sheet.child_sheets.position]
+x = 60.0
+y = 15.0
+
+[[extras.sheet.child_sheets.pins]]
+uuid = "00000000-0000-a5b2-0000-00000000002e"
+name = "DEBUG"
+direction = ""
+rotation = 0.0
+auto_generated = false
+user_moved = false
+
+[extras.sheet.child_sheets.pins.position]
+x = 60.0
+y = 20.0
+
+[extras.sheet.title_block]
+
+[extras.sheet.lib_symbols]
+
+[[extras.sheet.harness_wires]]
+uuid = "00000000-0000-a5b2-0000-00000000002c"
+
+[extras.sheet.harness_wires.start]
+x = 10.0
+y = 20.0
+
+[extras.sheet.harness_wires.end]
+x = 60.0
+y = 20.0
+
+[extras.sheet.harness_entry_types]
+00000000-0000-a5b2-0000-00000000002e = "DEBUG"

@@ -34,7 +34,7 @@ impl Signex {
     /// The Project tab for `project_id`, in the main window or an undocked
     /// one. A tab whose project is gone renders a short note instead.
     pub(crate) fn view_project_tab(&self, project_id: ProjectId) -> Element<'_, Message> {
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let i18n = self.ui_state.i18n.as_ref();
         let Some(project) = self.document_state.project_by_id(project_id) else {
             return container(
@@ -46,11 +46,11 @@ impl Signex {
             .style(crate::styles::panel_region(tokens))
             .boxed();
         };
-        let tab = self.document_state.project_tabs.get(&project_id);
+        let tab = self.document_view.project_tabs.get(&project_id);
         let selected = tab.map(|tab| tab.section).unwrap_or_default();
         let setup_draft = tab.and_then(|tab| tab.setup_draft.as_ref());
         let row_drag = tab.and_then(|tab| tab.row_drag.as_ref());
-        let users = &self.ui_state.setup_profiles;
+        let users = &self.document_state.setup_profiles;
         let content = match selected {
             ProjectSection::General => general::view(&self.ui_state.i18n, project, tokens),
             ProjectSection::Parameters => parameters::view(project, tab, i18n, tokens),
@@ -60,7 +60,7 @@ impl Signex {
                 row_drag,
                 setup_draft,
                 users,
-                &self.document_state.panel_ctx.canvas_colors,
+                &self.document_view.panel_ctx.canvas_colors,
                 i18n,
                 tokens,
             ),
@@ -94,7 +94,7 @@ impl Signex {
                 project,
                 tab.map(|tab| &tab.default_drafts),
                 &self.ui_state.project_preview,
-                &self.document_state.panel_ctx.canvas_colors,
+                &self.document_view.panel_ctx.canvas_colors,
                 i18n,
                 tokens,
             ),
@@ -170,8 +170,8 @@ impl Signex {
     ) -> Option<Element<'a, Message>> {
         let project = self.document_state.project_by_id(project_id)?;
         let ui = &self.ui_state.project_preview;
-        let tokens = &self.document_state.panel_ctx.tokens;
-        let canvas = &self.document_state.panel_ctx.canvas_colors;
+        let tokens = &self.document_view.panel_ctx.tokens;
+        let canvas = &self.document_view.panel_ctx.canvas_colors;
         let i18n = self.ui_state.i18n.as_ref();
         let (hint, drawing) = match ui.popup_of(project_id)? {
             PreviewPopup::Sheet => (
@@ -179,7 +179,7 @@ impl Signex {
                 sheets::popup_drawing(
                     project,
                     setup_draft,
-                    &self.ui_state.setup_profiles,
+                    &self.document_state.setup_profiles,
                     canvas,
                     i18n,
                     tokens,

@@ -1,9 +1,5 @@
 use std::path::PathBuf;
 
-use signex_types::project::ProjectData;
-
-use crate::dock::DockArea;
-
 use super::TabInfo;
 
 mod agent_edits;
@@ -15,14 +11,13 @@ mod board_sketch_dxf;
 mod bom_preview;
 #[cfg(test)]
 mod case_fold_tests;
-pub(crate) mod check_runs;
 pub(crate) mod cross_select;
-pub(crate) mod dir_case;
 mod dirty;
 #[cfg(test)]
 mod dirty_tests;
 mod document;
 mod document_load;
+mod document_view;
 #[cfg(test)]
 mod draft_ownership_tests;
 mod error_notice;
@@ -73,6 +68,7 @@ mod window_tab;
 pub use crate::app::core::case_fold::CaseFold;
 pub use crate::app::core::document_times::DocumentTimes;
 pub use agent_edits::AgentEdits;
+pub(crate) use agent_edits::JoinedSheet;
 pub use board_3d::{Board3dSession, BuiltScene, CaptureResult, MatteBackdrop};
 pub use board_net_classes::BoardNetClassPanelState;
 pub use board_sketch::BoardSketchSession;
@@ -82,6 +78,7 @@ pub use board_sketch_dxf::{
 };
 pub use bom_preview::{BomIssueLine, BomPreviewState, BomSidebarTab, ColumnResizeState};
 pub(crate) use document_load::SheetInstall;
+pub use document_view::DocumentViewState;
 pub use error_notice::{
     ErrorNotice, NoticeAction, NoticeSeverity, disk_changed_choices, untranslated, verbatim,
 };
@@ -110,6 +107,9 @@ pub use ui::{DEFAULT_BOTTOM_PANEL_HEIGHT, UiState};
 pub struct Signex {
     pub ui_state: UiState,
     pub document_state: DocumentState,
+    /// The GUI side of the open documents, kept out of the proto-core
+    /// `DocumentState` (ADR-0006 slice 4a).
+    pub document_view: DocumentViewState,
     pub interaction_state: InteractionState,
     /// v0.9 Library subsystem state. Borrowed independently of
     /// `document_state` so the library dispatcher can mutate it
@@ -335,56 +335,7 @@ pub use signex_types::schematic::AnnotateOrder;
 
 pub use crate::app::core::project_id::ProjectId;
 
-/// One loaded project in the multi-project workspace. `path` is the
-/// canonical identity (`.snxprj` location on disk); `data`
-/// is the parsed project contents. Multiple projects with different
-/// `path`s coexist in `DocumentState.projects`; two identical `path`s
-/// at once is a loader bug (existing `open_project_file` de-dupes).
-#[derive(Debug, Clone)]
-pub struct LoadedProject {
-    pub id: ProjectId,
-    pub path: PathBuf,
-    pub data: ProjectData,
-    /// Libraries the user has authored via the New Library flow but not
-    /// yet committed to disk. The New Library dialog's Create button
-    /// only registers an entry here + flips the project dirty bit;
-    /// `commands::create_pending_library` runs at project-save time
-    /// to actually write the `.snxlib`. Closes
-    /// `feedback_no_disk_writes_without_user_save.md`'s "wait for
-    /// explicit user save" invariant. Keyed by a temporary handle that
-    /// becomes the eventual `library_id` once materialised.
-    pub pending_libraries:
-        std::collections::HashMap<uuid::Uuid, crate::library::commands::PendingLibrarySpec>,
-    /// Path-key rules for this project's volume, probed once off-thread
-    /// after load (#694); the host default until the answer arrives.
-    pub case_fold: scope::CaseFold,
-    /// The volume probe has reported; the first answer wins.
-    pub case_probed: bool,
-    /// The probe DECIDED (not undecided, failed or a stat error): only then is
-    /// `case_fold` a fact about the volume rather than the host default, and
-    /// only then does document identity trust it (#1447).
-    pub case_decided: bool,
-}
-
-impl LoadedProject {
-    /// The project's directory — the *one* convention for "where this
-    /// project's relative sheet filenames resolve from".
-    ///
-    /// Two conventions used to coexist: the parent of the `.snxprj` on disk,
-    /// and the persisted `data.dir` string. The loader patches `data.dir` to
-    /// the opened path's parent, so they agree for a freshly-loaded project —
-    /// but a `LoadedProject` assembled any other way (project creation, a
-    /// `.snxprj` that recorded an absolute `dir` that no longer matches) can
-    /// have them disagree, and then ownership resolution succeeds while the
-    /// sheet paths it produces do not exist. The export skips those pages
-    /// silently. `path.parent()` is the only one that cannot be stale: it is
-    /// derived from the file actually opened.
-    pub fn dir(&self) -> &std::path::Path {
-        self.path
-            .parent()
-            .unwrap_or_else(|| std::path::Path::new(""))
-    }
-}
+pub use crate::app::core::loaded_project::LoadedProject;
 
 /// #431 — pending "Export anyway (incomplete)?" prompt for netlist export.
 ///
@@ -439,7 +390,7 @@ pub struct PdfExportRequest {
 pub struct DocumentState {
     /// Document ids a document cannot say itself: project files not loaded,
     /// and the order documents were first seen in (#2172).
-    pub document_ids: crate::app::document_ids::DocumentIds,
+    pub document_ids: crate::app::core::document_ids::DocumentIds,
     /// Counts the changes that can alter an ERC finding: an edit to a sheet
     /// (through the engine, or Annotate, Replace, library update and the like),
     /// a project-file change, and a sheet written behind the engines. Each calls
@@ -448,13 +399,6 @@ pub struct DocumentState {
     pub sheet_edit_epoch: u64,
     /// Symbol editors opened so far; see [`DocumentState::next_symbol_history_base`].
     pub symbol_editors_opened: u64,
-    pub dock: DockArea,
-    /// Change detection + debounce for persisting `dock` (#692). The
-    /// write itself runs as a `Task`; see `handlers/dock/layout_persist.rs`.
-    pub dock_layout_sync: crate::dock::DockLayoutSync,
-    /// The Components filter + Library Browser queries and the debounce
-    /// that persists them (#859); see `handlers/dock/search_prefs_persist.rs`.
-    pub search_prefs: crate::persist::SearchPrefsSync,
     /// Off-thread document writes: per-path ordering, in-flight tracking and
     /// the quit barrier (#859); see `handlers/document_files/save_async.rs`.
     pub document_saves: crate::persist::DocumentSaves,
@@ -468,10 +412,6 @@ pub struct DocumentState {
     pub project_fs: project_fs::ProjectFsCache,
     /// Idle check of open documents against the disk (#1877).
     pub disk_poll: crate::app::handlers::document_files::DiskPoll,
-    /// Off-thread Navigator hierarchy assembly (#1470).
-    pub navigator_job: navigator_job::NavigatorJob,
-    /// Hierarchies of the other projects undocked windows show (#2021).
-    pub window_hierarchies: window_hierarchies::WindowHierarchies,
     /// Cached sheet-path -> owning-project index, rebuilt when its inputs
     /// change (#1470); see `state/ownership_index.rs`.
     pub(crate) ownership: std::cell::RefCell<Option<ownership_index::OwnershipIndex>>,
@@ -482,16 +422,13 @@ pub struct DocumentState {
     /// were seeded from has changed locally (#1085).
     pub profile_drift_noted: std::collections::HashSet<ProjectId>,
     /// Undo / redo of each project's stored rule set edits (#1085).
-    pub rules_history: std::collections::HashMap<ProjectId, rules_history::RulesHistory>,
+    pub rules_history:
+        std::collections::HashMap<ProjectId, crate::app::core::rules_history::RulesHistory>,
     /// Undo / redo of each project's General settings (engine-owned).
     pub general_history: std::collections::HashMap<ProjectId, signex_engine::ProjectGeneralHistory>,
     /// How many undo steps every history keeps (`undo_depth`); see
     /// [`Signex::set_undo_depth`](crate::app::Signex::set_undo_depth).
     pub undo_depth: usize,
-    /// Which font families the Messages panel has already said an open
-    /// document names but this machine lacks (#510), so each is reported
-    /// once per document.
-    pub missing_fonts: crate::fonts::document_report::MissingFontReporter,
     /// Engines (`Engine::instance_id`) already told, once per open, that an
     /// edit was refused because the sheet is read-only (#1402).
     pub read_only_refusal_noted: std::collections::HashSet<u64>,
@@ -516,13 +453,6 @@ pub struct DocumentState {
     /// Per-tab state for open `.snxfpt` document tabs. Keyed the same
     /// way as `symbol_editors`.
     pub footprint_editors: std::collections::HashMap<PathBuf, super::FootprintDocument>,
-    /// v0.26-E — process-local clipboard for footprint-editor pad
-    /// Cut / Copy / Paste. Survives tab switches so a pad copied from
-    /// one footprint can be pasted into another. `None` until the
-    /// first Cut / Copy. Replaced wholesale on every copy. Keyed by
-    /// no path on purpose — Altium parity is single-slot, last-write-
-    /// wins.
-    pub pad_clipboard: Option<crate::library::editor::footprint::state::EditorPad>,
     /// The path of the schematic the main window is currently editing.
     /// `active_engine()` reads `engines.get(active_path)`. `None` means
     /// no schematic tab is active (e.g. a PCB tab is active, or nothing
@@ -530,7 +460,7 @@ pub struct DocumentState {
     pub active_path: Option<PathBuf>,
     /// Every loaded project in the workspace. Order = load order. First
     /// project becomes active on load; subsequent opens append.
-    pub projects: Vec<LoadedProject>,
+    pub projects: Vec<crate::app::core::loaded_project::LoadedProject>,
     /// Which project is "active" for handlers that operate on the workspace
     /// at large (save-all, the Projects panel). Currently tracks the
     /// most-recently-loaded project plus whichever project contains the
@@ -555,13 +485,10 @@ pub struct DocumentState {
     pub recovery_check_due: Vec<std::path::PathBuf>,
     /// Dirty documents that no editor draft holds; see `dirty.rs`, the only
     /// reader and writer. Ask `is_document_dirty`, never this field.
-    pub(crate) dirty_docs: dirty::DirtyDocuments,
+    pub(crate) dirty_docs: crate::app::core::dirty_documents::DirtyDocuments,
     /// Undo/redo of each project's net-class table (#1042). The table is
     /// project data, so it has its own history beside the per-sheet engines.
     pub net_class_history: std::collections::HashMap<ProjectId, signex_engine::NetClassHistory>,
-    /// Project tab state per loaded project (#1202): selected section and
-    /// the General history. Outlives the tab, dropped with the project.
-    pub project_tabs: std::collections::HashMap<ProjectId, crate::app::ProjectTabState>,
     /// Monotonic counter used to mint `ProjectId` on load. Never reused —
     /// closing a project does not free its id (tabs may hold stale refs,
     /// which we detect by resolving through `projects` and treating None
@@ -588,76 +515,22 @@ pub struct DocumentState {
     /// `state/pcb_board.rs`, the only reader and writer.
     pub(crate) boards: std::collections::HashMap<PathBuf, signex_engine::pcb::BoardEngine>,
     /// The engines of PCB tabs closed while dirty; see `state/pcb_board.rs`.
-    pub(crate) parked_pcb_boards: pcb_board::ParkedBoards,
+    pub(crate) parked_pcb_boards: crate::app::core::parked_boards::ParkedBoards,
     /// The sheets each undo group touched. Undo/redo of a
     /// grouped entry consults this to find the sheets that must move with it.
-    pub undo_groups:
-        std::collections::HashMap<signex_engine::UndoGroupId, crate::app::UndoGroupSheets>,
+    pub undo_groups: std::collections::HashMap<
+        signex_engine::UndoGroupId,
+        crate::app::core::undo_groups::UndoGroupSheets,
+    >,
     /// Power rail renames waiting on their project's sheets (mockup row 45).
     pub(crate) rail_rename: crate::app::core::rail_rename::RailRenames,
     /// An agent's edit list in progress, and the labels of its undo steps (#2178).
     pub agent_edits: AgentEdits,
     /// The last runs of `check_erc`, for a later run's baseline (#2199).
-    pub(crate) check_runs: check_runs::CheckRuns,
+    pub(crate) check_runs: crate::app::core::check_runs::CheckRuns,
     /// Each open project's design reuse blocks, read or saved (#2410).
     pub(crate) reuse_blocks: crate::app::board_reuse::ReuseBlockStore,
-    /// The one store of half-typed title-block and paper-edge text (#2027);
-    /// every panel context holds a handle to it.
-    pub drafts: crate::panels::PanelDrafts,
-    /// The drawing field being typed, if any (#2768).
-    pub(crate) live_drawing_edit: Option<LiveDrawingEdit>,
-    /// The selection the Line Width box's text was typed under (#2767).
-    pub(crate) line_width_draft_selection: Option<uuid::Uuid>,
-    pub panel_ctx: crate::panels::PanelContext,
-    /// The panel context of each undocked document window, so its dock
-    /// panels show and edit that window's sheet (#1966).
-    pub window_panel_ctx: std::collections::HashMap<iced::window::Id, crate::panels::PanelContext>,
-    /// What each window context was last built from; see `window_ctx_key`.
-    pub(crate) window_panel_ctx_keys:
-        std::collections::HashMap<iced::window::Id, crate::app::runtime::WindowCtxKey>,
-    /// Print-preview overlay state. `Some` while the preview dialog is
-    /// open. Doubles as the unified PDF Export modal — `File → Export
-    /// PDF` and `File → Print Preview` both populate this field.
-    pub preview: Option<PreviewState>,
-    /// Page setup (size, orientation, margins, scale) each document last used
-    /// in the PDF export modal, restored when it reopens for the same
-    /// document. Session-only; never written to disk.
-    pub page_setup_memory: PageSetupMemory,
-    /// The sheet symbol each child tab was descended through (#1133).
-    pub tab_placements: TabPlacements,
-    /// Sheet history, net highlight, hover insight and the project net index
-    /// they read (#1270, #1271, #1272).
-    pub net_nav: net_nav::NetNavState,
     pub compiled_design: crate::app::core::compiled_design::CompiledDesigns,
-    /// Generation counter and in-flight job of the preview renderer.
-    pub raster_queue: RasterQueue,
-    /// The app's one user-visible error card. `Some` while it is shown;
-    /// cleared by `OverlayMsg::DismissErrorNotice`.
-    ///
-    /// Not export-only, despite the heading it used to hardcode: the
-    /// project-close path already raised it for "could not save N
-    /// file(s)", so a failed close announced itself to the user as
-    /// "Export Failed" (#532). The title now travels with the message.
-    pub error_notice: Option<ErrorNotice>,
-    /// #431 — pending "Export anyway (incomplete)?" prompt. `Some` while the
-    /// netlist-incomplete modal is up, waiting on the user's choice. Set by
-    /// `handle_export_netlist_finished` when the derived netlist has a hole;
-    /// cleared by both prompt actions (Export anyway / Cancel).
-    pub netlist_incomplete_prompt: Option<NetlistIncompletePrompt>,
-    /// BOM preview state. `Some` while the BOM Export modal is open.
-    /// Mirrors the Print Preview pattern: the user adjusts grouping /
-    /// include flags / format / variant in the modal and clicks
-    /// Export to drive the file picker with the chosen options.
-    pub bom_preview: Option<BomPreviewState>,
-    /// Right-dock History panel state — current generation counter,
-    /// last loaded entries, the path the load was issued for. Driven
-    /// by `Message::HistoryLoaded` and re-targeted on tab switch.
-    pub history: crate::panels::history::HistoryPanelState,
-    /// The History panel state of each undocked document window, swapped in
-    /// with its panel context so the window shows and restores its own file
-    /// (#2067).
-    pub(crate) window_history:
-        std::collections::HashMap<iced::window::Id, crate::panels::history::HistoryPanelState>,
     /// v0.23 — Async git commit work queue. Save handlers push tuples
     /// here; `finish_update` drains them into `Task::perform` calls
     /// that run the actual commit on a tokio `spawn_blocking`. Each
@@ -698,7 +571,16 @@ pub struct DocumentState {
     pub pending_opens: crate::app::document_read::InFlightReads,
     /// What the directory case probes of loose documents reported, and the
     /// opens and saves waiting on one (#1447).
-    pub dir_case: dir_case::DirCases,
+    pub dir_case: crate::app::core::dir_case::DirCases,
+    /// The user's saved setup profiles (#2232), loaded from `prefs.json` at
+    /// boot and saved on every Save as profile and Remove.
+    pub setup_profiles: Vec<signex_types::project::UserProfile>,
+    /// Names of the profiles removed this session, by id, so a project that
+    /// still names one can say which.
+    pub removed_profile_names: std::collections::HashMap<String, String>,
+    /// Profile ids a project named and the user did not have, already said
+    /// in Messages this session.
+    pub missing_profiles_warned: std::collections::HashSet<String>,
     /// #859 — History restores running on a worker, keyed by the document
     /// path. A second restore click for the same document is ignored until
     /// the first completes; closing the project or all documents cancels it.
@@ -734,9 +616,8 @@ pub struct DocumentState {
     /// Commits asked for while their project folder moved, run once the move
     /// has finished.
     pub deferred_git_commits: Vec<DeferredGitCommit>,
-    /// The Gerber Viewer tab (mockup rows 193 and 193f): the package shown
-    /// and the app-wide recent packages. Its slice owns it.
-    pub gerber_viewer: crate::app::gerber_viewer::GerberViewerState,
+    /// The open block diagrams (mockup row 171); their slice owns them.
+    pub block_diagrams: crate::app::core::block_diagram_editor::BlockDiagrams,
     /// Each project's Design Notebook (mockup row 195) as a document being
     /// edited, kept while the project is loaded so a closed tab keeps its
     /// unsaved text. The tab's view of it is `UiState::notebook_tabs`.

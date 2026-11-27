@@ -47,7 +47,7 @@ fn inputs(ctx: &PanelContext, width: f32) -> Vec<iced::Rectangle> {
 #[test]
 fn x_and_y_share_a_row_at_the_default_dock_and_stack_when_narrow() {
     let (app, _boot) = Signex::new();
-    let ctx = app.document_state.panel_ctx.clone();
+    let ctx = app.document_view.panel_ctx.clone();
     let value = natural::<PanelMsg>(text(UserText::new(VALUE)).size(TS.body).boxed(), VALUE);
 
     let wide = inputs(&ctx, DEFAULT_ROW);
@@ -66,7 +66,7 @@ const PANEL: Size = Size::new(300.0, 4000.0);
 
 fn context() -> PanelContext {
     let (app, _boot) = Signex::new();
-    app.document_state.panel_ctx.clone()
+    app.document_view.panel_ctx.clone()
 }
 
 /// `laid` with the isolation marks round message arguments stripped.

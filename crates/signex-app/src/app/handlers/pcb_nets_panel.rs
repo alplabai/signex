@@ -14,7 +14,7 @@ impl Signex {
         if let PcbPanelMsg::Polygons(event) = msg {
             return self.handle_polygons(event);
         }
-        let ui = &mut self.document_state.panel_ctx.pcb_panel;
+        let ui = &mut self.document_view.panel_ctx.pcb_panel;
         let previous = ui.selected.clone();
         let is_click = matches!(msg, PcbPanelMsg::NetClicked(_));
         ui.apply(msg);

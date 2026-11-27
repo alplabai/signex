@@ -181,7 +181,7 @@ fn a_silent_converter_is_stopped_and_its_new_folder_removed() {
     let started = Instant::now();
     let (_dir, out, _events, result) = run(body, RunMode::Import, FAST);
     let failure = result.unwrap_err();
-    assert_eq!(failure.error, ImportError::Silent { seconds: 1 });
+    assert_eq!(*failure.error, ImportError::Silent { seconds: 1 });
     assert!(failure.removed_output);
     assert!(!out.exists());
     assert!(
@@ -210,7 +210,7 @@ fn a_failed_run_keeps_a_folder_that_existed_and_carries_the_report() {
     )
     .unwrap_err();
     assert_eq!(
-        failure.error,
+        *failure.error,
         ImportError::ConverterFailed {
             message: "bad input".into()
         }
@@ -245,7 +245,7 @@ fn exit_code_and_summary_must_agree() {
     );
     let (_d, _o, _e, result) = run(&body, RunMode::Import, FAST);
     assert!(matches!(
-        result.unwrap_err().error,
+        *result.unwrap_err().error,
         ImportError::ExitMismatch { .. }
     ));
 }
@@ -257,7 +257,7 @@ fn a_crash_without_summary_names_its_status_and_stderr() {
         RunMode::Import,
         FAST,
     );
-    match result.unwrap_err().error {
+    match *result.unwrap_err().error {
         ImportError::NoSummary { status, stderr } => {
             assert!(status.contains("101"), "{status}");
             assert!(stderr.contains("reader panicked"), "{stderr}");
@@ -274,7 +274,7 @@ fn a_library_outside_the_output_is_refused() {
     );
     let (_d, out, _e, result) = run(&body, RunMode::Import, FAST);
     let failure = result.unwrap_err();
-    assert!(matches!(failure.error, ImportError::PathOutside { .. }));
+    assert!(matches!(*failure.error, ImportError::PathOutside { .. }));
     assert!(!out.exists(), "the folder this run made is removed");
 }
 
@@ -302,7 +302,7 @@ fn cancel_stops_the_run_at_once() {
         cancel.store(true, Ordering::Relaxed);
         handle.join().unwrap()
     });
-    assert_eq!(result.unwrap_err().error, ImportError::Cancelled);
+    assert_eq!(*result.unwrap_err().error, ImportError::Cancelled);
     assert!(started.elapsed() < Duration::from_secs(10));
 }
 
@@ -343,7 +343,7 @@ fn a_library_other_than_the_output_folder_is_refused() {
     let (_d, out, _e, result) = run(&body, RunMode::Import, FAST);
     let failure = result.unwrap_err();
     assert!(
-        matches!(failure.error, ImportError::LibraryNotOutput { .. }),
+        matches!(*failure.error, ImportError::LibraryNotOutput { .. }),
         "{:?}",
         failure.error
     );
@@ -400,7 +400,7 @@ fn cancel_kills_what_the_converter_started() {
             }
         },
     );
-    assert_eq!(result.unwrap_err().error, ImportError::Cancelled);
+    assert_eq!(*result.unwrap_err().error, ImportError::Cancelled);
     let pid = std::fs::read_to_string(&pid_file).unwrap();
     let proc_dir = PathBuf::from(format!("/proc/{}", pid.trim()));
     let deadline = Instant::now() + Duration::from_secs(5);
@@ -466,7 +466,7 @@ fn cancel_ends_a_converter_that_repeats_is_silent_or_never_exits() {
     let stubborn = "trap '' TERM INT HUP; while :; do sleep 0.1; done\n";
     for body in [heartbeat, silent, stubborn] {
         let (result, took, _out) = cancel_after_a_moment(body);
-        assert_eq!(result.unwrap_err().error, ImportError::Cancelled, "{body}");
+        assert_eq!(*result.unwrap_err().error, ImportError::Cancelled, "{body}");
         assert!(took < Duration::from_secs(5), "{body}: took {took:?}");
     }
 }
@@ -535,7 +535,7 @@ fn a_failed_run_into_an_empty_folder_removes_it_and_a_full_one_never_runs() {
         &mut |_| {},
     )
     .unwrap_err();
-    assert!(matches!(failure.error, ImportError::OutputNotEmpty { .. }));
+    assert!(matches!(*failure.error, ImportError::OutputNotEmpty { .. }));
     assert!(!ran.exists(), "not run");
     assert!(out.join("mine.txt").exists());
 }

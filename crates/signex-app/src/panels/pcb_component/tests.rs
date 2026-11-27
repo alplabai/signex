@@ -85,7 +85,7 @@ fn drawn(courtyard: bool) -> ComponentDrawing {
 /// `opened` toggled.
 fn context(facts: PcbComponentFacts, tab: usize, opened: &[&str]) -> PanelContext {
     let (app, _boot) = Signex::new();
-    let mut ctx = app.document_state.panel_ctx.clone();
+    let mut ctx = app.document_view.panel_ctx.clone();
     ctx.has_pcb = true;
     ctx.properties_tab = tab;
     for key in opened {
@@ -125,7 +125,7 @@ fn has(texts: &[String], wanted: &str) -> bool {
 fn i18n() -> std::sync::Arc<signex_i18n::I18n> {
     // The catalog the app's panels render with.
     let (app, _boot) = Signex::new();
-    app.document_state.panel_ctx.i18n.clone()
+    app.document_view.panel_ctx.i18n.clone()
 }
 
 #[test]

@@ -46,7 +46,7 @@ fn has_text(texts: &[LaidOutText], label: &str) -> bool {
 #[test]
 fn an_error_card_paints_with_no_editor_tab_active() {
     let (mut app, window) = start_screen_app();
-    app.document_state.error_notice =
+    app.document_view.error_notice =
         Some(ErrorNotice::save(crate::app::state::verbatim(ERROR_DETAIL)));
 
     let texts = main_window_texts(&app, window);
@@ -60,7 +60,7 @@ fn an_error_card_paints_with_no_editor_tab_active() {
 #[test]
 fn the_netlist_incomplete_prompt_paints_with_no_editor_tab_active() {
     let (mut app, window) = start_screen_app();
-    app.document_state.netlist_incomplete_prompt = Some(NetlistIncompletePrompt {
+    app.document_view.netlist_incomplete_prompt = Some(NetlistIncompletePrompt {
         save_path: "out.net".into(),
         messages: vec!["sheet two is not in the netlist".to_owned()],
         ctx: signex_output::ExportContext {

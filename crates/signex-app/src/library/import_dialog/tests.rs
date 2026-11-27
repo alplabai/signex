@@ -294,7 +294,7 @@ fn cancel_stops_after_the_current_item_and_says_what_was_removed() {
         Some(ImportEnd::Cancelled { removed: true })
     );
     assert!(
-        app.document_state.error_notice.is_none(),
+        app.document_view.error_notice.is_none(),
         "no notice repeats it"
     );
 }
@@ -350,7 +350,7 @@ fn a_dry_run_result_or_failure_lands_in_step_two_and_back_returns_to_step_one() 
         Some(PreviewState::Failed(_))
     ));
     assert!(
-        app.document_state.error_notice.is_none(),
+        app.document_view.error_notice.is_none(),
         "shown in the dialog"
     );
     drop(app.update(d(ImportDialogMsg::BackPressed)));
@@ -383,7 +383,7 @@ fn back_during_a_dry_run_cancels_it_and_its_result_is_ignored() {
     drop(app.update(cancelled(true)));
     assert!(dialog(&app).preview.is_none(), "no longer awaited");
     assert!(
-        app.document_state.error_notice.is_none(),
+        app.document_view.error_notice.is_none(),
         "a dry run never raises a notice"
     );
 }
@@ -518,7 +518,7 @@ fn next_waits_while_a_left_dry_run_is_still_stopping() {
     assert!(!dialog(&app).checking_target, "nothing started");
     drop(app.update(cancelled(true)));
     assert_eq!(dialog(&app).blocker(), None, "free again");
-    assert!(app.document_state.error_notice.is_none());
+    assert!(app.document_view.error_notice.is_none());
 }
 
 #[test]

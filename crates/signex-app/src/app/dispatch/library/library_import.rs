@@ -54,7 +54,7 @@ impl Signex {
         scope: MountScope,
     ) -> Task<Message> {
         if let Some(running) = &self.library.import.running {
-            self.document_state.error_notice = Some(ErrorNotice::new(
+            self.document_view.error_notice = Some(ErrorNotice::new(
                 ids::LIBRARY_IMPORT_FAILED_TITLE,
                 Translatable::new(ids::LIBRARY_IMPORT_RUNNING)
                     .arg("path", running.output.display().to_string()),
@@ -64,7 +64,7 @@ impl Signex {
         if job.request.mode == RunMode::Update
             && let Some(what) = self.unsaved_in_library(&job.request.output)
         {
-            self.document_state.error_notice = Some(ErrorNotice::new(
+            self.document_view.error_notice = Some(ErrorNotice::new(
                 ids::LIBRARY_IMPORT_FAILED_TITLE,
                 ImportError::UnsavedInApp { what }.to_translatable(),
             ));
@@ -209,7 +209,7 @@ impl Signex {
             _ => Task::none(),
         };
         let task = match &finished.result {
-            Err(failure) if failure.error == ImportError::Cancelled => {
+            Err(failure) if *failure.error == ImportError::Cancelled => {
                 log::info!("Library import: cancelled");
                 if !shown && mode != Some(RunMode::Preview) {
                     self.report_library_import_failure(failure);
@@ -259,7 +259,7 @@ impl Signex {
             "Library import",
             &anyhow::anyhow!("{}\n{}", failure.error, failure.stderr_tail.trim()),
         );
-        self.document_state.error_notice =
+        self.document_view.error_notice =
             Some(ErrorNotice::new(ids::LIBRARY_IMPORT_FAILED_TITLE, detail));
     }
 
@@ -279,7 +279,7 @@ impl Signex {
                 .arg("path", file.display().to_string())
                 .arg("other", other.display().to_string());
             crate::diagnostics::log_warning(detail.render_en_us());
-            self.document_state.error_notice =
+            self.document_view.error_notice =
                 Some(ErrorNotice::new(ids::LIBRARY_IMPORT_FAILED_TITLE, detail));
             return Task::none();
         }
@@ -380,7 +380,7 @@ impl Signex {
             );
         }
         if outcome.run.exit == ExitKind::Partial {
-            self.document_state.error_notice =
+            self.document_view.error_notice =
                 Some(ErrorNotice::new(ids::LIBRARY_IMPORT_DONE_TITLE, done));
         }
     }

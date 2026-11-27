@@ -95,7 +95,7 @@ fn picked(f: &mut Fixture) -> PrimitiveTarget {
     );
     let facts = f
         .app
-        .document_state
+        .document_view
         .panel_ctx
         .pcb_board
         .as_ref()

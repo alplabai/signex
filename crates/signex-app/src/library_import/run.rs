@@ -183,7 +183,9 @@ pub struct RunOutcome {
 /// A run that did not produce a usable library.
 #[derive(Debug, Clone, PartialEq)]
 pub struct RunFailure {
-    pub error: ImportError,
+    /// Boxed so the failure stays small: a `Result` carrying it is returned
+    /// along every step of a run.
+    pub error: Box<ImportError>,
     /// The report, when the run got far enough to write one.
     pub report: Option<Box<ImportReport>>,
     pub stderr_tail: String,
@@ -197,7 +199,7 @@ pub struct RunFailure {
 impl RunFailure {
     pub fn new(error: ImportError) -> Self {
         Self {
-            error,
+            error: Box::new(error),
             report: None,
             stderr_tail: String::new(),
             removed_output: false,
@@ -394,7 +396,7 @@ fn finish(request: &LibraryRunRequest, finished: Finished) -> Result<RunOutcome,
         stderr_tail,
     } = finished;
     let fail = |error: ImportError, report: Option<ImportReport>| RunFailure {
-        error,
+        error: Box::new(error),
         report: report.map(Box::new),
         stderr_tail: stderr_tail.clone(),
         removed_output: false,
