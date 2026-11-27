@@ -667,8 +667,8 @@ fn copy_to_library_notes_each_add_a_banner_and_stay_above_the_footer() {
     let (none, scale) = height_with(false, false);
     let (one, _) = height_with(false, true);
     let (two, _) = height_with(true, true);
-    // Each note is a banner (mockup row 134): one banner block, and more
-    // when its text wraps (the previous-library note names a path).
+    // Each note is a banner (mockup row 134): one banner block, and a line
+    // more for each line its text wraps onto.
     let banner = |text: &str| {
         crate::app::handlers::modal_sizing::banner_height(
             crate::app::handlers::erc::modal_size(ModalId::LibraryStockCopy).width,
@@ -676,11 +676,6 @@ fn copy_to_library_notes_each_add_a_banner_and_stay_above_the_footer() {
             text,
         ) * scale
     };
-    let previous = crate::library::stock_copy::previous_note(
-        &signex_i18n::I18n::en_us(),
-        std::path::Path::new("/gone/Gone.snxlib"),
-    )
-    .into_string();
     let block = crate::app::handlers::modal_sizing::BANNER_BLOCK * scale;
     // The one-line error, written out: 7 px padding above and below, one
     // 16.5 px body line (12 px x 1.375) and the 8.7 px gap above the banner.
@@ -693,9 +688,15 @@ fn copy_to_library_notes_each_add_a_banner_and_stay_above_the_footer() {
         (banner("The copy could not be written") - one_line_banner).abs() <= 1.0,
         "the sizing helper agrees for the one-line error"
     );
+    // The previous-library note, written out: its 76 characters (the path
+    // and its two isolation marks included) wrap onto two lines in the
+    // 452 px text column of the 520 px dialog, so it adds a second 16.5 px
+    // line to the banner. Counted here, not by the sizing helper, so a
+    // wrapping bug in the helper cannot move both sides together (#2648).
+    let two_line_banner = (7.0 + 2.0 * 16.5 + 7.0 + 8.7) * scale;
     assert!(
-        (two - one - banner(&previous)).abs() <= 2.0,
-        "two notes: {one} -> {two}"
+        (two - one - two_line_banner).abs() <= 2.0,
+        "two notes: {one} -> {two}, a two-line banner is {two_line_banner} px"
     );
     assert!(two - one >= block - 2.0, "a note adds at least one banner");
 }

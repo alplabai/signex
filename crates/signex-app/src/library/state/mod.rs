@@ -348,6 +348,10 @@ pub struct EditRowModalState {
     /// modal stays open meanwhile, and the result closes it only if the
     /// draft still equals this.
     pub saving: Option<SavingSnapshot>,
+    /// Template slots added through their "+ name" offer in this edit, each
+    /// with whether an edit message has touched it since (#2648): while one
+    /// is untouched its row keeps a ✕.
+    pub added_slots: HashMap<String, bool>,
 }
 
 /// What the Edit Component Details modal held when Save was pressed.
@@ -418,6 +422,21 @@ impl EditRowModalState {
             reload_confirming: false,
             opened_primary,
             saving: None,
+            added_slots: HashMap::new(),
+        }
+    }
+
+    /// Whether the row `key` is a template slot added in this edit and still
+    /// at its default, whatever its kind, so it can be taken back (#2648).
+    pub fn is_untouched_added_slot(&self, key: &str) -> bool {
+        self.added_slots.get(key) == Some(&false)
+    }
+
+    /// An edit message reached the row `key`: an added slot stops being
+    /// untouched, even when the value it sets is the default again.
+    pub fn touch_slot(&mut self, key: &str) {
+        if let Some(touched) = self.added_slots.get_mut(key) {
+            *touched = true;
         }
     }
 }

@@ -281,7 +281,7 @@ library-edit-row-reload-saved = Reload saved version
 # Change Component: go on to the pin preview.
 library-picker-next = Next
 library-primitive-picker-browse = Browse filesystem…
-library-primitive-picker-open-library = Open library
+library-primitive-picker-library-not-open = Library not open
 library-recovery-remove-from-project = Remove from project
 library-recovery-locate = Locate…
 library-recovery-restore-remote = Restore from remote

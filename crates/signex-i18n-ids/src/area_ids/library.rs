@@ -22,7 +22,7 @@ define_ids! {
     LIBRARY_EDIT_ROW_RELOAD_SAVED = "library-edit-row-reload-saved";
     LIBRARY_PICKER_NEXT = "library-picker-next";
     LIBRARY_PRIMITIVE_PICKER_BROWSE = "library-primitive-picker-browse";
-    LIBRARY_PRIMITIVE_PICKER_OPEN_LIBRARY = "library-primitive-picker-open-library";
+    LIBRARY_PRIMITIVE_PICKER_LIBRARY_NOT_OPEN = "library-primitive-picker-library-not-open";
     LIBRARY_RECOVERY_REMOVE_FROM_PROJECT = "library-recovery-remove-from-project";
     LIBRARY_RECOVERY_LOCATE = "library-recovery-locate";
     LIBRARY_RECOVERY_RESTORE_REMOTE = "library-recovery-restore-remote";
