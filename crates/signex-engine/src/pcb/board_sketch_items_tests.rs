@@ -360,7 +360,12 @@ fn baked_then(edit: impl FnOnce(&mut Zone)) -> BoardEngine {
 }
 
 fn pour(engine: &BoardEngine) -> &Zone {
-    engine.board().zones.iter().find(|z| z.uuid == POUR).unwrap()
+    engine
+        .board()
+        .zones
+        .iter()
+        .find(|z| z.uuid == POUR)
+        .unwrap()
 }
 
 /// #2706 (Caner, 2026-11-21): a re-bake keeps a shelved pour shelved and

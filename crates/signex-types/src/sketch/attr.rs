@@ -517,8 +517,7 @@ impl PourAttr {
     /// bake the outline as drawn, as on the board (`Zone::pour_corner_shape`).
     pub fn corner_shape(&self) -> Option<(crate::zone_pour_shape::PourCorners, f64)> {
         let size = self.corner_size;
-        (self.has_corner_shape() && size.is_finite() && size > 0.0)
-            .then_some((self.corners, size))
+        (self.has_corner_shape() && size.is_finite() && size > 0.0).then_some((self.corners, size))
     }
 }
 

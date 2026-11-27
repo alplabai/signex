@@ -83,11 +83,11 @@ mod board_layout_plan_tests;
 #[cfg(test)]
 mod board_linear_suppression_tests;
 #[cfg(test)]
-mod board_pour_corner_tests;
-#[cfg(test)]
 mod board_options_tests;
 #[cfg(test)]
 mod board_pattern_token_tests;
+#[cfg(test)]
+mod board_pour_corner_tests;
 #[cfg(test)]
 mod board_sketch_targets_tests;
 #[cfg(test)]

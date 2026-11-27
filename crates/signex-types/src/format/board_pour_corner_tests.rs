@@ -74,7 +74,12 @@ fn board() -> PcbBoard {
 
 fn set_corners(board: &mut PcbBoard, corners: PourCorners, size: f64) {
     let stored = board.sketch.as_mut().expect("a board sketch");
-    for pour in stored.sketch.entities.iter_mut().filter_map(|e| e.pour.as_mut()) {
+    for pour in stored
+        .sketch
+        .entities
+        .iter_mut()
+        .filter_map(|e| e.pour.as_mut())
+    {
         pour.corners = corners;
         pour.corner_size = size;
     }

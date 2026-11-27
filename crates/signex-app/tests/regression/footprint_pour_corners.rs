@@ -120,7 +120,10 @@ fn rounded_corners_shape_the_baked_pour_and_save_as_snxfpt_1_5() {
     size(&mut app, id, "0.5");
 
     let attr = pour(&app, &path, id);
-    assert_eq!((attr.corners, attr.corner_size), (PourCorners::Rounded, 0.5));
+    assert_eq!(
+        (attr.corners, attr.corner_size),
+        (PourCorners::Rounded, 0.5)
+    );
     assert!(editor(&app, &path).is_dirty());
     assert_eq!(editor(&app, &path).history.undo_len(), 2, "one step each");
     let rounded = baked_outline(&app, &path);
@@ -154,7 +157,10 @@ fn a_chamfer_cuts_the_baked_corners_by_the_size() {
             .iter()
             .any(|p| (p[0] - x).abs() < 1e-6 && (p[1] - y).abs() < 1e-6)
     };
-    assert!(has(1.0, 0.0) && has(0.0, 1.0) && has(3.0, 4.0), "{points:?}");
+    assert!(
+        has(1.0, 0.0) && has(0.0, 1.0) && has(3.0, 4.0),
+        "{points:?}"
+    );
     assert!(!has(0.0, 0.0), "{points:?}");
 }
 

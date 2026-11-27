@@ -126,7 +126,10 @@ fn corner_rows<'a>(
     .map(|(corners, label)| Segment {
         label: t!(i18n, label),
         active: corners == pour.corners,
-        msg: Some(PanelMsg::FpSubform(FpSubformMsg::PourCornersPicked { id, corners })),
+        msg: Some(PanelMsg::FpSubform(FpSubformMsg::PourCornersPicked {
+            id,
+            corners,
+        })),
     })
     .collect();
     let shapes = field_row(

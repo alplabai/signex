@@ -42,7 +42,11 @@ fn pour_sketch() -> SketchData {
         .collect();
     for i in 0..4 {
         let (start, end) = (points[i], points[(i + 1) % 4]);
-        let line = Entity::new(SketchEntityId::new(), plane, EntityKind::Line { start, end });
+        let line = Entity::new(
+            SketchEntityId::new(),
+            plane,
+            EntityKind::Line { start, end },
+        );
         sketch.entities.push(line);
     }
     let first_line = sketch.entities.len() - 4;

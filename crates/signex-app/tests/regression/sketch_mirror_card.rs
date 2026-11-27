@@ -343,7 +343,10 @@ fn a_pattern_picked_by_its_glyph_is_mirrored_without_its_source() {
 
     arm(&mut app, &path);
     click(&mut app, &path, 0.05, 2.0);
-    assert_eq!(card(&app, &path).objects, vec![MirrorObject::Pattern(row_id)]);
+    assert_eq!(
+        card(&app, &path).objects,
+        vec![MirrorObject::Pattern(row_id)]
+    );
     answer(&mut app, &path, MirrorCardMsg::Confirmed);
 
     let sk = sketch(&app, &path);
@@ -370,7 +373,10 @@ fn a_pattern_left_for_another_entity_is_not_mirrored() {
     arm(&mut app, &path);
     click(&mut app, &path, 0.05, 2.0);
 
-    assert_eq!(card(&app, &path).objects, vec![MirrorObject::Entity(d.line)]);
+    assert_eq!(
+        card(&app, &path).objects,
+        vec![MirrorObject::Entity(d.line)]
+    );
 }
 
 // ─── Board host ─────────────────────────────────────────────────────────────

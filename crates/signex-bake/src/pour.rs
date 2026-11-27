@@ -130,10 +130,7 @@ pub fn bake_pours(
 /// (#2598), through the rule a board pour fills with (#2578,
 /// `pcb_geom::shaped_outline_mm`). Sharp, or no positive size, keeps the
 /// outline as traced; `None` when the geometry cannot hold it.
-fn shaped(
-    vertices: Vec<[f64; 2]>,
-    attr: &signex_sketch::attr::PourAttr,
-) -> Option<Vec<[f64; 2]>> {
+fn shaped(vertices: Vec<[f64; 2]>, attr: &signex_sketch::attr::PourAttr) -> Option<Vec<[f64; 2]>> {
     let Some((corners, size)) = attr.corner_shape() else {
         return Some(vertices);
     };
@@ -164,13 +161,13 @@ fn map_thermal(t: &signex_sketch::attr::ThermalRelief) -> LibThermal {
 mod tests {
     use super::*;
     use signex_sketch::attr::{PourAttr, PourFillType, ThermalRelief};
-    use signex_types::zone_pour_shape::PourCorners;
     use signex_sketch::entity::Entity;
     use signex_sketch::id::SketchEntityId;
     use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
     use signex_sketch::solver::Solver;
     use signex_sketch::solver::residual::ResolvedParams;
     use signex_types::pcb_layer::{CopperLayer, PcbLayer};
+    use signex_types::zone_pour_shape::PourCorners;
 
     fn solve(sketch: &SketchData) -> FullSolveOutput {
         Solver::default()
@@ -458,6 +455,9 @@ mod tests {
         }
         let full = 25.0 - 4.0 * (1.0 - std::f64::consts::FRAC_PI_4);
         let got = area(&points);
-        assert!(got < 25.0 && got > 23.0 && (got - full).abs() < 0.01, "{got}");
+        assert!(
+            got < 25.0 && got > 23.0 && (got - full).abs() < 0.01,
+            "{got}"
+        );
     }
 }
