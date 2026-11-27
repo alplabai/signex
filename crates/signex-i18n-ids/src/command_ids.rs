@@ -133,6 +133,8 @@ define_ids! {
         CMD_SAVE_ALL = "cmd-save-all";
         CMD_SAVE_PROJECT_AS = "cmd-save-project-as";
         CMD_MENU_SAVE_PROJECT_AS = "cmd-menu-save-project-as";
+        CMD_IMPORT_LIBRARY = "cmd-import-library";
+        CMD_MENU_IMPORT_LIBRARY = "cmd-menu-import-library";
         CMD_SELECT_ALL = "cmd-select-all";
         CMD_MENU_SELECT_ALL = "cmd-menu-select-all";
         CMD_SELECT_EXPAND_CONNECTION = "cmd-select-expand-connection";

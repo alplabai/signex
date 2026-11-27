@@ -151,6 +151,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `generate_design_notebook` | Generate a design notebook from the project | design | — | — |
 | `home_view` | Reset the view rotation and Flip, then fit the board or sheet | view | — | — |
 | `import_graphics` | Import graphics | place | — | `Mod+Shift+F` |
+| `import_library` | Import a library made in another tool | file | — | — |
 | `keymap_assign` | Give a command a key in a custom keyboard profile | preferences | — | — |
 | `keymap_clear` | Take a command's keys away in a custom keyboard profile | preferences | — | — |
 | `list_annotations` | List the annotation blocks of the project's Design Notebook | design | — | — |

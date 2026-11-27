@@ -421,6 +421,8 @@ const MENU_SESSION: &[&str] = &[
     "import_dxf",
     "import_dxf_outline",
     "import_graphics",
+    // #3117: the Import Library dialog.
+    "import_library",
     "import_parameters",
     "lasso_select",
     "leave_sheet",

@@ -8,6 +8,7 @@ save_document	file	Save document	Save	General	-	-	Always	-	document:document
 save_document_as	file	Save as	Save As...	General	-	-	Always	-	document:document,path:path,overwrite:bool?
 save_all	file	Save all unsaved documents	Save All	General	-	-	Always	gui_only	-
 save_project_as	file	Save the project to a new folder	Save Project As…	General	-	-	Always	gui_only	-
+import_library	file	Import a library made in another tool	Library…	General	-	-	Always	gui_only	-
 revert	edit	Revert an agent's edit step	-	General	-	-	Always	mutates_doc	document:document,group:text,documents:text?
 close_active_document	file	Close active document	Close Document	General	-	-	Always	-	document:document
 close_all_documents	window	Close all documents	Close All Documents	General	-	-	Always	gui_only	-

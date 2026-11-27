@@ -112,6 +112,17 @@ pub(super) const DOCUMENTS: &[CommandMetadata] = &[
         flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
+    // #3117: File > Import > Library…, the Import Library dialog.
+    CommandMetadata {
+        id: "import_library",
+        category: "file",
+        label: command_ids::CMD_IMPORT_LIBRARY,
+        menu_label: Some(command_ids::CMD_MENU_IMPORT_LIBRARY),
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
     CommandMetadata {
         id: "revert",
         category: "edit",
