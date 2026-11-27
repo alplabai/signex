@@ -106,6 +106,7 @@ pub(crate) mod sheet_repairs;
 pub(crate) mod sheet_swap;
 pub(crate) mod sheet_sync;
 pub(crate) mod sheet_write;
+pub(crate) mod symbol_repairs;
 pub mod unions;
 pub use project_git::ProjectGitMsg;
 pub use project_save_as::{SaveProjectAsMsg, SaveProjectAsState};

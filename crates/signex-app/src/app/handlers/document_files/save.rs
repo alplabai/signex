@@ -141,7 +141,8 @@ impl Signex {
         }
         // The write runs off the UI thread; the completion logs it, clears
         // the dirty marker and queues the git commit.
-        let task = match self.save_primitive_tab_at(&path) {
+        // The person's Save: the one write of a file that opened repaired.
+        let task = match self.save_primitive_tab_explicitly(&path) {
             Ok(task) => task,
             Err(e) => {
                 self.report_save_failure("Save failed", &e);

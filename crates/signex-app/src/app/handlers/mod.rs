@@ -7,6 +7,8 @@ pub mod autosave_project;
 #[cfg(test)]
 mod autosave_project_tests;
 pub mod autosave_recovery;
+#[cfg(test)]
+mod autosave_repair_tests;
 pub mod autosave_row;
 pub(crate) mod board_3d;
 #[cfg(test)]

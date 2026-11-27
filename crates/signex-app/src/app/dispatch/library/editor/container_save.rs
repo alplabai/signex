@@ -28,6 +28,9 @@ pub(super) struct SaveOptions {
     /// Patch-bump the version of each primitive the save changed, in the
     /// same write (#832).
     pub bump_versions: bool,
+    /// Read a `.snxsym` on disk leniently and write the repair: only the
+    /// person's Save of a draft that opened repaired (#3129).
+    pub write_repair: bool,
 }
 
 /// Outcome of a container save.
@@ -77,9 +80,20 @@ pub(super) fn save_symbol_container(
                 whole_file(editor.symbols.iter().map(|s| s.uuid)),
             )
         };
+        let mut repaired = Vec::new();
         let (mut file, m) = match current {
             Some(bytes) if options.mode == ContainerWrite::Merge && !holds_nothing(bytes) => {
-                let disk = SymbolFile::from_bytes(bytes).map_err(|e| unreadable_on_disk(&e))?;
+                // A file an older build wrote with a control character in a
+                // pin table reads repaired only for the person's Save of a
+                // draft that opened repaired (#3129); that save writes the
+                // repair. Any other save reads strictly and is refused.
+                let (disk, repairs) = if options.write_repair {
+                    SymbolFile::from_bytes_repairing(bytes)
+                } else {
+                    SymbolFile::from_bytes(bytes).map(|file| (file, Vec::new()))
+                }
+                .map_err(|e| unreadable_on_disk(&e))?;
+                repaired = repairs;
                 editor
                     .merge_into(baseline, disk, now)
                     .or_else(|duplicate| duplicated_uuids(path, duplicate, whole()))?
@@ -90,6 +104,11 @@ pub(super) fn save_symbol_container(
             return Err(would_be_empty("symbol"));
         }
         merge = m;
+        for uuid in repaired.iter().filter_map(|r| r.symbol_uuid) {
+            if !merge.changed.contains(&uuid) {
+                merge.changed.push(uuid);
+            }
+        }
         if merge.is_empty() {
             return Ok(None);
         }

@@ -16,6 +16,10 @@ pub(crate) mod updates;
 /// Fit the symbol editor camera to a viewport; the document layer calls it
 /// when it opens a symbol.
 pub(crate) use updates::fit_to_viewport;
+pub(crate) use updates::{
+    apply_symbol_primitive_edit, new_unstorable_pin_text, pin_text_refused, refuse_pin_text,
+    refuse_read_only,
+};
 
 /// The tool a person arms, which the commands' tests compare against.
 #[cfg(test)]

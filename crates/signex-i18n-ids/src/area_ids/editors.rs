@@ -532,4 +532,10 @@ define_ids! {
     // symbol commands (#2817, #2838)
     EDITORS_SYMBOL_FILE_NOT_OPEN = "editors-symbol-file-not-open";
     EDITORS_SYMBOL_NOT_OPEN = "editors-symbol-not-open";
+    // pin-text-control-characters (#3129)
+    EDITORS_SYMBOL_REPAIRED_ON_OPEN = "editors-symbol-repaired-on-open";
+    EDITORS_SYMBOL_REPAIRED_MORE = "editors-symbol-repaired-more";
+    EDITORS_SYMBOL_READ_ONLY_REPAIRED = "editors-symbol-read-only-repaired";
+    EDITORS_SYMBOL_PIN_TEXT_REFUSED = "editors-symbol-pin-text-refused";
+    EDITORS_SYMBOL_REPAIRED_WRITE_REFUSED = "editors-symbol-repaired-write-refused";
 }

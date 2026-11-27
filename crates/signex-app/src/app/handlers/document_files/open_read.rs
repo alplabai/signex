@@ -173,8 +173,9 @@ impl Signex {
                 self.open_pcb_tab(path.clone(), title, *board);
                 self.record_disk_read(&path, disk);
             }
-            LoadedDocument::Symbol(file) => {
+            LoadedDocument::Symbol { file, repairs } => {
                 self.open_symbol_editor_tab(path.clone(), *file);
+                self.open_repaired_symbol(&path, &repairs);
                 // An earlier run's recovery copy of this symbol (#1185).
                 return self.autosave_check_recovery(&path);
             }

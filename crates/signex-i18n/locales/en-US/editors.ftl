@@ -1248,3 +1248,22 @@ editors-symbol-bar-pin-type = Pin type
 # nothing: the symbol file they name has no open editor.
 editors-symbol-file-not-open = the symbol file is not open
 editors-symbol-not-open = the symbol is not open
+# Messages panel (#3129): opening a symbol file removed a control character
+# that an older build had written into its pin table. $file is the file name,
+# $symbol the symbol's name, $pin the pin number, $column the pin table column
+# as the file names it (name, number, description, function), $character the
+# character as a code point such as U+000D.
+editors-symbol-repaired-on-open = { $file }: removed the control character { $character } from the { $column } of pin { $pin } in symbol { $symbol }. The file is read-only until you save it.
+# Messages panel: the repairs past the ones listed one by one. $count is a whole number.
+editors-symbol-repaired-more = { $file }: { $count } more control characters removed.
+# Symbol editor status line: an edit refused while a repaired file waits to be saved.
+editors-symbol-read-only-repaired = This file was repaired when it opened. Save it to keep the repair, then edit.
+# Under a pin's fields and in the symbol editor status line: pin text holding a
+# control character is not taken (#3129). $column is the field as the file
+# names it (name, number, description, function), $pin the pin number,
+# $character the character as a code point such as U+000D.
+editors-symbol-pin-text-refused = The { $column } of pin { $pin } cannot hold the control character { $character }; the edit was not applied.
+# Messages panel (#3129): a write of a symbol file that opened repaired, other
+# than the person's own Save of it (Save All, a close, a command or an agent),
+# is refused so the file is never rewritten unasked. $file is the file name.
+editors-symbol-repaired-write-refused = { $file } was repaired when it opened and is written only when you save it yourself (Save on its tab); this write was refused.

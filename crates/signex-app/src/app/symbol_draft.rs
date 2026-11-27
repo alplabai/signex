@@ -8,7 +8,7 @@ use signex_library::{Symbol, SymbolFile};
 use super::SymbolHistorySnapshot;
 use super::documents::FieldEditKey;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SymbolDraft {
     /// Multi-symbol container backing this `.snxsym` tab. The editor
     /// works against `file.symbols[active_idx]`; access via
@@ -60,6 +60,10 @@ pub struct SymbolDraft {
     /// step; another history push leaves it open. It groups undo steps, like
     /// `last_edit_key`, so it is history state, not a front-end operand.
     move_run_open: bool,
+    /// Opened from a file the read had to repair (#3129): edits are refused
+    /// until a save writes the repair, so the file is never rewritten
+    /// without the user asking.
+    repaired_read_only: bool,
 }
 
 impl SymbolDraft {
@@ -78,7 +82,28 @@ impl SymbolDraft {
             history_generation: 0,
             last_edit_key: None,
             move_run_open: false,
+            repaired_read_only: false,
         }
+    }
+
+    /// The file was repaired as it was read: it differs from the disk, so
+    /// the draft is dirty with no clean undo depth, and read-only until saved.
+    pub fn open_repaired(&mut self, history_depth: usize) {
+        self.dirty = true;
+        self.history = signex_history::History::unknown(history_depth);
+        self.repaired_read_only = true;
+    }
+
+    /// Are edits refused until a save writes the load repair? Only an
+    /// explicit Save of this document writes it; every other write of the
+    /// file is refused meanwhile (`docs/DECISIONS.md`, #3129).
+    pub fn is_read_only(&self) -> bool {
+        self.repaired_read_only
+    }
+
+    /// An explicit Save wrote the repair to disk: edits are taken again.
+    pub fn repair_written(&mut self) {
+        self.repaired_read_only = false;
     }
 
     /// Is a drag's undo step open, so a movement tick records nothing?

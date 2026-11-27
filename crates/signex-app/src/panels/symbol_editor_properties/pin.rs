@@ -68,7 +68,7 @@ pub(super) fn view<'a>(
         t!(i18n, ids::EDITORS_SYMPROPS_SECTION_PIN),
         true,
         None,
-        || pin_rows(pin, form),
+        || pin_rows(pin, form, sym.pin_text_refusal.as_ref()),
     ));
     col.push(form.section(
         LOCATION,
@@ -94,7 +94,11 @@ pub(super) fn view<'a>(
     col
 }
 
-fn pin_rows<'a>(pin: &SymbolPinSummary, form: &Form<'_>) -> Vec<Element<'a, PanelMsg>> {
+fn pin_rows<'a>(
+    pin: &SymbolPinSummary,
+    form: &Form<'_>,
+    refusal: Option<&signex_library::UnstorablePinText>,
+) -> Vec<Element<'a, PanelMsg>> {
     let i18n = form.i18n;
     let pin_idx = pin.idx;
     let part_now = pin.details.part_number;
@@ -119,7 +123,7 @@ fn pin_rows<'a>(pin: &SymbolPinSummary, form: &Form<'_>) -> Vec<Element<'a, Pane
     ]
     .spacing(SP.xs)
     .align_y(Alignment::Center);
-    vec![
+    let mut rows = vec![
         form.field(
             t!(i18n, ids::EDITORS_SYMPROPS_DESIGNATOR_NAME),
             form.pair(
@@ -172,7 +176,18 @@ fn pin_rows<'a>(pin: &SymbolPinSummary, form: &Form<'_>) -> Vec<Element<'a, Pane
             part.boxed(),
             None,
         ),
-    ]
+    ];
+    // #3129: why the last text was not taken, under the field it was typed in.
+    if let Some(refusal) = refusal.filter(|r| r.pin_index == pin_idx) {
+        let under = match refusal.column {
+            "description" => 3,
+            "function" => 4,
+            _ => 1,
+        };
+        let line = crate::library::editor::symbol::pin_text_refused(refusal, &pin.number, i18n);
+        rows.insert(under, form.caption(line));
+    }
+    rows
 }
 
 fn location_rows<'a>(pin: &SymbolPinSummary, form: &Form<'_>) -> Vec<Element<'a, PanelMsg>> {
