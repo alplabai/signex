@@ -5,7 +5,8 @@
 //! on show, marked. After a failed solve it reads `last_good_solve`, the
 //! last solve that succeeded, drawn dimmed (#2856). Both hosts draw the
 //! baking edges; a footprint also draws its baked pads, except in a
-//! last-good preview. Drawing: `preview_canvas`.
+//! last-good preview and while a solve is owed (#2859). Drawing:
+//! `preview_canvas`.
 
 use std::collections::{BTreeSet, HashMap};
 use std::f64::consts::TAU;
@@ -36,6 +37,8 @@ pub(super) type Mm = (f64, f64);
 pub(super) enum Freshness {
     /// The solve of the sketch as it is.
     Current,
+    /// An edit since this solve owes another that has not landed (#2859).
+    Owed,
     /// The sketch failed to solve since: this is the last solve that did.
     LastGood,
 }
@@ -98,6 +101,7 @@ pub(super) fn of_editor(editor: &FootprintDocument) -> Option<BakePreview> {
     let sketch = editor.primitive().sketch.as_ref()?;
     let state = &editor.state;
     let (solve, freshness) = match (&state.last_solve, &state.last_good_solve) {
+        (Some(solve), _) if state.sketch_solve.is_solve_owed() => (solve, Freshness::Owed),
         (Some(solve), _) => (solve, Freshness::Current),
         (None, Some(solve)) => (solve, Freshness::LastGood),
         (None, None) => return None,

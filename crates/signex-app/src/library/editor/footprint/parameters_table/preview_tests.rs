@@ -29,7 +29,7 @@ use super::preview_canvas::{PreviewDrawing, arrow_head, dimension_label, label_r
 use super::view::problems_of;
 use crate::app::FootprintDocument;
 use crate::library::editor::footprint::sketch_solve_task::{
-    SolveOutcome, dispatch_pending, run_solve_with, snapshot_request,
+    SolveOutcome, dispatch_pending, run_solve, run_solve_with, snapshot_request,
 };
 use crate::library::editor::footprint::state::{BoardBackdrop, EditorMode, EditorPad};
 use crate::library::editor::footprint::updates::apply_footprint_primitive_edit;
@@ -653,4 +653,64 @@ fn a_failed_solve_hides_the_pads_of_the_last_good_preview() {
     assert!(preview.pads.is_empty());
     assert_eq!(preview.pads_hidden, Some(PadsHidden::UntilSketchSolves));
     assert!(preview.is_unsolved && !preview.is_last_good);
+}
+
+/// #2859 part 3, Caner 2026-11-27: between an edit and the solve that
+/// lands for it, the solve's numbers need not match the table's units, so
+/// the pads are hidden, saying so, and come back when the solve lands. The
+/// edges stay, at full strength.
+#[test]
+fn pads_are_hidden_while_a_solve_is_owed() {
+    const PADS_WAIT: &str = "Pads are hidden until the sketch solves.";
+    let mut editor = editor_on(SketchHost::Footprint, pad_sketch());
+    assert_eq!(of_editor(&editor).expect("solved").pads.len(), 3);
+    let pad = editor
+        .primitive()
+        .sketch
+        .as_ref()
+        .expect("a sketch")
+        .entities[0]
+        .id;
+    apply_footprint_primitive_edit(
+        &mut editor,
+        M::SketchMovePoint {
+            id: pad,
+            dx: 0.0,
+            dy: 1.0,
+        },
+    );
+    assert!(editor.state.sketch_solve.is_solve_owed());
+    let owed = of_editor(&editor).expect("the last solve is drawn");
+    assert!(owed.pads.is_empty(), "no pads read with stale units");
+    assert_eq!(owed.pads_hidden, Some(PadsHidden::UntilSketchSolves));
+    assert!(!owed.is_unsolved && !owed.is_last_good, "not marked stale");
+    assert!(card_texts(&editor).iter().any(|t| t == PADS_WAIT));
+
+    let path = PathBuf::from("preview.snxfpt");
+    let _task = dispatch_pending(&mut editor, &path);
+    assert!(editor.state.sketch_solve.is_solve_owed(), "still running");
+    assert!(of_editor(&editor).expect("drawn").pads.is_empty());
+    let answer = run_solve(snapshot_request(&editor).expect("a sketch"));
+    apply_footprint_primitive_edit(&mut editor, answer);
+    assert!(!editor.state.sketch_solve.is_solve_owed());
+    let landed = of_editor(&editor).expect("solved");
+    assert_eq!(landed.pads.len(), 3, "the solve landed: pads are back");
+    assert_eq!(landed.pads_hidden, None);
+    assert!(!card_texts(&editor).iter().any(|t| t == PADS_WAIT));
+}
+
+#[test]
+fn an_owed_solve_hides_the_pads_but_does_not_dim_the_preview() {
+    let sketch = pad_sketch();
+    let params = resolve(&sketch.parameters).unwrap();
+    let solve = Solver::default().solve(&sketch, &params).unwrap();
+    let none = BTreeSet::new();
+    let host = SketchHost::Footprint;
+    let current = BakePreview::of(&sketch, &solve, host, &none, Freshness::Current);
+    let owed = BakePreview::of(&sketch, &solve, host, &none, Freshness::Owed);
+    assert!(owed.pads.is_empty());
+    assert_eq!(owed.pads_hidden, Some(PadsHidden::UntilSketchSolves));
+    assert!(!owed.is_unsolved);
+    assert_eq!(owed.edges, current.edges);
+    assert_eq!(owed.dimensions, current.dimensions);
 }

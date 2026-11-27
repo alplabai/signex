@@ -303,7 +303,11 @@ solve fails (the canvas then shows the sketch unsolved), the preview keeps
 the last solve that succeeded, dimmed, under "The sketch does not solve:
 this is the last good bake.", with its pads hidden until the sketch solves
 (Caner, 2026-11-27, #2856). The next successful solve replaces it; the
-copy lives in the editor tab and goes with it. Live checks sits beside it,
+copy lives in the editor tab and goes with it. Between an edit and the solve
+that lands for it (a drag solves off the UI thread), the preview hides
+the pads, saying "Pads are hidden until the sketch solves.": the last
+solve's numbers would be read with the table's new units (Caner,
+2026-11-27, #2859). Live checks sits beside it,
 parameter errors first.
 
 **The table** is a card over the canvas with one row per parameter:
