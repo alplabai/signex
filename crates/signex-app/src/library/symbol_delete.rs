@@ -487,8 +487,8 @@ fn rows_cell<'a>(
         );
     }
     if show_all {
-        return container(scrollable(list))
-            .max_height(ROWS_MAX_H)
+        return container(scrollable(list).width(Length::Fill).height(Length::Shrink))
+            .height(Length::Fit.max(ROWS_MAX_H))
             .width(Length::Fill)
             .boxed();
     }
