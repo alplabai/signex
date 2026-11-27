@@ -25,6 +25,12 @@ pub enum LiteralContext {
     /// geometry. A prefix-only literal (`10m`, `1u`, `4k7`, `2n`) has no
     /// single reading there, so it is refused rather than baked.
     Geometry,
+    /// An angle (a pattern sweep, a pad rotation), in degrees. A
+    /// prefix-only or RKM literal (`10m`, `4k7`) is refused.
+    Angle,
+    /// A count (a pattern's instance count). A prefix-only or RKM literal
+    /// (`1k`, `4k7`) is refused rather than read as a multiplier.
+    Count,
 }
 
 /// What a bare `m` after a number means.
