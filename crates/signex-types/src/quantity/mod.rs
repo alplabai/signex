@@ -15,12 +15,16 @@
 //! is never rewritten just to normalise it, and an unrecognised unit
 //! string is kept as [`Unit::Other`].
 //!
+//! A min-to-max parameter (supply voltage, temperature) is two stored
+//! measurements; [`QuantityRange`] pairs them for display and ordering.
+//!
 //! Lengths are a separate home (epic #1058, `units/`); this module covers
-//! electrical values only.
+//! component values only (electrical, data rate, temperature).
 
 mod format;
 mod parse;
 mod prefix;
+mod range;
 mod sort;
 mod unit;
 mod value;
@@ -34,6 +38,7 @@ pub use parse::{
     unit_string_matches,
 };
 pub use prefix::SiPrefix;
+pub use range::{QuantityRange, RangeEnd, compare_ranges};
 pub use sort::{compare_for_sort, sort_key_from_value_text};
 pub use unit::Unit;
 pub use value::Quantity;

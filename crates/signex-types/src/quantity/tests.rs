@@ -107,7 +107,7 @@ fn units_tokens_glyphs_and_prefix_sets() {
     assert_eq!(
         tokens,
         [
-            "ohm", "F", "H", "V", "A", "W", "Hz", "%", "ppm/C", "V/us", "AWG"
+            "ohm", "F", "H", "V", "A", "W", "Hz", "%", "ppm/C", "V/us", "AWG", "bps", "degC"
         ]
     );
     assert_eq!(Unit::Ohm.glyph(), "\u{03A9}");
@@ -121,11 +121,17 @@ fn units_tokens_glyphs_and_prefix_sets() {
     );
     assert_eq!(SiPrefix::all_for(&Unit::Henry), &[Nano, Micro, Milli, One]);
     assert_eq!(SiPrefix::all_for(&Unit::Volt), &[Micro, Milli, One, Kilo]);
+    assert_eq!(
+        SiPrefix::all_for(&Unit::BitsPerSecond),
+        &[One, Kilo, Mega, Giga]
+    );
+    assert_eq!(Unit::DegreeCelsius.glyph(), "°C");
     for u in [
         Unit::Percent,
         Unit::PpmPerKelvin,
         Unit::VoltPerMicrosecond,
         Unit::Awg,
+        Unit::DegreeCelsius,
         Unit::Other("x".into()),
     ] {
         assert_eq!(SiPrefix::all_for(&u), &[One], "{u:?}");
@@ -167,12 +173,23 @@ fn split_unit_string_real_units() {
         ("mhz ", Mega, Unit::Hertz),
         ("MHz", Mega, Unit::Hertz),
         ("kHz", Kilo, Unit::Hertz),
+        ("bps", One, Unit::BitsPerSecond),
+        ("kbps", Kilo, Unit::BitsPerSecond),
+        ("Kbps", Kilo, Unit::BitsPerSecond),
+        ("Mbps", Mega, Unit::BitsPerSecond),
+        ("Gbps", Giga, Unit::BitsPerSecond),
+        ("kbit/s", Kilo, Unit::BitsPerSecond),
+        ("°C", One, Unit::DegreeCelsius),
+        ("\u{2103}", One, Unit::DegreeCelsius),
+        ("degC", One, Unit::DegreeCelsius),
+        ("degc", One, Unit::DegreeCelsius),
     ];
     for (s, p, u) in cases {
         assert_eq!(split_unit_string(s), Some((p, u)), "{s:?}");
     }
     for s in [
-        "", "k", "k%", "kppm/C", "kAWG", "xF", "kk", "mm", "foo", "µs",
+        "", "k", "k%", "kppm/C", "kAWG", "xF", "kk", "mm", "foo", "µs", "Bps", "kBps", "mbps",
+        "k°C", "C", "kdegC",
     ] {
         assert_eq!(split_unit_string(s), None, "{s:?}");
     }
@@ -280,6 +297,12 @@ fn golden_format_table() {
         ),
         (10.0, VoltPerMicrosecond, "10 V/µs", "10 V/µs", "10 V/us"),
         (18.0, Awg, "18 AWG", "18 AWG", "18 AWG"),
+        (20e3, BitsPerSecond, "20 kbps", "20 kbps", "20 kbps"),
+        (480e6, BitsPerSecond, "480 Mbps", "480 Mbps", "480 Mbps"),
+        (1e9, BitsPerSecond, "1 Gbps", "1 Gbps", "1 Gbps"),
+        (500.0, BitsPerSecond, "500 bps", "500 bps", "500 bps"),
+        (-40.0, DegreeCelsius, "−40 °C", "−40 °C", "-40 degC"),
+        (125.0, DegreeCelsius, "125 °C", "125 °C", "125 degC"),
     ];
     for (base, unit, eng, rkm, ascii) in rows {
         assert_eq!(render(base, unit.clone(), Engineering), eng, "{base:e} eng");
@@ -393,4 +416,159 @@ fn an_exponent_that_does_not_fit_is_refused_not_dropped() {
     // turn into "1e3" (1000) by dropping the unreadable exponent.
     assert!(quantity_from_parts("1e-99999999999", SiPrefix::Kilo, Unit::Ohm).is_err());
     assert!(quantity_from_parts("1e2147483647", SiPrefix::Kilo, Unit::Ohm).is_err());
+}
+
+/// components-cx decision 7: data rate is a real unit with k, M and G.
+#[test]
+fn a_data_rate_is_entered_in_a_prefix_and_stored_as_bits_per_second() {
+    let rate = parts("20", SiPrefix::Kilo, Unit::BitsPerSecond);
+    assert_eq!(rate.base(), 20_000.0);
+    assert_eq!(rate.to_string(), "20 kbps");
+    assert_eq!(quantity_from_stored(20.0, "kbps").unwrap(), rate);
+    assert_eq!(quantity_from_stored(20_000.0, "bps").unwrap(), rate);
+    // Bytes per second is not this unit; it is kept as written.
+    assert_eq!(
+        quantity_from_stored(20.0, "kBps").unwrap().unit(),
+        &Unit::Other("kBps".into())
+    );
+}
+
+/// components-cx decision 8: °C is a unit, takes no prefix, may be
+/// negative.
+#[test]
+fn celsius_takes_no_prefix_and_reads_its_spellings() {
+    let t = parts("-40", SiPrefix::One, Unit::DegreeCelsius);
+    assert_eq!(t.to_string(), "−40 °C");
+    for spelling in ["°C", "\u{2103}", "degC"] {
+        assert_eq!(
+            quantity_from_stored(-40.0, spelling).unwrap(),
+            t,
+            "{spelling}"
+        );
+    }
+    assert!(matches!(
+        quantity_from_parts("1", SiPrefix::Kilo, Unit::DegreeCelsius),
+        Err(MantissaError::PrefixNotAllowed(_))
+    ));
+}
+
+/// The new units sort after every older family, so existing sorted
+/// columns keep their order.
+#[test]
+fn new_units_rank_after_the_older_families() {
+    let mut keys = [
+        q(25.0, Unit::DegreeCelsius),
+        q(1e6, Unit::BitsPerSecond),
+        q(18.0, Unit::Awg),
+        q(1.0, Unit::Ohm),
+    ];
+    keys.sort_by(compare_for_sort);
+    let units: Vec<&Unit> = keys.iter().map(Quantity::unit).collect();
+    assert_eq!(
+        units,
+        [
+            &Unit::Ohm,
+            &Unit::Awg,
+            &Unit::BitsPerSecond,
+            &Unit::DegreeCelsius
+        ]
+    );
+    assert_eq!(
+        sort_key_from_value_text("20kbps"),
+        Some(q(20e3, Unit::BitsPerSecond))
+    );
+    assert_eq!(
+        sort_key_from_value_text("125 °C"),
+        Some(q(125.0, Unit::DegreeCelsius))
+    );
+}
+
+#[test]
+fn the_displayed_number_drops_prefix_and_unit() {
+    assert_eq!(q(100e-9, Unit::Farad).displayed_number(), 100.0);
+    assert_eq!(q(4700.0, Unit::Ohm).displayed_number(), 4.7);
+    assert_eq!(q(-40.0, Unit::DegreeCelsius).displayed_number(), -40.0);
+    assert_eq!(q(1.2e-16, Unit::Farad).displayed_number(), 1.2e-16);
+    assert_eq!(q(100e-9, Unit::Farad).number_in(SiPrefix::Micro), 0.1);
+    assert_eq!(q(3.3, Unit::Volt).number_in(SiPrefix::Milli), 3300.0);
+    assert_eq!(q(0.1 + 0.2, Unit::Volt).number_in(SiPrefix::One), 0.3);
+}
+
+fn range(a: f64, b: f64, unit: Unit) -> QuantityRange {
+    QuantityRange::new(q(a, unit.clone()), q(b, unit)).unwrap()
+}
+
+#[test]
+fn a_range_orders_its_ends_and_refuses_mixed_units() {
+    let r = range(3.6, 3.0, Unit::Volt);
+    assert_eq!((r.low().base(), r.high().base()), (3.0, 3.6));
+    assert_eq!(r.end(RangeEnd::Max).base(), 3.6);
+    assert!(QuantityRange::new(q(1.0, Unit::Volt), q(1.0, Unit::Ampere)).is_none());
+    // A one-point range is valid.
+    assert!(range(5.0, 5.0, Unit::Volt).covers(&q(5.0, Unit::Volt)));
+}
+
+#[test]
+fn covers_and_within_include_the_ends() {
+    let supply = range(3.0, 3.6, Unit::Volt);
+    assert!(supply.covers(&q(3.3, Unit::Volt)));
+    assert!(supply.covers(&q(3.0, Unit::Volt)));
+    assert!(supply.covers(&q(3.6, Unit::Volt)));
+    assert!(!supply.covers(&q(5.0, Unit::Volt)));
+    assert!(!supply.covers(&q(3.3, Unit::Ampere)));
+    let temp = range(-40.0, 85.0, Unit::DegreeCelsius);
+    let c = |b| q(b, Unit::DegreeCelsius);
+    assert!(temp.is_within(&c(-40.0), &c(125.0)));
+    assert!(!temp.is_within(&c(-20.0), &c(125.0)));
+    assert!(!temp.is_within(&c(-40.0), &c(70.0)));
+}
+
+#[test]
+fn display_ends_share_a_prefix_or_carry_their_own() {
+    use ValueStyle::*;
+    let show = |r: &QuantityRange| r.display_ends(Engineering);
+    assert_eq!(
+        show(&range(3.0, 3.6, Unit::Volt)),
+        ("3".into(), "3.6 V".into())
+    );
+    assert_eq!(
+        show(&range(-40.0, 125.0, Unit::DegreeCelsius)),
+        ("−40".into(), "125 °C".into())
+    );
+    assert_eq!(
+        show(&range(0.5, 5.5, Unit::Volt)),
+        ("500 mV".into(), "5.5 V".into())
+    );
+    assert_eq!(
+        range(-40.0, 125.0, Unit::DegreeCelsius).display_ends(Ascii),
+        ("-40".into(), "125 degC".into())
+    );
+    assert_eq!(
+        range(2e3, 1e6, Unit::BitsPerSecond).display_ends(Engineering),
+        ("2 kbps".into(), "1 Mbps".into())
+    );
+}
+
+#[test]
+fn ranges_sort_by_the_chosen_end_then_the_other() {
+    use std::cmp::Ordering::*;
+    let a = range(-40.0, 85.0, Unit::DegreeCelsius);
+    let b = range(-40.0, 125.0, Unit::DegreeCelsius);
+    let c = range(0.0, 85.0, Unit::DegreeCelsius);
+    assert_eq!(compare_ranges(&a, &b, RangeEnd::Max), Less);
+    assert_eq!(compare_ranges(&c, &b, RangeEnd::Max), Less);
+    assert_eq!(
+        compare_ranges(&a, &c, RangeEnd::Max),
+        Less,
+        "tie on max, then min"
+    );
+    assert_eq!(compare_ranges(&c, &b, RangeEnd::Min), Greater);
+    assert_eq!(compare_ranges(&a, &a.clone(), RangeEnd::Min), Equal);
+}
+
+#[test]
+fn range_end_serialises_as_min_or_max() {
+    assert_eq!(serde_json::to_string(&RangeEnd::Max).unwrap(), "\"max\"");
+    let back: RangeEnd = serde_json::from_str("\"min\"").unwrap();
+    assert_eq!(back, RangeEnd::Min);
 }

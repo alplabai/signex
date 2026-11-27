@@ -330,6 +330,7 @@ fn with_slot_template(app: &mut Signex, root: &Path) {
             slot("count", ParamKind::Number, None),
             slot("note", ParamKind::Text, None),
         ],
+        ..ParameterTemplate::default()
     };
     let library_id = app.library.library_at(root).expect("library").library_id;
     std::sync::Arc::make_mut(&mut app.library.template_registry)
