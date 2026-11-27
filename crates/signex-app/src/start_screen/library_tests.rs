@@ -60,10 +60,10 @@ fn every_row_shows_its_version_control_state() {
     assert_eq!(attention, 2, "{texts:#?}");
 }
 
-/// A row whose state is not read yet draws nothing in the column rather
-/// than a guess.
+/// Ruled 2026-11-27: a row whose state is not read yet shows `…`, never a
+/// state it may not have.
 #[test]
-fn a_row_not_read_yet_shows_no_state() {
+fn a_row_not_read_yet_shows_a_placeholder() {
     let mut fx = Fixture::new(&[]).on(StartPage::Libraries);
     fx.libraries = vec![libraries_page::sample(
         "fresh",
@@ -74,6 +74,7 @@ fn a_row_not_read_yet_shows_no_state() {
     for label in ["git", "off", "needs attention"] {
         assert!(texts.iter().all(|t| plain(&t.text) != label), "{label}");
     }
+    assert!(texts.iter().any(|t| plain(&t.text) == "…"), "{texts:#?}");
 }
 
 /// Decided 2026-11-27: "off" is a link that opens Enable Version Control for

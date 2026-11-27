@@ -252,6 +252,7 @@ define_ids! {
     START_LIBRARIES_NONE_BODY = "start-libraries-none-body";
     START_LIBRARIES_COLUMN_VERSION_CONTROL = "start-libraries-column-version-control";
     START_LIBRARIES_VCS_NONE = "start-libraries-vcs-none";
+    START_LIBRARIES_VCS_PENDING = "start-libraries-vcs-pending";
     START_LIBRARIES_VCS_GIT = "start-libraries-vcs-git";
     START_LIBRARIES_VCS_OFF = "start-libraries-vcs-off";
     START_LIBRARIES_VCS_ATTENTION = "start-libraries-vcs-attention";

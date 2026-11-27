@@ -305,13 +305,14 @@ pub fn is_removable(scope: ComponentsMountSource) -> bool {
 
 /// The Version control cell (#2591): `—` for Stock, a `git` pill, `off` as
 /// a link to Enable Version Control, or a "needs attention" pill over its
-/// reason. Empty until the state is read.
+/// reason. `…` until the state is read, so a pending read never looks
+/// like no version control.
 fn vcs_cell<'a>(tokens: &ThemeTokens, i18n: &I18n, lib: &LoadedLibrary) -> Element<'a, Message> {
     if lib.scope == ComponentsMountSource::Stock {
         return quiet_text(tokens, t!(i18n, ids::START_LIBRARIES_VCS_NONE));
     }
     match &lib.vcs {
-        None => Space::new().boxed(),
+        None => quiet_text(tokens, t!(i18n, ids::START_LIBRARIES_VCS_PENDING)),
         Some(LibraryVcsState::Git) => {
             pill(tokens, t!(i18n, ids::START_LIBRARIES_VCS_GIT), PillTone::Ok)
         }

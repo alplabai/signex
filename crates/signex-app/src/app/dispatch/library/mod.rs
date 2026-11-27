@@ -98,9 +98,9 @@ mod save_all_cascade_tests;
 mod settings;
 #[cfg(test)]
 mod settings_tests;
-mod start_libraries;
 #[cfg(test)]
 mod stale_row_tests;
+mod start_libraries;
 mod stock_copy;
 mod updates;
 mod use_site;
@@ -662,7 +662,16 @@ impl Signex {
                 self.handle_components_panel_add_library(source)
             }
             LibraryMessage::ComponentsPanelAddLibraryAt { source, path } => {
-                self.handle_components_panel_add_library_at(source, path)
+                // A library added while the Libraries page shows gets its
+                // version control read like the rest (#2591).
+                let picked = path.is_some();
+                let added = self.handle_components_panel_add_library_at(source, path);
+                let read = if picked {
+                    self.refresh_start_library_vcs()
+                } else {
+                    Task::none()
+                };
+                Task::batch([added, read])
             }
             LibraryMessage::ComponentsPanelPromoteToGlobal(path) => {
                 self.handle_components_panel_promote_to_global(path)

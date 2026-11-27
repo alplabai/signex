@@ -369,6 +369,8 @@ start-libraries-none-body = Add a library to use its parts in every project.
 start-libraries-column-version-control = VERSION CONTROL
 # The library that comes with the install has no version control to show.
 start-libraries-vcs-none = —
+# Shown while the library's version control is still being read.
+start-libraries-vcs-pending = …
 start-libraries-vcs-git = git
 # A link: pressing it opens Enable Version Control for the library.
 start-libraries-vcs-off = off

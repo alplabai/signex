@@ -278,3 +278,35 @@ fn a_global_library_leaves_the_saved_list_on_a_worker() {
     );
     assert!(app.library.global_libraries.is_empty());
 }
+
+/// A library on disk that is not mounted: what Add library… picks.
+fn library_on_disk(app: &mut Signex, dir: &Path, name: &str) -> PathBuf {
+    let file = mounted_library(app, dir, name);
+    app.library.close_library(&file);
+    app.library.unmounted.clear();
+    file
+}
+
+/// Ruled 2026-11-27: Add library… while the Libraries page shows reads the
+/// version control again, so the new row gets its state.
+#[test]
+fn a_library_added_while_the_page_shows_gets_its_state_read() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _startup) = Signex::new();
+    let file = library_on_disk(&mut app, dir.path(), "Added");
+    let folder = file.parent().unwrap().to_path_buf();
+    app.ui_state.start_screen.page = StartPage::Libraries;
+
+    let task = app.update(Message::Library(
+        LibraryMessage::ComponentsPanelAddLibraryAt {
+            source: crate::library::state::ComponentsMountSource::Installed,
+            path: Some(file.clone()),
+        },
+    ));
+    assert!(app.library.library_at(&file).is_some());
+    settle(&mut app, task);
+    assert_eq!(
+        app.ui_state.start_screen.library_vcs.get(&folder),
+        Some(&LibraryVcsState::Off)
+    );
+}
