@@ -471,7 +471,7 @@ impl Signex {
             .as_deref()
             .and_then(|target| self.footprint_editor_at(target))
             .map(|e| e.state.snap_options);
-        tracing::info!(
+        tracing::debug!(
             target: "signex::ui",
             has_snap = editor_snap.is_some(),
             "GridPropertiesOpen received",

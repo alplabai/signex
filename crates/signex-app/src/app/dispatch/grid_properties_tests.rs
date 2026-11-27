@@ -299,3 +299,43 @@ fn the_os_close_of_the_detached_window_closes_the_dialog_with_a_label_open() {
     let _ = app.update(Message::Window(WindowMsg::WindowCloseRequested(window)));
     assert!(app.ui_state.grid_properties.is_none());
 }
+
+/// Mockup row 142 (#3012): opening Grid Properties through `Signex::update`
+/// posts nothing to Messages; its open trace is a debug line, which the
+/// panel does not list.
+#[test]
+fn opening_grid_properties_posts_nothing_to_messages() {
+    use crate::app::Message;
+    let mut app = app_with_footprint_editor();
+    let before = crate::diagnostics::said_on_this_thread();
+    let _ = app.update(Message::GridProperties(GridPropertiesMsg::Open));
+    assert!(app.ui_state.grid_properties.is_some(), "the dialog opened");
+    if crate::diagnostics::configured_level() < log::LevelFilter::Debug {
+        assert_eq!(
+            crate::diagnostics::said_on_this_thread(),
+            before,
+            "opening Grid Properties reached the Messages panel"
+        );
+    }
+}
+
+/// The same through the dialog's own handler, and with no footprint in
+/// view, where the dialog stays closed: neither says anything either.
+#[test]
+fn the_grid_properties_handler_says_nothing_on_open() {
+    let said_by = |app: &mut Signex| {
+        let before = crate::diagnostics::said_on_this_thread();
+        send(app, GridPropertiesMsg::Open);
+        crate::diagnostics::said_on_this_thread() - before
+    };
+    let mut app = app_with_footprint_editor();
+    let with_footprint = said_by(&mut app);
+    assert!(app.ui_state.grid_properties.is_some());
+    let (mut bare, _boot) = Signex::new();
+    let without = said_by(&mut bare);
+    assert!(bare.ui_state.grid_properties.is_none());
+    if crate::diagnostics::configured_level() < log::LevelFilter::Debug {
+        assert_eq!(with_footprint, 0, "with a footprint: nothing said");
+        assert_eq!(without, 0, "no footprint: nothing said");
+    }
+}

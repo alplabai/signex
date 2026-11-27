@@ -6,10 +6,14 @@
 //! The scale is picked so one coarse cell is about a fifth of the width,
 //! within [`MIN_PX_PER_MM`]..[`MAX_PX_PER_MM`]; a fine grid whose pitch
 //! falls under [`MIN_PITCH_EM`] is not drawn, and a note says so.
+//!
+//! It is a board-style preview (mockup row 142): the board ground and the
+//! Graphite Dark inks in both chrome themes, the pad filled in top copper.
 
-use iced::{Point, Rectangle, Size};
+use iced::{Color, Point, Rectangle, Size};
 use signex_i18n::{I18n, ids, t};
 use signex_types::coord::Unit;
+use signex_types::theme::{ThemeId, ThemeTokens, theme_tokens};
 use signex_widgets::LengthFormat;
 use signex_widgets::dimension_label::{DimensionLabel, LabelAnchor};
 use signex_widgets::property_illustration::{
@@ -20,6 +24,7 @@ use signex_widgets::property_illustration::{
 use crate::app::GridPropertiesState;
 pub(crate) use crate::app::contracts::grid_properties::PreviewLabel;
 use crate::library::editor::footprint::GridDisplay;
+use crate::styles::board_palette::{BoardPalette, BoardSwatch};
 
 /// Preview height in body ems: about 200 px folded, taller expanded.
 pub(crate) const HEIGHT_EM: f32 = 16.5;
@@ -48,8 +53,30 @@ const COARSE_DOT_EM: f32 = 0.1;
 /// The scale pad, in mm, and where it sits as a share of the size.
 const PAD_MM: (f32, f32) = (1.55, 0.6);
 const PAD_AT: (f32, f32) = (0.68, 0.45);
+/// Opacity of the scale pad's copper fill (mockup row 142).
+const PAD_ALPHA: f32 = 0.8;
 /// Decimals the labels show, in mm.
 const LABEL_DECIMALS: usize = 3;
+
+/// The ground the preview draws on: the board canvas, in both themes.
+pub(crate) fn ground() -> Color {
+    BoardPalette::new().canvas
+}
+
+/// The tokens the preview's inks, labels and expand button take: Graphite
+/// Dark, so they read on the board ground under either chrome theme.
+pub(crate) fn board_tokens() -> ThemeTokens {
+    theme_tokens(ThemeId::GraphiteDark)
+}
+
+/// The scale pad's fill: top copper from the board palette.
+pub(crate) fn pad_fill() -> Color {
+    let copper = BoardPalette::new().swatch(BoardSwatch::TopCopper);
+    Color {
+        a: copper.a * PAD_ALPHA,
+        ..copper
+    }
+}
 
 /// The preview's size in px and the text size its metrics derive from.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -306,7 +333,7 @@ fn origin_cross(parts: &mut Vec<Part>, s: &Scale, size: PreviewSize) {
     }
 }
 
-/// A pad at true scale, centred on the fine node nearest its spot.
+/// A filled pad at true scale, centred on the fine node nearest its spot.
 fn pad(s: &Scale, size: PreviewSize) -> Part {
     let snap = |at: f32, origin: f32| {
         if s.fine > 0.0 {
@@ -324,7 +351,7 @@ fn pad(s: &Scale, size: PreviewSize) -> Part {
             rect,
             radius: h * 0.25,
         },
-        Style::outline(Ink::Accent, Weight::Regular).with_fill(Paint::Ink(Ink::Accent), Tint::Body),
+        Style::filled(Paint::Document(pad_fill()), Tint::Solid),
     )
 }
 
