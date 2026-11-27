@@ -49,6 +49,7 @@ fn app_with_cached_library_over(
         pricing: Default::default(),
         own_edit_stamp: None,
         display: LibraryDisplaySettings::default(),
+        provenance: Default::default(),
     });
     let saved = dir.join("symbols").join("just-saved.snxsym");
     (app, saved)
@@ -214,6 +215,7 @@ fn a_post_save_refresh_for_a_library_closed_before_it_lands_is_dropped() {
         pricing: Default::default(),
         own_edit_stamp: None,
         display: LibraryDisplaySettings::default(),
+        provenance: Default::default(),
     });
 
     crate::app::path_ops::settle_task(&mut app, task);

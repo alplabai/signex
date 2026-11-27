@@ -61,7 +61,7 @@ fn send(app: &mut Signex, msg: LayerStackMsg) {
 }
 
 fn facts(app: &Signex) -> LayerStackFacts {
-    app.document_state
+    app.document_view
         .panel_ctx
         .layer_stack
         .clone()
@@ -404,7 +404,7 @@ fn the_net_table_and_the_stack_follow_an_edit_and_its_undo() {
     app.open_pcb_tab(path.clone(), "board".into(), with_net);
     app.refresh_panel_ctx();
     let length = |app: &Signex| {
-        let nets = app.document_state.panel_ctx.pcb_nets.as_ref();
+        let nets = app.document_view.panel_ctx.pcb_nets.as_ref();
         nets.expect("the net table").nets[0].length_mm
     };
     assert_eq!(length(&app), 5.0);
@@ -445,7 +445,7 @@ fn an_undocked_windows_net_table_and_stack_follow_an_edit_and_its_undo() {
     let mut app = app_workspace(&dir.path().to_string_lossy(), &[]);
     let path = dir.path().join("board.snxpcb");
     app.open_pcb_tab(path.clone(), "board".into(), with_net);
-    app.document_state
+    app.document_view
         .dock
         .add_panel(PanelPosition::Right, PanelKind::PcbNets);
 

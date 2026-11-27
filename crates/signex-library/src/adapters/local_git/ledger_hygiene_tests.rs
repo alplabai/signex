@@ -14,6 +14,7 @@ fn manifest(name: &str) -> SnxlibManifest {
         library: LibrarySection {
             name: name.into(),
             description: None,
+            ..Default::default()
         },
         mode: LibraryMode::default(),
         workflow: WorkflowConfig::default(),

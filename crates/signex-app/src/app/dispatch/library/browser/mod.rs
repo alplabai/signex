@@ -143,7 +143,7 @@ impl Signex {
         // not global) the first time a browser tab opens this session.
         // This session's edits win over the disk: a debounced write may
         // not have landed yet.
-        let persisted_search = match self.document_state.search_prefs.library_search(&path) {
+        let persisted_search = match self.document_view.search_prefs.library_search(&path) {
             Some(typed) => typed,
             None => crate::fonts::read_library_browser_searches()
                 .remove(&path)

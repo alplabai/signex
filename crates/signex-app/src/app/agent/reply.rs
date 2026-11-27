@@ -8,10 +8,9 @@ use std::path::PathBuf;
 
 use serde::Serialize;
 use serde_json::Value;
-use signex_i18n::RenderTranslatable;
 
 use crate::app::Signex;
-use crate::app::command::CommandOutcome;
+use crate::app::command::{CommandOutcome, RequestOutcome};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -40,47 +39,16 @@ pub struct MessageLine {
 }
 
 /// What a dispatch outcome means for the result line. A `Ran` that left an
-/// error notice failed; nothing unknown is ever reported as ran.
+/// error notice failed; nothing unknown is ever reported as ran. This is the
+/// one reading, [`RequestOutcome`], as a reply's status, reason and data.
 pub fn outcome_verdict(
     id: &str,
     outcome: CommandOutcome,
     notice: Option<String>,
 ) -> (Status, Option<String>, Option<Value>) {
-    match outcome {
-        CommandOutcome::Ran => match notice {
-            Some(why) => (Status::Failed, Some(why), None),
-            None => (Status::Ran, None, None),
-        },
-        CommandOutcome::UnknownId => (
-            Status::Refused,
-            Some(format!(
-                "unknown command `{id}`{}",
-                crate::keymap::did_you_mean(id)
-            )),
-            None,
-        ),
-        CommandOutcome::NoBridgeArm => (
-            Status::Refused,
-            Some(format!(
-                "not runnable headless: `{id}` has no dispatch arm yet"
-            )),
-            None,
-        ),
-        // A command that made nothing because the app said why in an error
-        // notice (an open of a missing file) failed; it was not refused.
-        CommandOutcome::Disabled { reason } => match notice {
-            Some(why) => (Status::Failed, Some(why), None),
-            // en-US, so the reply stays locale-invariant.
-            None => (Status::Refused, Some(reason.render_en_us()), None),
-        },
-        // A query ran: what it found is the result, never a bare `ran`.
-        CommandOutcome::Answered(value) => (Status::Answered, None, Some(value)),
-        other => (
-            Status::Failed,
-            Some(format!("unexpected outcome {other:?}")),
-            None,
-        ),
-    }
+    RequestOutcome::of(id, outcome)
+        .after_notice(notice)
+        .into_verdict()
 }
 
 /// The state a command can change, per document: engine revision and unsaved

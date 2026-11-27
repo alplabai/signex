@@ -78,6 +78,7 @@ fn fixture_project_with_companions(stem: &str) -> (Signex, TempDir, PathBuf) {
         schematic_design: Default::default(),
         fab_outputs: None,
         router_tool_diameter: None,
+        bom_alternates: Vec::new(),
         requirements: Default::default(),
         parameters: Default::default(),
         unknown: Default::default(),
@@ -310,7 +311,7 @@ fn remove_delete_choice_refuses_shared_library_outside_project() {
     assert!(lib_dir.is_dir(), "shared library must survive DeleteFile");
     assert!(inner.exists(), "shared library contents must survive");
     let notice = app
-        .document_state
+        .document_view
         .error_notice
         .as_ref()
         .expect("refusal must be surfaced to the user");
@@ -333,7 +334,7 @@ fn remove_delete_choice_refuses_shared_library_file_outside_project() {
     );
 
     assert!(outside.exists(), "file outside the project must survive");
-    assert!(app.document_state.error_notice.is_some());
+    assert!(app.document_view.error_notice.is_some());
 }
 
 #[test]
@@ -350,7 +351,7 @@ fn remove_delete_choice_still_deletes_project_local_library() {
     );
 
     assert!(!lib_dir.exists(), "project-local package may be deleted");
-    assert!(app.document_state.error_notice.is_none());
+    assert!(app.document_view.error_notice.is_none());
 }
 
 /// #139 — kind beats path: a Shared library whose package physically sits
@@ -381,7 +382,7 @@ fn remove_delete_choice_refuses_shared_library_inside_project_folder() {
     assert!(lib_dir.is_dir(), "Shared library must survive DeleteFile");
     assert!(inner.exists(), "Shared library contents must survive");
     let notice = app
-        .document_state
+        .document_view
         .error_notice
         .as_ref()
         .expect("refusal must be surfaced");
@@ -421,12 +422,12 @@ fn find_tree_path(
 fn open_remove_dialog_for_label(app: &mut Signex, label: &str) {
     refresh_tree(app);
     let path = find_tree_path(
-        &app.document_state.panel_ctx.project_tree,
+        &app.document_view.panel_ctx.project_tree,
         label,
         &mut Vec::new(),
     )
     .unwrap_or_else(|| panic!("tree row {label} must exist"));
-    let key = signex_widgets::tree_view::key_of(&app.document_state.panel_ctx.project_tree, &path)
+    let key = signex_widgets::tree_view::key_of(&app.document_view.panel_ctx.project_tree, &path)
         .expect("row key");
     let _ = app.update(Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
         ProjectTreeAction::OpenRemoveDialog(key),
@@ -512,7 +513,7 @@ fn f10_save_clears_dirty_paths_and_refreshes_panel_ctx() {
     // Tree row dirty dot: panel_ctx.projects[0].is_dirty must read false
     // after save. Pre-F10 fix, refresh_panel_ctx wasn't called inside
     // save_active_document so the cached snapshot kept is_dirty=true.
-    let projects = &app.document_state.panel_ctx.projects;
+    let projects = &app.document_view.panel_ctx.projects;
     assert!(
         !projects.is_empty(),
         "panel_ctx.projects must be populated after save (proves refresh ran)"
@@ -858,6 +859,7 @@ fn loaded_project_data_round_trips_via_write_then_parse() {
         schematic_design: Default::default(),
         fab_outputs: None,
         router_tool_diameter: None,
+        bom_alternates: Vec::new(),
         requirements: Default::default(),
         parameters: Default::default(),
         unknown: Default::default(),
@@ -1111,7 +1113,7 @@ fn app_exit_save_all_never_loses_an_unsaveable_file() {
     // Modal resolved, but the unsaveable file is reported and retained.
     assert!(app.ui_state.app_quit_confirm.is_none());
     assert!(
-        app.document_state.error_notice.is_some(),
+        app.document_view.error_notice.is_some(),
         "Save All must report files it could not save"
     );
     assert!(
@@ -1192,7 +1194,7 @@ fn new_project_opens_the_project_and_returns_the_open_task() {
     let task = app.update(messages.pop().unwrap());
 
     assert!(
-        app.document_state.error_notice.is_none(),
+        app.document_view.error_notice.is_none(),
         "creating a project in an empty directory must not raise an error notice"
     );
     assert!(prj_path.exists() && sch_path.exists(), "files not created");
@@ -1328,7 +1330,7 @@ fn a_corrupt_snxsym_raises_the_error_card_naming_the_file() {
     crate::settle_support::settle(&mut app, Message::File(FileMsg::Opened(Some(sym.clone()))));
 
     let notice = app
-        .document_state
+        .document_view
         .error_notice
         .as_ref()
         .expect("a corrupt .snxsym must raise the error card, not fail silently");
@@ -1361,7 +1363,7 @@ fn a_valid_snxsym_leaves_the_error_card_clear() {
     crate::settle_support::settle(&mut app, Message::File(FileMsg::Opened(Some(sym))));
 
     assert!(
-        app.document_state.error_notice.is_none(),
+        app.document_view.error_notice.is_none(),
         "a successful open must not raise the error card"
     );
 }
@@ -1375,7 +1377,7 @@ fn dismissing_the_card_clears_it() {
     let (mut app, _t) = Signex::new();
     crate::settle_support::settle(&mut app, Message::File(FileMsg::Opened(Some(sym))));
     assert!(
-        app.document_state.error_notice.is_some(),
+        app.document_view.error_notice.is_some(),
         "card should be up"
     );
 
@@ -1385,7 +1387,7 @@ fn dismissing_the_card_clears_it() {
     let _ = app.update(Message::Overlay(OverlayMsg::DismissErrorNotice));
 
     assert!(
-        app.document_state.error_notice.is_none(),
+        app.document_view.error_notice.is_none(),
         "OverlayMsg::DismissErrorNotice must clear the card"
     );
 }
@@ -1432,6 +1434,7 @@ fn fixture_schematic_with_symbol_and_child_sheet()
             on_board: true,
             exclude_from_sim: false,
             locked: false,
+            net_tie: false,
             fields: HashMap::new(),
             custom_properties: Vec::new(),
             pin_uuids: HashMap::new(),
@@ -1552,7 +1555,7 @@ fn save_all_writes_dirty_snxprj_and_clears_dirty_marker() {
         "Save All must resolve the modal"
     );
     assert!(
-        app.document_state.error_notice.is_none(),
+        app.document_view.error_notice.is_none(),
         "the real project's .snxprj is saveable — Save All must not report a failure"
     );
     assert!(
@@ -1605,6 +1608,7 @@ fn insert_other_project(app: &mut Signex, index: usize) -> (TempDir, PathBuf) {
                 schematic_design: Default::default(),
                 fab_outputs: None,
                 router_tool_diameter: None,
+                bom_alternates: Vec::new(),
                 requirements: Default::default(),
                 parameters: Default::default(),
                 unknown: Default::default(),
@@ -1750,7 +1754,7 @@ fn new_project_write_failure_reaches_the_user_after_the_task_runs() {
     );
 
     let notice = app
-        .document_state
+        .document_view
         .error_notice
         .as_ref()
         .expect("a failed create must be reported");
@@ -1801,7 +1805,7 @@ fn failed_new_project_clears_pending_and_a_retry_starts_a_worker() {
         &mut app,
         Message::File(FileMsg::NewProject(Some(prj_path.clone()))),
     );
-    assert!(app.document_state.error_notice.is_some());
+    assert!(app.document_view.error_notice.is_some());
     assert!(!app.document_state.pending_opens.contains(&prj_path));
 
     let retry = app.update(Message::File(FileMsg::NewProject(Some(prj_path))));
@@ -1824,7 +1828,7 @@ fn new_project_keeps_an_existing_nonempty_project_byte_identical() {
 
     assert_eq!(fs::read(&prj_path).unwrap(), b"precious");
     let notice = app
-        .document_state
+        .document_view
         .error_notice
         .as_ref()
         .expect("a refusal must reach the user");
@@ -1863,14 +1867,14 @@ fn project_git_commit_done_reloads_history_of_the_shown_file() {
     });
     app.document_state.active_tab = 0;
     // Panel already shows the file (as after a settled load).
-    app.document_state.history.source_key = Some(tab_path.clone());
-    app.document_state.history.active_path = Some(tab_path.clone());
-    let before = app.document_state.history.generation;
+    app.document_view.history.source_key = Some(tab_path.clone());
+    app.document_view.history.active_path = Some(tab_path.clone());
+    let before = app.document_view.history.generation;
     let _ = app.update(Message::Project(ProjectMsg::GitCommitDone {
         project_root: tab_path.parent().unwrap().to_path_buf(),
         rel_path: PathBuf::from(tab_path.file_name().unwrap()),
         result: Ok(Some("deadbeef".to_string())),
     }));
-    assert_ne!(app.document_state.history.generation, before);
-    assert!(app.document_state.history.loading);
+    assert_ne!(app.document_view.history.generation, before);
+    assert!(app.document_view.history.loading);
 }

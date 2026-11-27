@@ -63,6 +63,7 @@ fn app_with_libraries(
             schematic_design: Default::default(),
             fab_outputs: None,
             router_tool_diameter: None,
+            bom_alternates: Vec::new(),
             requirements: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
@@ -126,7 +127,7 @@ fn tree_action(app: &mut Signex, action: ProjectTreeAction) {
 
 /// The key of the tree row at index path `path`.
 fn row_key(app: &Signex, path: &[usize]) -> Vec<String> {
-    signex_widgets::tree_view::key_of(app.document_state.panel_ctx.project_tree.as_slice(), path)
+    signex_widgets::tree_view::key_of(app.document_view.panel_ctx.project_tree.as_slice(), path)
         .expect("row exists")
 }
 

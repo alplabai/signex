@@ -246,7 +246,7 @@ mod tests {
                 !app.ui_state.profile_writes.is_idle(),
                 app.machine_rules_issue(),
                 None,
-                &app.document_state.panel_ctx.tokens,
+                &app.document_view.panel_ctx.tokens,
                 &app.ui_state.i18n,
             );
             crate::layout_probe::lay_out_texts(element, iced::Size::new(1000.0, 900.0))

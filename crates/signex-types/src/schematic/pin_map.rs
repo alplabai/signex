@@ -10,6 +10,8 @@ pub enum PinMatchedBy {
     Number,
     /// No number match left; same non-empty pin name.
     Name,
+    /// Picked by hand in the pin mapping of Change Component (#2954).
+    Chosen,
 }
 
 /// One old pin paired with the new pin that takes over its connection.
@@ -28,6 +30,56 @@ pub struct PinMapping {
     pub pairs: Vec<PinPair>,
     /// Keys of the old pins no new pin took over.
     pub unmatched: Vec<String>,
+}
+
+impl PinMapping {
+    /// The new pin that takes over old pin `old`, if any.
+    pub fn new_of(&self, old: &str) -> Option<&str> {
+        self.pairs
+            .iter()
+            .find(|p| p.old == old)
+            .map(|p| p.new.as_str())
+    }
+
+    /// This mapping with old pin `old` taken over by new pin `new`, picked by
+    /// hand, or by no pin (`None`). A new pin serves one old pin, so the old
+    /// pin `new` served before is left unmatched. An `old` the mapping does
+    /// not list changes nothing.
+    #[must_use]
+    pub fn remapped(mut self, old: &str, new: Option<&str>) -> Self {
+        let listed =
+            self.pairs.iter().any(|p| p.old == old) || self.unmatched.iter().any(|k| k == old);
+        if !listed || self.new_of(old) == new {
+            return self;
+        }
+        if let Some(new) = new
+            && let Some(at) = self.pairs.iter().position(|p| p.new == new)
+        {
+            let freed = self.pairs.remove(at);
+            self.unmatched.push(freed.old);
+        }
+        let paired = self.pairs.iter().position(|p| p.old == old);
+        match (new, paired) {
+            (Some(new), Some(at)) => {
+                self.pairs[at].new = new.to_string();
+                self.pairs[at].by = PinMatchedBy::Chosen;
+            }
+            (Some(new), None) => {
+                self.unmatched.retain(|k| k != old);
+                self.pairs.push(PinPair {
+                    old: old.to_string(),
+                    new: new.to_string(),
+                    by: PinMatchedBy::Chosen,
+                });
+            }
+            (None, Some(at)) => {
+                self.pairs.remove(at);
+                self.unmatched.push(old.to_string());
+            }
+            (None, None) => {}
+        }
+        self
+    }
 }
 
 /// Reads the label one matching pass compares.
@@ -178,6 +230,56 @@ mod tests {
         let m = map(&[lp("1", "P"), lp("2", "P")], &[lp("7", "P")]);
         assert_eq!(m.pairs, vec![pair("1", "7", PinMatchedBy::Name)]);
         assert_eq!(m.unmatched, vec!["2".to_string()]);
+    }
+
+    fn two_by_number() -> PinMapping {
+        map(&[lp("1", "A"), lp("2", "B")], &[lp("1", "A"), lp("2", "B")])
+    }
+
+    #[test]
+    fn a_remapped_pin_takes_the_new_pin_and_frees_the_one_that_held_it() {
+        let m = two_by_number().remapped("1", Some("2"));
+        assert_eq!(m.pairs, vec![pair("1", "2", PinMatchedBy::Chosen)]);
+        assert_eq!(m.unmatched, vec!["2".to_string()]);
+        assert_eq!(m.new_of("1"), Some("2"));
+        assert_eq!(m.new_of("2"), None);
+    }
+
+    #[test]
+    fn a_pin_mapped_to_none_is_unmatched_and_an_unmatched_pin_can_be_paired() {
+        let m = two_by_number().remapped("2", None);
+        assert_eq!(m.pairs, vec![pair("1", "1", PinMatchedBy::Number)]);
+        assert_eq!(m.unmatched, vec!["2".to_string()]);
+        let back = m.remapped("2", Some("2"));
+        assert_eq!(
+            back.pairs,
+            vec![
+                pair("1", "1", PinMatchedBy::Number),
+                pair("2", "2", PinMatchedBy::Chosen)
+            ]
+        );
+        assert!(back.unmatched.is_empty());
+    }
+
+    #[test]
+    fn remapping_an_unknown_pin_or_to_the_same_pin_changes_nothing() {
+        assert_eq!(two_by_number().remapped("9", Some("1")), two_by_number());
+        assert_eq!(two_by_number().remapped("1", Some("1")), two_by_number());
+    }
+
+    #[test]
+    fn swapping_two_pins_by_hand_pairs_both() {
+        let m = two_by_number()
+            .remapped("1", Some("2"))
+            .remapped("2", Some("1"));
+        assert_eq!(
+            m.pairs,
+            vec![
+                pair("1", "2", PinMatchedBy::Chosen),
+                pair("2", "1", PinMatchedBy::Chosen)
+            ]
+        );
+        assert!(m.unmatched.is_empty());
     }
 
     #[test]

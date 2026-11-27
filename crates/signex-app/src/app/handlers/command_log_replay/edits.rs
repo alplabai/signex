@@ -185,6 +185,13 @@ impl Signex {
                 targets,
                 message,
             } => self.run_editor_panel(path, targets, message),
+            ReplayInput::FootprintSwap {
+                footprints,
+                template,
+            } => match row.document.as_deref() {
+                Some(document) => self.replay_footprint_swap(document, footprints, template),
+                None => (refused(no_change()), Task::none()),
+            },
             _ => {
                 let outcome = match row.document.as_deref() {
                     Some(document) => self.run_document_input(document, input),
@@ -220,22 +227,27 @@ impl Signex {
                 Ok(_) => CommandOutcome::Ran,
                 Err(why) => refused_with(why),
             },
-            ReplayInput::FootprintSwap {
-                footprints,
-                template,
-            } => {
-                let before = self.board_revision(document);
-                self.swap_footprints(document, footprints, Ok(template.clone()));
-                let outcome = if self.board_revision(document) == before {
-                    refused(no_change())
-                } else {
-                    CommandOutcome::Ran
-                };
-                self.repaint_board_selection(document);
-                outcome
-            }
             _ => refused(no_change()),
         }
+    }
+
+    /// A recorded Change Footprint on `document`, with what its step left
+    /// to do.
+    fn replay_footprint_swap(
+        &mut self,
+        document: &Path,
+        footprints: &[uuid::Uuid],
+        template: &signex_types::pcb::Footprint,
+    ) -> (CommandOutcome, Task<Message>) {
+        let before = self.board_revision(document);
+        let task = self.swap_footprints(document, footprints, Ok(Box::new(template.clone())));
+        let outcome = if self.board_revision(document) == before {
+            refused(no_change())
+        } else {
+            CommandOutcome::Ran
+        };
+        self.repaint_board_selection(document);
+        (outcome, task)
     }
 
     fn run_sheet_commands(&mut self, document: &Path, commands: &[Command]) -> CommandOutcome {

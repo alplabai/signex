@@ -6,17 +6,15 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use iced::Task;
-use signex_engine::pcb::eco::{CompareJump, CompareReport, Compared, Direction, compare};
+use signex_engine::pcb::eco::{CompareJump, CompareReport, Direction};
 use signex_i18n::{MessageId, ids, t};
 use signex_net::cross_probe::PartOccurrence;
 
-use super::read::{CompareRead, CompareRequest, compute};
+use super::read::{CompareRead, compute};
 use super::{CompareBoardMsg, CompareBoardState, JumpSide};
-use crate::app::back_annotate::read::BackRequest;
-use crate::app::project_sheets::{plan_project_sheets_for, project_root_sheet_path};
+use crate::app::project_sheets::project_root_sheet_path;
 use crate::app::state::ErrorNotice;
 use crate::app::state::cross_select::{CrossSelection, PendingProbe};
-use crate::app::update_pcb::design::DesignRequest;
 use crate::app::update_pcb::{Phase, file_name};
 use crate::app::{Message, Signex};
 
@@ -116,6 +114,7 @@ impl Signex {
                 self.ui_state.compare_board = None;
                 Task::none()
             }
+            M::Job(msg) => self.dispatch_compare_job(msg),
         }
     }
 
@@ -186,51 +185,12 @@ impl Signex {
             return Task::none();
         };
         let (board_path, project_id) = (state.board.clone(), state.project);
-        let Some(project) = self.document_state.project_by_id(project_id) else {
-            let why = t!(self.ui_state.i18n, ids::COMPARE_BOARD_PROJECT_CLOSED).into_string();
-            self.fail_compare_board(why);
-            return Task::none();
-        };
-        let Some(root) = project_root_sheet_path(project) else {
-            let why = t!(self.ui_state.i18n, ids::COMPARE_BOARD_NO_SCHEMATIC).into_string();
-            self.fail_compare_board(why);
-            return Task::none();
-        };
-        let project_dir = project.dir().to_path_buf();
-        let Some(engine) = self.document_state.board_engine(&board_path) else {
-            self.fail_compare_board(self.compare_board_missing(&board_path));
-            return Task::none();
-        };
-        let (board, revision) = (engine.board().clone(), engine.revision());
-        let libraries = self.library_rows();
-        let open_revisions: Vec<(PathBuf, u64)> = self
-            .document_state
-            .engines
-            .iter()
-            .map(|(path, engine)| (path.clone(), engine.revision()))
-            .collect();
-        let naming = crate::app::saved_channel_naming::SavedChannelNaming::of(&project.data);
-        let request = CompareRequest {
-            design: DesignRequest {
-                naming: naming.clone(),
-                plan: plan_project_sheets_for(&self.document_state, &root),
-                project_dir: project_dir.clone(),
-                board: board.clone(),
-                revision,
-                libraries: libraries.clone(),
-                open_revisions: open_revisions.clone(),
-                previous: None,
-            },
-            back: BackRequest {
-                naming,
-                plan: plan_project_sheets_for(&self.document_state, &root),
-                project_dir,
-                board,
-                revision,
-                libraries,
-                open_revisions,
-                previous: None,
-            },
+        let request = match self.compare_request(project_id, &board_path) {
+            Ok(request) => request,
+            Err(why) => {
+                self.fail_compare_board(why);
+                return Task::none();
+            }
         };
         let Some(state) = self.ui_state.compare_board.as_mut() else {
             return Task::none();
@@ -282,15 +242,7 @@ impl Signex {
             }
         };
         self.log_compare_library_errors(&read);
-        let mut back = read.back.list.clone();
-        self.block_values_shared_elsewhere(owner, &read.back, &mut back);
-        let mut report = compare(&read.pcb.list, &back);
-        let snapshot = &read.pcb.snapshot;
-        report.compared = Compared {
-            parts: snapshot.parts.len(),
-            nets: snapshot.netlist.nets.len(),
-            footprints: snapshot.board.footprints.len(),
-        };
+        let mut report = self.compare_report_of(owner, &read);
         let Some(state) = self.ui_state.compare_board.as_mut() else {
             return Task::none();
         };
@@ -480,11 +432,11 @@ impl Signex {
             signex_i18n::I18n::en_us()
                 .message_plain(ids::COMPARE_BOARD_FAILED, &[("why", why.into())]),
         );
-        self.document_state.error_notice = Some(ErrorNotice::new(ids::COMPARE_BOARD_TITLE, id));
+        self.document_view.error_notice = Some(ErrorNotice::new(ids::COMPARE_BOARD_TITLE, id));
         Task::none()
     }
 
-    fn compare_board_missing(&self, board: &Path) -> String {
+    pub(super) fn compare_board_missing(&self, board: &Path) -> String {
         t!(self.ui_state.i18n, ids::UPDATE_PCB_BOARD_MISSING, "board" => file_name(board))
             .into_string()
     }

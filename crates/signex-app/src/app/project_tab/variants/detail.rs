@@ -70,22 +70,28 @@ fn cell_view<'a>(
         .column(cell.variant.as_deref())
         .and_then(|column| part.fitted.get(column).copied())
         .unwrap_or(true);
-    column![
+    let mut pane = column![
         heading(m, cell, part),
         field_label(
             t!(m.i18n, ids::VARIANT_MANAGER_FITTING, "variant" => m.name(cell.variant.as_deref())),
             m.tokens
         ),
         fitting(m, cell, part, fitted),
-        field_label(t!(m.i18n, ids::VARIANT_MANAGER_OVERRIDES), m.tokens),
-        overrides(m, cell, part, fitted),
-        field_label(
-            t!(m.i18n, ids::VARIANT_MANAGER_OTHER_VARIANTS, "designator" => part.designator.as_str()),
-            m.tokens
-        ),
-        others(m, cell, matrix, part),
     ]
-    .spacing(SP.m)
+    .spacing(SP.m);
+    if let Some(every) = super::channel_rows::every_channel(m, cell, matrix, part) {
+        pane = pane.push(every);
+    }
+    pane.push(field_label(
+        t!(m.i18n, ids::VARIANT_MANAGER_OVERRIDES),
+        m.tokens,
+    ))
+    .push(overrides(m, cell, part, fitted))
+    .push(field_label(
+        t!(m.i18n, ids::VARIANT_MANAGER_OTHER_VARIANTS, "designator" => part.designator.as_str()),
+        m.tokens,
+    ))
+    .push(others(m, cell, matrix, part))
     .boxed()
 }
 
@@ -120,7 +126,7 @@ fn heading<'a>(m: &Manager<'_>, cell: &VariantCell, part: &VariantRow) -> Elemen
     column![title, facts].spacing(SP.xs).boxed()
 }
 
-/// Fitted / Not fitted for a variant's cell, Alternate (not built yet), and
+/// Fitted / Not fitted for a variant's cell, Alternate (the picker), and
 /// As on the sheets while the cell sets a fit of its own. Base's cell shows
 /// its fit greyed: Base is what the sheets say.
 fn fitting<'a>(
@@ -156,10 +162,14 @@ fn fitting<'a>(
     }
     let send = fit_message(m, cell);
     let switch = segmented(options, fitted, style, move |fitted| send(Some(fitted)));
+    // The canvas's Alternate part picker for this part (mockup row 208).
     let alternate = text_button(
         None,
         t!(m.i18n, ids::VARIANT_MANAGER_ALTERNATE),
-        None,
+        Some(tab_message(ProjectTabMsg::VariantManager {
+            project_id: m.project_id,
+            msg: VariantManagerMsg::AlternateRequested { cell: cell.clone() },
+        })),
         ButtonKind::Small,
         m.tokens,
     );

@@ -44,7 +44,7 @@ fn board() -> PcbBoard {
 
 fn context(selected: usize) -> PanelContext {
     let (app, _boot) = Signex::new();
-    let mut ctx = app.document_state.panel_ctx.clone();
+    let mut ctx = app.document_view.panel_ctx.clone();
     ctx.has_pcb = true;
     ctx.unit = Unit::Mm;
     ctx.pcb_board = Some(Box::new(PcbBoardSummary::of(

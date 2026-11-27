@@ -4,7 +4,8 @@
 
 use std::collections::{HashMap, HashSet};
 
-use signex_engine::ComponentChangePreview;
+use signex_engine::{ComponentChangePreview, PinChoice, PinMapRow};
+use signex_types::schematic::PinMapping;
 use uuid::Uuid;
 
 use crate::library::messages::{PlacedPartTarget, ResolvedPlacement};
@@ -168,6 +169,13 @@ pub struct ChangePreview {
     /// Every other user parameter is kept.
     pub dropped: Vec<String>,
     pub scope: ChangeScope,
+    /// The pins as mapped by hand (#2954); `None` until a pin is remapped,
+    /// which maps by number, then name.
+    pub pin_map: Option<PinMapping>,
+    /// The mapping the swap uses: each old pin, its new pin and its net.
+    pub pins: Vec<PinMapRow>,
+    /// The new part's pins an old pin can be mapped to.
+    pub pin_choices: Vec<PinChoice>,
     /// The step the dialog shows; a fresh read lands on the pick.
     pub step: ChangeStep,
 }

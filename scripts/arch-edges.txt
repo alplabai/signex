@@ -36,6 +36,8 @@ signex-bake -> signex-types
 signex-bom -> signex-types
 signex-cli -> signex-app
 signex-cli -> signex-i18n
+signex-cli -> signex-library
+signex-cli -> signex-renderer
 signex-cli -> signex-types
 signex-commands -> signex-i18n-ids
 signex-commands -> signex-types
@@ -46,6 +48,7 @@ signex-drc-dsl -> signex-drc
 signex-drc-dsl -> signex-net
 signex-drc-dsl -> signex-types
 signex-engine -> pcb-geom
+signex-engine -> signex-drc
 signex-engine -> signex-history
 signex-engine -> signex-net
 signex-engine -> signex-types
@@ -63,6 +66,7 @@ signex-library -> signex-sketch
 signex-library -> signex-types
 signex-library-server -> signex-library
 signex-net -> signex-types
+signex-notebook -> signex-types
 signex-output -> pcb-geom
 signex-output -> signex-bom
 signex-output -> signex-types

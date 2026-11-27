@@ -49,7 +49,7 @@ fn messages_since(mark: Option<u64>, needle: &str) -> Vec<String> {
 }
 
 fn notice(app: &Signex) -> Option<(String, String)> {
-    app.document_state
+    app.document_view
         .error_notice
         .as_ref()
         .map(|n| (n.title.render_en_us(), n.detail.render_en_us()))

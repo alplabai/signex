@@ -36,7 +36,7 @@ pub fn footprint_body(footprint: &Footprint) -> Result<Shape, GeomError> {
             radius: 0,
         });
     };
-    Ok(placed(&placement, local))
+    Ok(placed_box(&placement, local))
 }
 
 /// The courtyard DRC measures: the turned box of the courtyard drawings'
@@ -44,7 +44,7 @@ pub fn footprint_body(footprint: &Footprint) -> Result<Shape, GeomError> {
 /// display only. `None` when `footprint` has no courtyard drawing.
 pub fn courtyard_outline(footprint: &Footprint) -> Result<Option<Shape>, GeomError> {
     let placement = Placement::of_footprint(footprint)?;
-    Ok(courtyard_extent(footprint, Stroke::Excluded)?.map(|local| placed(&placement, local)))
+    Ok(courtyard_extent(footprint, Stroke::Excluded)?.map(|local| placed_box(&placement, local)))
 }
 
 /// The body DRC measures a part by: its [`courtyard_outline`], or without a
@@ -56,8 +56,9 @@ pub fn checked_body(footprint: &Footprint) -> Result<Shape, GeomError> {
     }
 }
 
-/// The local box `local` placed on the board, as a turned rectangle.
-fn placed(placement: &Placement, local: RectNm) -> Shape {
+/// The footprint-local box `local` placed on the board, as a turned
+/// rectangle (a part's 3D body box reads it too, #2939).
+pub fn placed_box(placement: &Placement, local: RectNm) -> Shape {
     let centre = PointNm::new(
         local.min.x / 2 + local.max.x / 2,
         local.min.y / 2 + local.max.y / 2,

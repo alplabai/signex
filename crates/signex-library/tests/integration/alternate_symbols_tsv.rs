@@ -24,6 +24,7 @@ fn new_library() -> (tempfile::TempDir, PathBuf, LocalGitAdapter) {
         library: LibrarySection {
             name: "L".into(),
             description: None,
+            ..Default::default()
         },
         mode: LibraryMode::default(),
         workflow: WorkflowConfig::default(),

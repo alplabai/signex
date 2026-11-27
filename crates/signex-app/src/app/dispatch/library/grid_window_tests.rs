@@ -155,6 +155,7 @@ fn app_with_rows(n: usize) -> (Signex, PathBuf, Vec<RowId>) {
         pricing: Default::default(),
         own_edit_stamp: None,
         display: LibraryDisplaySettings::default(),
+        provenance: Default::default(),
     });
     app.library.touch_data();
     let browser = app.library.library_browsers.get_mut(&root).unwrap();

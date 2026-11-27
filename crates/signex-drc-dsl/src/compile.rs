@@ -136,7 +136,24 @@ impl Checker<'_> {
     }
 
     fn scope(&mut self, conds: &[CondAst], target: Option<RuleKind>) -> (NetScope, Option<u32>) {
-        if let Some(kind) = target.filter(|k| !k.is_scoped())
+        // A component rule's one narrowing is the side its parts sit on.
+        // Only a side is a side: `inner`, `outer` or an inner layer would
+        // compile and never match (#2986).
+        if let Some(kind) = target.filter(|k| k.takes_side()) {
+            let not_a_side = |c: &&CondAst| {
+                c.subject.text != "layer"
+                    || !matches!(c.value.text.as_str(), "TopCopper" | "BottomCopper")
+            };
+            if let Some(cond) = conds.iter().find(not_a_side) {
+                let msg = format!(
+                    "a {} rule takes only a 'layer' condition (TopCopper or BottomCopper)",
+                    kind.keyword()
+                );
+                self.error(&cond.subject.span, msg);
+                return (NetScope::Board, None);
+            }
+        }
+        if let Some(kind) = target.filter(|k| !k.is_scoped() && !k.takes_side())
             && let Some(cond) = conds.first()
         {
             let msg = format!(

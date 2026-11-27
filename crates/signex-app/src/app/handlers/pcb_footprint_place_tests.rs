@@ -33,6 +33,7 @@ fn library(dir: &Path) -> OpenLibrary {
         pricing: Default::default(),
         own_edit_stamp: None,
         display: Default::default(),
+        provenance: Default::default(),
     }
 }
 
@@ -72,7 +73,7 @@ fn place_puts_the_footprint_on_the_cursor_of_the_open_board() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, _) = rig(dir.path(), 1);
     let row = &app
-        .document_state
+        .document_view
         .panel_ctx
         .footprint_editor
         .as_ref()

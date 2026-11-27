@@ -354,7 +354,24 @@ fn object_content(sheet: &SchematicSheet, item: &SelectedItem, scope: Scope) -> 
             let t = sheet.text_notes.iter().find(|t| t.uuid == id)?;
             json!({"text": t.text, "position": to_value(&t.position)?})
         }
-        SelectedKind::Drawing | SelectedKind::Directive => return None,
+        SelectedKind::Drawing => return None,
+        // #2656: a class conflict lapses when a directive's kind, class or
+        // place changes.
+        SelectedKind::Directive => {
+            let d = sheet.directives.iter().find(|d| d.uuid() == id)?;
+            let (start, end) = d.region().map_or((d.anchor(), d.anchor()), |r| {
+                (
+                    signex_types::schematic::Point::new(r.min_x, r.min_y),
+                    signex_types::schematic::Point::new(r.max_x, r.max_y),
+                )
+            });
+            json!({
+                "kind": d.kind().as_str(),
+                "net_class": d.net_class(),
+                "start": to_value(&start)?,
+                "end": to_value(&end)?,
+            })
+        }
         // #1280: a harness finding lapses when the connector's type, entries
         // or place change.
         SelectedKind::HarnessConnector => harness_connector_view(sheet.harness.connector(id)?)?,

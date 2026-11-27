@@ -31,6 +31,7 @@ fn seeded_library(dir: &Path) -> (PathBuf, Uuid, RowId) {
         library: LibrarySection {
             name: "Stock".into(),
             description: None,
+            ..Default::default()
         },
         mode: LibraryMode::default(),
         workflow: WorkflowConfig::default(),

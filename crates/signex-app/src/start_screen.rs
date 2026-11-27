@@ -26,6 +26,7 @@ use crate::menu_bar::MenuMessage;
 use crate::pinned_projects::PinnedProjects;
 use crate::recent_projects::RecentProjects;
 
+mod extension_slot;
 mod graphite;
 mod hint;
 mod kit;
@@ -294,6 +295,9 @@ pub struct StartScreenData<'a> {
     /// The clock the last-opened times are read against
     /// ([`StartScreenState::now`], stamped by `update`).
     pub now: DateTime<Utc>,
+    /// The installed extensions, whose sections fill the Home page's
+    /// extension slot (#2495). None in the Community binary.
+    pub extensions: &'a crate::extension::ExtensionHost,
 }
 
 pub fn view<'a>(

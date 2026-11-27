@@ -215,12 +215,12 @@ fn header<'a, M: 'a>(
     }
     let line: Element<'a, M> = match trailing {
         Some(trailing) => Row::new()
-            .push(check)
+            .push_boxed(check)
             .push(trailing)
             .spacing(SP.s)
             .align_y(iced::Alignment::Center)
-            .into(),
-        None => check.into(),
+            .boxed(),
+        None => check.boxed(),
     };
     container(line)
         .padding(Padding {

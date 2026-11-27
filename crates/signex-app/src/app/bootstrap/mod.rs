@@ -63,7 +63,7 @@ impl Signex {
             // The dialog's own name, no application suffix: the notice
             // names itself, the rest read "Quit Signex", "Rename", ...
             if *modal == super::state::ModalId::ErrorNotice
-                && let Some(notice) = self.document_state.error_notice.as_ref()
+                && let Some(notice) = self.document_view.error_notice.as_ref()
             {
                 return notice.title_text(&self.ui_state.i18n);
             }
@@ -86,7 +86,7 @@ impl Signex {
             self.ui_state.windows.get(&id),
             Some(super::state::WindowKind::DetachedModal(_))
         ) {
-            let paper = crate::styles::ti(self.document_state.panel_ctx.tokens.paper);
+            let paper = crate::styles::ti(self.document_view.panel_ctx.tokens.paper);
             return Some(crate::styles::dialog_window_theme(&theme, paper));
         }
         Some(theme)

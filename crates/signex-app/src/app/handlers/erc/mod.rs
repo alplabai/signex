@@ -3,6 +3,9 @@
 mod annotate;
 #[cfg(test)]
 mod annotate_colour_tests;
+mod annotate_command;
+#[cfg(test)]
+mod annotate_command_tests;
 #[cfg(test)]
 mod annotate_golden_tests;
 mod annotate_job;
@@ -26,6 +29,7 @@ mod erc_job;
 mod erc_run;
 #[cfg(test)]
 mod erc_run_tests;
+mod live;
 mod reprefix;
 mod reprefix_confirm;
 mod reprefix_job;
@@ -35,6 +39,7 @@ mod stale_findings;
 #[cfg(test)]
 mod stale_findings_tests;
 
+pub(crate) use annotate_command::{annotate_quietly_by_operands, force_annotate_by_operands};
 pub(crate) use annotate_job::{AnnotateRuns, SheetsRead};
 pub(crate) use annotate_preview::rows::{
     AnnotateListView, AnnotateSession, PlacementLabel, SheetTickRow, TickState, change_count,
@@ -45,6 +50,7 @@ pub(crate) use annotate_preview::{
 };
 pub(crate) use erc_check::ERC_CHECK;
 pub(crate) use erc_job::{ErcRunOutcome, PageFrames, WaivedFinding};
+pub(crate) use live::{LiveErc, LiveErcMsg};
 pub(crate) use reprefix_confirm::ReprefixConfirm;
 pub(crate) use reprefix_job::ReprefixSheets;
 mod machine_rules;

@@ -347,7 +347,7 @@ impl Signex {
                 .as_ref()
                 .filter(|d| !d.unsaved_prompt)
                 .map(|d| fixed.height + self.remove_dialog_growth(d, fixed.width)),
-            ModalId::ErrorNotice => self.document_state.error_notice.as_ref().map(|n| {
+            ModalId::ErrorNotice => self.document_view.error_notice.as_ref().map(|n| {
                 // The 44 px header is 10 px taller than the intro it replaced;
                 // the body parts sit 10 px apart. The system block is caption
                 // mono lines in 8 px padding; the choice list wraps each
@@ -384,7 +384,7 @@ impl Signex {
                 height
             }),
             ModalId::NetlistIncompletePrompt => self
-                .document_state
+                .document_view
                 .netlist_incomplete_prompt
                 .as_ref()
                 .map(|p| {

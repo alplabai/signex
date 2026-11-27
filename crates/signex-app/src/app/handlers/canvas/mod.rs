@@ -104,9 +104,10 @@ mod wire_undo_tests;
 /// user's Width/Fill edits when committing the next click.
 pub(crate) fn pre_placement_shape(
     doc: &super::super::state::DocumentState,
+    view: &super::super::state::DocumentViewState,
 ) -> (f64, signex_types::schematic::FillType) {
     let (default_mm, default_fill) = default_shape(doc);
-    doc.panel_ctx
+    view.panel_ctx
         .pre_placement
         .as_ref()
         .map(|pp| {
@@ -149,6 +150,8 @@ impl Signex {
                 // index only once the dwell is up.
                 let hit = self.item_hit_at(x as f64, y as f64);
                 self.observe_net_hover(hit, (x as f64, y as f64));
+                // Mockup row 197: a Notebook badge under the pointer shows its card.
+                self.observe_notebook_badge_hover(x as f64, y as f64);
                 let hover_uuid: Option<uuid::Uuid> = hit.and_then(|hit| {
                     matches!(hit.kind, signex_types::schematic::SelectedKind::Symbol)
                         .then_some(hit.uuid)
@@ -551,6 +554,24 @@ impl Signex {
         let known = self.ui_state.cursor_document.as_deref()?;
         (Some(known) == self.cursor_document_now())
             .then_some((self.ui_state.cursor_x, self.ui_state.cursor_y))
+    }
+
+    /// Whether `world` lies on an object of the sheet in view, with that
+    /// sheet's net-class and special-string widths. Run when a canvas menu
+    /// opens, inside an undocked window's swap for its menu (#2629).
+    pub(crate) fn sheet_object_at(&self, world: Option<(f64, f64)>) -> bool {
+        let Some((x, y)) = world else {
+            return false;
+        };
+        self.interaction_state
+            .active_canvas()
+            .hit_item_at(
+                x,
+                y,
+                self.active_wire_widths(),
+                self.active_class_revision(),
+            )
+            .is_some()
     }
 
     /// Redraw the active schematic or PCB canvas after its camera moved.

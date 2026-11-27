@@ -63,6 +63,9 @@ pub enum PlacedPartMsg {
     ChangeKeepToggled(String),
     /// An Apply to choice was picked.
     ChangeScopePicked(ChangeScope),
+    /// The old pin `old` was mapped by hand to the new pin `new`, or to no
+    /// pin (#2954).
+    ChangePinRemapped { old: String, new: Option<String> },
     /// The off-thread read of the listed rows' pin counts finished; `Err`
     /// carries the runtime's text when the read's thread panicked.
     ChangePinCountsRead {

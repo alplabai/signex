@@ -22,12 +22,12 @@ const PRESS: Point = Point::new(300.0, 200.0);
 fn canvas_of(editor: &SymbolDocument) -> SymbolCanvas<'_> {
     SymbolCanvas::new(
         editor.primitive(),
-        editor.selected.clone(),
-        editor.tool,
-        &editor.polygon_vertices,
+        editor.gui.selected.clone(),
+        editor.gui.tool,
+        &editor.gui.polygon_vertices,
         editor.view(),
         false,
-        &editor.camera,
+        &editor.gui.camera,
         1.27,
         true,
         crate::render_config::GridStyle::default(),
@@ -38,7 +38,7 @@ fn canvas_of(editor: &SymbolDocument) -> SymbolCanvas<'_> {
         Color::BLACK,
         Color::BLACK,
     )
-    .with_zoom_step(editor.zoom_step)
+    .with_zoom_step(editor.gui.zoom_step)
 }
 
 struct Rig {
@@ -54,9 +54,9 @@ impl Rig {
             PathBuf::from("t.snxsym"),
             SymbolFile::from_symbol(Symbol::empty("T")),
         );
-        editor.pending_view = None;
-        editor.camera = Camera::default();
-        editor.tool = tool;
+        editor.gui.pending_view = None;
+        editor.gui.camera = Camera::default();
+        editor.gui.tool = tool;
         Self {
             editor,
             cstate: CanvasState::default(),
@@ -97,7 +97,7 @@ impl Rig {
     }
 
     fn scale(&self) -> f32 {
-        self.editor.camera.scale
+        self.editor.gui.camera.scale
     }
 }
 
@@ -122,20 +122,20 @@ fn a_middle_drag_down_zooms_the_symbol_out() {
 #[test]
 fn a_sideways_middle_drag_leaves_the_symbol_view() {
     let mut rig = Rig::new(SymbolTool::Select);
-    let (scale, offset) = (rig.scale(), rig.editor.camera.offset);
+    let (scale, offset) = (rig.scale(), rig.editor.gui.camera.offset);
     rig.press(mouse::Button::Middle, PRESS);
     rig.move_to(Point::new(PRESS.x + 120.0, PRESS.y));
-    assert_eq!((rig.scale(), rig.editor.camera.offset), (scale, offset));
+    assert_eq!((rig.scale(), rig.editor.gui.camera.offset), (scale, offset));
 }
 
 #[test]
 fn the_symbol_point_under_the_press_stays_put() {
     let mut rig = Rig::new(SymbolTool::Select);
-    let pinned = rig.editor.camera.screen_to_world(PRESS, BOUNDS);
+    let pinned = rig.editor.gui.camera.screen_to_world(PRESS, BOUNDS);
     rig.press(mouse::Button::Middle, PRESS);
     for (dx, dy) in [(40.0, -30.0), (-70.0, -90.0), (15.0, 25.0), (90.0, -140.0)] {
         rig.move_to(Point::new(PRESS.x + dx, PRESS.y + dy));
-        let held = rig.editor.camera.screen_to_world(PRESS, BOUNDS);
+        let held = rig.editor.gui.camera.screen_to_world(PRESS, BOUNDS);
         assert!(
             (held.x - pinned.x).abs() < 1e-2 && (held.y - pinned.y).abs() < 1e-2,
             "{pinned:?} moved to {held:?}"
@@ -146,12 +146,12 @@ fn the_symbol_point_under_the_press_stays_put() {
 #[test]
 fn a_right_drag_still_pans_the_symbol() {
     let mut rig = Rig::new(SymbolTool::Select);
-    let (scale, offset) = (rig.scale(), rig.editor.camera.offset);
+    let (scale, offset) = (rig.scale(), rig.editor.gui.camera.offset);
     rig.press(mouse::Button::Right, PRESS);
     rig.move_to(Point::new(PRESS.x + 30.0, PRESS.y + 20.0));
     assert_eq!(rig.scale(), scale);
     assert_eq!(
-        rig.editor.camera.offset,
+        rig.editor.gui.camera.offset,
         Point::new(offset.x + 30.0, offset.y + 20.0)
     );
     rig.release(mouse::Button::Right, Point::new(330.0, 220.0));
@@ -177,7 +177,7 @@ fn a_right_click_still_opens_the_symbol_menu() {
 #[test]
 fn a_middle_gesture_leaves_an_armed_symbol_tool_and_its_stash() {
     let mut rig = Rig::new(SymbolTool::PlacePolygon);
-    rig.editor.polygon_vertices = vec![(0.0, 0.0), (5.0, 0.0)];
+    rig.editor.gui.polygon_vertices = vec![(0.0, 0.0), (5.0, 0.0)];
     rig.press(mouse::Button::Middle, PRESS);
     for dy in [-40.0, -80.0, -50.0] {
         let at = Point::new(PRESS.x + 10.0, PRESS.y + dy);
@@ -185,8 +185,11 @@ fn a_middle_gesture_leaves_an_armed_symbol_tool_and_its_stash() {
         rig.redraw(at);
     }
     rig.release(mouse::Button::Middle, Point::new(310.0, 150.0));
-    assert_eq!(rig.editor.tool, SymbolTool::PlacePolygon);
-    assert_eq!(rig.editor.polygon_vertices, vec![(0.0, 0.0), (5.0, 0.0)]);
+    assert_eq!(rig.editor.gui.tool, SymbolTool::PlacePolygon);
+    assert_eq!(
+        rig.editor.gui.polygon_vertices,
+        vec![(0.0, 0.0), (5.0, 0.0)]
+    );
     for published in &rig.published {
         assert!(
             published.starts_with("ZoomFactor") || published.starts_with("CursorAt"),

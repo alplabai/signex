@@ -19,6 +19,9 @@ pub(super) struct AnnotatePass<'a> {
     pub reprefix: Option<&'a std::collections::HashMap<uuid::Uuid, String>>,
     /// The pass's name in the Messages panel.
     pub label: &'static str,
+    /// The sheet a `document` operand named (#2470), which takes the active
+    /// sheet's place in the walk order; `None`: the active sheet.
+    pub anchor: Option<&'a std::path::Path>,
 }
 
 impl Signex {
@@ -30,12 +33,14 @@ impl Signex {
         &mut self,
         mode: signex_engine::AnnotateMode,
         project_set: ProjectSheetSet,
+        anchor: Option<&std::path::Path>,
     ) -> Task<Message> {
         self.number_project(
             AnnotatePass {
                 mode,
                 reprefix: None,
                 label: "Annotate",
+                anchor,
             },
             project_set,
         )
@@ -52,6 +57,7 @@ impl Signex {
             mode,
             reprefix,
             label,
+            anchor,
         } = pass;
         // Designators before the pass, to tell afterwards which symbols it
         // renumbered.
@@ -75,7 +81,7 @@ impl Signex {
         let active_path = self.document_state.active_path.clone();
         let ordered_paths = crate::app::project_sheets::ordered_project_sheet_paths(
             &project_set,
-            active_path.as_deref(),
+            anchor.or(active_path.as_deref()),
         );
         // Sheets the Annotate dialog unticked (#75) stay as they are: their
         // symbols act as locked, so their designators keep their numbers in
@@ -127,8 +133,26 @@ impl Signex {
         // A re-prefix or reset that left one sheet out would split a prefix
         // or a part; Incremental still skips a sheet it cannot change.
         let all_or_nothing = reprefix.is_some() || resets;
-        let (parts, mut next_by_prefix, first_unit, placements) =
-            self.walk_project(&project_set, &ordered_paths, &locked, resets);
+        let numbered: Vec<std::path::PathBuf> = (in_run.iter())
+            .filter(|path| !read_only.contains(*path))
+            .cloned()
+            .collect();
+        let super::annotate_placements::Walked {
+            parts,
+            seed: mut next_by_prefix,
+            first_unit,
+            placements,
+            blocks,
+        } = self.walk_project(&project_set, &ordered_paths, &locked, resets, &numbered);
+        // A page scheme that cannot give every page a block of its own
+        // refuses the run before any sheet changes (#1292).
+        let blocks = match blocks {
+            Ok(blocks) => blocks,
+            Err(why) => {
+                self.refuse_run(label, &format!("{why}. Nothing was changed"));
+                return Task::none();
+            }
+        };
         let mut assigned: std::collections::HashMap<usize, String> =
             std::collections::HashMap::new();
         let mut any_active_changed = false;
@@ -166,6 +190,7 @@ impl Signex {
                 undo_group,
                 reprefix,
                 placements: &placements[sheet],
+                blocks: blocks.as_ref(),
             };
             if read_only.contains(path) || unticked.contains(path) {
                 continue;

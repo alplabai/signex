@@ -31,10 +31,11 @@ const SP: Spacing = Spacing::DEFAULT;
 const SOURCE: &str = "Source Documents";
 const SCHEMATICS: &str = "Schematics";
 const PCB: &str = "PCB";
+const NOTEBOOK: &str = "Notebook";
 const BOM: &str = "Bill of Materials";
 const OUTPUTS: &str = "Output Jobs";
 /// The view-only groups, in display order.
-const GROUPS: [&str; 4] = [SCHEMATICS, PCB, BOM, OUTPUTS];
+const GROUPS: [&str; 5] = [SCHEMATICS, PCB, NOTEBOOK, BOM, OUTPUTS];
 
 /// View-only state of the Projects panel.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -114,6 +115,8 @@ fn group_of(node: &TreeNode) -> &'static str {
         BOM
     } else if label.contains(".snxout") {
         OUTPUTS
+    } else if crate::app::notebook_project::is_notebook_row(&label) {
+        NOTEBOOK
     } else if matches!(node.icon, TreeIcon::Pcb | TreeIcon::SnxPcb) {
         PCB
     } else {
@@ -178,6 +181,7 @@ fn shown_labels(i18n: &I18n, roots: &mut [TreeNode]) {
         let branch = match node.key.as_str() {
             SCHEMATICS => Some(ids::PANELS_PROJECTS_GROUP_SCHEMATICS),
             PCB => Some(ids::PANELS_PROJECTS_GROUP_PCB),
+            NOTEBOOK => Some(ids::PANELS_PROJECTS_GROUP_NOTEBOOK),
             BOM => Some(ids::PANELS_PROJECTS_GROUP_BOM),
             OUTPUTS => Some(ids::PANELS_PROJECTS_GROUP_OUTPUTS),
             super::projects::LIBRARIES_KEY => Some(ids::PANELS_PROJECTS_GROUP_LIBRARIES),

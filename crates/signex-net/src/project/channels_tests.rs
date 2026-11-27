@@ -298,6 +298,34 @@ fn a_stored_channel_path_reads_like_the_walk() {
     assert_eq!(channels.designator_of(r5, &path), "CH3_R5");
 }
 
+/// #2662: a repeated sheet's logical placement stands for every channel the
+/// walk compiles it to; a plain placement stands for itself.
+#[test]
+fn a_logical_placement_compiles_to_the_walks_channel_paths() {
+    let p = project();
+    let top = &p.sheets[&SheetKey::new(TOP)];
+    let placed = top
+        .child_sheets
+        .iter()
+        .map(|cs| (cs.uuid, cs.name.as_str()));
+    let logical = InstancePath::root().child(BUCK_SYMBOL);
+    let mut got = ChannelDesignators::compiled_paths(&logical, placed.clone());
+    let mut walk: Vec<InstancePath> = project_occurrences(&p.graph())
+        .into_iter()
+        .filter(|o| o.key == SheetKey::new(BUCK))
+        .map(|o| o.instance_path)
+        .collect();
+    got.sort();
+    walk.sort();
+    assert_eq!(got.len(), 4);
+    assert_eq!(got, walk);
+    let plain = InstancePath::root().child(Uuid::from_u128(0x99));
+    assert_eq!(
+        ChannelDesignators::compiled_paths(&plain, placed),
+        vec![plain]
+    );
+}
+
 fn channel_first_nets() -> ChannelNaming {
     ChannelNaming {
         net_format: "${Channel}_${Net}".to_string(),

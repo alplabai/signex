@@ -1,6 +1,9 @@
 //! Transform commands: drag, move, rotate, flip and mirror the selection.
 
-use super::{CommandFlags, CommandGroup, CommandMetadata, DocumentKind, Enablement, operands};
+use super::{
+    CommandFlags, CommandGroup, CommandMetadata, DocumentKind, Enablement, footprint_operands,
+    operands,
+};
 use signex_i18n_ids::command_ids;
 
 pub(super) const TRANSFORM: &[CommandMetadata] = &[
@@ -178,6 +181,42 @@ pub(super) const TRANSFORM: &[CommandMetadata] = &[
         enable: Enablement::RequiresDocument(DocumentKind::Schematic),
         flags: CommandFlags::MUTATES,
         operands: operands::OBJECT_ROTATION,
+        ..CommandMetadata::DEFAULT
+    },
+    // #2936: a board footprint moved, turned or flipped by id on the board
+    // `document` names, one undo step each. Each runs from its operands
+    // only; a person drags the footprint or uses the Component view.
+    CommandMetadata {
+        id: "set_footprint_position",
+        category: "edit",
+        label: command_ids::CMD_SET_FOOTPRINT_POSITION,
+        menu_label: None,
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::MUTATES,
+        operands: footprint_operands::FOOTPRINT_POSITION,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "set_footprint_rotation",
+        category: "edit",
+        label: command_ids::CMD_SET_FOOTPRINT_ROTATION,
+        menu_label: None,
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::MUTATES,
+        operands: footprint_operands::FOOTPRINT_ROTATION,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "set_footprint_side",
+        category: "edit",
+        label: command_ids::CMD_SET_FOOTPRINT_SIDE,
+        menu_label: None,
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::MUTATES,
+        operands: footprint_operands::FOOTPRINT_SIDE,
         ..CommandMetadata::DEFAULT
     },
 ];

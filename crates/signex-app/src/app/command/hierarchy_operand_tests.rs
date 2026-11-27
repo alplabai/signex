@@ -168,7 +168,7 @@ fn a_sheet_symbol_of_this_sheet_or_an_ancestor_is_refused_and_a_sibling_is_not()
         "mid.snxsch",
         vec![main, node(d, "side.snxsch", Vec::new())],
     );
-    app.document_state.panel_ctx.navigator.hierarchy = Some(SheetHierarchy {
+    app.document_view.panel_ctx.navigator.hierarchy = Some(SheetHierarchy {
         root: Some(node(d, "top.snxsch", vec![mid])),
         ..Default::default()
     });

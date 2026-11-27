@@ -4,9 +4,13 @@ pub mod autosave;
 pub mod autosave_pcb;
 pub mod autosave_primitives;
 pub mod autosave_project;
+#[cfg(test)]
+mod autosave_project_tests;
 pub mod autosave_recovery;
 pub mod autosave_row;
 pub(crate) mod board_3d;
+#[cfg(test)]
+mod board_3d_model_tests;
 mod board_3d_screenshot;
 pub(crate) mod board_net_classes;
 mod board_sketch;
@@ -51,11 +55,15 @@ pub(crate) mod modal_sizing;
 pub mod native_menu;
 pub mod net_nav;
 mod object_list;
+mod object_list_edit;
 mod pan_zoom_bench;
+mod parameter_closed_sheets;
 pub mod parameter_manager;
 pub mod paste;
 pub mod pcb_drc;
+pub(crate) mod pcb_drc_bodies;
 mod pcb_drc_check;
+pub(crate) mod pcb_drc_fix;
 mod pcb_drc_results;
 #[cfg(test)]
 mod pcb_drc_results_tests;
@@ -146,6 +154,8 @@ mod project_fs;
 mod repeat_placement;
 mod requirements_check;
 pub(crate) use requirements_check::REQUIREMENTS_CHECK;
+pub(crate) use requirements_check::board_path as project_board_path;
+pub(crate) use requirements_check::bom::{BomInputs, project_boms};
 pub mod selection_transform;
 pub mod selection_workflow;
 pub mod window_controls;

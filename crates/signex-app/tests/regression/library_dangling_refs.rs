@@ -70,6 +70,7 @@ fn init_library(dir: &std::path::Path, name: &str) -> (PathBuf, Uuid) {
         library: LibrarySection {
             name: name.into(),
             description: None,
+            ..Default::default()
         },
         mode: LibraryMode::default(),
         workflow: WorkflowConfig::default(),
@@ -200,7 +201,7 @@ fn saving_a_symbol_refreshes_a_preview_that_already_resolved_it() {
     let mut edited = file.clone();
     edited.symbols[0].description = "edited in the symbol editor".into();
     let mut editor = SymbolDocument::new(symbol_path.clone(), file);
-    editor.file = edited;
+    editor.draft.file = edited;
     editor.mark_dirty();
     f.app
         .document_state
@@ -283,7 +284,7 @@ fn saving_a_symbol_refreshes_a_preview_bound_across_libraries() {
     let mut edited = file.clone();
     edited.symbols[0].description = "edited in the other library".into();
     let mut editor = SymbolDocument::new(symbol_path.clone(), file);
-    editor.file = edited;
+    editor.draft.file = edited;
     editor.mark_dirty();
     f.app
         .document_state

@@ -64,6 +64,7 @@ fn add_project(
             schematic_design: Default::default(),
             fab_outputs: None,
             router_tool_diameter: None,
+            bom_alternates: Vec::new(),
             requirements: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
@@ -107,7 +108,7 @@ fn close_project_applies_the_sketch_of_its_board_first() {
     assert!(!f.app.document_state.is_document_dirty(&f.path));
     send(&mut f, Message::Menu(MenuMessage::CloseProject));
     assert!(
-        f.app.document_state.error_notice.is_none(),
+        f.app.document_view.error_notice.is_none(),
         "nothing is held"
     );
     assert_eq!(live(&f).outline.len(), 4, "the sketch reached the board");
@@ -132,7 +133,7 @@ fn close_project_ignores_the_sketch_of_another_board() {
         f.app.document_state.projects.is_empty(),
         "the project closes"
     );
-    assert!(f.app.document_state.error_notice.is_none(), "nothing held");
+    assert!(f.app.document_view.error_notice.is_none(), "nothing held");
     assert!(in_sketch(&f), "the board's sketch is untouched");
 }
 
@@ -178,7 +179,7 @@ fn an_undocked_board_asks_for_its_projects_hierarchy() {
     let shown = f.app.document_state.active_path.clone();
     assert_eq!(shown.as_deref(), Some(a_sheet.as_path()), "main shows A");
 
-    let hierarchies = &f.app.document_state.window_hierarchies;
+    let hierarchies = &f.app.document_view.window_hierarchies;
     assert!(
         hierarchies.is_exhausted(&dir.join("b.snxsch")).is_some(),
         "the board's window asks for project B"

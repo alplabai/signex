@@ -3,7 +3,7 @@
 //! https://github.com/alplabai/signex/issues/2199#issuecomment-6817821301):
 //! the run goes off the UI thread and is answered once it lands, as an edit
 //! that waits for its reads is; the answer is numbered, kept
-//! (`state::check_runs`) and compared with its `baseline`. `check_erc`,
+//! (`core::check_runs`) and compared with its `baseline`. `check_erc`,
 //! `check_drc` and `check_requirements` differ only in what they check. See
 //! `docs/CLI.md`, "Checks on demand".
 
@@ -112,6 +112,8 @@ impl Signex {
         };
         let run = runs.record(request.check, &request.scope, report.keys());
         let report = CheckReport { run, ..report };
+        // The newest run, for a design report from the last results (#2945).
+        runs.keep_report(&request.scope, report.clone());
         let report = match earlier {
             Some((baseline, keys)) => report.compared_with(baseline, &keys),
             None => report,

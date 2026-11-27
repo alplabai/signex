@@ -5,11 +5,14 @@
 //! refuses a move or a fit. Every command takes or restores absolute values,
 //! so undo is exact. See `docs/PCB_ROOMS.md`.
 
+mod arrange;
+pub mod auto_place;
 mod plan;
 
 #[cfg(test)]
 mod tests;
 
+pub use arrange::{RoomArrangement, arrange_room};
 pub use plan::{
     PlanShape, PlannedRoom, RoomOptions, RoomPlan, SheetMembers, plan_rooms_from_sheets,
 };

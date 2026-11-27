@@ -71,6 +71,7 @@ fn app_with_selected_row(
         pricing: Default::default(),
         own_edit_stamp: None,
         display: LibraryDisplaySettings::default(),
+        provenance: Default::default(),
     });
     let mut browser = LibraryBrowserState::new(root.clone());
     browser.active_table = Some("R".into());
@@ -109,7 +110,7 @@ fn shelf(
 
 /// The symbol line as shown, without Fluent's isolation marks.
 fn symbol_summary(app: &Signex) -> String {
-    app.document_state
+    app.document_view
         .panel_ctx
         .library_row_detail
         .as_ref()

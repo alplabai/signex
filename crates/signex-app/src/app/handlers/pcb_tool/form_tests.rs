@@ -12,7 +12,7 @@ use crate::panels::{PanelMsg, PcbPrimitiveMsg};
 use super::tests::{app_with_board, board_of, click, escape, run, undo};
 
 pub(super) fn form(app: &Signex) -> PcbPrimitiveFacts {
-    app.document_state
+    app.document_view
         .panel_ctx
         .pcb_board
         .as_ref()

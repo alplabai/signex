@@ -49,7 +49,7 @@ fn two_sheet_part() -> NetInspectorView {
 
 fn texts(view: &NetInspectorView) -> Vec<String> {
     let (app, _boot) = crate::app::Signex::new();
-    let ctx = app.document_state.panel_ctx.clone();
+    let ctx = app.document_view.panel_ctx.clone();
     lay_out_texts(list(&ctx, view), WINDOW)
         .into_iter()
         .map(|t| t.text.replace(['\u{2068}', '\u{2069}'], ""))

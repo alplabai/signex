@@ -153,7 +153,7 @@ fn unticking_all_rules_then_ticking_one_silences_only_that_rule() {
     let untick = PanelMsg::SelectionForm(SelectionFormMsg::AllRulesUnticked(id));
     let _ = app.update(Message::Dock(DockMessage::Panel(untick)));
     assert_eq!(
-        app.document_state.panel_ctx.selection_form.picking_rules_of,
+        app.document_view.panel_ctx.selection_form.picking_rules_of,
         Some(id)
     );
     assert!(doc(&app).no_erc_directives[0].rules.is_empty());

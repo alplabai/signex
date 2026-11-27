@@ -261,7 +261,7 @@ fn the_preview_takes_the_board_ground_and_inks() {
 fn app_with_grid_properties(id: signex_types::theme::ThemeId) -> crate::app::Signex {
     use crate::app::{FootprintDocument, Message, Signex, TabInfo, TabKind};
     let (mut app, _boot) = Signex::new();
-    app.document_state.panel_ctx.tokens = signex_types::theme::theme_tokens(id);
+    app.document_view.panel_ctx.tokens = signex_types::theme::theme_tokens(id);
     app.ui_state.window_size = (1400.0, 900.0);
     let path = std::path::PathBuf::from("/w/part.snxfpt");
     let file =

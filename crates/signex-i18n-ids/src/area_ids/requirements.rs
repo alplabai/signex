@@ -94,4 +94,35 @@ define_ids! {
     REQUIREMENTS_BOARD_MARGIN = "requirements-board-margin";
     REQUIREMENTS_BOARD_FITS = "requirements-board-fits";
     REQUIREMENTS_BOARD_DOES_NOT_FIT = "requirements-board-does-not-fit";
+    // Part lifecycle variant and fitted parts, the net class note (#2686)
+    REQUIREMENTS_FIELD_VARIANT = "requirements-field-variant";
+    REQUIREMENTS_FIELD_FITTED_ONLY = "requirements-field-fitted-only";
+    REQUIREMENTS_VARIANT_ACTIVE = "requirements-variant-active";
+    REQUIREMENTS_PARTS_UNMET_FITTED = "requirements-parts-unmet-fitted";
+    REQUIREMENTS_PROBLEM_UNKNOWN_VARIANT = "requirements-problem-unknown-variant";
+    REQUIREMENTS_EDITS_NOT_CHECKED = "requirements-edits-not-checked";
+    // requirements-rails-and-layers (#2943)
+    REQUIREMENTS_KIND_RAIL_BUDGET = "requirements-kind-rail-budget";
+    REQUIREMENTS_KIND_LAYER_COUNT = "requirements-kind-layer-count";
+    REQUIREMENTS_FIELD_NET = "requirements-field-net";
+    REQUIREMENTS_FIELD_VOLTAGE = "requirements-field-voltage";
+    REQUIREMENTS_FIELD_TOLERANCE = "requirements-field-tolerance";
+    REQUIREMENTS_FIELD_MAX_CURRENT = "requirements-field-max-current";
+    REQUIREMENTS_FIELD_MARGIN = "requirements-field-margin";
+    REQUIREMENTS_FIELD_MIN_LAYERS = "requirements-field-min-layers";
+    REQUIREMENTS_FIELD_MAX_LAYERS = "requirements-field-max-layers";
+    REQUIREMENTS_SUMMARY_RAIL_BUDGET = "requirements-summary-rail-budget";
+    REQUIREMENTS_SUMMARY_RAIL_SUPPLY = "requirements-summary-rail-supply";
+    REQUIREMENTS_SUMMARY_RAIL_VOLTAGE = "requirements-summary-rail-voltage";
+    REQUIREMENTS_SUMMARY_RAIL_VOLTAGE_TOLERANCE = "requirements-summary-rail-voltage-tolerance";
+    REQUIREMENTS_SUMMARY_RAIL_MAX_CURRENT = "requirements-summary-rail-max-current";
+    REQUIREMENTS_SUMMARY_RAIL_MARGIN = "requirements-summary-rail-margin";
+    REQUIREMENTS_SUMMARY_LAYER_RANGE = "requirements-summary-layer-range";
+    REQUIREMENTS_SUMMARY_LAYER_MIN = "requirements-summary-layer-min";
+    REQUIREMENTS_SUMMARY_LAYER_MAX = "requirements-summary-layer-max";
+    REQUIREMENTS_PROBLEM_NOT_A_VOLTAGE = "requirements-problem-not-a-voltage";
+    REQUIREMENTS_PROBLEM_NOT_A_PERCENT = "requirements-problem-not-a-percent";
+    REQUIREMENTS_PROBLEM_LAYER_COUNT_ASKS_NOTHING = "requirements-problem-layer-count-asks-nothing";
+    REQUIREMENTS_RAIL_REFUSED = "requirements-rail-refused";
+    REQUIREMENTS_RAIL_BUDGET_REFUSED = "requirements-rail-budget-refused";
 }

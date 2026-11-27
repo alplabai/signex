@@ -31,7 +31,7 @@ fn app_with_sheet() -> (Signex, iced::window::Id) {
     });
     app.document_state.active_tab = 0;
     app.document_state.active_path = Some(path);
-    app.document_state.dock = crate::dock::graphite_first_run();
+    app.document_view.dock = crate::dock::graphite_first_run();
     app.ui_state.left_width = LEFT_W;
     app.ui_state.right_width = RIGHT_W;
     app.ui_state.bottom_height = crate::dock::GRAPHITE_BOTTOM_HEIGHT;
@@ -83,11 +83,11 @@ fn the_bottom_dock_sits_under_the_canvas_and_the_side_docks_run_full_height() {
 #[test]
 fn a_crowded_side_dock_shows_every_tab_inside_the_dock() {
     let (mut app, main) = app_with_sheet();
-    app.document_state
+    app.document_view
         .dock
         .add_panel(PanelPosition::Left, PanelKind::Library);
     let kinds = app
-        .document_state
+        .document_view
         .dock
         .panel_kinds(PanelPosition::Left)
         .to_vec();
@@ -114,10 +114,10 @@ fn a_crowded_side_dock_shows_every_tab_inside_the_dock() {
 #[test]
 fn the_library_panel_draws_its_chips_and_no_open_library_footer() {
     let (mut app, main) = app_with_sheet();
-    app.document_state
+    app.document_view
         .dock
         .show_panel_at(PanelPosition::Left, PanelKind::Library);
-    assert!(app.document_state.dock.is_frontmost(PanelKind::Library));
+    assert!(app.document_view.dock.is_frontmost(PanelKind::Library));
     let texts = crate::layout_probe::lay_out_texts(app.view(main), WINDOW);
     for chip in ["Symbols", "Footprints", "Parts"] {
         assert!(
@@ -157,10 +157,11 @@ fn the_kind_chips_share_one_line_in_the_default_left_dock() {
             pricing: Default::default(),
             own_edit_stamp: None,
             display: crate::library::state::LibraryDisplaySettings::default(),
+            provenance: Default::default(),
         });
     app.library.touch_data();
     app.library.sync_view_caches();
-    app.document_state
+    app.document_view
         .dock
         .show_panel_at(PanelPosition::Left, PanelKind::Library);
     assert_eq!(LEFT_W, crate::dock::DEFAULT_LEFT_DOCK_WIDTH);

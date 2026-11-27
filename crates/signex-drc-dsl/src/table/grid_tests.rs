@@ -83,6 +83,8 @@ fn each_limit_sits_in_its_domain_and_group() {
         (F::MinPasteExpansion, D::Mask, "paste_mask"),
         (F::MaxPasteExpansion, D::Mask, "paste_mask"),
         (F::MinCourtyardSpacing, D::Placement, "component_clearance"),
+        (F::MinBodyClearance, D::Placement, "component_clearance"),
+        (F::MaxHeight, D::Placement, "height"),
     ];
     assert_eq!(cases.len(), LimitField::ALL.len());
     for (field, domain, id) in cases {

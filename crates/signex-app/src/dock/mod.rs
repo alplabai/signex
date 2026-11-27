@@ -6,6 +6,7 @@
 
 mod first_run;
 mod graphite;
+mod kept_panels;
 mod layout_sync;
 pub(crate) mod measure;
 mod placement;
@@ -18,7 +19,7 @@ mod view;
 pub use first_run::{GRAPHITE_BOTTOM_HEIGHT, graphite_first_run};
 pub use layout_sync::{
     DOCK_LAYOUT_SAVE_DEBOUNCE, DockLayoutBarrier, DockLayoutMsg, DockLayoutSnapshot,
-    DockLayoutStore, DockLayoutSync, DockLayoutWrite, RegionLayout,
+    DockLayoutStore, DockLayoutSync, DockLayoutWrite, KeptPanelKey, RegionLayout,
 };
 pub use placement::{DropGeometry, RegionExtent, drop_target};
 pub use side_width::{
@@ -29,4 +30,4 @@ pub use types::{
     DockArea, DockMessage, DockTabAction, DockTabMenu, EditorContext, FloatingPanel, PanelPosition,
     PanelSite,
 };
-pub(crate) use view::title_actions;
+pub(crate) use view::{extension_panel, title_actions};

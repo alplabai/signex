@@ -14,6 +14,9 @@ define_ids! {
     DRC_KIND_MASK_EXPANSION = "drc-kind-mask-expansion";
     DRC_KIND_PASTE_EXPANSION = "drc-kind-paste-expansion";
     DRC_KIND_COURTYARD = "drc-kind-courtyard";
+    DRC_KIND_COMPONENT_HEIGHT = "drc-kind-component-height";
+    DRC_KIND_BODY_CLEARANCE = "drc-kind-body-clearance";
+    DRC_DETAIL_HEIGHT = "drc-detail-height";
     DRC_DETAIL_GAP = "drc-detail-gap";
     DRC_DETAIL_OVERLAP = "drc-detail-overlap";
     DRC_DETAIL_NO_NET = "drc-detail-no-net";

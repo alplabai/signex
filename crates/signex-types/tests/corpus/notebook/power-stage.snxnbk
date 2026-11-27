@@ -1,0 +1,85 @@
++++
+format = "snxnbk/1"
+
+[[references]]
+kind = "component"
+component = "U1"
+id = "0193a0c4-5b1e-7c3a-9f00-6f1c2d3e4101"
+
+[[references]]
+kind = "pin"
+component = "U1"
+pin = "3"
+id = "0193a0c4-5b1e-7c3a-9f00-6f1c2d3e4101"
+
+[[references]]
+kind = "net"
+net = "VOUT_3V3"
++++
+#import "@signex/notebook:0.1.0": *
+#show: report.with(doc: "DN-0017", rev: "B", title: [dcdc-buck Design Notebook])
+
+= Power stage <sec:power>
+#page-info(file: "power-stage.snxnbk", author: "j.berg", date: "2026-11-17", reviewer: "a.lind", status: "reviewed")
+
+The buck converter #component("U1") takes #net("VIN_12V") and makes
+#net("VOUT_3V3"). Feedback enters at #pin("U1", "3"). Rail current is
+measured by #component("U3") on the mcu sheet.
+
+== Output voltage <sec:vout>
+#calculation(
+  id: "CALC-3.1",
+  title: [Output voltage],
+  target: (3.30, 2%),
+  result: 3.332,
+  unit: "V",
+)[
+  $ V_"out" &= V_"ref" (1 + R_1 / R_2) = 0.8 "V" times (1 + 100 "k"Omega / 31.6 "k"Omega) = 3.33 "V" $
+  with $R_1$ from #component("R3"), $R_2$ from #component("R4") and $V_"ref"$ from #component("U1").
+]
+
+== Rails at 2 A load
+#measurement(
+  id: "MEAS-3.2",
+  title: [Rails at 2 A load],
+  date: "2026-11-17",
+  conditions: "12.0 V in, 2.0 A, 25 °C",
+  instrument: "DMM 6½ digit, LAB-0117",
+  operator: "j.berg",
+  rows: (
+    (net("VIN_12V"), 12.00, 5%, 11.96),
+    (net("VOUT_3V3"), 3.300, 2%, 3.310),
+    (net("VBUS"), 5.00, 5%, 4.78),
+  ),
+  unit: "V",
+)
+
+== Open items
+#issue(
+  id: "ISS-3.1",
+  title: [VBUS droop at 2 A],
+  status: "open",
+  owner: "j.berg",
+  date: "2026-11-17",
+  from: "MEAS-3.2",
+  target: (net("VBUS"),),
+  due: "rev C",
+)[
+  VBUS reads 4.78 V at 2 A, 30 mV above the −5 % limit. Check the
+  ideal-diode OR on the usb sheet.
+]
+
+#decision(
+  id: "DEC-3.1",
+  title: [Current monitor in the Lite variant],
+  status: "accepted",
+  owner: "a.lind",
+  date: "2026-11-17",
+  review: "R-02",
+  target: component("U3"),
+)[
+  The Lite variant leaves #component("U3") unfitted; Lite boards do not
+  report rail current.
+]
+
+#note(id: "NOTE-3.1")[The old LDO #component("U7") was removed in rev B; this note predates that change.]

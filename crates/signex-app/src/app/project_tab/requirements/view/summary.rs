@@ -168,7 +168,7 @@ pub(in crate::app::project_tab::requirements) fn summary_words(
             "width" => value(RequirementField::MaxWidthMm),
             "height" => value(RequirementField::MaxHeightMm),
         ),
-        RequirementKind::PartsState { states } => t!(
+        RequirementKind::PartsState { states, .. } => t!(
             i18n,
             ids::REQUIREMENTS_SUMMARY_PARTS_STATE,
             "states" => i18n.list(states.as_slice(), ListKind::Or),
@@ -203,8 +203,76 @@ pub(in crate::app::project_tab::requirements) fn summary_words(
             "currency" => value(RequirementField::Currency),
             "quantity" => value(RequirementField::Quantity),
         ),
+        RequirementKind::RailBudget { net, .. } => {
+            let limits = rail_limits(raw, i18n);
+            t!(
+                i18n,
+                ids::REQUIREMENTS_SUMMARY_RAIL_BUDGET,
+                "net" => net.as_str(),
+                "limits" => i18n.list(limits.as_slice(), ListKind::And),
+            )
+        }
+        RequirementKind::LayerCount {
+            min_layers,
+            max_layers,
+        } => {
+            let min = value(RequirementField::MinLayers);
+            let max = value(RequirementField::MaxLayers);
+            match (min_layers, max_layers) {
+                (Some(_), Some(_)) => t!(
+                    i18n,
+                    ids::REQUIREMENTS_SUMMARY_LAYER_RANGE,
+                    "min" => min,
+                    "max" => max,
+                ),
+                (Some(_), None) => t!(i18n, ids::REQUIREMENTS_SUMMARY_LAYER_MIN, "min" => min),
+                (None, Some(_)) => t!(i18n, ids::REQUIREMENTS_SUMMARY_LAYER_MAX, "max" => max),
+                (None, None) => return None,
+            }
+        }
     };
     Some(words)
+}
+
+/// The limits a `rail_budget` asks, one phrase each, as stored: the
+/// voltage band, the load against the supply, the load cap and the margin.
+fn rail_limits(raw: &Value, i18n: &I18n) -> Vec<String> {
+    let set = |field: RequirementField| {
+        let text = stored_text(field, raw);
+        (!text.is_empty()).then_some(text)
+    };
+    let mut limits: Vec<String> = Vec::new();
+    match (
+        set(RequirementField::Voltage),
+        set(RequirementField::TolerancePercent),
+    ) {
+        (Some(voltage), Some(tolerance)) => limits.push(
+            t!(
+                i18n,
+                ids::REQUIREMENTS_SUMMARY_RAIL_VOLTAGE_TOLERANCE,
+                "voltage" => voltage,
+                "tolerance" => tolerance,
+            )
+            .into_string(),
+        ),
+        (Some(voltage), None) => limits.push(
+            t!(i18n, ids::REQUIREMENTS_SUMMARY_RAIL_VOLTAGE, "voltage" => voltage).into_string(),
+        ),
+        _ => {}
+    }
+    limits.push(t!(i18n, ids::REQUIREMENTS_SUMMARY_RAIL_SUPPLY).into_string());
+    if let Some(current) = set(RequirementField::MaxCurrentA) {
+        limits.push(
+            t!(i18n, ids::REQUIREMENTS_SUMMARY_RAIL_MAX_CURRENT, "current" => current)
+                .into_string(),
+        );
+    }
+    if let Some(margin) = set(RequirementField::MarginPercent) {
+        limits.push(
+            t!(i18n, ids::REQUIREMENTS_SUMMARY_RAIL_MARGIN, "margin" => margin).into_string(),
+        );
+    }
+    limits
 }
 
 /// The limits a `net_class` asks, one phrase each: its class, then the

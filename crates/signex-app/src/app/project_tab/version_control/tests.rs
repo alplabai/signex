@@ -51,7 +51,7 @@ fn the_switch_turns_on_only_with_a_repository_and_always_turns_off() {
 #[test]
 fn open_history_panel_opens_the_history_panel() {
     let (mut app, _) = app();
-    let _ = app.document_state.dock.close_panel(PanelKind::History);
+    let _ = app.document_view.dock.close_panel(PanelKind::History);
     assert!(!app.is_panel_open(PanelKind::History));
     let _ = app.update(open_history_message());
     assert!(app.is_panel_open(PanelKind::History));

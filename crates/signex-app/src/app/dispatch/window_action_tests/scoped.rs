@@ -7,12 +7,7 @@ use super::*;
 fn a_child_sheet_name_typed_in_a_window_lands_in_that_windows_properties() {
     let mut f = fixture();
     f.app.refresh_panel_ctx();
-    assert!(
-        f.app
-            .document_state
-            .window_panel_ctx
-            .contains_key(&f.window)
-    );
+    assert!(f.app.document_view.window_panel_ctx.contains_key(&f.window));
     let id = uuid::Uuid::from_u128(11);
     let typed = typed_in_window(
         &f,
@@ -21,16 +16,10 @@ fn a_child_sheet_name_typed_in_a_window_lands_in_that_windows_properties() {
     assert!(is_scoped(&typed, f.window));
     let _ = f.app.update(typed);
     assert_eq!(
-        f.app.document_state.window_panel_ctx[&f.window].child_sheet_name_buf,
+        f.app.document_view.window_panel_ctx[&f.window].child_sheet_name_buf,
         Some((id, "Power".to_string()))
     );
-    assert!(
-        f.app
-            .document_state
-            .panel_ctx
-            .child_sheet_name_buf
-            .is_none()
-    );
+    assert!(f.app.document_view.panel_ctx.child_sheet_name_buf.is_none());
 }
 
 /// The part's ⋯ menu toggled in an undocked Properties window opens in that
@@ -46,9 +35,9 @@ fn a_part_menu_toggled_in_a_window_opens_in_that_windows_properties() {
     );
     assert!(is_scoped(&toggled, f.window));
     let _ = f.app.update(toggled);
-    let window = &f.app.document_state.window_panel_ctx[&f.window];
+    let window = &f.app.document_view.window_panel_ctx[&f.window];
     assert_eq!(window.part_panel.menu_for, Some(id));
-    assert_eq!(f.app.document_state.panel_ctx.part_panel.menu_for, None);
+    assert_eq!(f.app.document_view.panel_ctx.part_panel.menu_for, None);
 }
 
 #[test]

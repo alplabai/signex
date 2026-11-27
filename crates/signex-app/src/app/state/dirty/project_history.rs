@@ -16,15 +16,11 @@
 //! `mark_document_dirty` and sit in the `external` set, so only a save
 //! clears them.
 
-use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use signex_types::project::encode_project;
 
 use super::super::{DocumentState, ProjectId};
-
-/// The cursors, keyed by project file.
-pub(super) type ProjectSavedBytes = HashMap<PathBuf, Vec<u8>>;
 
 impl DocumentState {
     /// Call before a history-recorded edit to project `id`: if the project is

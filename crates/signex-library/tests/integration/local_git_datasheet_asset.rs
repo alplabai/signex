@@ -31,6 +31,7 @@ fn mounted_library(dir: &Path, enable_git: bool) -> (PathBuf, LocalGitAdapter, U
         library: LibrarySection {
             name: "Pin".into(),
             description: None,
+            ..Default::default()
         },
         mode: LibraryMode::default(),
         workflow: WorkflowConfig::default(),

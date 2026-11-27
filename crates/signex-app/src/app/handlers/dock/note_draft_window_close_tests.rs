@@ -50,7 +50,7 @@ fn typed_in_undocked_window() -> (
         let msg = app.scope_dock_message(window, msg);
         let _ = app.update(msg);
     }
-    let draft = app.document_state.window_panel_ctx[&window]
+    let draft = app.document_view.window_panel_ctx[&window]
         .placed
         .note
         .as_ref();

@@ -316,6 +316,9 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
             crate::workspace_layouts::WorkspaceLayoutMsg::ResetActiveRequested.into()
         }
         "open_parameter_manager" => Message::ParameterManager(ParameterManagerMsg::Open),
+        // #1295: the Parameter Manager footer's Export… and Import….
+        "export_parameters" => crate::app::parameter_io::ParameterIoMsg::ExportRequested.into(),
+        "import_parameters" => crate::app::parameter_io::ParameterIoMsg::ImportRequested.into(),
         "print" => Message::PrintPreview(PrintPreviewMsg::Requested),
         "redo" => Message::Edit(EditMsg::Redo),
         // Tools ▸ Assign Footprints (#2248) and View ▸ Net Inspector (#1269).
@@ -325,6 +328,20 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         )),
         // Design ▸ Compile Project and View ▸ Compiled Design (#1279, #1308).
         "compile_project" => Message::from(crate::app::CompiledDesignMsg::CompileRequested),
+        // #2968: the project in view, through the operand handler; a
+        // person's regenerate lists its changes without applying them.
+        "generate_block_diagram" => Message::Project(ProjectMsg::BlockDiagramSync(
+            crate::app::BlockDiagramSyncMsg::Requested {
+                regenerate: false,
+                apply: false,
+            },
+        )),
+        "regenerate_block_diagram" => Message::Project(ProjectMsg::BlockDiagramSync(
+            crate::app::BlockDiagramSyncMsg::Requested {
+                regenerate: true,
+                apply: false,
+            },
+        )),
         "open_compiled_design" => Message::Overlay(OverlayMsg::OpenPanel(
             crate::panels::PanelKind::CompiledDesign,
         )),
@@ -348,6 +365,11 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "rotate_clockwise" => Message::Edit(EditMsg::RotateSelectedClockwise),
         "rotate_counterclockwise" => Message::Edit(EditMsg::RotateSelectedCounterclockwise),
         "open_erc_dialog" => Message::Erc(ErcMsg::OpenDialog),
+        // #1288: the live ERC preference flips; with `enabled`, the operand
+        // handler sets it.
+        "toggle_live_erc" => {
+            Message::Erc(ErcMsg::Live(crate::app::handlers::erc::LiveErcMsg::Toggled))
+        }
         "repair_pin_junctions" => Message::Erc(ErcMsg::PinJunctionRepairRequested),
         // #1300: the contents sheet of the active document's project.
         "add_table_of_contents" => Message::from(crate::app::TablesMsg::TableOfContentsRequested),
@@ -358,6 +380,12 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
                 project: None,
             }))
         }
+        // The Design Notebook of the active document's project (mockup rows
+        // 195, 201, 202) and the schematic's Notebook badges (row 197).
+        "open_design_notebook" => NotebookMsg::OpenRequested { project: None }.into(),
+        "generate_design_notebook" => NotebookMsg::GenerateRequested { project: None }.into(),
+        "export_notebook_pdf" => NotebookMsg::ExportPdfRequested { project: None }.into(),
+        "toggle_notebook_badges" => NotebookMsg::BadgesToggled.into(),
         // #2399: the board's DRC results panel.
         "open_drc_panel" => Message::Overlay(OverlayMsg::OpenPanel(crate::panels::PanelKind::Drc)),
         "reannotate_board" => Message::from(crate::app::BoardReannotateMsg::Requested),
@@ -381,6 +409,8 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
             ))
         }
         "export_board_step" => Message::from(crate::app::BoardOutputMsg::StepExportRequested),
+        // #2796: the diagram in view (or one picked), then the SVG or PDF file.
+        "export_block_diagram" => Message::from(crate::app::BlockDiagramExportMsg::Requested),
         // #2410: Tools ▸ Panelize Board and Remove Panel, on the board in view.
         "panelize_board" => Message::from(crate::app::BoardPanelMsg::PanelizeRequested),
         "remove_board_panel" => Message::from(crate::app::BoardPanelMsg::RemoveRequested),
@@ -435,6 +465,13 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "place_board_room" => board_tool(BoardPlaceTool::Room),
         "create_rooms_from_sheets" => Message::Pcb(PcbMsg::CreateRooms(
             crate::app::rooms::CreateRoomsMsg::Requested,
+        )),
+        // #2457, #2941: translated to their operand handlers.
+        "arrange_in_room" => Message::Pcb(PcbMsg::RoomTool(
+            crate::app::rooms::RoomToolMsg::ArrangeRequested,
+        )),
+        "auto_place" => Message::Pcb(PcbMsg::RoomTool(
+            crate::app::rooms::RoomToolMsg::AutoPlaceRequested,
         )),
         "place_board_route" => board_tool(BoardPlaceTool::InteractiveRouting),
         // #2424: the Graphics tools.
@@ -503,6 +540,8 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         // #2410: the two pads selected on the board name the pins or gates.
         "swap_pins" => part_swap(signex_engine::pcb::pad_swap::SwapKind::Pins),
         "swap_gates" => part_swap(signex_engine::pcb::pad_swap::SwapKind::Gates),
+        "swap_schematic_pins" => Message::from(crate::app::SheetSwapMsg::PinsRequested),
+        "swap_schematic_gates" => Message::from(crate::app::SheetSwapMsg::GatesRequested),
         "save_board_reuse_block" => {
             Message::Pcb(PcbMsg::ReuseBlock(crate::app::ReuseBlockMsg::SaveRequested))
         }
@@ -553,6 +592,8 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "compare_board_with_schematic" => Message::from(crate::app::CompareBoardMsg::Requested),
         "back_annotate_schematics" => Message::from(crate::app::BackAnnotateMsg::Requested),
         "new_pcb_document" => Message::UpdatePcb(UpdatePcbMsg::NewPcbRequested(None)),
+        // #2796: an empty block diagram named after the project, unsaved.
+        "new_block_diagram" => Message::from(crate::app::BlockDiagramMsg::NewRequested),
         // #2232: the setup dialogs; a headless run with `profile` makes the
         // document through `run_operands` instead.
         "new_schematic_sheet" => Message::from(crate::app::DocumentSetupMsg::OpenRequested {
@@ -597,6 +638,9 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         }),
         "place_design_block" => extras(PlacementExtrasMsg::DesignBlockRequested),
         "import_graphics" => extras(PlacementExtrasMsg::ImportGraphicsRequested),
+        // #1283: the snippets dialog, and the selection saved as a snippet.
+        "place_snippet" => extras(PlacementExtrasMsg::SnippetRequested),
+        "save_snippet" => extras(PlacementExtrasMsg::SnippetSaveRequested),
         // BRIDGE_ARMS_END — `tests::match_block` scans for command-id
         // literals up to this marker and no further. Everything below is
         // fallthrough machinery whose own string literals must not be
@@ -1390,6 +1434,28 @@ mod tests {
         ));
     }
 
+    /// #1295 - the palette's Export… and Import… of the Parameter Manager
+    /// reach the same messages as its footer buttons.
+    #[test]
+    fn export_and_import_parameters_resolve_to_the_footer_messages() {
+        use crate::app::parameter_io::ParameterIoMsg;
+        let export = AppCommandId::new("export_parameters").unwrap();
+        let import = AppCommandId::new("import_parameters").unwrap();
+        assert!(is_dispatchable(&export) && is_dispatchable(&import));
+        assert!(matches!(
+            resolve(&export, &CommandArgs::none()),
+            Some(Message::ParameterManager(ParameterManagerMsg::Io(
+                ParameterIoMsg::ExportRequested
+            )))
+        ));
+        assert!(matches!(
+            resolve(&import, &CommandArgs::none()),
+            Some(Message::ParameterManager(ParameterManagerMsg::Io(
+                ParameterIoMsg::ImportRequested
+            )))
+        ));
+    }
+
     /// #103 - ids that gained an existing handler resolve; the rest of the
     /// pinned set stays unresolved.
     #[test]
@@ -1452,7 +1518,8 @@ mod tests {
     }
 
     /// #1669 - `cycle_wiring_mode` resolves to its tool message and steps the
-    /// drag wiring mode through all four and back to auto.
+    /// drag wiring mode through all six (the 45° two since #2516) and back
+    /// to auto.
     #[test]
     fn cycle_wiring_mode_resolves_and_cycles_the_drag_wiring_mode() {
         use signex_types::corner::DragWiringMode;
@@ -1464,7 +1531,7 @@ mod tests {
         let (mut app, _task) = Signex::new();
         assert_eq!(app.interaction_state.drag_wiring, DragWiringMode::Auto);
         let mut seen = Vec::new();
-        for _ in 0..4 {
+        for _ in 0..6 {
             let _ = app.dispatch_command(&cmd, CommandArgs::none(), None);
             seen.push(app.interaction_state.drag_wiring);
         }
@@ -1474,6 +1541,8 @@ mod tests {
                 DragWiringMode::HorizontalFirst,
                 DragWiringMode::VerticalFirst,
                 DragWiringMode::Straight,
+                DragWiringMode::Angle45Start,
+                DragWiringMode::Angle45End,
                 DragWiringMode::Auto
             ]
         );

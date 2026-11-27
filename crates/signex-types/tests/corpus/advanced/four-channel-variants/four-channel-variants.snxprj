@@ -1,0 +1,51 @@
+{
+  "active_variant": null,
+  "dir": "",
+  "enable_git": false,
+  "format": "snxprj/1.1",
+  "libraries": [],
+  "name": "four-channel-variants",
+  "pcb_file": null,
+  "schematic_root": "top.snxsch",
+  "sheets": [
+    {
+      "filename": "top.snxsch",
+      "labels_count": 0,
+      "name": "top.snxsch",
+      "symbols_count": 0,
+      "wires_count": 0
+    },
+    {
+      "filename": "channel.snxsch",
+      "labels_count": 0,
+      "name": "channel.snxsch",
+      "symbols_count": 0,
+      "wires_count": 0
+    }
+  ],
+  "variant_definitions": [
+    "Full",
+    "Lite"
+  ],
+  "variant_settings": {
+    "parts": [
+      {
+        "designator": "CH1_R1",
+        "parameters": {
+          "Value": "4k7"
+        },
+        "variant": "Full"
+      },
+      {
+        "designator": "CH3_R1",
+        "fitted": false,
+        "variant": "Lite"
+      },
+      {
+        "designator": "CH4_R1",
+        "fitted": false,
+        "variant": "Lite"
+      }
+    ]
+  }
+}

@@ -441,7 +441,7 @@ impl Signex {
             colours,
         };
         let i18n = &self.ui_state.i18n;
-        let panel_ctx = &self.document_state.panel_ctx;
+        let panel_ctx = &self.document_view.panel_ctx;
         let (tokens, font) = (&panel_ctx.tokens, &panel_ctx.ui_font_name);
         let look = TabMenuLook {
             theme: self.ui_state.effective_theme_id(),

@@ -55,6 +55,7 @@ fn library(tables: Vec<(&str, LibraryTable)>) -> LibraryFile {
             library: LibrarySection {
                 name: "Eq".into(),
                 description: None,
+                ..Default::default()
             },
             mode: LibraryMode::default(),
             workflow: WorkflowConfig::default(),

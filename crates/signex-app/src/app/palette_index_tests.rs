@@ -191,7 +191,7 @@ fn rows_for_a_twice_placed_sheet_focus_the_right_placement() {
     let row = rows(&app, "R101")[0];
     select_row(&mut app, row);
     assert_eq!(
-        app.document_state.tab_placements.get(&child),
+        app.document_view.tab_placements.get(&child),
         Some(&chain(PLACEMENT_B))
     );
 
@@ -208,7 +208,7 @@ fn rows_for_a_twice_placed_sheet_focus_the_right_placement() {
         .expect("the placement A row");
     select_row(&mut app, first);
     assert_eq!(
-        app.document_state.tab_placements.get(&child),
+        app.document_view.tab_placements.get(&child),
         Some(&chain(PLACEMENT_A))
     );
 }
@@ -351,7 +351,7 @@ fn a_sheet_row_lands_on_the_right_placement_of_a_child_placed_twice() {
         Some(child.as_path())
     );
     assert_eq!(
-        app.document_state.tab_placements.get(&child),
+        app.document_view.tab_placements.get(&child),
         Some(&chain(PLACEMENT_B))
     );
 }

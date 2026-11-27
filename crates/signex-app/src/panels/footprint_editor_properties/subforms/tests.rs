@@ -106,7 +106,7 @@ fn ctx_in_mode(
             shift: false,
         }),
     }));
-    app.document_state
+    app.document_view
         .panel_ctx
         .footprint_editor
         .as_deref()

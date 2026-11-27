@@ -465,6 +465,7 @@ fn open_readme_project(app: &mut Signex, dir: &std::path::Path) -> PathBuf {
         schematic_design: Default::default(),
         fab_outputs: None,
         router_tool_diameter: None,
+        bom_alternates: Vec::new(),
         requirements: Default::default(),
         parameters: Default::default(),
         unknown: Default::default(),
@@ -567,7 +568,7 @@ fn render_guide_screenshots() {
     // point at the unused-pin row (its actions show on hover), and fit the
     // canvas again after the run.
     let unused = app
-        .document_state
+        .document_view
         .panel_ctx
         .erc_diagnostics
         .iter()

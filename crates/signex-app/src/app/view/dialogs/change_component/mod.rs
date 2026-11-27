@@ -48,11 +48,18 @@ fn stage(mode: &PickerMode) -> Option<(&ChangeSession, Option<&ChangePreview>)> 
     }
 }
 
-/// Whether Next and Change act: a comparison is read and the list still
-/// shows and picks the part it compares.
-fn can_apply(picker: &PickerState, change: Option<&ChangePreview>) -> bool {
+/// Whether Next acts: a comparison is read and the list still shows and
+/// picks the part it compares. A mapping the sheet cannot follow still
+/// leads on, since the pins are remapped on the compare step.
+fn can_compare(picker: &PickerState, change: Option<&ChangePreview>) -> bool {
     let shown = picker.shown_selection().map(|(_, summary)| summary.row_id);
     change.is_some_and(|change| change.compares_shown(shown))
+}
+
+/// Whether Change applies: Next would act and the comparison's pin mapping
+/// can be followed.
+fn can_apply(picker: &PickerState, change: Option<&ChangePreview>) -> bool {
+    can_compare(picker, change) && change.is_some_and(|c| c.preview.refused.is_none())
 }
 
 /// The dialog; `None` outside the Change Component stages.
@@ -150,7 +157,7 @@ fn pick_footer<'a>(
             primary_btn_if(
                 t!(i18n, ids::LIBRARY_PICKER_NEXT),
                 LibraryMessage::PlacedPart(PlacedPartMsg::ChangeNextPressed),
-                can_apply(picker, change),
+                can_compare(picker, change),
                 tokens,
             ),
         ],

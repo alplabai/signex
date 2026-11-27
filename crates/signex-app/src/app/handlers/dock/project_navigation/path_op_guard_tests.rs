@@ -73,7 +73,7 @@ fn a_delete_is_refused_while_a_project_folder_move_is_in_flight() {
         RemoveChoice::DeleteFile,
     ))));
 
-    let notice = fx.app.document_state.error_notice.clone().expect("notice");
+    let notice = fx.app.document_view.error_notice.clone().expect("notice");
     assert!(
         notice
             .detail
@@ -144,7 +144,7 @@ fn a_file_whose_delete_is_in_flight_cannot_be_opened_renamed_or_saved() {
     drop(fx.app.update(Message::Remove(RemoveMsg::Confirm(
         RemoveChoice::DeleteFile,
     ))));
-    assert!(fx.app.document_state.error_notice.is_some());
+    assert!(fx.app.document_view.error_notice.is_some());
     drop(delete);
 }
 
@@ -184,7 +184,7 @@ fn close_project_is_held_while_a_delete_under_it_is_pending() {
     drop(fx.app.close_project_at_tree_path(&[0]));
 
     assert_eq!(fx.app.document_state.projects.len(), 1, "still open");
-    let notice = fx.app.document_state.error_notice.clone().expect("notice");
+    let notice = fx.app.document_view.error_notice.clone().expect("notice");
     assert!(
         notice.detail.render_en_us().contains("delete"),
         "{}",
@@ -216,7 +216,7 @@ fn a_library_delete_waits_for_a_library_copy_in_flight() {
         RemoveChoice::DeleteFile,
     ))));
 
-    let notice = fx.app.document_state.error_notice.clone().expect("notice");
+    let notice = fx.app.document_view.error_notice.clone().expect("notice");
     assert!(
         notice
             .detail

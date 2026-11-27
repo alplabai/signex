@@ -198,7 +198,7 @@ fn sorted_names(pins: &[SheetPin]) -> Vec<String> {
 }
 
 fn panel_has(app: &Signex, needle: &str) -> bool {
-    app.document_state
+    app.document_view
         .panel_ctx
         .diagnostics
         .iter()

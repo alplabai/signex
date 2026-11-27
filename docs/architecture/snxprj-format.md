@@ -254,6 +254,18 @@ without bumping the `snxprj/1` token. It is deliberately not a child of
   verbatim in the unknown-key bag, written back untouched, not applied, and
   reported in the Messages panel when a part is placed. Choosing a standard in
   the Project tab replaces it.
+- `numbering` (#1292) is how Annotate numbers new designators:
+  `page_hundreds` (page N hands out N×100+1 to N×100+99) or `page_thousands`
+  (N×1000+1 to N×1000+999). Absent is continuous, the next number after the
+  highest in the project; continuous is never written, so choosing it on a
+  project that had no scheme re-saves byte-identical. The page is the number
+  the title block prints (`signex_net::sheet_numbering`); a file placed more
+  than once numbers each placement from its own page. A run refuses, changing
+  nothing, when two numbered pages share a number, a numbered sheet has no
+  page, or a page's block is full; numbers never spill into the next page.
+  An older build keeps the key inside the section, unread, so the token stays
+  `snxprj/1`; it numbers continuously. A value this build does not know makes
+  the section unreadable, kept and not applied, as an unknown standard does.
 
 ## Schematic defaults (`schematic_defaults`, #2026)
 
@@ -389,6 +401,20 @@ saves byte-identical; a value that is not a positive number reads as absent
 and is dropped on the next save. No format token changes: a build that
 predates the field keeps the key as an unknown key.
 
+## Power rails (`rails`, #2943)
+
+An optional top-level object, a power rail by net name with its nominal
+`voltage` (volts, not 0) and an optional `tolerance_percent` (0 to below
+100): `"rails": {"+3V3": {"voltage": 3.3, "tolerance_percent": 5}}`. Unlike
+`router_tool_diameter` it is not a declared field of `ProjectData`: the value
+stays in the unknown-key bag as stored and is read through
+`ProjectData::rails()` and written through `ProjectData::set_rail`, so every
+rail nobody edited saves in the form it was written (`5` stays `5`), and a
+project that sets none saves byte-identical. A value this build cannot read
+is kept as written and not edited over. No format token changes: a build
+that predates the key keeps it as an unknown key. Rules: `docs/CLI.md`,
+"Rail budgets".
+
 ## Variant settings (`variant_settings`)
 
 `ProjectData.variant_settings` (`VariantSettings`) is an optional top-level
@@ -423,6 +449,10 @@ the `snxprj/1` token. It sits beside `variant_definitions` and
   the old designator. `designator` is the name the part had when the entry
   was last set; an entry without `part` (written by hand) names the part by
   it. The Variant Manager writes `part` on every cell edit.
+- A channel's copy of a part on a repeated sheet is a part of its own: its
+  `part.sheet` ends in the channel's placement uuid, so an entry is per
+  channel (#2662, `docs/MULTI_CHANNEL.md`, "Per-channel variant state"). Its
+  `designator` is the channel designator (`CH2_R5`). No key is added for it.
 - A rename of a variant renames its entries and the default; a removal drops
   them (and the default falls back to Base). Both are refused, like every
   settings edit, while the section is unreadable.

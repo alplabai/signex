@@ -202,6 +202,7 @@ fn refused_commands() -> Vec<(&'static str, Command)> {
                     footprint: String::new(),
                     datasheet: String::new(),
                     fields: Vec::new(),
+                    pin_map: None,
                 },
             },
         ),
@@ -520,6 +521,7 @@ fn changing_the_component_of_a_free_unit_is_refused_while_a_sibling_unit_is_lock
             footprint: String::new(),
             datasheet: String::new(),
             fields: Vec::new(),
+            pin_map: None,
         },
     }));
     assert!(message.contains("U1 is locked"), "{message}");

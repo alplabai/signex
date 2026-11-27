@@ -12,7 +12,7 @@ use crate::app::Signex;
 use crate::app::state::ProjectId;
 
 fn target(app: &Signex, id: ProjectId) -> Option<PreviewTarget> {
-    app.document_state.project_tabs[&id]
+    app.document_view.project_tabs[&id]
         .rules
         .drawing_target
         .clone()

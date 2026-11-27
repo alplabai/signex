@@ -74,7 +74,7 @@ pub fn sync_agent_journal_ignore(
 /// other platforms do not churn diffs.
 const TEXT_EXTENSIONS: &[&str] = &[
     "snxsch", "snxpcb", "snxprj", "snxmat", "snxnet", "snxbom", "snxout", "snxsym", "snxfpt",
-    "snxlib", "snxmod",
+    "snxlib", "snxmod", "snxblk",
 ];
 
 /// Attachments git must not diff or merge.

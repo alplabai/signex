@@ -76,7 +76,7 @@ fn show_variants(app: &mut Signex, id: ProjectId) {
 }
 
 fn tab(app: &Signex, id: ProjectId) -> &super::super::ProjectTabState {
-    &app.document_state.project_tabs[&id]
+    &app.document_view.project_tabs[&id]
 }
 
 fn matrix(app: &Signex, id: ProjectId) -> &signex_output::VariantMatrix {

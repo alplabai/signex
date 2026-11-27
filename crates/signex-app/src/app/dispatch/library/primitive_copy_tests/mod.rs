@@ -52,6 +52,7 @@ fn fixture(dir: &Path) -> Fixture {
         library: LibrarySection {
             name: "cells".into(),
             description: None,
+            ..Default::default()
         },
         mode: LibraryMode::default(),
         workflow: WorkflowConfig::default(),
@@ -358,6 +359,7 @@ fn browsing_a_file_of_a_nested_open_library_binds_from_the_inner_one() {
             library: LibrarySection {
                 name: "v".into(),
                 description: None,
+                ..Default::default()
             },
             mode: LibraryMode::default(),
             workflow: WorkflowConfig::default(),
@@ -405,6 +407,7 @@ fn init_library(snxlib: &Path) -> Uuid {
         library: LibrarySection {
             name: "inner".into(),
             description: None,
+            ..Default::default()
         },
         mode: LibraryMode::default(),
         workflow: WorkflowConfig::default(),

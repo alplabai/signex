@@ -23,9 +23,9 @@ pub(super) fn apply_symbol_ui(editor: &mut SymEditor, msg: SymbolEditorMsg) {
             };
             // A Bezier needs all four clicks: leaving the tool drops the
             // partial curve rather than placing one.
-            if editor.tool == SymbolTool::PlaceBezier && new_tool != SymbolTool::PlaceBezier {
-                editor.polygon_vertices.clear();
-                editor.canvas_cache.clear();
+            if editor.gui.tool == SymbolTool::PlaceBezier && new_tool != SymbolTool::PlaceBezier {
+                editor.gui.polygon_vertices.clear();
+                editor.gui.canvas_cache.clear();
             }
             // Footprint parity ("leaving Place Polygon commits (>= 3
             // vertices) / discards it (< 3)"): flush the in-flight
@@ -36,45 +36,45 @@ pub(super) fn apply_symbol_ui(editor: &mut SymEditor, msg: SymbolEditorMsg) {
             // window: switching to a footprint/schematic tab or a
             // different `.snxsym` tab can never see, let alone
             // mis-commit, another document's in-flight stash.
-            if editor.tool == SymbolTool::PlacePolygon
+            if editor.gui.tool == SymbolTool::PlacePolygon
                 && new_tool != SymbolTool::PlacePolygon
-                && !editor.polygon_vertices.is_empty()
+                && !editor.gui.polygon_vertices.is_empty()
             {
                 commit_or_discard_polygon(editor);
             }
             // Any real change ends the half-placed gesture on the canvas.
-            if editor.tool != new_tool {
-                editor.tool_epoch = editor.tool_epoch.wrapping_add(1);
-                editor.canvas_cache.clear();
+            if editor.gui.tool != new_tool {
+                editor.gui.tool_epoch = editor.gui.tool_epoch.wrapping_add(1);
+                editor.gui.canvas_cache.clear();
             }
-            editor.tool = new_tool;
-            editor.active_bar_menu = None;
+            editor.gui.tool = new_tool;
+            editor.gui.active_bar_menu = None;
         }
         SymbolEditorMsg::ToggleActiveBarMenu(menu) => {
-            editor.active_bar_menu = match editor.active_bar_menu {
+            editor.gui.active_bar_menu = match editor.gui.active_bar_menu {
                 Some(m) if m == menu => None,
                 _ => Some(menu),
             };
         }
         SymbolEditorMsg::CloseActiveBarMenu => {
-            editor.active_bar_menu = None;
+            editor.gui.active_bar_menu = None;
         }
         SymbolEditorMsg::ActiveBarStub(label) => {
             crate::diagnostics::log_info(unbuilt_row_note(label));
-            editor.active_bar_menu = None;
+            editor.gui.active_bar_menu = None;
         }
         SymbolEditorMsg::ToggleSelectionFilter(kind) => {
-            editor.selection_filter.toggle(kind);
-            editor.canvas_cache.clear();
+            editor.gui.selection_filter.toggle(kind);
+            editor.gui.canvas_cache.clear();
         }
         SymbolEditorMsg::PinTypePicked(pin_type) => {
             // Sticky (mockup row 141): the type stays for every following
             // pin; picking the checked type again goes back to unclassified.
-            if editor.pin_type == Some(pin_type) {
-                editor.pin_type = None;
-                editor.active_bar_menu = None;
+            if editor.gui.pin_type == Some(pin_type) {
+                editor.gui.pin_type = None;
+                editor.gui.active_bar_menu = None;
             } else {
-                editor.pin_type = Some(pin_type);
+                editor.gui.pin_type = Some(pin_type);
                 apply_symbol_ui(editor, SymbolEditorMsg::SetTool(SymbolToolMsg::AddPin));
             }
         }
@@ -117,19 +117,19 @@ mod tests {
     #[test]
     fn set_tool_away_from_polygon_commits_synchronously() {
         let mut editor = new_editor("A");
-        editor.tool = SymbolTool::PlacePolygon;
-        editor.polygon_vertices = vec![(0.0, 0.0), (4.0, 0.0), (2.0, 3.0)];
+        editor.gui.tool = SymbolTool::PlacePolygon;
+        editor.gui.polygon_vertices = vec![(0.0, 0.0), (4.0, 0.0), (2.0, 3.0)];
 
         apply_symbol_ui(&mut editor, SymbolEditorMsg::SetTool(SymbolToolMsg::Select));
 
-        assert_eq!(editor.tool, SymbolTool::Select);
+        assert_eq!(editor.gui.tool, SymbolTool::Select);
         assert_eq!(
             editor.primitive().graphics.len(),
             1,
             "stash committed on tool switch"
         );
-        assert_eq!(editor.history.undo_len(), 1);
-        assert!(editor.polygon_vertices.is_empty());
+        assert_eq!(editor.draft.history.undo_len(), 1);
+        assert!(editor.gui.polygon_vertices.is_empty());
     }
 
     /// Switching away from `PlacePolygon` with < 3 vertices discards
@@ -137,14 +137,14 @@ mod tests {
     #[test]
     fn set_tool_away_from_polygon_discards_short_stash() {
         let mut editor = new_editor("A");
-        editor.tool = SymbolTool::PlacePolygon;
-        editor.polygon_vertices = vec![(0.0, 0.0), (4.0, 0.0)];
+        editor.gui.tool = SymbolTool::PlacePolygon;
+        editor.gui.polygon_vertices = vec![(0.0, 0.0), (4.0, 0.0)];
 
         apply_symbol_ui(&mut editor, SymbolEditorMsg::SetTool(SymbolToolMsg::Select));
 
         assert!(editor.primitive().graphics.is_empty());
-        assert_eq!(editor.history.undo_len(), 0);
-        assert!(editor.polygon_vertices.is_empty());
+        assert_eq!(editor.draft.history.undo_len(), 0);
+        assert!(editor.gui.polygon_vertices.is_empty());
     }
 
     /// Regression for the cross-tab corruption class this fix
@@ -159,7 +159,7 @@ mod tests {
         let mut editor_a = new_editor("A");
         let mut editor_b = new_editor("B");
 
-        editor_a.tool = SymbolTool::PlacePolygon;
+        editor_a.gui.tool = SymbolTool::PlacePolygon;
         apply_symbol_primitive_edit(
             &mut editor_a,
             SymbolEditorMsg::PolygonClick { x: 0.0, y: 0.0 },
@@ -183,7 +183,7 @@ mod tests {
         );
 
         assert!(
-            editor_b.polygon_vertices.is_empty(),
+            editor_b.gui.polygon_vertices.is_empty(),
             "B never saw A's in-flight stash"
         );
         assert!(
@@ -191,7 +191,7 @@ mod tests {
             "B's symbol stays untouched"
         );
         assert_eq!(
-            editor_b.history.undo_len(),
+            editor_b.draft.history.undo_len(),
             0,
             "B never pushed an undo entry"
         );
@@ -203,7 +203,7 @@ mod tests {
             SymbolEditorMsg::SetTool(SymbolToolMsg::Select),
         );
         assert_eq!(editor_a.primitive().graphics.len(), 1);
-        assert_eq!(editor_a.history.undo_len(), 1);
+        assert_eq!(editor_a.draft.history.undo_len(), 1);
     }
 
     /// Mockup row 141 (accepted 2026-11-24): a type picked in the Place Pin
@@ -212,15 +212,16 @@ mod tests {
     fn a_picked_pin_type_stays_for_every_following_pin() {
         use signex_types::schematic::PinDirection;
         let mut editor = new_editor("A");
-        editor.active_bar_menu = Some(crate::library::editor::symbol::state::SymActiveBarMenu::Pin);
+        editor.gui.active_bar_menu =
+            Some(crate::library::editor::symbol::state::SymActiveBarMenu::Pin);
 
         apply_symbol_primitive_edit(
             &mut editor,
             SymbolEditorMsg::PinTypePicked(PinDirection::Output),
         );
-        assert_eq!(editor.pin_type, Some(PinDirection::Output));
-        assert_eq!(editor.tool, SymbolTool::AddPin, "Place Pin is armed");
-        assert_eq!(editor.active_bar_menu, None, "the menu closes");
+        assert_eq!(editor.gui.pin_type, Some(PinDirection::Output));
+        assert_eq!(editor.gui.tool, SymbolTool::AddPin, "Place Pin is armed");
+        assert_eq!(editor.gui.active_bar_menu, None, "the menu closes");
 
         apply_symbol_primitive_edit(&mut editor, SymbolEditorMsg::AddPin { x: 0.0, y: 0.0 });
         apply_symbol_primitive_edit(&mut editor, SymbolEditorMsg::AddPin { x: 0.0, y: 5.0 });
@@ -249,7 +250,7 @@ mod tests {
             &mut editor,
             SymbolEditorMsg::PinTypePicked(PinDirection::Passive),
         );
-        assert_eq!(editor.pin_type, None);
+        assert_eq!(editor.gui.pin_type, None);
         apply_symbol_primitive_edit(&mut editor, SymbolEditorMsg::AddPin { x: 0.0, y: 5.0 });
 
         let types: Vec<PinDirection> = editor

@@ -65,6 +65,7 @@ fn annotate_placed(
         undo_group: None,
         reprefix: None,
         placements: &placements,
+        blocks: None,
     };
     engine
         .annotate_in_project(mode, &mut HashMap::new(), scope, &mut HashMap::new())

@@ -430,7 +430,7 @@ fn the_net_inspector_lists_the_board_nets_and_selects_one() {
     let _ = app.update(Message::Overlay(OverlayMsg::OpenPanel(
         PanelKind::NetInspector,
     )));
-    let view = app.document_state.panel_ctx.net_inspector.board.clone();
+    let view = app.document_view.panel_ctx.net_inspector.board.clone();
     let view = view.expect("the board's nets");
     assert_eq!(view.total, 2);
     let gnd = &view.nets[0];

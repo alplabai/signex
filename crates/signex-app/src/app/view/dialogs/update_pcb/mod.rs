@@ -71,7 +71,7 @@ impl Signex {
         let Some(state) = self.ui_state.update_pcb.as_ref() else {
             return container(Space::new()).boxed();
         };
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let i18n = self.ui_state.i18n.as_ref();
         let subtitle = t!(
             i18n,
@@ -96,6 +96,13 @@ impl Signex {
         body = body.push(self.update_pcb_banner(state, i18n, tokens));
         // #1489: the rules the schematic asks for, below the board's rows.
         let rules = schematic_rules::section(&self.update_pcb_rule_rows(state), i18n, tokens);
+        // Exit criterion 3: the net classes from the schematic, one line.
+        let classes =
+            schematic_rules::classes_line(self.update_pcb_class_count(state), i18n, tokens);
+        let rules = match (rules, classes) {
+            (Some(rules), Some(classes)) => Some(column![rules, classes].boxed()),
+            (rules, classes) => rules.or(classes),
+        };
         if let Some(list) = state.list.as_ref().filter(|l| !l.rows.is_empty()) {
             if let Some(card) = problems::card(list, i18n, tokens) {
                 body = body.push(card);
@@ -209,10 +216,7 @@ impl Signex {
         tokens: &ThemeTokens,
     ) -> Vec<Element<'a, Message>> {
         let ready = state.ready_list();
-        let count = state.execute_count()
-            + crate::app::update_pcb::rules_from_schematic::pending(
-                &self.update_pcb_rule_rows(state),
-            );
+        let count = self.update_pcb_execute_count(state);
         let can_execute = ready.is_some() && count > 0 && self.update_pcb_execute_block().is_none();
         let execute = match ready {
             Some(_) => t!(i18n, ids::UPDATE_PCB_EXECUTE_COUNT, "count" => count),

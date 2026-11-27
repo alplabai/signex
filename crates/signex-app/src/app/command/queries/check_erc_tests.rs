@@ -231,7 +231,7 @@ fn a_baseline_that_is_not_kept_is_refused() {
     assert!(why.contains("no such run"), "{why}");
     // The refused run is not numbered.
     assert_eq!(report(&mut app, &top(&dir), &[])["run"], 1);
-    for _ in 0..crate::app::state::check_runs::KEPT_CHECK_RUNS {
+    for _ in 0..crate::app::core::check_runs::KEPT_CHECK_RUNS {
         report(&mut app, &top(&dir), &[]);
     }
     let why = refusal(check(&mut app, &top(&dir), &["baseline=1"]));
@@ -412,12 +412,12 @@ fn a_check_leaves_the_erc_results_and_the_panel_alone() {
     let dir = tempfile::tempdir().unwrap();
     let mut app = project_app(&dir);
     let before = erc_state(&app);
-    let panels = crate::dock::DockLayoutSnapshot::capture(&app.document_state.dock);
+    let panels = crate::dock::DockLayoutSnapshot::capture(&app.document_view.dock);
     let checked = report(&mut app, &top(&dir), &[]);
     assert!(!checked["findings"].as_array().unwrap().is_empty());
     assert_eq!(erc_state(&app), before);
     assert_eq!(
-        crate::dock::DockLayoutSnapshot::capture(&app.document_state.dock),
+        crate::dock::DockLayoutSnapshot::capture(&app.document_view.dock),
         panels
     );
     // Run ERC on the same project fills them.

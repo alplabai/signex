@@ -41,6 +41,8 @@ mod sheet_placement;
 mod sheet_sync;
 mod sheet_sync_entries;
 #[cfg(test)]
+mod sheet_sync_repeat_tests;
+#[cfg(test)]
 mod sheet_sync_tests;
 mod transform;
 
@@ -54,6 +56,8 @@ pub mod unions;
 #[cfg(test)]
 pub(crate) mod test_support;
 
+#[cfg(test)]
+mod annotation_blocks_tests;
 #[cfg(test)]
 mod annotation_drawing_tests;
 #[cfg(test)]
@@ -71,6 +75,8 @@ mod commit_local_tests;
 mod drag_wiring_tests;
 #[cfg(test)]
 mod field_follow_tests;
+#[cfg(test)]
+mod junction_drag_tests;
 #[cfg(test)]
 mod lock_tests;
 #[cfg(test)]
@@ -126,12 +132,13 @@ pub use command::{
 pub use error::EngineError;
 pub use exec::change_component::{
     ComponentChangePreview, ComponentReplacement, DataChange, change_component_preview,
-    placed_unit_ids,
+    placed_unit_ids, swapped_sheet,
 };
+pub use exec::change_component_pins::{PinChoice, PinMapRow, pin_choices, pin_table};
 pub use exec::pin_changes::{SwitchBlockers, switch_blockers};
 pub use find::{
     DesignatorScope, FindHit, FindKind, FindQuery, MatchOptions, PatternError, designator_commands,
-    replace_all_ci, replace_commands, scan_sheet, value_part_name,
+    replace_all_ci, replace_commands, scan_sheet, stored_text, value_part_name,
 };
 pub use find_similar::{
     SimilarProperty, SimilarValue, describe, find_similar, kind_label, properties_of,
@@ -147,7 +154,8 @@ pub use multi_edit::{
 };
 pub use net_class_table::{
     HISTORY_LIMIT as NET_CLASS_HISTORY_LIMIT, NetClassCommand, NetClassError, NetClassHistory,
-    StepId as NetClassStepId, apply_net_class_command,
+    SchematicClass, StepId as NetClassStepId, apply_net_class_command, schematic_class_edit,
+    schematic_classes,
 };
 pub use patch::{CommandResult, DocumentPatch, PatchPair, SemanticPatch};
 pub use placed_edit::{
@@ -158,8 +166,8 @@ pub use placement::PlacementPayload;
 pub use placement_sources::DesignBlock;
 pub use power_port::{place_power_port, restyle_power_port};
 pub use project_general::{
-    HISTORY_LIMIT as PROJECT_GENERAL_HISTORY_LIMIT, ProjectGeneralCommand, ProjectGeneralHistory,
-    ProjectRequirementCommand, ProjectSectionCommand,
+    HISTORY_LIMIT as PROJECT_GENERAL_HISTORY_LIMIT, ProjectBomCommand, ProjectGeneralCommand,
+    ProjectGeneralHistory, ProjectRailCommand, ProjectRequirementCommand, ProjectSectionCommand,
 };
 pub use selection::{
     ClipboardSelection, SelectionAnchor, SelectionDetails, info_keys, partition_cuttable,

@@ -566,7 +566,7 @@ impl Signex {
 
 /// Route `leg` with the route's rules, in the corner rule and mode given,
 /// expanding at most `budget` lattice points.
-fn route_on(
+pub(super) fn route_on(
     board: &PcbBoard,
     router: &RouterState,
     leg: LegRequest,
@@ -661,7 +661,7 @@ pub(super) fn rule_via(mut via: Via, rules: &DrcRules) -> Via {
 }
 
 /// The Messages line for a leg that was not routed.
-fn refusal_line(refusal: RouteRefusal) -> MessageId {
+pub(super) fn refusal_line(refusal: RouteRefusal) -> MessageId {
     match refusal {
         RouteRefusal::Blocked => ids::PCB_ROUTE_BLOCKED,
         RouteRefusal::ViaBlocked => ids::PCB_ROUTE_VIA_BLOCKED,

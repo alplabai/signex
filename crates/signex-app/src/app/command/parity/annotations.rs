@@ -29,6 +29,19 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
         Bridge,
         &[ActiveDocument],
     ),
+    // #2968: the project in view becomes the `document` operand.
+    (
+        &["generate_block_diagram", "regenerate_block_diagram"],
+        Translator,
+        &[ActiveDocument],
+    ),
+    // #2968: the named document's project and its sheets, read off the UI
+    // thread; a diagram open in a tab refuses a run that writes.
+    (
+        &["generate_block_diagram", "regenerate_block_diagram"],
+        Operand,
+        &[],
+    ),
     // The canvas selection and the union picked in the Unions panel (mockup row 158).
     (
         &["add_to_union", "remove_from_union", "break_union"],
@@ -87,8 +100,29 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
         Operand,
         &[Settings],
     ),
+    // The routing tools from their operands (#2470): the rules the route
+    // keeps come from `board_design_rules` -> `drc_inputs`; none reads the
+    // person's tool form, corner rule or route mode (handlers/pcb_tool/
+    // route_order.rs). A via reads nothing past its operands and the board.
+    (
+        &[
+            "place_board_track",
+            "place_board_quick_route",
+            "place_board_route",
+            "place_board_diff_pair",
+            "place_board_multi_route",
+        ],
+        Operand,
+        &[Settings],
+    ),
+    (&["place_board_via"], Operand, &[]),
     // The PDF's printed text is in the UI locale (`print_text`).
     (&["export_board_pdf"], Operand, &[Settings]),
+    // Mockup row 202: the stale check reads the named project's design on
+    // the worker (`notebook_design_inputs`), its open sheets as edited; the
+    // dialog opens on the project in view.
+    (&["export_notebook_pdf"], Operand, &[]),
+    (&["export_notebook_pdf"], Bridge, &[ActiveDocument]),
     // Save As of a background sheet is refused (`active_path`).
     (&["save_document_as"], Operand, &[ActiveDocument]),
     // The rfd picker (`save_as_dialog_for_active_tab`).
@@ -124,6 +158,10 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
         Operand,
         &[Settings],
     ),
+    // The live ERC preference (#1288): a flip reads the value it flips.
+    (&["toggle_live_erc"], Bridge, &[Settings]),
+    (&["toggle_live_erc"], Operand, &[Settings]),
+    (&["toggle_live_erc"], HeadlessWithoutOperands, &[Settings]),
     // A project without rules of its own edits from the machine rules
     // (`rules_text_of` falls back on `ui_state.machine_drc_rules`); a preset
     // comes from the machine's profile library.
@@ -149,6 +187,28 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
     // #3013: the library dialogs' actions read the dialog they fill, the
     // library state and their operands; nothing implicit.
     (LIBRARY_DIALOGS, Operand, &[]),
+    // #2457: from the palette, Arrange in Room acts on the room Properties
+    // shows on the board in view.
+    (
+        &["arrange_in_room"],
+        Translator,
+        &[ActiveDocument, Selection],
+    ),
+    // #2470: a headless New PCB with no `document` joins the project in view.
+    (
+        &["new_pcb_document"],
+        HeadlessNewDocument,
+        &[ActiveDocument],
+    ),
+    // #2470: Annotate with no `document` runs on the active sheet's project.
+    (
+        &[
+            "annotate_schematic_quietly",
+            "force_annotate_all_schematics",
+        ],
+        Operand,
+        &[ActiveDocument],
+    ),
     // The DRC results act on the board in view only (`drc_results_board`,
     // handlers/pcb_drc_results.rs); Show also centres that window's camera
     // (`center_on_world` reads the canvas `viewport`). The last DRC run
@@ -157,6 +217,10 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
     // category listed in scripts/uifree-state.txt, so it is no implicit input.
     (&["show_drc_violation"], Operand, &[ActiveDocument, Window]),
     (&["filter_drc_results"], Operand, &[ActiveDocument]),
+    // The DRC fixes check the named board with Run DRC's rules: a project
+    // without rules is checked with the machine rules (`fix_drc` ->
+    // `board_design_rules` -> `drc_inputs`), configuration.
+    (&["fix_drc", "fix_drc_violation"], Operand, &[Settings]),
     // A waiver is refused on a stale last run (`set_drc_waiver`): the core
     // session state above, so nothing implicit.
     (
@@ -184,15 +248,40 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
     ),
     // A run already going in the Project tab skips this one.
     (&["project_run_requirements"], Operand, &[Window]),
-    // The board update targets the window acting, else the active document.
+    // #2795: a compile reads the project's notebook as its tab holds it (or
+    // its file) and the view writes that tab's session, nothing implicit; an
+    // insert lands at the tab's cursor unless `line` names one.
+    (&["notebook_compile", "notebook_view"], Operand, &[]),
+    (&["notebook_insert"], Operand, &[Cursor]),
+    // Mockup rows 196 and 197: each reads the project it names first and
+    // answers from that read; a fix edits the notebook tab's text.
+    (
+        &[
+            "notebook_references",
+            "notebook_reference_card",
+            "notebook_reference_picker",
+            "notebook_badges",
+            "notebook_fix_reference",
+        ],
+        Operand,
+        &[],
+    ),
+    // The board update acts on the project its `document` names (#2470),
+    // else on the active project (the workspace pointer, not the tab in
+    // view); an open Update PCB dialog only refuses it.
+    (&["update_pcb_from_schematic"], Operand, &[ActiveDocument]),
     (
         &["update_pcb_from_schematic"],
-        Operand,
-        &[ActiveDocument, Window],
+        HeadlessWithoutOperands,
+        &[ActiveDocument],
     ),
     // The new document joins the active document's project.
     (
-        &["new_pcb_document", "new_schematic_sheet"],
+        &[
+            "new_pcb_document",
+            "new_schematic_sheet",
+            "new_block_diagram",
+        ],
         Operand,
         &[ActiveDocument],
     ),
@@ -317,6 +406,8 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
         Check,
         &[Settings],
     ),
+    // The design report runs the same checks (#2945).
+    (&["generate_design_notebook"], Operand, &[Settings]),
     // The answer names the view angle of the board's canvas.
     (&["document_info"], Query, &[Window]),
     // `rules_explain` and `rules_get` read the board's last DRC run
@@ -340,20 +431,65 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
         Query,
         &[Settings],
     ),
-    // Read: operands only.
+    // Read: operands only. `bom_lines` (#1988) reads the named sheet's
+    // project, its open board and the library's cached prices, as documents.
+    // `layout_plan_status` reads the board's last DRC run, core-bound session
+    // state as for `rules_get` above.
     (
         &[
             "board_panel",
+            "bom_lines",
+            // #2949: the named project's variants and sheets.
+            "compare_variants",
             "find_items",
             "find_similar_items",
+            // #2952: the named project's open sheets and classes.
+            "list_diff_pairs",
+            "layout_plan_get",
+            "layout_plan_status",
             "measure_board",
+            // #2796: the named diagram, open or saved.
+            "query_block_diagram",
             "query_board_nets",
+            "query_net_ties",
             "query_pins",
+            // #1313: the project's sheets, read off the UI thread.
+            "query_power_tree",
+            // #2943: the project's rails and its parts, read off the UI thread.
+            "query_rail_budget",
+            // #2937, #2462, #2460, #2938, #1297: the footprint list, the board
+            // against the schematic, the board's counters, the priced BOM
+            // and the part search.
+            "query_footprint_assignments",
+            "check_board_against_schematic",
+            "board_status",
+            "query_bom",
+            "search_parts",
             "read_document",
+            "variant_bom",
+            // Mockup row 199: the named project's notebook and sheets.
+            "notebook_measurements",
+            "notebook_timeline",
+            "notebook_attachments",
+            // Mockup row 198: the review records of the named project's
+            // notebook files, read from disk.
+            "list_annotations",
         ],
         Query,
         &[],
     ),
+    // #1283: the snippet and template folders of the project in view
+    // (`reuse_roots_in_view`) and of the user's library.
+    (
+        &["list_snippets", "list_templates"],
+        Query,
+        &[ActiveDocument],
+    ),
+    // #2944: a relative library path is read from the edited sheet's
+    // project folder (`open_library_named`), as `place_component` reads it.
+    (&["query_library"], Query, &[ActiveDocument]),
+    // #2939: the named board and the open libraries' models.
+    (&["query_part_heights"], Operand, &[]),
     // What the open or the new project dialog answers.
     (
         &["new_document", "open_document", "new_project_with_profile"],
@@ -366,10 +502,20 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "tile_windows_horizontally",
             "tile_windows_vertically",
             "untile_documents",
+            // #2470: Fit frames the main window's active document.
+            "zoom_to_fit",
         ],
         AgentWindowLayout,
         &[Window, ActiveDocument],
     ),
+    // #2470: the main window's dock; opening Net Classes on a board opens
+    // the PCB panel (`show_panel`), so the active tab is read too.
+    (
+        &["set_dock_panel"],
+        AgentWindowLayout,
+        &[Window, ActiveDocument],
+    ),
+    (&["set_dock_panel"], Operand, &[Window, ActiveDocument]),
     // The listings narrow to an agent's documents (`document_entries`).
     (&["list_documents", "resolve"], Query, &[Origin]),
     // The grid the copy is stored on (`copy_selection`).
@@ -405,14 +551,52 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
     // The named board only (#2522): nothing implicit.
     (&["reset_board_origin", "reset_layer_colors"], Operand, &[]),
     (
-        &["new_pcb_document", "new_schematic_sheet"],
+        &[
+            "new_pcb_document",
+            "new_schematic_sheet",
+            "new_block_diagram",
+        ],
         HeadlessWithoutOperands,
         &[ActiveDocument],
     ),
+    // #2796: File ▸ New ▸ Block Diagram makes the diagram in the active
+    // document's project.
+    (&["new_block_diagram"], Bridge, &[ActiveDocument]),
+    // #2796: a block diagram edit acts on the named diagram and its
+    // operands only.
+    (
+        &[
+            "block_add",
+            "block_set",
+            "block_remove",
+            "block_port_add",
+            "block_port_remove",
+            "block_link",
+            "block_link_set",
+            "block_unlink",
+            "block_group",
+            "block_group_set",
+            "block_ungroup",
+        ],
+        Operand,
+        &[],
+    ),
+    // #2796: the diagram in view or the one the open dialog picks, then the
+    // file the save dialog answers.
+    (
+        &["export_block_diagram"],
+        Bridge,
+        &[ActiveDocument, DialogAnswer],
+    ),
+    // The PDF title block's labels follow the locale.
+    (&["export_block_diagram"], Operand, &[Settings]),
     // The preset is looked up among the saved filter presets
     // (`interaction_state.custom_filter_presets`, prefs-backed through
     // fonts/presets.rs): configuration.
     (&["apply_selection_filter_preset"], Operand, &[Settings]),
+    // The live keyboard profiles (`ui_state.keymap_profiles`, the saved
+    // `keyboard_shortcuts.toml`) and the installed extensions' commands (#2495).
+    (&["keymap_assign", "keymap_clear"], Operand, &[Settings]),
     (&["set_selection_filters"], Operand, &[]),
     (
         &[
@@ -440,6 +624,10 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
     (&["place_wire", "draw_wire"], Operand, &[ToolState]),
     (&["place_bus", "draw_bus"], Operand, &[ToolState]),
     (PLACEMENTS, Operand, &[ToolState]),
+    // #1283: without `ids`, the selection on the sheet in view is saved.
+    (&["save_snippet"], Operand, &[Selection]),
+    // #2665: the in-app copy, and the grid its default offset is measured on.
+    (&["smart_paste"], Operand, &[ToolState, Clipboard]),
     // Move Keeps Wires is not read: both take `keep_wires` as an operand
     // (#2552; rotation, Hakan 2026-11-25, #2326 comment 7167743982).
     (
@@ -447,6 +635,9 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
         Operand,
         &[],
     ),
+    // #2953: a designator is written for the placement the sheet in view
+    // shows, and only on that sheet (`designator_edit_commands`).
+    (&["set_object_text"], Operand, &[ActiveDocument]),
     // The tool defaults, and the active layer when `layer` is not given.
     // Declared 6.P3 exception: still the person's form until #2876 (docs/DECISIONS.md, 2026-11-24).
     (
@@ -652,6 +843,7 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "show_current_command_shortcuts",
             "new_project_with_profile",
             "toggle_cross_select_mode",
+            "toggle_notebook_badges",
             "place_wire_to_bus_entry",
         ],
         Bridge,
@@ -707,6 +899,8 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "save_board_reuse_block",
             "swap_gates",
             "swap_pins",
+            "swap_schematic_gates",
+            "swap_schematic_pins",
         ],
         Translator,
         &[Selection],

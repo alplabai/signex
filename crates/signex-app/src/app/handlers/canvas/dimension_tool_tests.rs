@@ -58,7 +58,7 @@ fn properties_shows_the_armed_tool_before_the_first_click() {
     assert!(!form.is_aligned);
     assert!(!form.has_from && !form.has_to);
     assert!(
-        app.document_state
+        app.document_view
             .panel_ctx
             .annotation
             .dimension_tool
@@ -76,7 +76,7 @@ fn the_form_follows_the_clicks_and_leaves_with_the_tool() {
 
     let _ = app.update(Message::Tool(ToolMessage::SelectTool(Tool::Select)));
     assert!(
-        app.document_state
+        app.document_view
             .panel_ctx
             .annotation
             .dimension_tool
@@ -94,7 +94,7 @@ fn pointer_at(app: &mut Signex, (x, y): (f32, f32)) {
 }
 
 fn shown_form(app: &Signex) -> crate::panels::DimensionToolForm {
-    *app.document_state
+    *app.document_view
         .panel_ctx
         .annotation
         .dimension_tool
@@ -138,10 +138,10 @@ fn nothing_follows_the_pointer_before_the_first_click_or_while_paused() {
 fn the_panel_shows_the_followed_to_and_its_length() {
     let mut app = armed(Tool::LinearDimension);
     click(&mut app, (0.0, 0.0));
-    app.document_state.panel_ctx.has_schematic = true;
+    app.document_view.panel_ctx.has_schematic = true;
     let size = iced::Size::new(300.0, 1000.0);
     let texts = |app: &Signex| {
-        let view = crate::panels::view_properties(&app.document_state.panel_ctx);
+        let view = crate::panels::view_properties(&app.document_view.panel_ctx);
         crate::layout_probe::lay_out_texts(view, size)
     };
     let shows_length = |app: &Signex| texts(app).iter().any(|t| t.text.contains("12.700"));
@@ -149,7 +149,7 @@ fn the_panel_shows_the_followed_to_and_its_length() {
 
     pointer_at(&mut app, (12.7, 0.0));
     assert!(shows_length(&app), "the length follows the pointer");
-    let view = crate::panels::view_properties(&app.document_state.panel_ctx);
+    let view = crate::panels::view_properties(&app.document_view.panel_ctx);
     let inputs = crate::layout_probe::lay_out_inputs(view, size);
     assert!(
         inputs.iter().any(|i| i.text == "12.70"),
@@ -398,12 +398,12 @@ fn the_hint_names_tab_and_space_from_the_second_point() {
 /// Returns whether a widget captured the key.
 fn press_in_override(app: &mut Signex, key: Key, text: Option<&str>) -> bool {
     // The bare test sheet has no render snapshot to set this from.
-    app.document_state.panel_ctx.has_schematic = true;
+    app.document_view.panel_ctx.has_schematic = true;
     let size = iced::Size::new(300.0, 1000.0);
     let mut renderer = crate::layout_probe::headless_renderer();
     let mut published = Bus::new();
     let captured = {
-        let view = crate::panels::view_properties(&app.document_state.panel_ctx);
+        let view = crate::panels::view_properties(&app.document_view.panel_ctx);
         let mut ui = UserInterface::build(view, size, Cache::default(), &mut renderer);
         let mut focus = focusable::focus::<()>(iced::widget::Id::new(DIMENSION_OVERRIDE_INPUT));
         ui.operate(&renderer, &mut focus);
@@ -497,7 +497,7 @@ fn emptying_the_box_turns_override_off_again() {
     }
     assert_eq!(override_text(&app), None);
     assert_eq!(
-        app.document_state.panel_ctx.annotation.draft, None,
+        app.document_view.panel_ctx.annotation.draft, None,
         "no empty draft hides the measured value after the second Tab"
     );
 }
@@ -511,7 +511,7 @@ fn tab_unfolds_the_text_section_so_typing_reaches_the_override_box() {
         PanelMsg::ToggleSection(crate::panels::DIMENSION_TEXT_SECTION.into()),
     )));
     assert!(
-        app.document_state
+        app.document_view
             .panel_ctx
             .collapsed_sections
             .contains(crate::panels::DIMENSION_TEXT_SECTION)
@@ -527,7 +527,7 @@ fn the_form_is_paused_only_between_the_two_tabs() {
     let mut app = armed(Tool::LinearDimension);
     let shown = |app: &Signex| {
         let form = app
-            .document_state
+            .document_view
             .panel_ctx
             .annotation
             .dimension_tool

@@ -113,7 +113,7 @@ impl Signex {
         let Some(ref st) = self.ui_state.enable_version_control else {
             return container(Space::new()).boxed();
         };
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let i18n = self.ui_state.i18n.as_ref();
         let modal = crate::app::state::ModalId::EnableVersionControl;
         let vc = |m: EnableVersionControlMsg| Message::EnableVersionControl(m);
@@ -520,7 +520,7 @@ mod tests {
         for theme in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
             for scope in [VersionControlScope::Project, VersionControlScope::Library] {
                 let (mut app, _) = Signex::new();
-                app.document_state.panel_ctx.tokens = app.tokens_for(theme);
+                app.document_view.panel_ctx.tokens = app.tokens_for(theme);
                 let mut st = dialog(
                     scope,
                     vec![

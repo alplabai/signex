@@ -191,7 +191,7 @@ impl Signex {
         let ds = &mut self.document_state;
         if record {
             ds.note_project_clean_state(id);
-            let general = &mut ds.project_tabs.entry(id).or_default().general_history;
+            let general = ds.general_history.entry(id).or_default();
             // Typing after this step is a step after it, not an older run.
             general.close_run();
             let position = general.position();

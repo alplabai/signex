@@ -32,6 +32,7 @@ define_ids! {
     FILE_DIALOG_NEW_COMPONENT_LIBRARY = "file-dialog-new-component-library";
     FILE_DIALOG_PLACE_DESIGN_BLOCK = "file-dialog-place-design-block";
     FILE_DIALOG_IMPORT_GRAPHICS = "file-dialog-import-graphics";
+    FILE_DIALOG_PLACE_SNIPPET = "file-dialog-place-snippet";
     FILE_FILTER_PROJECT = "file-filter-project";
     FILE_FILTER_SCHEMATIC = "file-filter-schematic";
     FILE_FILTER_PCB = "file-filter-pcb";

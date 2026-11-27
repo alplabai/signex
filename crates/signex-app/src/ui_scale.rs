@@ -168,9 +168,9 @@ mod tests {
 
     #[test]
     fn main_registers_the_scale_factor_hook_on_the_daemon() {
-        // The daemon builder lives in `main`, which no test can call; this
-        // pins that the registration is still there.
-        assert!(include_str!("main.rs").contains(".scale_factor(Signex::scale_factor)"));
+        // The daemon builder lives in `launch::run` (main calls it), which no
+        // test can call; this pins that the registration is still there.
+        assert!(include_str!("launch.rs").contains(".scale_factor(Signex::scale_factor)"));
     }
 
     #[test]

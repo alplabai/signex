@@ -89,7 +89,7 @@ fn the_stale_project_is_dirtied_only_when_the_file_moves_back() {
     );
     assert!(!app.document_state.has_dirty_documents());
     assert!(
-        app.document_state.error_notice.is_some(),
+        app.document_view.error_notice.is_some(),
         "a stranded library raises the card"
     );
 }

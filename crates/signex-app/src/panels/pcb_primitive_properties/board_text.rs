@@ -214,7 +214,7 @@ mod tests {
     #[test]
     fn the_panel_shows_the_mirrored_fact_for_a_bottom_string() {
         let (app, _boot) = crate::app::Signex::new();
-        let ctx = app.document_state.panel_ctx.clone();
+        let ctx = app.document_view.panel_ctx.clone();
         let fact = t!(ctx.i18n, ids::PCB_PRIM_STRING_MIRRORED).into_string();
         let shows = |f: &TextFacts| {
             let section = properties(Look::of(&ctx), f).expect("the section");

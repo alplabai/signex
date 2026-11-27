@@ -61,7 +61,7 @@ fn save_found_drift(app: &mut Signex, path: &Path) {
     app.record_disk_baseline(path, ContentHash::of(b"as opened"));
     app.document_state.mark_document_dirty(path);
     app.handle_save_found_disk_drift(path.to_path_buf(), DiskDrift::Changed);
-    assert!(app.document_state.error_notice.is_some(), "the card is up");
+    assert!(app.document_view.error_notice.is_some(), "the card is up");
 }
 
 /// Click Reload and run the read; the completion is returned unapplied.
@@ -130,10 +130,7 @@ fn reloading_the_active_sheet_installs_the_file_and_leaves_it_saved() {
         Some(ContentHash::of(text.as_bytes())),
         "the next save compares with the file just read"
     );
-    assert!(
-        app.document_state.error_notice.is_none(),
-        "the card is gone"
-    );
+    assert!(app.document_view.error_notice.is_none(), "the card is gone");
     assert_disk_poll_resumes(&mut app);
 }
 
@@ -207,7 +204,7 @@ fn an_edit_made_while_the_file_is_read_refuses_the_reload_and_survives() {
         "the next save still asks"
     );
     assert!(
-        app.document_state.error_notice.is_some(),
+        app.document_view.error_notice.is_some(),
         "the card comes back so the user chooses again"
     );
     assert_disk_poll_resumes(&mut app);

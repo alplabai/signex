@@ -54,7 +54,7 @@ pub(super) fn app_with_eight_pads() -> Signex {
 }
 
 pub(super) fn panel_ctx(app: &Signex) -> FootprintEditorPanelContext {
-    app.document_state
+    app.document_view
         .panel_ctx
         .footprint_editor
         .as_deref()
@@ -64,7 +64,7 @@ pub(super) fn panel_ctx(app: &Signex) -> FootprintEditorPanelContext {
 
 /// The body of `fp` as one element, at the dock width.
 fn body<'a>(app: &'a Signex, fp: &'a FootprintEditorPanelContext) -> iced::Element<'a, PanelMsg> {
-    let ctx = &app.document_state.panel_ctx;
+    let ctx = &app.document_view.panel_ctx;
     let i18n = signex_i18n::I18n::en_us();
     view_body(
         fp,

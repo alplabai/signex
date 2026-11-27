@@ -14,6 +14,7 @@ use std::sync::Arc;
 use signex_library::{Symbol, SymbolFile};
 
 use super::SavePoint;
+use super::SymbolDraft;
 use super::documents::{FieldEditKey, SymbolDocument};
 
 /// One undo / redo step: the container and which symbol was active.
@@ -43,10 +44,7 @@ impl SymbolHistorySnapshot {
     }
 }
 
-impl SymbolDocument {
-    /// Depth cap for the undo / redo stacks.
-    pub const HISTORY_DEPTH: usize = signex_history::DEFAULT_UNDO_DEPTH;
-
+impl SymbolDraft {
     /// Capture the current container and active index. Symbols equal to
     /// ones in the newest undo / redo step share that step's allocation.
     pub fn snapshot(&self) -> SymbolHistorySnapshot {
@@ -83,14 +81,9 @@ impl SymbolDocument {
         }
     }
 
-    /// Write a snapshot back. Selection and unit live on the editor, not
-    /// in the snapshot: they are cleared, and when the step lands on a
-    /// different symbol the unit and viewport reset as a symbol switch
-    /// does, so new pins cannot land on a unit the symbol lacks.
+    /// Write a snapshot's content back. The file's id is the live one: a
+    /// step brings back content, not identity (#2172).
     fn restore(&mut self, snap: SymbolHistorySnapshot) {
-        let previous_idx = self.active_idx;
-        // The file's id is the live one: a step brings back content, not
-        // identity (#2172).
         let live_id = self.file.file_uuid;
         self.file = SymbolFile {
             symbols: snap.symbols.into_iter().map(Arc::unwrap_or_clone).collect(),
@@ -100,16 +93,7 @@ impl SymbolDocument {
         self.active_idx = snap
             .active_idx
             .min(self.file.symbols.len().saturating_sub(1));
-        self.mid_drag = false;
         self.last_edit_key = None;
-        self.selected = None;
-        if self.active_idx == previous_idx {
-            let max = crate::library::editor::symbol::state::max_part_number(self.primitive());
-            self.active_part = self.active_part.clamp(1, max);
-            self.canvas_cache.clear();
-        } else {
-            self.reset_view_for_symbol_switch();
-        }
     }
 
     /// Dirty exactly when the history is away from the saved depth (or rows
@@ -118,19 +102,8 @@ impl SymbolDocument {
         self.set_dirty(self.history.is_dirty() || !self.cascade_owed.is_empty());
     }
 
-    /// Start the newly active symbol on unit 1 with a fresh viewport, so
-    /// it does not inherit the previous symbol's unit, pan or zoom.
-    pub(crate) fn reset_view_for_symbol_switch(&mut self) {
-        self.selected = None;
-        self.active_part = 1;
-        self.active_body = signex_types::schematic::BodyStyle::Normal;
-        self.reset_camera_origin_center();
-        self.cursor_mm = None;
-        self.canvas_cache.clear();
-    }
-
     /// Record `snap` as an undo step: clears redo, evicts the oldest step
-    /// past [`Self::HISTORY_DEPTH`] and ends any coalescing run. The save
+    /// past the depth cap and ends any coalescing run. The save
     /// point is the one `snap` captured, so an edit's own `mark_dirty`
     /// between the capture and this call cannot cost it; a point on the
     /// cleared redo branch or on the evicted step is forgotten.
@@ -139,6 +112,46 @@ impl SymbolDocument {
         self.history.record(snap);
         self.last_edit_key = None;
         self.history_generation += 1;
+    }
+
+    /// Apply one Undo (`back`) or Redo step to the content. Returns the
+    /// symbol index active before it, or `None` when there is no step.
+    fn step(&mut self, back: bool) -> Option<usize> {
+        let snap = self.history.begin_step(back)?;
+        self.end_move_run();
+        let current = self.snapshot();
+        self.history.finish_step(current, back);
+        self.history_generation += 1;
+        let previous_idx = self.active_idx;
+        self.restore(snap);
+        self.sync_dirty_to_history();
+        Some(previous_idx)
+    }
+}
+
+impl SymbolDocument {
+    /// Depth cap for the undo / redo stacks.
+    pub const HISTORY_DEPTH: usize = signex_history::DEFAULT_UNDO_DEPTH;
+
+    /// See [`SymbolDraft::snapshot`].
+    pub fn snapshot(&self) -> SymbolHistorySnapshot {
+        self.draft.snapshot()
+    }
+
+    /// See [`SymbolDraft::commit_history`].
+    pub fn commit_history(&mut self, snap: SymbolHistorySnapshot) {
+        self.draft.commit_history(snap);
+    }
+
+    /// Start the newly active symbol on unit 1 with a fresh viewport, so
+    /// it does not inherit the previous symbol's unit, pan or zoom.
+    pub(crate) fn reset_view_for_symbol_switch(&mut self) {
+        self.gui.selected = None;
+        self.draft.active_part = 1;
+        self.draft.active_body = signex_types::schematic::BodyStyle::Normal;
+        self.reset_camera_origin_center();
+        self.gui.cursor_mm = None;
+        self.gui.canvas_cache.clear();
     }
 
     /// Run a Properties-panel edit as one undo step. `edit` returns
@@ -152,8 +165,8 @@ impl SymbolDocument {
         key: Option<FieldEditKey>,
         edit: impl FnOnce(&mut Self) -> bool,
     ) -> bool {
-        let key = key.map(|field| (field, self.active_idx));
-        let coalesce = key.is_some() && self.last_edit_key == key;
+        let key = key.map(|field| (field, self.draft.active_idx));
+        let coalesce = key.is_some() && self.draft.last_edit_key == key;
         let snap = (!coalesce).then(|| self.snapshot());
         if !edit(self) {
             return false;
@@ -161,35 +174,38 @@ impl SymbolDocument {
         if let Some(snap) = snap {
             self.commit_history(snap);
         } else {
-            self.history_generation += 1;
+            self.draft.history_generation += 1;
         }
-        self.last_edit_key = key;
+        self.draft.last_edit_key = key;
         true
     }
 
     /// Step back. Returns whether a step was applied.
     pub fn undo(&mut self) -> bool {
-        let Some(snap) = self.history.begin_step(true) else {
-            return false;
-        };
-        let current = self.snapshot();
-        self.history.finish_step(current, true);
-        self.history_generation += 1;
-        self.restore(snap);
-        self.sync_dirty_to_history();
-        true
+        self.apply_history_step(true)
     }
 
     /// Step forward. Returns whether a step was applied.
     pub fn redo(&mut self) -> bool {
-        let Some(snap) = self.history.begin_step(false) else {
+        self.apply_history_step(false)
+    }
+
+    /// Selection and the drag live outside the snapshot: a step clears
+    /// them (the drag in [`SymbolDraft::step`]), and when it lands on a
+    /// different symbol the unit and viewport reset as a symbol switch
+    /// does, so new pins cannot land on a unit the symbol lacks.
+    fn apply_history_step(&mut self, back: bool) -> bool {
+        let Some(previous_idx) = self.draft.step(back) else {
             return false;
         };
-        let current = self.snapshot();
-        self.history.finish_step(current, false);
-        self.history_generation += 1;
-        self.restore(snap);
-        self.sync_dirty_to_history();
+        self.gui.selected = None;
+        if self.draft.active_idx == previous_idx {
+            let max = crate::library::editor::symbol::state::max_part_number(self.primitive());
+            self.draft.active_part = self.draft.active_part.clamp(1, max);
+            self.gui.canvas_cache.clear();
+        } else {
+            self.reset_view_for_symbol_switch();
+        }
         true
     }
 }

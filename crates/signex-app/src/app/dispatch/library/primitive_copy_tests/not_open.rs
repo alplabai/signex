@@ -14,6 +14,7 @@ fn unmounted_library_symbol(f: &mut Fixture, dir: &Path) -> PathBuf {
         library: LibrarySection {
             name: "x".into(),
             description: None,
+            ..Default::default()
         },
         mode: LibraryMode::default(),
         workflow: WorkflowConfig::default(),

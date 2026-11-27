@@ -214,7 +214,7 @@ impl Signex {
             .and_then(|m| m.key.as_deref())
             .and_then(|key| {
                 signex_widgets::tree_view::resolve_path(
-                    self.document_state.panel_ctx.project_tree.as_slice(),
+                    self.document_view.panel_ctx.project_tree.as_slice(),
                     key,
                 )
             }) {

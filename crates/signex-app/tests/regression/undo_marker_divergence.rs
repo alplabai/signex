@@ -404,7 +404,7 @@ fn panel_locked_and_dnp_toggles_write_the_symbol_and_undo_once() {
     };
 
     let info_row = |app: &Signex, key: &str, value: &str| {
-        app.document_state
+        app.document_view
             .panel_ctx
             .selection_info
             .iter()
@@ -427,14 +427,14 @@ fn panel_locked_and_dnp_toggles_write_the_symbol_and_undo_once() {
     assert!(
         info_row(&app, "DNP", "Yes"),
         "the Properties selection info must show the new DNP state: {:?}",
-        app.document_state.panel_ctx.selection_info
+        app.document_view.panel_ctx.selection_info
     );
     click(&mut app, PanelMsg::ToggleSymbolLocked(id));
     assert_eq!(flags(&app), (true, true));
     assert!(
         info_row(&app, "Locked", "Yes"),
         "the Properties selection info must show the new Locked state: {:?}",
-        app.document_state.panel_ctx.selection_info
+        app.document_view.panel_ctx.selection_info
     );
 
     let _ = app.update(Message::Edit(EditMsg::Undo));

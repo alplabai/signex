@@ -29,7 +29,7 @@ impl Signex {
     /// Whether the History state in the main slots is a loaded list issued
     /// for the file `history_tab` resolves to.
     pub(crate) fn history_lists_target(&self) -> bool {
-        let history = &self.document_state.history;
+        let history = &self.document_view.history;
         history.mode == crate::panels::history::HistoryRenderMode::Ready
             && history.active_path.is_some()
             && history.active_path == self.history_target_path()
@@ -51,8 +51,9 @@ impl Signex {
     /// leave: same tab, same target, same dirty bit. Such a window needs no swap.
     fn window_history_is_current(&self, window: iced::window::Id) -> bool {
         let d = &self.document_state;
+        let document_view = &self.document_view;
         let (Some(history), Some(tab)) = (
-            d.window_history.get(&window),
+            document_view.window_history.get(&window),
             self.window_history_tab(window),
         ) else {
             return false;
@@ -91,16 +92,16 @@ impl Signex {
     /// re-target when the active tab changed (a new target starts a history
     /// load); otherwise just refresh the dirty bit (#111).
     pub(in crate::app) fn refresh_history_panel_cheap(&mut self) -> Task<Message> {
-        if self.history_source_key() != self.document_state.history.source_key {
+        if self.history_source_key() != self.document_view.history.source_key {
             return self.refresh_history_panel();
         }
         let dirty = self
-            .document_state
+            .document_view
             .history
             .active_path
             .as_deref()
             .map(|p| history_dirty(self, p));
-        let d = &mut self.document_state;
+        let d = &mut self.document_view;
         if let Some(dirty) = dirty
             && dirty != d.history.dirty
         {
@@ -119,15 +120,15 @@ impl Signex {
         committed: &std::path::Path,
     ) -> Task<Message> {
         // A window showing the file reloads on the next refresh.
-        for history in self.document_state.window_history.values_mut() {
+        for history in self.document_view.window_history.values_mut() {
             if history.active_path.as_deref() == Some(committed) {
                 history.active_path = None;
             }
         }
-        if self.document_state.history.active_path.as_deref() != Some(committed) {
+        if self.document_view.history.active_path.as_deref() != Some(committed) {
             return Task::none();
         }
-        self.document_state.history.active_path = None;
+        self.document_view.history.active_path = None;
         self.refresh_history_panel()
     }
 
@@ -141,49 +142,49 @@ impl Signex {
     /// search and the Library Browser's directory check run in the task
     /// (#1107).
     pub(super) fn refresh_history_panel(&mut self) -> Task<Message> {
-        self.document_state.history.source_key = self.history_source_key();
+        self.document_view.history.source_key = self.history_source_key();
         let target = history_target(self);
 
         // No change → nothing to do. Comparing on the target path keeps
         // the panel from re-fetching when an unrelated refresh fires
         // (selection change, theme change, etc.).
-        if self.document_state.history.active_path == target {
+        if self.document_view.history.active_path == target {
             // Mirror into the panel ctx in case generation/loading
             // bookkeeping was clobbered by a prior path-less branch.
             // Also refresh the dirty bit — the user may have just
             // saved/edited the active file without switching tabs.
-            if let Some(p) = self.document_state.history.active_path.clone() {
-                self.document_state.history.dirty = history_dirty(self, &p);
+            if let Some(p) = self.document_view.history.active_path.clone() {
+                self.document_view.history.dirty = history_dirty(self, &p);
             }
             self.sync_switch_block();
-            self.document_state.panel_ctx.history = self.document_state.history.clone();
+            self.document_view.panel_ctx.history = self.document_view.history.clone();
             return Task::none();
         }
 
-        self.document_state.history.generation =
-            self.document_state.history.generation.wrapping_add(1);
-        self.document_state.history.active_path = target.clone();
-        self.document_state.history.pending_restore = None;
-        self.document_state.history.entries = Vec::new();
-        self.document_state.history.repo = None;
-        self.document_state.history.visible = Default::default();
-        self.document_state.history.repo_loading = target.is_some();
+        self.document_view.history.generation =
+            self.document_view.history.generation.wrapping_add(1);
+        self.document_view.history.active_path = target.clone();
+        self.document_view.history.pending_restore = None;
+        self.document_view.history.entries = Vec::new();
+        self.document_view.history.repo = None;
+        self.document_view.history.visible = Default::default();
+        self.document_view.history.repo_loading = target.is_some();
 
         let Some(target) = target else {
-            self.document_state.history.loading = false;
-            self.document_state.history.dirty = false;
-            self.document_state.history.mode =
+            self.document_view.history.loading = false;
+            self.document_view.history.dirty = false;
+            self.document_view.history.mode =
                 crate::panels::history::HistoryRenderMode::NoActiveFile;
-            self.document_state.panel_ctx.history = self.document_state.history.clone();
+            self.document_view.panel_ctx.history = self.document_view.history.clone();
             return Task::none();
         };
 
-        self.document_state.history.dirty = history_dirty(self, &target);
-        self.document_state.history.loading = true;
-        self.document_state.history.mode = crate::panels::history::HistoryRenderMode::Loading;
-        self.document_state.panel_ctx.history = self.document_state.history.clone();
+        self.document_view.history.dirty = history_dirty(self, &target);
+        self.document_view.history.loading = true;
+        self.document_view.history.mode = crate::panels::history::HistoryRenderMode::Loading;
+        self.document_view.panel_ctx.history = self.document_view.history.clone();
 
-        let generation = self.document_state.history.generation;
+        let generation = self.document_view.history.generation;
         let response_path = target.clone();
         let window = self.interaction_state.acting_window;
         let graph = self.load_history_repo_task(target.clone());
@@ -217,19 +218,18 @@ impl Signex {
         // generation token compares cheaply and is the
         // authoritative staleness check (the path field
         // is informational only).
-        if generation != self.document_state.history.generation {
+        if generation != self.document_view.history.generation {
             return Task::none();
         }
-        self.document_state.history.loading = false;
+        self.document_view.history.loading = false;
         match result {
             Ok(crate::panels::history::HistoryLoad::Entries(entries)) => {
-                self.document_state.history.mode = crate::panels::history::HistoryRenderMode::Ready;
-                self.document_state.history.entries = entries;
+                self.document_view.history.mode = crate::panels::history::HistoryRenderMode::Ready;
+                self.document_view.history.entries = entries;
             }
             Ok(crate::panels::history::HistoryLoad::NoRepo) => {
-                self.document_state.history.mode =
-                    crate::panels::history::HistoryRenderMode::NoRepo;
-                self.document_state.history.entries = Vec::new();
+                self.document_view.history.mode = crate::panels::history::HistoryRenderMode::NoRepo;
+                self.document_view.history.entries = Vec::new();
             }
             // A failed revwalk used to be `unwrap_or_default()`d
             // into an empty `Ready`, which the panel renders as
@@ -248,9 +248,9 @@ impl Signex {
                     path = %path.display(),
                     "git history could not be read; Restore is unavailable"
                 );
-                self.document_state.history.mode =
+                self.document_view.history.mode =
                     crate::panels::history::HistoryRenderMode::Error(error);
-                self.document_state.history.entries = Vec::new();
+                self.document_view.history.entries = Vec::new();
                 // This arm does not run `finish_update`, so
                 // republish here or the failure sits in the ring
                 // buffer until some unrelated later message
@@ -258,7 +258,7 @@ impl Signex {
                 self.sync_diagnostics_panel_ctx();
             }
         }
-        self.document_state.panel_ctx.history = self.document_state.history.clone();
+        self.document_view.panel_ctx.history = self.document_view.history.clone();
         Task::none()
     }
 }
@@ -312,6 +312,11 @@ fn history_target_of(active: &crate::app::TabInfo) -> Option<std::path::PathBuf>
         | crate::app::TabKind::LayerStack
         | crate::app::TabKind::PinTable
         | crate::app::TabKind::VariantManager(_) => None,
+        // Not restored from History yet (#2796): no restore reads a diagram.
+        crate::app::TabKind::BlockDiagram(_) => None,
+        // A notebook restore would replace text the tab holds; not offered
+        // until the tab can reload a restored file.
+        crate::app::TabKind::Notebook(_) => None,
         _ => Some(active.path.clone()),
     }
 }
@@ -412,7 +417,7 @@ mod tests {
 
         let _task = app.refresh_history_panel();
 
-        let history = &app.document_state.history;
+        let history = &app.document_view.history;
         assert_eq!(history.active_path.as_deref(), Some(sheet.as_path()));
         assert_eq!(history.mode, HistoryRenderMode::Loading);
         assert!(history.loading);
@@ -496,6 +501,6 @@ mod tests {
 
         let _task = app.refresh_history_panel();
 
-        assert!(app.document_state.history.dirty);
+        assert!(app.document_view.history.dirty);
     }
 }

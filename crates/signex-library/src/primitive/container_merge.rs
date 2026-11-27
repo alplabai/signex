@@ -233,6 +233,9 @@ impl FootprintFile {
             &baseline.footprints,
             &changed,
         );
+        // The editor's embedded models come along; the save drops the ones
+        // no footprint attaches.
+        disk.models.absorb(&self.models);
         if renamed {
             disk.display_name = self.display_name.clone();
         }

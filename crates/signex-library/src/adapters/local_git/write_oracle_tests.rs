@@ -321,6 +321,7 @@ pub(super) fn seeded(dir: &Path, rng: &mut Rng, w: &World, rows: usize, git: boo
         library: LibrarySection {
             name: "lib".into(),
             description: None,
+            ..Default::default()
         },
         mode: LibraryMode::default(),
         workflow: WorkflowConfig::default(),

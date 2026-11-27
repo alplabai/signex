@@ -154,6 +154,7 @@ impl Signex {
         let started_with = std::mem::take(&mut self.document_state.disk_poll.started_with);
         for (path, observed, stamp) in seen {
             let d = &mut self.document_state;
+            let document_view = &mut self.document_view;
             match (stamp, observed) {
                 (Some(stamp), Ok(hash)) => d.disk_poll.stamps.insert(path.clone(), (stamp, hash)),
                 _ => d.disk_poll.stamps.remove(&path),
@@ -179,7 +180,7 @@ impl Signex {
             };
             // A card already up keeps the slot; leave the change unreported so
             // a later tick raises it once the slot is free.
-            if !known && d.error_notice.is_some() {
+            if !known && document_view.error_notice.is_some() {
                 continue;
             }
             if !d.disk_poll.observe(path.clone(), observed, known) {
@@ -191,7 +192,7 @@ impl Signex {
                 "[disk] {name} {}; nothing was changed in the open document",
                 drift.describe()
             ));
-            self.document_state.error_notice = Some(ErrorNotice::disk_changed(path, drift));
+            self.document_view.error_notice = Some(ErrorNotice::disk_changed(path, drift));
         }
         // A closed document's bookkeeping goes with it.
         let d = &mut self.document_state;

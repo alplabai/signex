@@ -20,6 +20,8 @@ mod primitive_save;
 #[cfg(test)]
 mod primitive_save_fold_tests;
 #[cfg(test)]
+mod primitive_save_models_tests;
+#[cfg(test)]
 mod primitive_save_refresh_tests;
 #[cfg(test)]
 mod primitive_save_tests;
@@ -58,7 +60,7 @@ impl Signex {
             Ok(task) => task,
             Err(error) => {
                 crate::diagnostics::log_error("Failed to open primitive", &error);
-                self.document_state.error_notice = Some(crate::app::state::ErrorNotice::open(
+                self.document_view.error_notice = Some(crate::app::state::ErrorNotice::open(
                     crate::app::state::verbatim(format!("{error:#}")),
                 ));
                 Task::none()
@@ -324,11 +326,8 @@ impl Signex {
             FootprintEditorMsg::CopyPad
             | FootprintEditorMsg::CutPad
             | FootprintEditorMsg::PastePad => {
-                let crate::app::DocumentState {
-                    footprint_editors,
-                    pad_clipboard,
-                    ..
-                } = &mut self.document_state;
+                let footprint_editors = &mut self.document_state.footprint_editors;
+                let pad_clipboard = &mut self.document_view.pad_clipboard;
                 if let Some(editor) = footprint_editors.get_mut(&path) {
                     apply_footprint_clipboard_op(editor, pad_clipboard, &msg);
                 }
@@ -443,7 +442,7 @@ impl Signex {
     /// grid / etc.
     fn invalidate_primitive_canvas_cache(&mut self, path: &std::path::Path) {
         if let Some(editor) = self.document_state.symbol_editors.get_mut(path) {
-            editor.canvas_cache.clear();
+            editor.gui.canvas_cache.clear();
         }
         if let Some(editor) = self.document_state.footprint_editors.get_mut(path) {
             editor.canvas_cache.clear();

@@ -37,7 +37,7 @@ fn a_double_click_on_a_sheet_symbol_in_a_window_descends_on_the_main_window() {
     // sheet has none, so only the window's can explain the child's.
     let parent = signex_types::schematic::InstancePath::root().child(uuid::Uuid::from_u128(500));
     d.app
-        .document_state
+        .document_view
         .tab_placements
         .record(&d.top, Some(parent.clone()));
     let task = d.app.update(Message::CanvasEventInWindow {
@@ -56,7 +56,7 @@ fn a_double_click_on_a_sheet_symbol_in_a_window_descends_on_the_main_window() {
     // double-clicked on the window's sheet, not one derived from main's.
     let expected = parent.child(uuid::Uuid::from_u128(1));
     assert_eq!(
-        d.app.document_state.tab_placements.get(&d.child),
+        d.app.document_view.tab_placements.get(&d.child),
         Some(&expected)
     );
 }

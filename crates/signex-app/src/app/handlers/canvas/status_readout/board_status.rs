@@ -281,7 +281,7 @@ impl Signex {
         let model = self.board_popover_model(window)?;
         let board = self.status_board(window)?;
         let ui = &self.ui_state;
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let left = self.status_popover_left(window, model.kind(), model.card_width(), &board);
         let card = crate::status_bar::board_popover_view(&model, tokens, &ui.i18n)
             .map(|event| Message::Ui(UiMsg::StatusBar(StatusBarRequest::BoardPopover(event))))
@@ -324,7 +324,7 @@ impl Signex {
                 &board,
             )
         });
-        let status_h = crate::status_bar::status_bar_height(&self.document_state.panel_ctx.tokens);
+        let status_h = crate::status_bar::status_bar_height(&self.document_view.panel_ctx.tokens);
         let (_, height) = self.ui_state.size_of_window(window);
         (left, height - status_h - crate::status_bar::POPUP_GAP)
     }

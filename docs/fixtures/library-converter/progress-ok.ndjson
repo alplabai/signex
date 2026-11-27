@@ -1,0 +1,7 @@
+{"event":"phase","phase":"read","total":2}
+{"event":"progress","done":1,"total":2,"item":"Passives"}
+{"event":"progress","done":2,"total":2,"item":"Connectors"}
+{"event":"phase","phase":"write","total":3}
+{"event":"progress","done":3,"total":3,"item":"Passives:R0603"}
+{"event":"phase","phase":"models","total":null}
+{"event":"summary","ok":true,"error":null,"exit":"partial","library":"/abs/out/Passives","report":"/abs/out/Passives/import-report.json","files":["/abs/out/Passives/Passives.snxlib"],"counts":{"symbols":2,"footprints":2,"parts":3,"models":1,"skipped":1},"warnings":[{"message":"footprint not found in the given libraries; part skipped","count":1}]}

@@ -31,9 +31,9 @@ fn stock_root() -> PathBuf {
 /// open and active. Returns the library's root as mounted.
 fn app_with_stock_browser() -> (Signex, PathBuf) {
     let (mut app, _boot) = Signex::new();
-    app.document_state.dock_layout_sync = crate::dock::DockLayoutSync::new(
+    app.document_view.dock_layout_sync = crate::dock::DockLayoutSync::new(
         std::sync::Arc::new(DiscardLayouts),
-        crate::dock::DockLayoutSnapshot::capture(&app.document_state.dock),
+        crate::dock::DockLayoutSnapshot::capture(&app.document_view.dock),
     );
     app.ui_state.first_run_tour_open = false;
     app.library.pending_mounts.clear();
@@ -98,7 +98,7 @@ fn browser_texts(app: &Signex, root: &Path, theme: ThemeId) -> Vec<String> {
 /// The Properties panel's symbol and footprint card lines for the row.
 fn binding_summaries(app: &Signex) -> (String, String) {
     let detail = app
-        .document_state
+        .document_view
         .panel_ctx
         .library_row_detail
         .as_ref()

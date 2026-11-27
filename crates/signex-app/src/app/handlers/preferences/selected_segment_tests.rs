@@ -14,9 +14,9 @@ fn send(app: &mut Signex, msg: PrefMsg) {
 fn dark_app_with_undocked() -> (Signex, iced::window::Id) {
     let (mut app, _boot) = Signex::new();
     let undocked = iced::window::Id::unique();
-    app.document_state
+    app.document_view
         .window_panel_ctx
-        .insert(undocked, app.document_state.panel_ctx.clone());
+        .insert(undocked, app.document_view.panel_ctx.clone());
     send(&mut app, PrefMsg::DraftTheme(ThemeId::GraphiteDark));
     send(&mut app, PrefMsg::Save);
     (app, undocked)
@@ -24,7 +24,7 @@ fn dark_app_with_undocked() -> (Signex, iced::window::Id) {
 
 /// The selected-segment fill of the main and the undocked window.
 fn fills(app: &Signex, undocked: iced::window::Id) -> [Option<Color>; 2] {
-    let document = &app.document_state;
+    let document = &app.document_view;
     [
         document.panel_ctx.tokens.extended.selected_segment,
         document.window_panel_ctx[&undocked]

@@ -81,7 +81,7 @@ fn a_closed_parent_in_the_hierarchy_keeps_the_channel_designator() {
         Vec::new(),
     );
     let top = node("top", None, Path::new(dir).join("top.snxsch"), vec![buck]);
-    app.document_state.panel_ctx.navigator.hierarchy = Some(SheetHierarchy {
+    app.document_view.panel_ctx.navigator.hierarchy = Some(SheetHierarchy {
         root: Some(top),
         ..Default::default()
     });
@@ -105,7 +105,7 @@ fn an_unreadable_saved_naming_is_not_read_so_it_is_no_mismatch() {
         Vec::new(),
     );
     let top = node("top", None, Path::new(dir).join("top.snxsch"), vec![buck]);
-    app.document_state.panel_ctx.navigator.hierarchy = Some(SheetHierarchy {
+    app.document_view.panel_ctx.navigator.hierarchy = Some(SheetHierarchy {
         root: Some(top),
         ..Default::default()
     });

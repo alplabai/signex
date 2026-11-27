@@ -123,7 +123,8 @@ impl DrcRules {
 
 /// What a board-wide silkscreen, mask, paste or courtyard rule applies to:
 /// the owners of the silkscreen, the mask openings, the tracks with a
-/// manual paste expansion, the parts with a courtyard.
+/// manual paste expansion, the parts with a courtyard, the parts that may
+/// have a 3D body.
 fn off_copper_items(board: &PcbBoard, sets: &dyn Fn(&[LimitKind]) -> bool) -> Vec<ItemRef> {
     let mut out = Vec::new();
     if sets(&[LimitKind::MinSilkToPad, LimitKind::MinSilkToSilk]) {
@@ -150,6 +151,9 @@ fn off_copper_items(board: &PcbBoard, sets: &dyn Fn(&[LimitKind]) -> bool) -> Ve
     }
     if sets(&[LimitKind::MinCourtyardGap]) {
         out.extend(crate::courtyard::parts(board).map(ItemRef::Footprint));
+    }
+    if sets(&[LimitKind::MaxComponentHeight, LimitKind::MinBodyClearance]) {
+        out.extend(crate::bodies::parts(board).map(ItemRef::Footprint));
     }
     out
 }

@@ -15,15 +15,22 @@ mod agent_edit_cross_sheet_tests;
 mod agent_edit_tests;
 mod agent_edits;
 mod args;
+#[cfg(test)]
+mod board_area_operand_tests;
+mod board_area_operands;
 mod board_edit_operands;
 #[cfg(test)]
 mod board_graphic_operand_tests;
 mod board_graphic_operands;
 mod board_operands;
+mod board_route_operands;
 #[cfg(test)]
 mod board_view_operand_tests;
 mod board_view_operands;
 pub(crate) mod bridge;
+#[cfg(test)]
+mod change_component_operand_tests;
+mod change_component_operands;
 mod component_operand;
 #[cfg(test)]
 mod directive_operand_tests;
@@ -41,8 +48,14 @@ pub(crate) mod enablement;
 mod file_operand_tests;
 mod file_operands;
 #[cfg(test)]
+mod footprint_assign_operand_tests;
+mod footprint_assign_operands;
+#[cfg(test)]
 mod footprint_pad_operand_tests;
 mod footprint_pad_operands;
+#[cfg(test)]
+mod footprint_place_operand_tests;
+mod footprint_place_operands;
 #[cfg(test)]
 mod footprint_text_operand_tests;
 mod footprint_text_operands;
@@ -53,6 +66,9 @@ mod hierarchy_operand_tests;
 mod hierarchy_operands;
 #[cfg(test)]
 pub(in crate::app) mod interaction_snapshot_tests;
+#[cfg(test)]
+mod keymap_operand_tests;
+mod keymap_operands;
 mod layer_strip_operands;
 #[cfg(test)]
 mod library_dialog_operand_tests;
@@ -63,6 +79,9 @@ mod library_recovery_operands;
 #[cfg(test)]
 mod library_update_operand_tests;
 mod library_update_operands;
+#[cfg(test)]
+mod live_erc_operand_tests;
+mod live_erc_operands;
 mod need_context;
 mod needs;
 #[cfg(test)]
@@ -71,7 +90,11 @@ mod needs_reason_tests;
 #[cfg(test)]
 pub(crate) use needs::needs as enablement_gate;
 #[cfg(test)]
+mod net_tie_operand_tests;
+#[cfg(test)]
 mod no_erc_operand_tests;
+#[cfg(test)]
+mod notebook_generate_tests;
 mod opened;
 #[cfg(test)]
 mod operand_handler_tests;
@@ -80,7 +103,11 @@ mod operands;
 #[cfg(test)]
 mod parity;
 #[cfg(test)]
+mod part_height_operand_tests;
+mod part_height_operands;
+#[cfg(test)]
 mod part_operand_tests;
+pub(crate) use part_height_operands::PartHeightsRead;
 mod part_operands;
 mod placed_move;
 #[cfg(test)]
@@ -99,13 +126,15 @@ mod placement_extras_operands;
 mod placement_operand_tests;
 mod placement_operands;
 #[cfg(test)]
-mod project_name_tests;
+pub(crate) mod project_name_tests;
 mod project_names;
 pub(crate) mod queries;
 #[cfg(test)]
 mod repair_reset_operand_tests;
 mod repair_reset_operands;
 mod replay;
+pub mod request;
+mod reuse_operands;
 mod routing;
 #[cfg(test)]
 mod selection_filter_operand_tests;
@@ -115,6 +144,7 @@ mod selection_operand_tests;
 mod selection_operands;
 #[cfg(test)]
 mod sheet_entry_ref_tests;
+mod sheet_swap_operands;
 #[cfg(test)]
 mod sheet_symbol_check_tests;
 mod sheet_symbol_checks;
@@ -123,6 +153,9 @@ mod sheet_sync_operand_tests;
 mod sheet_sync_operands;
 #[cfg(test)]
 mod sheet_variable_operand_tests;
+#[cfg(test)]
+mod smart_paste_operand_tests;
+mod smart_paste_operands;
 pub(crate) mod translator;
 #[cfg(test)]
 mod undo_agreement_tests;
@@ -139,6 +172,7 @@ pub use agent_edits::{
 };
 pub use args::CommandArgs;
 pub(crate) use args::InvocationContext;
+pub(crate) use board_edit_operands::mm_points;
 use bridge::core_to_message;
 pub(crate) use component_operand::component_by_uuid;
 pub use edit_reads::{EditReads, ReadsLoaded};
@@ -147,11 +181,15 @@ pub(crate) use enablement::{disabled_reason, is_enabled};
 pub(crate) use opened::answers_with_the_new_document;
 pub(crate) use operand_handlers::runs_headless_without_operands;
 pub use operands::{OperandError, OperandValue};
-pub(crate) use operands::{missing_headless_operand, parse_targets};
+pub(crate) use operands::{missing_headless_operand, operand_str, parse_targets};
+pub(crate) use part_operands::library_row;
 pub(crate) use placed_operands::PlacedRefusal;
+pub use request::{AgentGatePassed, CommandRequest, RefusalCause, RequestOutcome, RequestSurface};
 pub use signex_commands::CommandOutcome;
 
 use iced::Task;
+// The tests under this module read an outcome's reason through it.
+#[cfg(test)]
 use signex_i18n::RenderTranslatable;
 
 use super::*;
@@ -174,11 +212,14 @@ impl Signex {
         args: CommandArgs,
         window: Option<iced::window::Id>,
     ) -> Task<Message> {
-        let (outcome, task) = self.dispatch_command_reporting(command, args, window);
+        let request = CommandRequest::new(command.clone(), args);
+        let (outcome, task) = self.run_command_request(RequestSurface::Gui { window }, request);
         // Only the missing-operand refusal is said here; every other command
         // reports (or stays silent) exactly as before.
-        if let CommandOutcome::Disabled { reason } = outcome
-            && let reason = reason.render_en_us()
+        if let RequestOutcome::Refused {
+            reason,
+            cause: RefusalCause::NotAvailable,
+        } = outcome
             && operand_handlers::needs_operands_reason(command) == Some(reason.as_str())
         {
             crate::diagnostics::log_info(format!(
@@ -198,12 +239,16 @@ impl Signex {
         command: &crate::keymap::AppCommandId,
         window: Option<iced::window::Id>,
     ) -> Task<Message> {
-        let (outcome, task) = self.dispatch_command_reporting(command, CommandArgs::none(), window);
-        if let CommandOutcome::Disabled { reason } = outcome {
+        let request = CommandRequest::new(command.clone(), CommandArgs::none());
+        let (outcome, task) = self.run_command_request(RequestSurface::Gui { window }, request);
+        if let RequestOutcome::Refused {
+            reason,
+            cause: RefusalCause::NotAvailable,
+        } = outcome
+        {
             crate::diagnostics::log_info(format!(
-                "Menu: {} did nothing: {}",
-                command.as_str(),
-                reason.render_en_us()
+                "Menu: {} did nothing: {reason}",
+                command.as_str()
             ));
         }
         task
@@ -261,6 +306,13 @@ impl Signex {
         args: CommandArgs,
         window: Option<iced::window::Id>,
     ) -> (CommandOutcome, Task<Message>) {
+        // An installed extension's command runs its own handler (#2495); no
+        // built-in route below names an `ext.` id.
+        if command.is_extension()
+            && let Some(result) = self.dispatch_extension_command(command, &args)
+        {
+            return result;
+        }
         // A query answers an agent or the CLI with data; no GUI surface shows
         // that answer, so a palette, key or menu call is refused rather than
         // reported as run (#2172).

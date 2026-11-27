@@ -46,8 +46,9 @@ impl PendingSymbolDelete {
     /// and the symbol it names is still at its slot.
     pub fn is_current(&self, editor: &crate::app::SymbolDocument) -> bool {
         editor.path == self.path
-            && editor.history_generation == self.history
+            && editor.draft.history_generation == self.history
             && editor
+                .draft
                 .file
                 .symbols
                 .get(self.warning.idx)
@@ -360,6 +361,7 @@ mod tests {
             pricing: Default::default(),
             own_edit_stamp: None,
             display: LibraryDisplaySettings::default(),
+            provenance: Default::default(),
         }
     }
 
@@ -405,8 +407,8 @@ mod tests {
     fn pending_for(editor: &SymbolDocument) -> PendingSymbolDelete {
         PendingSymbolDelete {
             path: editor.path.clone(),
-            symbol: editor.file.symbols[0].uuid,
-            history: editor.history_generation,
+            symbol: editor.draft.file.symbols[0].uuid,
+            history: editor.draft.history_generation,
             serial: 1,
             rows: 1,
             sheets: 0,
@@ -425,7 +427,7 @@ mod tests {
 
     fn edit(editor: &mut SymbolDocument) {
         assert!(editor.record_edit(None, |e| {
-            e.file.symbols[0].name.push('x');
+            e.draft.file.symbols[0].name.push('x');
             true
         }));
     }
@@ -448,7 +450,7 @@ mod tests {
         assert!(ed.undo());
         assert!(!pending.is_current(&ed), "undo");
         edit(&mut ed);
-        assert_eq!(ed.history.undo_len(), 1);
+        assert_eq!(ed.draft.history.undo_len(), 1);
         assert!(!pending.is_current(&ed), "undo then edit");
     }
 

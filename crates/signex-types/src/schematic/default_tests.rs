@@ -108,6 +108,7 @@ fn every_field_is_accounted_for() {
         on_board: _,
         exclude_from_sim: _,
         locked: _,
+        net_tie: _,
         fields: _,
         custom_properties: _,
         pin_uuids: _,

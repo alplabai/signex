@@ -6,10 +6,10 @@
 //! symbol links to its row by `(library_id, row_id)`; a part placed without
 //! that link is matched by MPN instead.
 
-use signex_library::{age_label, current_pricing};
+use signex_library::{ComponentRow, age_label, current_pricing};
 use signex_output::bom::{PriceBook, PriceQuote, library_row_key, mpn_key};
 
-use super::state::LibraryState;
+use super::state::{LibraryState, OpenLibrary};
 
 /// The cached quotes of every row of every open library, each row's quotes
 /// in its listing order (the first is the one the BOM uses, as the library
@@ -24,19 +24,7 @@ pub fn price_book(library: &LibraryState) -> PriceBook {
         let mut tables: Vec<_> = open.tables.iter().collect();
         tables.sort_by(|a, b| a.0.cmp(b.0));
         for row in tables.into_iter().flat_map(|(_, rows)| rows) {
-            let Some(cached) = open.pricing.get(&row.row_id) else {
-                continue;
-            };
-            let quotes: Vec<PriceQuote> = current_pricing(row, cached)
-                .into_iter()
-                .map(|(distributor, price)| PriceQuote {
-                    distributor: distributor.to_string(),
-                    currency: price.currency.clone(),
-                    stock: price.stock,
-                    breaks: price.breaks.iter().map(|b| (b.qty, b.unit_price)).collect(),
-                    age: age_label(price.age(library.clock)),
-                })
-                .collect();
+            let quotes = row_quotes(library, open, row);
             if quotes.is_empty() {
                 continue;
             }
@@ -51,6 +39,29 @@ pub fn price_book(library: &LibraryState) -> PriceBook {
         }
     }
     book
+}
+
+/// The cached quotes of `row` of `open`, in its listing order; empty when
+/// none is cached. What the BOM prices a row from, and what `search_parts`
+/// answers (#1297).
+pub fn row_quotes(
+    library: &LibraryState,
+    open: &OpenLibrary,
+    row: &ComponentRow,
+) -> Vec<PriceQuote> {
+    let Some(cached) = open.pricing.get(&row.row_id) else {
+        return Vec::new();
+    };
+    current_pricing(row, cached)
+        .into_iter()
+        .map(|(distributor, price)| PriceQuote {
+            distributor: distributor.to_string(),
+            currency: price.currency.clone(),
+            stock: price.stock,
+            breaks: price.breaks.iter().map(|b| (b.qty, b.unit_price)).collect(),
+            age: age_label(price.age(library.clock)),
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -144,6 +155,7 @@ mod tests {
             pricing,
             own_edit_stamp: None,
             display: LibraryDisplaySettings::default(),
+            provenance: Default::default(),
         });
         (state, library_id)
     }

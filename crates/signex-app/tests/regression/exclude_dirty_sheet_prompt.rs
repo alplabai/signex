@@ -60,6 +60,7 @@ fn add_named_project(app: &mut Signex, dir: &Path, file: &str, sheet: &str) -> P
             schematic_design: Default::default(),
             fab_outputs: None,
             router_tool_diameter: None,
+            bom_alternates: Vec::new(),
             requirements: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
@@ -221,7 +222,7 @@ fn discard_excludes_without_writing_and_leaves_no_dirty_engine() {
     assert!(!app.document_state.engines.contains_key(&sheet));
     assert!(app.document_state.tabs.iter().all(|t| t.path != sheet));
     assert!(
-        app.document_state
+        app.document_view
             .panel_ctx
             .diagnostics
             .iter()
@@ -288,7 +289,7 @@ fn a_failed_save_keeps_the_prompt_and_does_not_exclude() {
         "blocker/X.snxsch".to_string(),
     ];
     let row = signex_widgets::tree_view::resolve_path(
-        app.document_state.panel_ctx.project_tree.as_slice(),
+        app.document_view.panel_ctx.project_tree.as_slice(),
         &key,
     )
     .expect("the sheet has a row");
@@ -307,11 +308,11 @@ fn a_failed_save_keeps_the_prompt_and_does_not_exclude() {
     assert!(app.document_state.is_document_dirty(&sheet));
     assert!(app.document_state.engines.contains_key(&sheet));
     assert!(
-        app.ui_state.remove_dialog.is_some() || app.document_state.error_notice.is_some(),
+        app.ui_state.remove_dialog.is_some() || app.document_view.error_notice.is_some(),
         "the failure must be visible to the user",
     );
     assert!(
-        app.document_state
+        app.document_view
             .panel_ctx
             .diagnostics
             .iter()
@@ -334,7 +335,7 @@ fn shared_fixture() -> (Signex, TempDir, PathBuf) {
 }
 
 fn diagnostics_mention(app: &Signex, needle: &str) -> bool {
-    app.document_state
+    app.document_view
         .panel_ctx
         .diagnostics
         .iter()

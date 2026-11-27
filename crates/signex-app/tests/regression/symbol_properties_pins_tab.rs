@@ -48,13 +48,14 @@ fn symbol_app() -> (Signex, PathBuf) {
         .symbol_editors
         .get_mut(&path)
         .unwrap()
+        .gui
         .selected = None;
     props(&mut app, SymbolPropsMsg::TabPicked(SymbolPropsTab::Symbol));
     (app, path)
 }
 
 fn shown(app: &Signex) -> &signex_app::panels::SymbolEditorPanelContext {
-    app.document_state
+    app.document_view
         .panel_ctx
         .symbol_editor
         .as_ref()
@@ -78,14 +79,24 @@ fn a_pins_tab_row_selects_its_pin_and_back_returns_to_the_list() {
     let (mut app, path) = symbol_app();
     props(&mut app, SymbolPropsMsg::TabPicked(SymbolPropsTab::Pins));
     panel(&mut app, PanelMsg::SymEditorSelectPin(1));
-    assert!(app.document_state.symbol_editors[&path].selected.is_some());
+    assert!(
+        app.document_state.symbol_editors[&path]
+            .gui
+            .selected
+            .is_some()
+    );
     assert!(matches!(
         shown(&app).selected,
         SymbolEditorSelection::Pin(ref p) if p.idx == 1
     ));
 
     props(&mut app, SymbolPropsMsg::PinsBackPressed);
-    assert!(app.document_state.symbol_editors[&path].selected.is_none());
+    assert!(
+        app.document_state.symbol_editors[&path]
+            .gui
+            .selected
+            .is_none()
+    );
     assert_eq!(shown(&app).selected, SymbolEditorSelection::None);
     assert_eq!(shown(&app).props.tab, SymbolPropsTab::Pins);
 }
@@ -104,7 +115,7 @@ fn add_pin_arms_the_add_pin_tool() {
     props(&mut app, SymbolPropsMsg::AddPinPressed);
     // Read through Debug so the test names no editor-slice internals.
     assert_eq!(
-        format!("{:?}", app.document_state.symbol_editors[&path].tool),
+        format!("{:?}", app.document_state.symbol_editors[&path].gui.tool),
         "AddPin"
     );
 }
@@ -112,14 +123,23 @@ fn add_pin_arms_the_add_pin_tool() {
 #[test]
 fn the_parts_stepper_adds_a_part_and_steps_back() {
     let (mut app, path) = symbol_app();
-    assert_eq!(app.document_state.symbol_editors[&path].active_part, 1);
+    assert_eq!(
+        app.document_state.symbol_editors[&path].draft.active_part,
+        1
+    );
     props(&mut app, SymbolPropsMsg::PartStepPressed(PartStep::Added));
-    assert_eq!(app.document_state.symbol_editors[&path].active_part, 2);
+    assert_eq!(
+        app.document_state.symbol_editors[&path].draft.active_part,
+        2
+    );
     props(
         &mut app,
         SymbolPropsMsg::PartStepPressed(PartStep::Previous),
     );
-    assert_eq!(app.document_state.symbol_editors[&path].active_part, 1);
+    assert_eq!(
+        app.document_state.symbol_editors[&path].draft.active_part,
+        1
+    );
     assert_eq!(shown(&app).active_part, 1);
 }
 
@@ -129,8 +149,8 @@ fn the_parts_stepper_adds_a_part_and_steps_back() {
 fn applies_to_retags_the_selection_as_one_undo_step() {
     let (mut app, path) = symbol_app();
     let editor = app.document_state.symbol_editors.get_mut(&path).unwrap();
-    editor.selected = Some(SymbolSelection::All);
-    let before = editor.history.undo_len();
+    editor.gui.selected = Some(SymbolSelection::All);
+    let before = editor.draft.history.undo_len();
     props(&mut app, SymbolPropsMsg::BodyScopePicked(BodyScope::Both));
     let editor = &app.document_state.symbol_editors[&path];
     assert!(
@@ -140,7 +160,7 @@ fn applies_to_retags_the_selection_as_one_undo_step() {
             .iter()
             .all(|p| p.body_style == signex_library::BODY_COMMON)
     );
-    assert_eq!(editor.history.undo_len(), before + 1);
+    assert_eq!(editor.draft.history.undo_len(), before + 1);
     assert_eq!(shown(&app).body_scope.scope, Some(BodyScope::Both));
 }
 

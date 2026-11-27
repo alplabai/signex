@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 
 use signex_types::format::SnxPcb;
 use signex_types::pcb::PcbBoard;
+use signex_types::reuse::{MAX_NAME_CHARS, NameRefusal};
 
 use super::SavedBlock;
 
@@ -19,15 +20,6 @@ pub(crate) const BLOCK_FOLDER: &str = "reuse-blocks";
 
 /// The extension of a block file: a board file holding the block alone.
 const BLOCK_EXTENSION: &str = "snxpcb";
-
-/// The longest block name, in characters.
-const MAX_NAME_CHARS: usize = 64;
-
-/// Names a file cannot take on Windows, whatever its extension.
-const RESERVED: &[&str] = &[
-    "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8",
-    "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
-];
 
 /// Whether a project's block folder has been read.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -199,29 +191,22 @@ pub struct BlocksOnDisk {
     pub(crate) error: Option<String>,
 }
 
-/// The block name `name` as stored, or why it cannot name a file.
+/// The block name `name` as stored, or why it cannot name a file: the one
+/// rule of `signex_types::reuse`, in a block's words.
 pub(crate) fn checked_name(name: &str) -> Result<String, String> {
-    let name = name.trim();
-    if name.is_empty() {
-        return Err("a reuse block needs a name".to_string());
-    }
-    if name.chars().count() > MAX_NAME_CHARS {
-        return Err(format!(
-            "a reuse block name is at most {MAX_NAME_CHARS} characters"
-        ));
-    }
-    let allowed = |c: char| c.is_alphanumeric() || matches!(c, ' ' | '-' | '_' | '.');
-    if !name.chars().all(allowed) || name.starts_with('.') || name.ends_with('.') {
-        return Err(format!(
-            "`{name}` cannot name a block: use letters, digits, spaces, `-`, `_` and `.` inside"
-        ));
-    }
-    // A reserved name stays reserved whatever follows its first dot.
-    let stem = name.split('.').next().unwrap_or(name).trim_end();
-    if RESERVED.iter().any(|r| r.eq_ignore_ascii_case(stem)) {
-        return Err(format!("`{name}` is a name the system keeps for itself"));
-    }
-    Ok(name.to_string())
+    signex_types::reuse::checked_name(name).map_err(|refusal| {
+        let name = name.trim();
+        match refusal {
+            NameRefusal::Empty => "a reuse block needs a name".to_string(),
+            NameRefusal::TooLong => {
+                format!("a reuse block name is at most {MAX_NAME_CHARS} characters")
+            }
+            NameRefusal::Characters => format!(
+                "`{name}` cannot name a block: use letters, digits, spaces, `-`, `_` and `.` inside"
+            ),
+            NameRefusal::Reserved => format!("`{name}` is a name the system keeps for itself"),
+        }
+    })
 }
 
 /// The file of block `name` of the project in `folder`.

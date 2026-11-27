@@ -180,17 +180,17 @@ fn highlight() -> crate::app::state::net_nav::NetHighlight {
 #[test]
 fn clear_filter_row_ends_the_net_highlight() {
     let mut app = one_symbol();
-    app.document_state.net_nav.highlight = Some(highlight());
+    app.document_view.net_nav.highlight = Some(highlight());
     let _ = press(&mut app, "clear_net_highlighting");
-    assert!(app.document_state.net_nav.highlight.is_none(), "still lit");
+    assert!(app.document_view.net_nav.highlight.is_none(), "still lit");
     assert_menu_closed(&app, "clear filter");
 
     // The same id through the reporting dispatch an agent reads.
-    app.document_state.net_nav.highlight = Some(highlight());
+    app.document_view.net_nav.highlight = Some(highlight());
     let (outcome, _task) =
         app.dispatch_command_reporting(&id("clear_net_highlighting"), CommandArgs::none(), None);
     assert_eq!(outcome, CommandOutcome::Ran);
-    assert!(app.document_state.net_nav.highlight.is_none(), "still lit");
+    assert!(app.document_view.net_nav.highlight.is_none(), "still lit");
 }
 
 #[test]

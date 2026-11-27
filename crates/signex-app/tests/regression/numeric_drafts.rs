@@ -64,7 +64,7 @@ fn type_into(app: &mut Signex, key: NumericFieldKey, text: &str) {
 /// What the box for `key` shows, from the context the Properties panel is
 /// built from (`None` when that box is not on screen).
 fn shown(app: &Signex, key: NumericFieldKey) -> Option<String> {
-    let ctx = &app.document_state.panel_ctx;
+    let ctx = &app.document_view.panel_ctx;
     let (_, stored) = signex_app::panels::numeric_field_state(
         key,
         None,
@@ -176,7 +176,7 @@ fn a_refused_pin_length_keeps_the_pin_and_the_text() {
         panel(&mut app, PanelMsg::NumericFieldSubmitted(len));
         assert_eq!(pin(&app, &path).length, before, "{bad}");
         assert_eq!(shown(&app, len).as_deref(), Some(bad), "{bad}");
-        assert!(len.refused_in(app.document_state.panel_ctx.numeric_draft.as_ref()));
+        assert!(len.refused_in(app.document_view.panel_ctx.numeric_draft.as_ref()));
     }
     type_into(&mut app, len, "0.1");
     assert_eq!(pin(&app, &path).length, 0.1, "the minimum is taken");
@@ -249,10 +249,10 @@ fn a_negative_shape_width_is_refused() {
         0.0,
     );
     pre.shape_width_mm = 0.3;
-    app.document_state.panel_ctx.pre_placement = Some(pre);
+    app.document_view.panel_ctx.pre_placement = Some(pre);
     panel(&mut app, PanelMsg::SetPrePlacementShapeWidth(-1.0));
     let stored = |app: &Signex| {
-        app.document_state
+        app.document_view
             .panel_ctx
             .pre_placement
             .as_ref()
@@ -350,7 +350,7 @@ fn undo_after_typing_restores_the_box_to_the_stored_value() {
     sym_edit(&mut app, &path, SymbolEditorMsg::Undo);
     assert_eq!(pin(&app, &path).position[0], 1.0, "undo restores the old X");
     assert!(
-        app.document_state.panel_ctx.numeric_draft.is_none(),
+        app.document_view.panel_ctx.numeric_draft.is_none(),
         "the undone edit's draft is dropped"
     );
     panel(&mut app, PanelMsg::SymEditorSelectPin(0));

@@ -140,18 +140,56 @@ pub enum DragWiringMode {
     VerticalFirst,
     /// No corner: the wire end goes straight to the pin, at any slope.
     Straight,
+    /// A 45° leg leaves the fixed end, then an axis-aligned leg (#2516).
+    Angle45Start,
+    /// An axis-aligned leg leaves the fixed end, then a 45° leg (#2516).
+    Angle45End,
 }
 
 impl DragWiringMode {
     /// The mode after this one: auto, horizontal first, vertical first,
-    /// straight, auto.
+    /// straight, 45° start, 45° end, auto.
     #[must_use]
     pub fn next(self) -> Self {
         match self {
             Self::Auto => Self::HorizontalFirst,
             Self::HorizontalFirst => Self::VerticalFirst,
             Self::VerticalFirst => Self::Straight,
-            Self::Straight => Self::Auto,
+            Self::Straight => Self::Angle45Start,
+            Self::Angle45Start => Self::Angle45End,
+            Self::Angle45End => Self::Auto,
+        }
+    }
+
+    /// The drawing rule this mode bends by, from the fixed end to the pin;
+    /// `None` for Auto, which is the rubber band's own rule.
+    #[must_use]
+    pub fn rule(self) -> Option<CornerRule> {
+        let mode = match self {
+            Self::Auto => return None,
+            Self::HorizontalFirst | Self::VerticalFirst => CornerMode::Ortho90,
+            Self::Straight => CornerMode::FreeAngle,
+            Self::Angle45Start => CornerMode::Angle45Start,
+            Self::Angle45End => CornerMode::Angle45End,
+        };
+        Some(CornerRule {
+            mode,
+            is_flipped: self == Self::VerticalFirst,
+        })
+    }
+
+    /// The rules a drag tries, in order: the mode's own, then its flip (the
+    /// other L, or the 45° leg at the other end) when that one collides.
+    /// Straight has one; Auto has none.
+    #[must_use]
+    pub fn rules(self) -> Vec<CornerRule> {
+        let Some(rule) = self.rule() else {
+            return Vec::new();
+        };
+        if rule.bend() == Bend::Straight {
+            vec![rule]
+        } else {
+            vec![rule, rule.flipped()]
         }
     }
 }
@@ -165,7 +203,7 @@ mod tests {
         let mut mode = DragWiringMode::default();
         assert_eq!(mode, DragWiringMode::Auto);
         let mut seen = Vec::new();
-        for _ in 0..4 {
+        for _ in 0..6 {
             mode = mode.next();
             seen.push(mode);
         }
@@ -175,9 +213,50 @@ mod tests {
                 DragWiringMode::HorizontalFirst,
                 DragWiringMode::VerticalFirst,
                 DragWiringMode::Straight,
+                DragWiringMode::Angle45Start,
+                DragWiringMode::Angle45End,
                 DragWiringMode::Auto
             ]
         );
+    }
+
+    /// #2516: a drag mode bends by the drawing rule, and falls back to its
+    /// flip; Straight has no fallback and Auto no rule.
+    #[test]
+    fn drag_wiring_modes_bend_by_the_drawing_rule_then_its_flip() {
+        let ortho = rule(CornerMode::Ortho90, false);
+        let start = rule(CornerMode::Angle45Start, false);
+        let end = rule(CornerMode::Angle45End, false);
+        assert!(DragWiringMode::Auto.rules().is_empty());
+        assert_eq!(
+            DragWiringMode::HorizontalFirst.rules(),
+            [ortho, ortho.flipped()]
+        );
+        assert_eq!(
+            DragWiringMode::VerticalFirst.rules(),
+            [ortho.flipped(), ortho]
+        );
+        assert_eq!(
+            DragWiringMode::Straight.rules(),
+            [rule(CornerMode::FreeAngle, false)]
+        );
+        assert_eq!(
+            DragWiringMode::Angle45Start.rules(),
+            [start, start.flipped()]
+        );
+        assert_eq!(DragWiringMode::Angle45End.rules(), [end, end.flipped()]);
+        // From the fixed end (0, 0) to the pin (10, -4).
+        let pin = Point::new(10.0, -4.0);
+        let first_corner = |mode: DragWiringMode| corner(mode.rule().expect("a rule"), pin);
+        let cases = [
+            (DragWiringMode::Angle45Start, Point::new(4.0, -4.0)),
+            (DragWiringMode::Angle45End, Point::new(6.0, 0.0)),
+            (DragWiringMode::HorizontalFirst, Point::new(10.0, 0.0)),
+            (DragWiringMode::VerticalFirst, Point::new(0.0, -4.0)),
+        ];
+        for (mode, expected) in cases {
+            assert_eq!(first_corner(mode), expected, "{mode:?}");
+        }
     }
 
     fn rule(mode: CornerMode, is_flipped: bool) -> CornerRule {

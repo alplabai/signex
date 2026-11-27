@@ -44,7 +44,7 @@ fn app() -> Signex {
 /// profiles as that host lists them.
 fn sketch_ctx(app: &Signex, host: SketchHost) -> FootprintEditorPanelContext {
     let mut fp = app
-        .document_state
+        .document_view
         .panel_ctx
         .footprint_editor
         .as_deref()
@@ -61,7 +61,7 @@ fn sketch_ctx(app: &Signex, host: SketchHost) -> FootprintEditorPanelContext {
 }
 
 fn cx<'a, 'i>(app: &'a Signex, fp: &'a FootprintEditorPanelContext, i18n: &'i I18n) -> Ctx<'a, 'i> {
-    let ctx = &app.document_state.panel_ctx;
+    let ctx = &app.document_view.panel_ctx;
     Ctx {
         fp,
         palette: PanelPalette::from_tokens(&ctx.tokens),
@@ -155,7 +155,7 @@ fn an_open_footprint_preview_shows_its_card_in_properties() {
         warnings: Vec::new(),
     });
     let i18n = I18n::en_us();
-    let ctx = &app.document_state.panel_ctx;
+    let ctx = &app.document_view.panel_ctx;
     let col = super::super::body::view_body(
         &fp,
         PanelPalette::from_tokens(&ctx.tokens),

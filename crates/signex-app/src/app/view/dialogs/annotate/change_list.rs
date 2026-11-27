@@ -62,7 +62,7 @@ impl Signex {
     /// The change list column: banner, list header, table and the
     /// Re-prefix note.
     pub(super) fn annotate_change_list_column(&self) -> Element<'_, Message> {
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let i18n = self.ui_state.i18n.as_ref();
         let faint = crate::styles::tokens::resolve(tokens).ink4;
         let standard = self
@@ -90,7 +90,7 @@ impl Signex {
 
     /// The summary on top: how many designators change, in bold, and where.
     fn annotate_banner(&self) -> Element<'_, Message> {
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let i18n = self.ui_state.i18n.as_ref();
         let ink = crate::styles::ti(tokens.text);
         let preview = &self.ui_state.annotate_preview;
@@ -131,7 +131,7 @@ impl Signex {
     /// "7 of 42 designators will change" in bold, then the sheets the
     /// changes land on and how it undoes.
     fn annotate_banner_changes(&self, changes: usize) -> Element<'_, Message> {
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let i18n = self.ui_state.i18n.as_ref();
         let ink = crate::styles::ti(tokens.text);
         let preview = &self.ui_state.annotate_preview;
@@ -169,7 +169,7 @@ impl Signex {
     /// row 75 draws them) the Changes / All switch, the filter and Re-prefix
     /// to standard.
     fn annotate_list_header(&self, has_standard: bool) -> Element<'_, Message> {
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let i18n = self.ui_state.i18n.as_ref();
         let r = crate::styles::tokens::resolve(tokens);
         let session = &self.ui_state.annotate_session;
@@ -231,7 +231,7 @@ impl Signex {
     /// The table: a sunken header with the lock-all box, then the listed
     /// rows (and the locked rows kept, under their subhead), scrolling.
     fn annotate_table(&self) -> Element<'_, Message> {
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let i18n = self.ui_state.i18n.as_ref();
         let r = crate::styles::tokens::resolve(tokens);
         let preview = &self.ui_state.annotate_preview;
@@ -321,7 +321,7 @@ impl Signex {
     /// One list row. A changing row shows "→ new" in accent ink; the rest
     /// are muted. The lock box toggles the row's lock.
     fn annotate_list_row<'a>(&'a self, entry: &AnnotatePreviewEntry) -> Element<'a, Message> {
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let r = crate::styles::tokens::resolve(tokens);
         let ink = crate::styles::ti(tokens.text);
         let changing = is_changing(entry);

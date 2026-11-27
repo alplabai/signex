@@ -213,7 +213,7 @@ impl Signex {
     ) -> Element<'_, Message> {
         // Properties follows the undocked sheet that owns a paused tool.
         let owner = self.detached_properties_owner(kind);
-        let ctx = owner.map_or(&self.document_state.panel_ctx, |w| self.panel_ctx_for(w));
+        let ctx = owner.map_or(&self.document_view.panel_ctx, |w| self.panel_ctx_for(w));
         let i18n = &self.ui_state.i18n;
         let panel = match kind {
             PanelKind::Components => crate::panels::components_panel::view(
@@ -227,6 +227,9 @@ impl Signex {
             // The same surface as the docked and floating Library panel.
             PanelKind::Library | PanelKind::SchLibrary | PanelKind::FootprintLibrary => {
                 crate::library::panel::view(&self.library, ctx)
+            }
+            PanelKind::Extension(panel) => {
+                crate::dock::extension_panel(&self.extensions, panel, ctx)
             }
             other => crate::panels::view_panel(other, ctx)
                 .map(crate::dock::DockMessage::Panel)
@@ -373,8 +376,8 @@ mod tests {
         use crate::app::state::WindowKind;
         let (mut app, _boot) = Signex::new();
         let kind = PanelKind::Projects;
-        app.document_state.dock.close_panel(kind);
-        assert!(app.document_state.dock.locate(kind).is_none());
+        app.document_view.dock.close_panel(kind);
+        assert!(app.document_view.dock.locate(kind).is_none());
         let id = iced::window::Id::unique();
         app.ui_state
             .windows
@@ -384,7 +387,7 @@ mod tests {
         assert_ne!(close.units(), 0, "Dock back closes the window");
         let _ = app.update(Message::Window(WindowMsg::SecondaryWindowClosed(id)));
         assert!(!app.ui_state.windows.contains_key(&id));
-        assert!(app.document_state.dock.locate(kind).is_some(), "re-docked");
+        assert!(app.document_view.dock.locate(kind).is_some(), "re-docked");
 
         // Dock back for a window that is not a detached panel does nothing.
         let other = iced::window::Id::unique();

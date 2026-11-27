@@ -138,6 +138,7 @@ pdf-layers-switch = Write PDF layers
 pdf-layers-help = Readers can switch these groups on and off. Checked = visible when the PDF opens.
 pdf-layers-off = Off: the PDF is flat; every group prints as drawn.
 pdf-layer-wires = Wires and buses
+pdf-layer-harnesses = Signal harnesses
 pdf-layer-parts = Parts
 pdf-layer-net-labels = Net labels and ports
 pdf-layer-power-ports = Power ports
@@ -169,9 +170,11 @@ pdf-global-bookmarks = Global Bookmarks for Components and Nets
 ## Schematics include
 pdf-no-erc-markers = No-ERC Markers
 pdf-no-connect-markers = No-Connect Markers
-pdf-parameter-sets = Parameter Sets
+pdf-net-parameters = Net Parameters
 pdf-probes = Probes
-pdf-blankets = Blankets
+pdf-net-blankets = Net Blankets
+pdf-compile-masks = Compile Masks
+pdf-diff-pairs = Differential Pairs
 pdf-notes = Notes
 pdf-collapsed-notes = Collapsed notes
 # Paper size names in the page-size picker.

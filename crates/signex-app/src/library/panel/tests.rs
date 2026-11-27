@@ -126,11 +126,12 @@ fn passives() -> OpenLibrary {
         pricing: Default::default(),
         own_edit_stamp: None,
         display: Default::default(),
+        provenance: Default::default(),
     }
 }
 
 fn texts(app: &Signex) -> Vec<String> {
-    lay_out_texts(view(&app.library, &app.document_state.panel_ctx), WINDOW)
+    lay_out_texts(view(&app.library, &app.document_view.panel_ctx), WINDOW)
         .into_iter()
         .map(|t| t.text.replace(['\u{2068}', '\u{2069}'], ""))
         .collect()
@@ -138,7 +139,7 @@ fn texts(app: &Signex) -> Vec<String> {
 
 fn clicked(app: &Signex, label: &str) -> Vec<DockMessage> {
     messages_on_click(
-        view(&app.library, &app.document_state.panel_ctx),
+        view(&app.library, &app.document_view.panel_ctx),
         WINDOW,
         label,
     )
@@ -151,7 +152,7 @@ fn picked(kind: LibraryPanelKind) -> Message {
 #[test]
 fn a_symbol_tab_opens_on_symbols_with_no_title_row_and_a_singular_count() {
     let app = app_with_one_symbol();
-    let ctx = &app.document_state.panel_ctx;
+    let ctx = &app.document_view.panel_ctx;
     assert!(
         ctx.symbol_editor.is_some(),
         "the symbol editor reaches the panel"
@@ -177,7 +178,7 @@ fn a_symbol_tab_opens_on_symbols_with_no_title_row_and_a_singular_count() {
 fn a_footprint_tab_opens_on_footprints() {
     let app = app_with_one_footprint();
     assert_eq!(
-        shown_kind(&app.library, &app.document_state.panel_ctx),
+        shown_kind(&app.library, &app.document_view.panel_ctx),
         LibraryPanelKind::Footprints
     );
     let shown = texts(&app);
@@ -194,7 +195,7 @@ fn any_other_tab_opens_on_parts_and_the_filter_matches_rows() {
     app.library.sync_view_caches();
     app.refresh_panel_ctx();
     assert_eq!(
-        shown_kind(&app.library, &app.document_state.panel_ctx),
+        shown_kind(&app.library, &app.document_view.panel_ctx),
         LibraryPanelKind::Parts
     );
     let shown = texts(&app);
@@ -256,10 +257,7 @@ fn a_chip_pick_holds_while_its_tab_stays_active() {
 fn with_nothing_open_the_chips_and_tools_are_inert() {
     let (mut app, _boot) = Signex::new();
     app.refresh_panel_ctx();
-    assert!(has_nothing_open(
-        &app.library,
-        &app.document_state.panel_ctx
-    ));
+    assert!(has_nothing_open(&app.library, &app.document_view.panel_ctx));
     let shown = texts(&app);
     for label in ["No libraries open", "No library open", "Open Library…"] {
         assert!(shown.iter().any(|t| t == label), "{label}: {shown:#?}");
@@ -290,7 +288,7 @@ fn delete_is_off_while_the_filter_hides_the_active_symbol() {
     push_tab(&mut app, &path, TabKind::SymbolEditor(path.clone()));
     app.refresh_panel_ctx();
     let delete = |app: &Signex| {
-        symbols::view(&app.library, &app.document_state.panel_ctx)
+        symbols::view(&app.library, &app.document_view.panel_ctx)
             .tools
             .delete
     };
@@ -326,7 +324,7 @@ fn edit_and_delete_are_off_while_the_filter_hides_the_highlighted_footprint() {
     push_tab(&mut app, &path, TabKind::FootprintEditor(path.clone()));
     app.refresh_panel_ctx();
     let tools = |app: &Signex| {
-        let tools = footprints::view(&app.library, &app.document_state.panel_ctx).tools;
+        let tools = footprints::view(&app.library, &app.document_view.panel_ctx).tools;
         (tools.edit, tools.delete)
     };
     assert!(
@@ -353,7 +351,7 @@ fn edit_and_delete_are_off_while_the_filter_hides_the_highlighted_footprint() {
 #[test]
 fn edit_follows_the_footprint_the_editor_shows() {
     let app = app_with_one_footprint();
-    let ctx = &app.document_state.panel_ctx;
+    let ctx = &app.document_view.panel_ctx;
     let fp = ctx.footprint_editor.as_ref().expect("footprint editor");
     assert_eq!(fp.internal_selected_idx, None, "nothing highlighted");
     assert!(fp.internal_footprints[0].is_active);
@@ -370,7 +368,7 @@ fn edit_follows_the_footprint_the_editor_shows() {
 #[test]
 fn place_is_off_with_its_reason_in_footprints_and_symbols() {
     let app = app_with_one_footprint();
-    let ctx = &app.document_state.panel_ctx;
+    let ctx = &app.document_view.panel_ctx;
     let tools = footprints::view(&app.library, ctx).tools;
     assert!(tools.place.is_none());
     assert_eq!(
@@ -380,7 +378,7 @@ fn place_is_off_with_its_reason_in_footprints_and_symbols() {
     );
 
     let app = app_with_one_symbol();
-    let ctx = &app.document_state.panel_ctx;
+    let ctx = &app.document_view.panel_ctx;
     let tools = symbols::view(&app.library, ctx).tools;
     assert!(tools.place.is_none());
     assert_eq!(tools.place_blocked, Some(ids::LIBRARY_PANEL_PLACE_SYMBOLS));
@@ -416,7 +414,7 @@ fn style_picked(style: LibraryRowStyle) -> Message {
 /// before Delete, which ends the toolbar.
 fn switch_point(app: &Signex, style: LibraryRowStyle) -> iced::Point {
     let cm = crate::styles::ChromeMetrics::DEFAULT;
-    let edit = lay_out_texts(view(&app.library, &app.document_state.panel_ctx), WINDOW)
+    let edit = lay_out_texts(view(&app.library, &app.document_view.panel_ctx), WINDOW)
         .into_iter()
         .find(|t| t.text == "Edit")
         .expect("Edit tool");
@@ -436,7 +434,7 @@ fn the_row_style_switch_before_delete_picks_each_style() {
     let app = app_with_one_footprint();
     for style in [LibraryRowStyle::Compact, LibraryRowStyle::Thumbnail] {
         let sent = crate::layout_probe::messages_on_click_at(
-            view(&app.library, &app.document_state.panel_ctx),
+            view(&app.library, &app.document_view.panel_ctx),
             WINDOW,
             None,
             switch_point(&app, style),
@@ -455,7 +453,7 @@ fn the_row_style_switch_before_delete_picks_each_style() {
 /// The laid-out bounds of the last text `label` in the panel: the list row,
 /// which comes after a breadcrumb naming the same footprint.
 fn bounds_of(app: &Signex, label: &str) -> iced::Rectangle {
-    lay_out_texts(view(&app.library, &app.document_state.panel_ctx), WINDOW)
+    lay_out_texts(view(&app.library, &app.document_view.panel_ctx), WINDOW)
         .into_iter()
         .rev()
         .find(|t| t.text.replace(['\u{2068}', '\u{2069}'], "") == label)
@@ -515,7 +513,7 @@ fn the_thumbnail_style_is_one_choice_for_every_kind() {
 fn thumbnail_rows_carry_each_items_own_drawing() {
     let mut app = app_with_one_footprint();
     let tile_of = |app: &Signex| {
-        app.document_state
+        app.document_view
             .panel_ctx
             .footprint_editor
             .as_ref()
@@ -532,7 +530,7 @@ fn thumbnail_rows_carry_each_items_own_drawing() {
 
     let mut sym = app_with_one_symbol();
     let drawing_of = |app: &Signex| {
-        app.document_state
+        app.document_view
             .panel_ctx
             .symbol_editor
             .as_ref()

@@ -75,6 +75,7 @@ pub(crate) fn add_project(
         schematic_design: Default::default(),
         fab_outputs: None,
         router_tool_diameter: None,
+        bom_alternates: Vec::new(),
         requirements: Default::default(),
         parameters: Default::default(),
         unknown: Default::default(),
@@ -108,7 +109,7 @@ fn fixture(defaults: ProjectDefaults) -> Fixture {
     let (mut app, _boot) = Signex::new();
     app.ui_state.first_run_tour_open = false;
     app.ui_state.main_window_id = Some(iced::window::Id::unique());
-    app.ui_state.setup_profiles.clear();
+    app.document_state.setup_profiles.clear();
     add_project(&mut app, &dir, "demo", defaults);
     Fixture {
         app,
@@ -272,7 +273,7 @@ fn a_saved_profile_appears_in_a_second_project() {
     send(&mut f.app, Message::from(DocumentSetupMsg::CancelRequested));
     let saved = f
         .app
-        .ui_state
+        .document_state
         .setup_profiles
         .iter()
         .find(|p| p.name == "Team 2232")
@@ -322,7 +323,7 @@ fn a_saved_profile_appears_in_a_second_project() {
     setup(&mut f.app, NewProjectMsg::UserProfileRemoveCancelled);
     assert!(
         f.app
-            .ui_state
+            .document_state
             .setup_profiles
             .iter()
             .any(|p| p.id == saved.id)
@@ -333,7 +334,7 @@ fn a_saved_profile_appears_in_a_second_project() {
     );
     assert!(
         f.app
-            .ui_state
+            .document_state
             .setup_profiles
             .iter()
             .any(|p| p.id == saved.id),
@@ -342,7 +343,7 @@ fn a_saved_profile_appears_in_a_second_project() {
     setup(&mut f.app, NewProjectMsg::UserProfileRemoveConfirmed);
     assert!(
         f.app
-            .ui_state
+            .document_state
             .setup_profiles
             .iter()
             .all(|p| p.id != saved.id)
@@ -404,7 +405,7 @@ fn tree_key(app: &mut Signex) -> signex_widgets::tree_view::TreeKey {
         app,
         Message::Ui(signex_app::app::UiMsg::GridPickerSelect(1.0)),
     );
-    signex_widgets::tree_view::key_of(&app.document_state.panel_ctx.project_tree, &[0])
+    signex_widgets::tree_view::key_of(&app.document_view.panel_ctx.project_tree, &[0])
         .expect("the project row")
 }
 
@@ -548,7 +549,7 @@ fn removing_the_projects_default_profile_clears_its_id() {
         signex_types::project::ProjectSetup::from_profile(SetupProfile::Hdi).defaults();
     defaults.profile = Some(id.clone());
     let mut f = fixture(defaults);
-    f.app.ui_state.setup_profiles = users;
+    f.app.document_state.setup_profiles = users;
     let project_id = f.app.document_state.projects[0].id;
     let edit = |msg| {
         Message::Project(ProjectMsg::Tab(ProjectTabMsg::SetupEdited {
@@ -560,9 +561,9 @@ fn removing_the_projects_default_profile_clears_its_id() {
         &mut f.app,
         edit(NewProjectMsg::UserProfileRemoveRequested(id.clone())),
     );
-    assert_eq!(f.app.ui_state.setup_profiles.len(), 1, "only asked");
+    assert_eq!(f.app.document_state.setup_profiles.len(), 1, "only asked");
     send(&mut f.app, edit(NewProjectMsg::UserProfileRemoveConfirmed));
-    assert!(f.app.ui_state.setup_profiles.is_empty());
+    assert!(f.app.document_state.setup_profiles.is_empty());
     let project = &f.app.document_state.projects[0];
     assert_eq!(
         project.data.project_defaults.profile, None,
@@ -616,7 +617,7 @@ fn a_profile_default_standard_is_not_applied_untouched() {
         profile: Some(id.clone()),
         ..ProjectDefaults::default()
     });
-    f.app.ui_state.setup_profiles = users;
+    f.app.document_state.setup_profiles = users;
     send(&mut f.app, menu_row("new_schematic_sheet"));
     let shown = f.app.ui_state.document_setup.as_ref().expect("dialog");
     assert_eq!(shown.draft_designators(), DesignatorStandard::Din40719_2);
@@ -649,7 +650,7 @@ fn removing_the_default_profile_in_the_dialog_unnames_it() {
         signex_types::project::ProjectSetup::from_profile(SetupProfile::Hdi).defaults();
     stored.profile = Some(id.clone());
     let mut f = fixture(stored);
-    f.app.ui_state.setup_profiles = users;
+    f.app.document_state.setup_profiles = users;
     send(&mut f.app, menu_row("new_pcb_document"));
     setup(&mut f.app, NewProjectMsg::UserProfileRemoveRequested(id));
     setup(&mut f.app, NewProjectMsg::UserProfileRemoveConfirmed);
@@ -672,7 +673,7 @@ fn a_failed_profile_write_is_undone() {
     setup(&mut f.app, NewProjectMsg::SaveProfileConfirmed);
     let id = f
         .app
-        .ui_state
+        .document_state
         .setup_profiles
         .iter()
         .find(|p| p.name == "Undo 2317")
@@ -689,7 +690,13 @@ fn a_failed_profile_write_is_undone() {
             result: Err("disk full".into()),
         }),
     );
-    assert!(f.app.ui_state.setup_profiles.iter().all(|p| p.id != id));
+    assert!(
+        f.app
+            .document_state
+            .setup_profiles
+            .iter()
+            .all(|p| p.id != id)
+    );
     let draft = f.app.ui_state.document_setup.as_ref().expect("dialog");
     assert_eq!(
         draft.draft_user_profile(),

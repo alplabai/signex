@@ -317,8 +317,8 @@ impl Signex {
         let endpoint = self.agent_listening_endpoint();
         self.ui_state.command_log.endpoint = endpoint;
         let shared = Arc::new((*self.ui_state.command_log).clone());
-        self.document_state.panel_ctx.command_log = Arc::clone(&shared);
-        for ctx in self.document_state.window_panel_ctx.values_mut() {
+        self.document_view.panel_ctx.command_log = Arc::clone(&shared);
+        for ctx in self.document_view.window_panel_ctx.values_mut() {
             ctx.command_log = Arc::clone(&shared);
         }
     }

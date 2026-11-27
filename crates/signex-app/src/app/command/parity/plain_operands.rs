@@ -8,6 +8,7 @@ pub(super) const NAMED_DOCUMENT_ONLY: &[&str] = &[
     "color_net",
     "export_board_report",
     "export_board_step",
+    "fabrication_outputs",
     "export_assembly_svg",
     "board_assembly_drawing",
     "board_report_bom",
@@ -43,14 +44,18 @@ pub(super) const NAMED_DOCUMENT_ONLY: &[&str] = &[
     "panelize_board",
     "remove_board_panel",
     "set_board_panel",
+    "layout_plan_set",
     "swap_pins",
     "swap_gates",
+    "swap_schematic_pins",
+    "swap_schematic_gates",
     "save_board_reuse_block",
     "place_board_reuse_block",
     "autoplace_fields",
     "sync_sheet_pins",
     "set_sheet_symbol_size",
     "set_symbol_parameter",
+    "set_net_tie",
     "project_move_sheet",
     "project_add_variant",
     "project_rename_variant",
@@ -58,14 +63,56 @@ pub(super) const NAMED_DOCUMENT_ONLY: &[&str] = &[
     "project_set_active_variant",
     "project_move_library",
     "project_set_annotate_undo",
+    "project_set_annotate_numbering",
+    "project_set_default_variant",
+    // #3038: the Variant Manager's part edits and Duplicate.
+    "project_set_variant_fit",
+    "project_set_variant_alternate",
+    "project_set_variant_override",
+    "project_duplicate_variant",
     "project_set_version_control",
     "project_set_requirement",
     "project_enable_requirement",
+    "project_set_rail",
     "bring_drawings_forward",
     "bring_drawings_to_front",
     "send_drawings_backward",
     "send_drawings_to_back",
     "delete_selection",
+    // Mockup row 199: the named project's notebook files.
+    "export_notebook_timeline",
+    "mark_notebook_attachment_valid",
+    "attach_notebook_file",
+    // #2470: the area tools take their layer and net as operands, never the
+    // active layer or the tool's form.
+    "place_board_fill",
+    "place_board_region",
+    "place_board_polygon_pour",
+    "place_board_keepout",
+    "place_board_pour_cutout",
+    // #2936, #2937: a footprint placed, turned, flipped, assigned or swapped
+    // by its operands, never the selection.
+    "set_footprint_position",
+    "set_footprint_rotation",
+    "set_footprint_side",
+    "assign_footprint",
+    "change_footprint",
+    // #1297, #2938: the part swap and a BOM line's alternates.
+    "change_component",
+    "bom_add_alternate",
+    "bom_remove_alternate",
+    "bom_set_alternate_order",
+    // #2470, #2462: board numbering, back annotation and the board against
+    // schematic Apply, on the named board or project.
+    "reannotate_board",
+    "back_annotate_schematics",
+    "apply_board_schematic_differences",
+    // #2457, #2941: the rooms commands take the room, the sheets' parts and
+    // the weights from their operands and the board.
+    "place_board_room",
+    "create_rooms_from_sheets",
+    "arrange_in_room",
+    "auto_place",
 ];
 
 /// The placements whose operand form reads tool state.
@@ -93,6 +140,8 @@ pub(super) const PLACEMENTS: &[&str] = &[
     "place_sheet_entry",
     "place_design_block",
     "import_graphics",
+    // #1283: a snippet is placed as a design block.
+    "place_snippet",
 ];
 
 /// The library dialogs' actions (#3013, mockup rows 132-138).

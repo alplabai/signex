@@ -88,6 +88,7 @@ fn build(workflow: WorkflowConfig, version: Option<&str>) -> Library {
         library: LibrarySection {
             name: "lib".into(),
             description: None,
+            ..Default::default()
         },
         mode: LibraryMode::default(),
         workflow,

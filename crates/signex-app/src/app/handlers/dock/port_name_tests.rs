@@ -105,7 +105,7 @@ fn a_rename_is_one_undo_step_however_many_keys_were_typed() {
         PlacedEditMsg::PortNameSubmitted { item: item(PORT) },
     );
     assert_eq!(name(&app, PORT), "+5V");
-    assert_eq!(app.document_state.panel_ctx.placed.port_name, None);
+    assert_eq!(app.document_view.panel_ctx.placed.port_name, None);
     let _ = app.update(Message::Edit(EditMsg::Undo));
     assert_eq!(name(&app, PORT), "+3V3");
     assert!(!app.document_state.engines[&path].can_undo());
@@ -139,7 +139,7 @@ fn a_discard_drops_the_typed_name() {
     let (mut app, path) = app();
     typing(&mut app, "+5V");
     app.drop_note_drafts_where(&|sheet| sheet == path);
-    assert_eq!(app.document_state.panel_ctx.placed.port_name, None);
+    assert_eq!(app.document_view.panel_ctx.placed.port_name, None);
     assert_eq!(name(&app, PORT), "+3V3");
     assert!(!app.document_state.engines[&path].can_undo());
 }
@@ -171,7 +171,7 @@ fn a_power_port_pin_click_shows_its_location_open() {
     let (mut app, path) = app();
     click_pin(&mut app, &path, PART);
     let collapsed =
-        |app: &Signex| (app.document_state.panel_ctx.collapsed_sections).contains("sel_location");
+        |app: &Signex| (app.document_view.panel_ctx.collapsed_sections).contains("sel_location");
     assert!(collapsed(&app), "a part's pin focus folds Location");
     click_pin(&mut app, &path, PORT);
     assert!(
@@ -179,5 +179,5 @@ fn a_power_port_pin_click_shows_its_location_open() {
         "the port's pin stays focused"
     );
     assert!(!collapsed(&app), "the power port's Location is open");
-    assert_eq!(app.document_state.panel_ctx.placed.item, Some(item(PORT)));
+    assert_eq!(app.document_view.panel_ctx.placed.item, Some(item(PORT)));
 }

@@ -110,7 +110,28 @@ All of it is derived once, in `signex-net` (`directives.rs`,
   whose names or patterns match it. `build_netlist` writes the directive
   class to `Net::class`, and the project netlist does the same from the
   sheets each net's wires are on, read in sheet-key order
-  (`apply_project_classes`).
+  (`project_classes.rs`).
+- **Class conflicts** (`class_assignments`, `net_class_conflicts`, #2656).
+  Every class the directives of a sheet give a net is listed in rank order:
+  the Net Parameters directives on it in sheet order, then the Net Blankets
+  catching it in sheet order. The first is the net's class (the order
+  above, from the same list). When a later one names another class, the
+  resolution stays the same and ERC reports `net_class_conflict` at the
+  overridden directive (`docs/ERC_RULES.md`). Directives naming the same
+  class agree. The check reads the sheet with its Compile Masks applied,
+  as the netlist does.
+- **Class conflicts across sheets** (`project_net_class_conflicts`). The
+  project netlist ranks the directives of all its sheets for each stitched
+  net: the Net Parameters directives on one of its wires (sheets in key
+  order, each in sheet order), then the Net Blankets catching it (the same
+  order). Restricted to one sheet this is the sheet's order above. The
+  first is the class the project netlist writes, and ERC's project run
+  reports every later one naming another class, on the overridden
+  directive's sheet, in place of that sheet's own answer on each net the
+  project netlist carries. The sheet keeps its own answer on a net the
+  project netlist does not carry, as does a sheet the project roots never
+  reach. Each net is its own finding: two nets the same directives class
+  give two (#2961).
 
 ## Differential pairs {#differential-pairs}
 
@@ -121,6 +142,14 @@ pair. The partner is found by name: `X_P` / `X_N`, `XDP` / `XDN` (pair
 matched by `_P` / `_N` only. A directive on no wire, or on a net with no
 suffix, pairs nothing; a half whose partner is not on the sheet is an
 incomplete pair.
+
+A net named as a positive half (`_P`, `DP`, `+`) is a pair member by name
+alone, with no directive; a negative name alone (`RESET_N`) is not, since it
+is an active-low signal far more often. The ERC rule
+`diff_pair_partner_missing` reports a half whose partner is missing (#2951,
+`signex_net::lone_pair_members`), and `list_diff_pairs` lists every pair of
+the project, by directive or by name, with its class (#2952,
+`signex_net::listed_pairs`; `docs/CLI.md`, "Differential pairs").
 
 ### Differential Pair Classes {#differential-pair-classes}
 
@@ -135,6 +164,20 @@ sheet each directive is on. Max skew and max uncoupled length are rules of
 the Rules tab (High Speed); the dialog shows them read-only, "—" while no
 such rule exists, with a link to the Rules tab (DECISIONS 2026-11-19). The pairs
 are shown in the PCB panel's Differential Pairs mode.
+
+The board-style preview under the fields is edited too (mockup row 153,
+#2661). A press on the width, the gap, the impedance or the tolerance written
+on it opens a field there: Enter commits, Tab commits and opens the next
+value, Esc closes it and leaves the dialog open, and a press elsewhere drops
+the typed text. A value not set opens at what the drawing shows (the drawn
+0.2 mm width or 0.15 mm gap, 0 for the impedance and tolerance) and commits
+nothing when left unchanged. A handle on the N trace drags the gap: it snaps
+to 0.005 mm, keeps the N trace inside the drawing, and the drawing keeps its
+scale while the handle is held; Esc puts the gap back. The expand button
+draws the pair twice as tall. A value set on the drawing is the same edit as
+typing it in its field, so the field shows it and OK applies it with the rest
+as one step. Where the drawing puts each value is decided once, in
+`app/diff_pair_classes/preview.rs`; the view only draws it.
 
 ## Editing
 
@@ -209,6 +252,30 @@ rule instead. The rule name keeps letters, digits and `_` of the class or
 net name, so two names can give one rule name (`V+BUS` and `V-BUS` both
 give `Width_V_BUS`): the first keeps it and Messages names the other.
 
+## Update PCB classes {#update-pcb-classes}
+
+The board's net classes are the project's net-class table (the board's
+nets are classed by name through it, as DRC reads them). Execute also puts
+each class a Net Blanket or a Net Parameters directive gives into that
+table, as one step of the table's history (built in
+`signex_engine::net_class_table::schematic_class_edit`):
+
+- a class the table lacks is added at its end;
+- each net the netlist puts in the class is assigned to it by name, out of
+  every other class's member list (a pattern of an earlier class still
+  wins, as the table's order decides);
+- the class's board rules are set from its first Net Parameters directive
+  (width, clearance, via diameter and drill), a Net Blanket's track width
+  when no Net Parameters directive sets a width, and the diff-pair width
+  and gap of the project's diff-pair class that directive names. A rule the
+  directives leave unset keeps the table's value.
+
+A diff-pair class on a directive with no net class makes no board class.
+The dialog shows them as one line below the rules, "N net classes from the
+schematic", and they count toward Execute, so a schematic that only adds or
+changes classes can apply them. A later Update PCB with nothing new changes
+nothing.
+
 ## Drawing
 
 All four use the directive colour the No-ERC diamond uses (`no_connect`): a
@@ -225,6 +292,14 @@ decision of 2026-11-21); a net label gets none. The flag text is fixed English, 
 region is picked by a click near its edge, so a click inside it still
 reaches what it covers; a point directive by its mark or its flag
 (`schematic_runtime/directives.rs`).
+
+Exports draw all four the same way (#2656): SVG, PDF and print are lowered
+from one page model, and the flag's lines and box come from the one function
+the canvas uses (`signex_types::schematic::directive_flag`). The first flag
+line is bold, as on the canvas. Each kind has its own box under Schematics
+include in the export options: "Net Blankets" and "Net Parameters" are on by
+default, "Compile Masks" and "Differential Pairs" off (decision of
+2026-11-25). Print Preview redraws when any of them changes.
 
 ## No-ERC rule list
 
@@ -270,7 +345,8 @@ Copy, cut and paste carry No-ERC directives with their lists.
 
 - Copy and paste do not carry Net Blankets, Compile Masks, Differential Pair
   or Net Parameters directives.
-- Exports (PDF, SVG) do not draw directives or their flags.
+- Compile Masks and Differential Pairs are not printed (open for the
+  maintainer, #2656).
 - The board does not read a Blanket's `track_width` or `pour` (Keep short).
 - A class a directive gives reaches the board's rules by name only: a
   `Width_<CLASS>` rule applies to the board nets the project's net-class

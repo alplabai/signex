@@ -23,9 +23,12 @@ pub(crate) struct DocumentsJob {
     pub step: Option<StepContext>,
 }
 
-/// One made file: its name in the output folder and its bytes.
+/// One made file: its name in the output folder, its kind as the
+/// `fabrication_outputs` answer names it (`gerber`, `assembly_pdf`, ...)
+/// and its bytes.
 pub(crate) struct MadeFile {
     pub name: String,
+    pub kind: &'static str,
     pub bytes: Vec<u8>,
 }
 
@@ -71,6 +74,7 @@ pub(crate) fn make_documents(
         }
         files.push(MadeFile {
             name: format!("{name}-assembly.pdf"),
+            kind: "assembly_pdf",
             bytes: pdf.bytes,
         });
     }
@@ -83,6 +87,7 @@ pub(crate) fn make_documents(
             let drawing = assembly_drawing(board, side);
             files.push(MadeFile {
                 name: svg_file_name(name, side),
+                kind: "assembly_svg",
                 bytes: assembly_svg(&drawing, &look).into_bytes(),
             });
         }
@@ -100,6 +105,7 @@ pub(crate) fn make_documents(
         );
         files.push(MadeFile {
             name: step_file_name(name),
+            kind: "step",
             bytes: built.step.bytes,
         });
     }

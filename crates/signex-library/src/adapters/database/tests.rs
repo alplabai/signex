@@ -137,6 +137,7 @@ fn from_snxlib_round_trips_database_mode() {
         library: LibrarySection {
             name: "Remote".into(),
             description: None,
+            ..Default::default()
         },
         mode: LibraryMode::Database {
             url: "https://example.com/api".into(),
@@ -159,6 +160,7 @@ fn from_snxlib_rejects_non_database_mode() {
         library: LibrarySection {
             name: "OopsLocalGit".into(),
             description: None,
+            ..Default::default()
         },
         mode: LibraryMode::default(), // LocalGit — wrong for DB adapter
         workflow: WorkflowConfig::default(),

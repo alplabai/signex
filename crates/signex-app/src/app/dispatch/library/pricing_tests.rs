@@ -57,6 +57,7 @@ fn app_with_library_at(name: &str, root: PathBuf) -> (Signex, LibraryRowRef) {
         pricing: Default::default(),
         own_edit_stamp: None,
         display: LibraryDisplaySettings::default(),
+        provenance: Default::default(),
     });
     let project_id = app.document_state.projects[0].id;
     (app, LibraryRowRef { project_id, root })
@@ -242,6 +243,7 @@ fn refresh_pricing_on_a_read_only_library_is_refused_and_starts_no_walk() {
             library: LibrarySection {
                 name: "PxRo".into(),
                 description: None,
+                ..Default::default()
             },
             mode: LibraryMode::default(),
             workflow: WorkflowConfig::default(),
@@ -266,6 +268,6 @@ fn refresh_pricing_on_a_read_only_library_is_refused_and_starts_no_walk() {
         app.library.pricing_refresh.is_none(),
         "no walk may start on a read-only mount"
     );
-    let notice = app.document_state.error_notice.as_ref().expect("explained");
+    let notice = app.document_view.error_notice.as_ref().expect("explained");
     assert_eq!(notice.title.render_en_us(), "Library Is Read-Only");
 }

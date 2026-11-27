@@ -324,7 +324,7 @@ fn a_loose_symbol_tab_starts_a_probe_and_a_case_variant_opens_apart_once_it_says
 
     assert_eq!(app.document_state.tabs.len(), 2, "a second editor opened");
     assert_eq!(active_path(&app), variant);
-    assert!(app.document_state.error_notice.is_none());
+    assert!(app.document_view.error_notice.is_none());
 }
 
 #[test]
@@ -374,7 +374,7 @@ fn a_deferred_ctrl_s_that_lost_focus_says_nothing_was_saved() {
 
     assert!(sink.0.lock().unwrap().is_empty());
     assert!(
-        app.document_state.error_notice.is_some(),
+        app.document_view.error_notice.is_some(),
         "the Save Failed card says nothing was written"
     );
     assert!(tab_dirty(&app, &upper));
@@ -412,7 +412,7 @@ fn a_deferred_ctrl_s_from_an_undocked_window_saves_that_window_document() {
     feed(&mut app, resumed);
 
     assert_eq!(*sink.0.lock().unwrap(), vec![lower.clone()]);
-    assert!(app.document_state.error_notice.is_none());
+    assert!(app.document_view.error_notice.is_none());
     assert!(!tab_dirty(&app, &lower));
     assert!(
         tab_dirty(&app, &upper),

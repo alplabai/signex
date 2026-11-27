@@ -2,25 +2,9 @@
 //! library symbol, the footprint editor modes and its pad moves, and the
 //! actions of the library dialogs.
 
+use super::operands::{Operand, OperandKind, optional, required};
 use super::{CommandFlags, CommandGroup, CommandMetadata, DocumentKind, Enablement};
-use super::{Operand, OperandKind};
 use signex_i18n_ids::command_ids;
-
-const fn required(name: &'static str, kind: OperandKind) -> Operand {
-    Operand {
-        name,
-        kind,
-        required: true,
-    }
-}
-
-const fn optional(name: &'static str, kind: OperandKind) -> Operand {
-    Operand {
-        name,
-        kind,
-        required: false,
-    }
-}
 
 /// Move Selection By on named footprint pads (#3013): the open footprint
 /// `document`, the `pads` by number (comma separated) and the offset `by`.
@@ -93,6 +77,8 @@ pub(super) const LIBRARY: &[CommandMetadata] = &[
         group: CommandGroup::General,
         enable: Enablement::Always,
         flags: CommandFlags::GUI_ONLY,
+        // The browser searches distributors and library servers.
+        needs_network: true,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {

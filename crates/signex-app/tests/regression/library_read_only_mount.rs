@@ -49,6 +49,7 @@ pub(crate) fn library_with_rows(dir: &Path, name: &str, count: usize) -> (PathBu
         library: LibrarySection {
             name: name.into(),
             description: None,
+            ..Default::default()
         },
         mode: LibraryMode::default(),
         workflow: WorkflowConfig::default(),
@@ -187,13 +188,13 @@ fn write_attempts_on_a_read_only_mount_explain_and_leave_disk_untouched() {
     let before = bytes_of(tmp.path());
 
     for msg in write_attempts(&snxlib, row_id) {
-        app.document_state.error_notice = None;
+        app.document_view.error_notice = None;
         let label = format!("{msg:?}");
         let task = app.update(Message::Library(msg));
         crate::drive::drive(&mut app, task);
 
         let notice = app
-            .document_state
+            .document_view
             .error_notice
             .as_ref()
             .unwrap_or_else(|| panic!("{label}: no explanation reached the user"));
@@ -254,7 +255,7 @@ fn the_same_attempts_on_an_ordinary_mount_write() {
     }));
     crate::drive::drive(&mut app, task);
 
-    assert!(app.document_state.error_notice.is_none());
+    assert!(app.document_view.error_notice.is_none());
     assert_ne!(before, bytes_of(tmp.path()), "Add Component must write");
 }
 
@@ -280,7 +281,7 @@ fn opening_a_primitive_picker_on_a_read_only_row_explains_and_opens_nothing() {
     let before = bytes_of(tmp.path());
 
     for target in picker_targets(&snxlib, row_id) {
-        app.document_state.error_notice = None;
+        app.document_view.error_notice = None;
         let label = format!("{target:?}");
         let task = app.update(Message::Library(LibraryMessage::OpenPrimitivePicker {
             kind: PrimitiveKind::Symbol,
@@ -289,7 +290,7 @@ fn opening_a_primitive_picker_on_a_read_only_row_explains_and_opens_nothing() {
         crate::drive::drive(&mut app, task);
         assert!(app.library.primitive_picker.is_none(), "{label}");
         let notice = app
-            .document_state
+            .document_view
             .error_notice
             .as_ref()
             .unwrap_or_else(|| panic!("{label}: no explanation reached the user"));
@@ -323,7 +324,7 @@ fn opening_a_primitive_picker_on_an_ordinary_row_opens_it() {
     }));
     crate::drive::drive(&mut app, task);
     assert!(app.library.primitive_picker.is_some());
-    assert!(app.document_state.error_notice.is_none());
+    assert!(app.document_view.error_notice.is_none());
 }
 
 /// A Component Preview save aimed at a read-only library reaches the
@@ -347,7 +348,7 @@ fn a_component_preview_save_on_a_read_only_library_explains() {
     crate::drive::drive(&mut app, task);
 
     let notice = app
-        .document_state
+        .document_view
         .error_notice
         .as_ref()
         .expect("save refusal must reach the user");
@@ -390,13 +391,13 @@ fn scrolling_the_spice_deck_on_a_read_only_row_is_not_refused() {
 
     let task = app.update(event(Action::Scroll { lines: 3 }));
     crate::drive::drive(&mut app, task);
-    assert!(app.document_state.error_notice.is_none());
+    assert!(app.document_view.error_notice.is_none());
     assert_eq!(refusals(), warned_before, "scroll must not log a warning");
 
     let task = app.update(event(Action::Edit(Edit::Insert('x'))));
     crate::drive::drive(&mut app, task);
     let notice = app
-        .document_state
+        .document_view
         .error_notice
         .as_ref()
         .expect("an edit must still be refused");

@@ -32,9 +32,9 @@ impl Signex {
     pub(super) fn error_notice_card(&self) -> Option<Element<'_, Message>> {
         use iced::widget::{column, container};
         use signex_i18n::RenderTranslatable as _;
-        let notice = self.document_state.error_notice.as_ref()?;
+        let notice = self.document_view.error_notice.as_ref()?;
 
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let i18n = self.ui_state.i18n.as_ref();
         let detached = self.modal_detached(crate::app::state::ModalId::ErrorNotice);
         let choices = notice_choice_buttons(i18n, notice, tokens);
@@ -57,7 +57,7 @@ impl Signex {
         if let Some(system) = &notice.system {
             content = content.push(notice_system_block(system, tokens));
         }
-        if let Some(rows) = notice_choice_effects(i18n, notice, &self.document_state.panel_ctx) {
+        if let Some(rows) = notice_choice_effects(i18n, notice, &self.document_view.panel_ctx) {
             content = content.push(rows);
         }
         // In its own window the OS title bar carries the close.
@@ -90,7 +90,7 @@ impl Signex {
     /// The error card's footer: Cancel, then `choices` on a choice card;
     /// Copy and OK on a plain one.
     fn error_notice_footer<'a>(&self, choices: Vec<Element<'a, Message>>) -> Element<'a, Message> {
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let i18n = self.ui_state.i18n.as_ref();
         let dismiss = || Some(Message::Overlay(OverlayMsg::DismissErrorNotice));
         if !choices.is_empty() {
@@ -121,7 +121,7 @@ impl Signex {
     /// `card` centred in a dialog's own OS window, on the panel surface.
     fn fill_dialog_window<'a>(&self, card: Element<'a, Message>) -> Element<'a, Message> {
         use iced::widget::container;
-        let panel_bg = crate::styles::ti(self.document_state.panel_ctx.tokens.panel_bg);
+        let panel_bg = crate::styles::ti(self.document_view.panel_ctx.tokens.panel_bg);
         container(card)
             .width(Length::Fill)
             .height(Length::Fill)
@@ -180,13 +180,13 @@ impl Signex {
         use iced::widget::{column, container};
         use signex_widgets::text;
 
-        let preview = match &self.document_state.preview {
+        let preview = match &self.document_view.preview {
             Some(p) => p,
             None => return iced::widget::Space::new().boxed(),
         };
 
         let i18n = self.ui_state.i18n.as_ref();
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let text_muted = crate::styles::ti(tokens.text_secondary);
 
         // Header — the modal chrome, with the file and its sheet count.

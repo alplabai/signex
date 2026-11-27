@@ -113,7 +113,7 @@ fn choosing_a_vanished_entry_drops_it_and_says_so() {
     assert!(app.ui_state.recent_projects.entries().is_empty());
     assert!(signex_app::fonts::read_recent_projects().is_empty());
     let notice = app
-        .document_state
+        .document_view
         .error_notice
         .as_ref()
         .expect("a visible notice");
@@ -139,7 +139,7 @@ fn choosing_a_live_entry_reopens_it_and_clear_empties_the_list() {
         Message::Menu(MenuMessage::OpenRecentProject(listed)),
     );
     assert_eq!(app.document_state.projects.len(), 1, "the project reopened");
-    assert!(app.document_state.error_notice.is_none());
+    assert!(app.document_view.error_notice.is_none());
 
     send(&mut app, Message::Menu(MenuMessage::ClearRecentProjects));
     assert!(app.ui_state.recent_projects.entries().is_empty());

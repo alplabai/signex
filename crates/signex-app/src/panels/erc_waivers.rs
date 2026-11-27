@@ -274,7 +274,7 @@ mod tests {
     #[test]
     fn the_waived_group_counts_and_lists_the_stored_waivers() {
         let (app, _boot) = crate::app::Signex::new();
-        let mut ctx = app.document_state.panel_ctx.clone();
+        let mut ctx = app.document_view.panel_ctx.clone();
         ctx.erc_violation_waivers = vec![waiver(ErcWaiverStatus::Lapsed); 12];
         ctx.validation.erc.waived_open = Some(true);
         let shown = texts(&ctx);
@@ -322,7 +322,7 @@ mod tests {
     #[test]
     fn a_waiver_without_an_author_shows_its_date_alone() {
         let (app, _boot) = crate::app::Signex::new();
-        let mut ctx = app.document_state.panel_ctx.clone();
+        let mut ctx = app.document_view.panel_ctx.clone();
         let mut stored = waiver(ErcWaiverStatus::Waiving(1));
         stored.author.clear();
         ctx.erc_violation_waivers = vec![stored];

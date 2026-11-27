@@ -122,6 +122,7 @@ define_ids! {
     RULES_PREVIEW_TITLE_MASK = "rules-preview-title-mask";
     RULES_PREVIEW_TITLE_PASTE = "rules-preview-title-paste";
     RULES_PREVIEW_TITLE_COURTYARD = "rules-preview-title-courtyard";
+    RULES_PREVIEW_TITLE_COMPONENT = "rules-preview-title-component";
     RULES_PREVIEW_NOTE_CLEARANCE = "rules-preview-note-clearance";
     RULES_PREVIEW_NOTE_TRACK = "rules-preview-note-track";
     RULES_PREVIEW_NOTE_VIA = "rules-preview-note-via";
@@ -132,6 +133,7 @@ define_ids! {
     RULES_PREVIEW_NOTE_MASK_MERGED = "rules-preview-note-mask-merged";
     RULES_PREVIEW_NOTE_PASTE = "rules-preview-note-paste";
     RULES_PREVIEW_NOTE_COURTYARD = "rules-preview-note-courtyard";
+    RULES_PREVIEW_NOTE_COMPONENT = "rules-preview-note-component";
     RULES_MATRIX_CAPTION = "rules-matrix-caption";
     RULES_MATRIX_CLEAR_CELL = "rules-matrix-clear-cell";
     RULES_MATRIX_CLEAR_PAIR = "rules-matrix-clear-pair";
@@ -245,6 +247,7 @@ define_ids! {
     RULES_TYPE_ROOM = "rules-type-room";
     RULES_COLUMN_MIN = "rules-column-min";
     RULES_COLUMN_MAX = "rules-column-max";
+    RULES_COLUMN_BODY_3D = "rules-column-body-3d";
     RULES_COLUMN_PREFERRED = "rules-column-preferred";
     RULES_COLUMN_DIAMETER = "rules-column-diameter";
     RULES_COLUMN_HOLE = "rules-column-hole";

@@ -45,6 +45,14 @@ fn with_dry_run(mut request: Request, dry_run: bool) -> Result<Request, String> 
     Ok(request)
 }
 
+/// Whether the answer of `line` says `"status": "ok"`.
+fn answer_status_ok(line: &ResultLine) -> bool {
+    line.data
+        .as_ref()
+        .and_then(|data| data.get("status"))
+        .is_some_and(|status| status == "ok")
+}
+
 /// What a finished run did.
 #[derive(Debug)]
 pub struct RunReport {
@@ -140,7 +148,12 @@ fn run_headless(
     if let Err(error) = diagnostics::init_logging() {
         eprintln!("[signex-cli] logging was already set up: {error:#}");
     }
-    // A throwaway config root: the run never reads or writes the user's.
+    // The one carve-out (docs/CLI.md, #2495): `keymap_assign` and
+    // `keymap_clear` edit the user's own keyboard_shortcuts.toml. Its path is
+    // taken before the override, and only those two commands read it.
+    let user_shortcuts = signex_app::keymap::user_config_path();
+    // A throwaway config root: otherwise the run never reads or writes the
+    // user's.
     let config_root = tempfile::Builder::new()
         .prefix("signex-cli-")
         .tempdir()
@@ -150,6 +163,9 @@ fn run_headless(
     install_before_boot(FontSet::BundledOnly).map_err(|_| "fonts were already installed")?;
 
     let mut session = Session::start(project, policy, run_id.clone())?;
+    if let Some(path) = user_shortcuts {
+        session.edit_user_shortcuts_at(path);
+    }
     let report = drive(&mut session, options, input, out)?;
 
     let unsaved = session.finish()?;
@@ -201,6 +217,9 @@ fn drive(
             Err(reason) => runner.reject(1, id, reason),
         };
         emit_line(&line)?;
+        if options.status_exit && line.status.is_ok() && !answer_status_ok(&line) {
+            report.not_ok += 1;
+        }
     } else {
         let mut seq = 0u64;
         while let Some(read) = read_line(input, options.limits.max_line_bytes)
@@ -242,4 +261,63 @@ fn drive(
         }
     }
     Ok(report)
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::*;
+    use crate::cli::{Invocation, parse};
+    use crate::protocol::{Mode, Status};
+
+    /// A runner that answers every command with `data`.
+    struct Answers(serde_json::Value);
+
+    impl Answers {
+        fn line(&self, seq: u64) -> ResultLine {
+            ResultLine {
+                run: "run".into(),
+                seq,
+                mode: Mode::Headless,
+                id: Some("generate_design_notebook".into()),
+                status: Status::Answered,
+                reason: None,
+                data: Some(self.0.clone()),
+                messages: Vec::new(),
+                changed: Vec::new(),
+            }
+        }
+    }
+
+    impl Runner for Answers {
+        fn execute(&mut self, seq: u64, _request: &Request, _raw: &str) -> ResultLine {
+            self.line(seq)
+        }
+        fn reject(&self, seq: u64, _raw: &str, _reason: String) -> ResultLine {
+            self.line(seq)
+        }
+    }
+
+    fn not_ok(line: &[&str], status: &str) -> u64 {
+        let Ok(Invocation::Run(options)) = parse(line.iter().map(|arg| arg.to_string())) else {
+            panic!("{line:?} is a run");
+        };
+        let mut runner = Answers(json!({ "status": status }));
+        let report = drive(&mut runner, &options, &mut &b""[..], &mut Vec::new()).expect("runs");
+        report.not_ok
+    }
+
+    /// Mockup row 201: `notebook generate` exits 1 when the summary's
+    /// status is not `ok` (a `--fail-on` condition held, or the report did
+    /// not compile); other answers keep their exit.
+    #[test]
+    fn generate_is_not_ok_unless_its_summary_is() {
+        let generate = ["notebook", "generate", "p.snxprj"];
+        assert_eq!(not_ok(&generate, "ok"), 0);
+        assert_eq!(not_ok(&generate, "fail"), 1);
+        assert_eq!(not_ok(&generate, "error"), 1);
+        let run = ["run", "p.snxprj", "generate_design_notebook"];
+        assert_eq!(not_ok(&run, "fail"), 0, "a plain run reads the answer");
+    }
 }

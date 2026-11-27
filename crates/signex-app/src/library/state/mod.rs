@@ -690,6 +690,9 @@ pub struct LibraryState {
     /// concurrent mounts of *different* libraries are both legitimate,
     /// so a single counter would cancel the wrong one.
     pub pending_mounts: HashMap<PathBuf, super::mount::MountIntent>,
+    /// Libraries mounted whose `requires` were not checked yet; checked
+    /// once no mount is pending (`library::requires`, #3112).
+    pub requires_unchecked: Vec<PathBuf>,
     /// Libraries holding saved changes that no git commit has yet (#858).
     pub uncommitted: uncommitted::UncommittedState,
     /// An external-edit `stat` pass is running off-thread (#531); a tick
@@ -778,6 +781,8 @@ pub struct LibraryState {
     /// Stock files whose copy is being written, so a second open of the
     /// same file does not start a second copy.
     pub stock_copies_in_flight: std::collections::HashSet<PathBuf>,
+    /// The library import running, and the last one finished (#3114).
+    pub import: crate::library_import::run_state::ImportState,
     /// The Properties panel state of each symbol editor (mockup rows 122
     /// and 123): its tab, Pins filter, part chip and illustration hover, by
     /// `.snxsym` path. Session only; an entry outlives its tab so a
@@ -1097,6 +1102,8 @@ mod refresh;
 #[cfg(test)]
 mod refresh_tests;
 mod relocate;
+#[cfg(test)]
+mod scale_bench_tests;
 mod stock_copy;
 mod symbol_choice;
 mod table_scan;

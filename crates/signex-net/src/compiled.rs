@@ -8,14 +8,12 @@ use std::collections::{HashMap, HashSet};
 use signex_types::designator::compare_references;
 use signex_types::project::ChannelNaming;
 use signex_types::schematic::{
-    ChannelOccurrence, ChannelRepeat, InstancePath, LabelType, Point, SchematicSheet, SelectedKind,
+    ChannelOccurrence, ChannelRepeat, InstancePath, Point, SchematicSheet, SelectedKind,
 };
 use uuid::Uuid;
 
 use crate::project::{CompiledOccurrence, compiled_occurrences};
-use crate::{
-    NetIndex, NetMember, NetMemberKind, ProjectGraph, SheetKey, build_project_netlist_indexed_named,
-};
+use crate::{NetIndex, NetMember, ProjectGraph, SheetKey, build_project_netlist_indexed_named};
 
 /// The compiled project.
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -392,10 +390,7 @@ impl Counts {
                 let occ = (m.sheet.clone(), m.occurrence.clone());
                 nets.entry(occ.clone()).or_default().insert(i);
                 net_sheets.entry(i).or_default().insert(occ);
-                if matches!(
-                    m.kind,
-                    NetMemberKind::PowerPort | NetMemberKind::Label(LabelType::Power)
-                ) {
+                if m.names_power_net() {
                     power.insert(i);
                 }
             }

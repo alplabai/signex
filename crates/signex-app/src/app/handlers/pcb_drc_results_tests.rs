@@ -186,7 +186,7 @@ fn on_screen(app: &Signex, x: f32, y: f32) -> (f32, f32) {
 
 /// The texts the DRC results panel shows, bidi marks dropped.
 fn panel_texts(app: &Signex) -> Vec<String> {
-    let ctx = &app.document_state.panel_ctx;
+    let ctx = &app.document_view.panel_ctx;
     let view = crate::panels::view_panel(PanelKind::Drc, ctx);
     crate::layout_probe::lay_out_texts(view, iced::Size::new(1400.0, 2000.0))
         .into_iter()

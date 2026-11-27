@@ -17,7 +17,7 @@ use signex_types::theme::Color;
 
 use super::{CommandArgs, CommandOutcome, OperandValue};
 use crate::app::document::{DocumentKey, UndoTarget};
-use crate::app::document_ids::DocumentEntry;
+use crate::app::document_ids::{DocumentEntry, DocumentKind};
 use crate::app::handlers::canvas::net_color_click::net_elements_in;
 use crate::app::rules_tab::TEXT_UNAPPLIED;
 use crate::app::state::ProjectId;
@@ -145,6 +145,9 @@ fn step(app: &mut Signex, args: &CommandArgs, undo: bool) -> Ran {
         Ok(entry) => entry,
         Err(reason) => return refused(reason),
     };
+    if let (DocumentKind::BlockDiagram, Some(path)) = (entry.kind, entry.path.as_deref()) {
+        return crate::app::block_diagram::step_by_command(app, path, undo);
+    }
     let Some(key) = entry.key else {
         return refused(format!("{} is not loaded", entry.name));
     };
@@ -243,6 +246,9 @@ pub(super) fn save(app: &mut Signex, args: &CommandArgs) -> Ran {
         Ok(entry) => entry,
         Err(reason) => return refused(reason),
     };
+    if let (DocumentKind::BlockDiagram, Some(path)) = (entry.kind, entry.path.as_deref()) {
+        return crate::app::block_diagram::save_by_command(app, path);
+    }
     let (Some(key), Some(path)) = (entry.key.clone(), entry.path.clone()) else {
         return refused(format!(
             "{} is not loaded, so there is nothing to save",
@@ -336,7 +342,7 @@ pub(super) fn close(app: &mut Signex, args: &CommandArgs) -> Ran {
     let task = if app.agent.serving && index != app.document_state.active_tab {
         // The person's typed title-block or page-settings text is theirs to
         // commit or drop; the same check as the request gate.
-        let drafts = &app.document_state.drafts;
+        let drafts = &app.document_view.drafts;
         if drafts.has_sheet(&tab_path) {
             let which = if drafts.title_block_sheets().contains(&tab_path) {
                 "title-block draft"

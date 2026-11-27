@@ -23,6 +23,7 @@ fn library(dir: &Path) -> PathBuf {
         library: LibrarySection {
             name: "Lib".into(),
             description: None,
+            ..Default::default()
         },
         mode: LibraryMode::default(),
         workflow: WorkflowConfig::default(),
