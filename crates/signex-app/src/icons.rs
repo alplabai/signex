@@ -358,8 +358,12 @@ canonical_icon!(icon_dd_eye, "dropdown/eye.svg");
 canonical_icon!(icon_dd_eye_off, "dropdown/eye_off.svg");
 canonical_icon!(icon_dd_highlight, "dropdown/highlight.svg");
 canonical_icon!(icon_dd_layers, "dropdown/layers.svg");
-// Document and dock tab menus (mockup row 5): Close, Undock / Float, Reveal in Projects.
+// Document and dock tab menus (mockup row 5): Close, the bulk closes,
+// Undock / Float, Reveal in Projects.
 canonical_icon!(icon_dd_close, "dropdown/close.svg");
+canonical_icon!(icon_dd_close_others, "dropdown/close_others.svg");
+canonical_icon!(icon_dd_close_right, "dropdown/close_right.svg");
+canonical_icon!(icon_dd_close_all, "dropdown/close_all.svg");
 canonical_icon!(icon_dd_undock, "undock.svg");
 canonical_icon!(icon_dd_folder, "dropdown/folder.svg");
 // Tab strip overflow button and the detached panel window's Dock back

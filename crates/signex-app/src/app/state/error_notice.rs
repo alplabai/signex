@@ -134,13 +134,15 @@ impl ErrorNotice {
 
     /// The sentence and, after a colon, the system part, as one en-US line:
     /// the text that leaves the screen (a CLI reason), as the card read
-    /// before the system part had its own block.
+    /// before the system part had its own block. A sentence's closing period
+    /// gives way to the colon.
     pub fn detail_line_en_us(&self) -> String {
         let detail = self.detail.render(&I18n::en_us());
         match &self.system {
             Some(system) => {
                 let system: Vec<&str> = system.as_str().lines().collect();
-                format!("{detail}: {}", system.join(": "))
+                let sentence = detail.strip_suffix('.').unwrap_or(detail.as_str());
+                format!("{sentence}: {}", system.join(": "))
             }
             None => detail,
         }

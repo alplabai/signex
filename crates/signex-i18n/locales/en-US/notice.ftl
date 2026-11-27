@@ -313,6 +313,9 @@ notice-load-restore-engine-failed = [git] restore: { $file } was restored but it
 # chrome-copy-help
 # After the detail of a Save Failed card (mockup row 11): nothing was lost.
 notice-save-failed-edits-kept = Your edits are still open and unsaved.
+# The sentence of a Save Failed card whose write failed (mockup row 11).
+# $file is the file name; the path and the system's error are shown below it.
+notice-save-failed-file = { $file } could not be written.
 
 ## A project written by a newer version opens read-only (#2904)
 
