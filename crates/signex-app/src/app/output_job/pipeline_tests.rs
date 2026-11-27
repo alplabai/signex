@@ -124,7 +124,11 @@ fn a_profile_writes_its_ticked_outputs_by_group_with_a_zip() {
     assert_eq!(answer["zip"], "rel.zip");
     let zip = std::fs::File::open(dir.path().join("out").join("rel.zip")).expect("the zip");
     let archive = zip::ZipArchive::new(zip).expect("a zip");
-    let mut names: Vec<String> = archive.file_names().map(str::to_string).collect();
+    let mut names: Vec<String> = archive
+        .file_names()
+        .map(|name| name.map(std::borrow::Cow::into_owned))
+        .collect::<Result<_, _>>()
+        .expect("the zip's names read");
     names.sort();
     assert_eq!(names, files);
     let saved = read_output_job(&job).unwrap();
