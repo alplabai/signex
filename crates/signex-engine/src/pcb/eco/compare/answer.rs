@@ -200,6 +200,7 @@ fn value_answer(side: &Option<CompareValue>) -> Value {
             json!({ "value": value, "footprint": footprint })
         }
         Some(CompareValue::NoNet) => json!({ "no_net": true }),
+        Some(CompareValue::Unlinked) => json!({ "unlinked": true }),
     }
 }
 

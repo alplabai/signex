@@ -468,7 +468,12 @@ fn the_messages_line_shares_the_finding_wording() {
     let run = run(&b, &DrcRules::new(RULE));
     let v = &run.violations[0];
     assert_eq!(
-        super::findings::messages_line(v, &names()),
+        super::findings::messages_line(v, Some(&b), &names()),
+        "DRC: clearance 0.15 mm, needs 0.2 mm, GND / VCC at (0, 0.2) mm"
+    );
+    // Without the board the same line: a clearance is named by its nets.
+    assert_eq!(
+        super::findings::messages_line(v, None, &names()),
         "DRC: clearance 0.15 mm, needs 0.2 mm, GND / VCC at (0, 0.2) mm"
     );
     let report = checked(&b);

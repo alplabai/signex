@@ -91,6 +91,7 @@ fn side_text(side: &Option<CompareValue>, absent: &str) -> String {
         Some(CompareValue::Text(s)) => s.clone(),
         Some(CompareValue::Part { value, footprint }) => format!("{value} {footprint}"),
         Some(CompareValue::NoNet) => "(no net)".to_string(),
+        Some(CompareValue::Unlinked) => "(not linked)".to_string(),
     }
 }
 

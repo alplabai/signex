@@ -12,6 +12,7 @@ use signex_types::project::DrcRuleSet;
 
 use crate::app::state::DrcInput;
 use crate::app::{DrcRunResult, Message, PcbMsg, Signex};
+use crate::panels::DrcCategory;
 
 /// Violations written to the Messages log after the summary line; the panel
 /// lists them all (up to its own cap), the log is for a headless run.
@@ -139,7 +140,13 @@ impl Signex {
                         // As `check_drc` words it in its report's warnings.
                         crate::diagnostics::log_warning(super::LOOSE_BOARD_WARNING);
                     }
-                    log_report(report, net_names);
+                    // The board names a room finding's part and room (#3058).
+                    let board = self
+                        .interaction_state
+                        .pcb_drc
+                        .last()
+                        .and_then(|done| self.document_state.pcb_board(&done.path));
+                    log_report(report, board, net_names);
                     self.log_lapsed_drc_waivers();
                 }
             }
@@ -238,6 +245,11 @@ impl Signex {
         panel.short = report.count(ViolationKind::Short);
         panel.unconnected = report.count(ViolationKind::Unconnected);
         panel.keepout = report.count(ViolationKind::Keepout);
+        panel.other = report
+            .violations
+            .iter()
+            .filter(|v| DrcCategory::of(v.kind) == DrcCategory::Other)
+            .count();
         panel.skipped = report.skipped.len();
         panel.skipped_keepouts = report.skipped_keepouts.len();
         panel.hidden = report
@@ -481,8 +493,12 @@ fn log_rule_text(report: &signex_drc::DrcReport) {
 }
 
 /// The run's Messages lines. A finding is worded by `signex_drc::findings`,
-/// as `check_drc` words it (#2334).
-fn log_report(report: &signex_drc::DrcReport, names: &std::collections::BTreeMap<u32, String>) {
+/// as `check_drc` words it (#2334), from `board`, the board checked.
+fn log_report(
+    report: &signex_drc::DrcReport,
+    board: Option<&signex_types::pcb::PcbBoard>,
+    names: &std::collections::BTreeMap<u32, String>,
+) {
     let summary = summary_line(report);
     for entry in &report.rules.severities.unrecognised {
         crate::diagnostics::log_info(format!("DRC rules: ignoring unrecognised entry ({entry})"));
@@ -504,6 +520,6 @@ fn log_report(report: &signex_drc::DrcReport, names: &std::collections::BTreeMap
         crate::diagnostics::log_warning(findings::skipped_warning(skipped));
     }
     for v in report.violations.iter().take(LOGGED_VIOLATIONS) {
-        crate::diagnostics::log_warning(findings::messages_line(v, names));
+        crate::diagnostics::log_warning(findings::messages_line(v, board, names));
     }
 }

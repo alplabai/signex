@@ -13,7 +13,9 @@ use signex_i18n::{I18n, Localized, ids, t};
 use signex_types::pcb_layer::CopperLayer;
 use signex_types::violation::Severity;
 use signex_widgets::dropdown_style::{DropdownLook, GraphiteDropdown as _};
-use signex_widgets::stat_tiles::{Density, StatTile, Tone as TileTone, stat_tiles};
+use signex_widgets::stat_tiles::{
+    Density, StatTile, StatTileMetrics, Tone as TileTone, stat_tiles,
+};
 use signex_widgets::{CheckboxLabel as _, checkbox};
 
 use super::drc::{layer_label, row_text};
@@ -59,17 +61,19 @@ pub enum DrcCategory {
     Short,
     Unconnected,
     Keepout,
+    /// Every other kind: room, height, 3D body clearance, sizes (#3058).
+    Other,
 }
 
 impl DrcCategory {
-    /// The tile a violation counts under; `None` for the kinds no tile counts.
-    pub fn of(kind: ViolationKind) -> Option<Self> {
+    /// The tile a violation counts under.
+    pub fn of(kind: ViolationKind) -> Self {
         match kind {
-            ViolationKind::Clearance => Some(Self::Clearance),
-            ViolationKind::Short => Some(Self::Short),
-            ViolationKind::Unconnected => Some(Self::Unconnected),
-            ViolationKind::Keepout => Some(Self::Keepout),
-            _ => None,
+            ViolationKind::Clearance => Self::Clearance,
+            ViolationKind::Short => Self::Short,
+            ViolationKind::Unconnected => Self::Unconnected,
+            ViolationKind::Keepout => Self::Keepout,
+            _ => Self::Other,
         }
     }
 
@@ -85,6 +89,7 @@ impl DrcCategory {
                 ids::DRC_PANEL_CATEGORY_UNCONNECTED,
             ),
             Self::Keepout => (ids::DRC_PANEL_TILE_KEEPOUT, ids::DRC_PANEL_CATEGORY_KEEPOUT),
+            Self::Other => (ids::DRC_PANEL_TILE_OTHER, ids::DRC_PANEL_CATEGORY_OTHER),
         }
     }
 }
@@ -108,8 +113,7 @@ pub struct DrcView {
 impl DrcView {
     /// Whether `row` is in the tile's category (every row with no tile on).
     pub fn shows(&self, row: &DrcRow) -> bool {
-        self.category
-            .is_none_or(|c| DrcCategory::of(row.kind) == Some(c))
+        self.category.is_none_or(|c| DrcCategory::of(row.kind) == c)
     }
 }
 
@@ -353,8 +357,9 @@ fn filters<'a>(ctx: &'a PanelContext, drc: &'a DrcPanel) -> Element<'a, PanelMsg
     .boxed()
 }
 
-/// The four count tiles that filter by category, and the line under them:
-/// the hint, or what is listed and "Clear filter".
+/// The four count tiles that filter by category, the "other" tile under
+/// them when another kind was found, and the line under those: the hint,
+/// or what is listed and "Clear filter".
 fn tiles<'a>(ctx: &'a PanelContext, drc: &DrcPanel) -> Element<'a, PanelMsg> {
     let i18n = &*ctx.i18n;
     let on = drc.view.category;
@@ -380,6 +385,31 @@ fn tiles<'a>(ctx: &'a PanelContext, drc: &DrcPanel) -> Element<'a, PanelMsg> {
         TS.body,
         i18n,
     );
+    let mut counted = column![row_of_tiles].spacing(SP.xs);
+    if drc.other > 0 {
+        // Below the four, one tile wide: a fifth in the row would clip
+        // their captions in a 300 px dock (#3058).
+        let other = stat_tiles(
+            vec![tile(DrcCategory::Other, drc.other, TileTone::Err)],
+            Density::Compact,
+            &ctx.tokens,
+            TS.body,
+            i18n,
+        );
+        // Three empty slots with the row's gaps: the tile is exactly as
+        // wide as each of the four above it.
+        let gap = StatTileMetrics::from_text_size(TS.body, Density::Compact).gap;
+        let slot = || Space::new().width(Length::FillPortion(1));
+        counted = counted.push(
+            row![
+                container(other).width(Length::FillPortion(1)),
+                slot(),
+                slot(),
+                slot(),
+            ]
+            .spacing(gap),
+        );
+    }
     let ink4 = crate::styles::tokens::resolve(&ctx.tokens).ink4;
     let under = match on {
         None => text(t!(i18n, ids::DRC_PANEL_TILES_HINT))
@@ -403,7 +433,7 @@ fn tiles<'a>(ctx: &'a PanelContext, drc: &DrcPanel) -> Element<'a, PanelMsg> {
         .wrap()
         .boxed(),
     };
-    column![row_of_tiles, under].spacing(SP.xs).boxed()
+    counted.push(under).boxed()
 }
 
 /// A warn notice that ends with "see Messages".

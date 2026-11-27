@@ -209,6 +209,40 @@ mod tests {
         );
     }
 
+    /// #3058: Run DRC's Messages line names the part and the room, never
+    /// "net 0 / net 0", and says the same as the check report's message.
+    #[test]
+    fn the_messages_line_names_the_part_and_the_room() {
+        let b = with_room(board(11.0), true);
+        let v = found(&b);
+        let names = std::collections::BTreeMap::new();
+        let line = crate::findings::messages_line(&v[0], Some(&b), &names);
+        assert_eq!(
+            line,
+            format!(
+                "DRC: R2 is 1.75 mm outside room dcdc at ({}, {}) mm",
+                mm(v[0].at.x),
+                mm(v[0].at.y)
+            )
+        );
+        assert!(!line.contains("net 0"), "{line}");
+        let report = crate::findings::check_report(
+            &check::run(&b, &DrcRules::new(200_000)),
+            &b,
+            &names,
+            "board.snxpcb",
+            Vec::new(),
+            serde_json::Map::new(),
+        );
+        let messages: Vec<&str> = report
+            .findings
+            .iter()
+            .filter(|f| f.rule == ViolationKind::PartOutsideRoom.rule_id())
+            .map(|f| f.message.as_str())
+            .collect();
+        assert_eq!(messages, ["R2 is 1.75 mm outside room dcdc"]);
+    }
+
     #[test]
     fn a_part_inside_the_margin_is_a_finding() {
         // The body reaches x = 9.75: inside the room, 0.25 mm into the margin.

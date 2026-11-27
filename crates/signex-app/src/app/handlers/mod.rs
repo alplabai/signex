@@ -65,6 +65,8 @@ pub(crate) mod pcb_drc_fix;
 mod pcb_drc_results;
 #[cfg(test)]
 mod pcb_drc_results_tests;
+#[cfg(test)]
+mod pcb_drc_room_tests;
 pub(crate) mod pcb_dxf_import;
 pub(crate) mod pcb_dxf_sketch;
 pub(crate) use pcb_drc_check::DRC_CHECK;
