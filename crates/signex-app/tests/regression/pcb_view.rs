@@ -324,19 +324,19 @@ fn the_view_is_kept_per_board_and_never_written_to_the_file() {
 #[test]
 fn the_layers_panel_follows_the_view() {
     let mut f = open_board();
-    let panel = &f.app.document_state.panel_ctx.pcb_layers;
+    let panel = &f.app.document_view.panel_ctx.pcb_layers;
     assert_eq!(panel.active, Some(TOP));
     assert!(panel.hidden.is_empty());
     // Hiding the active Top layer moves the active layer to Mid-Layer 1; the
     // next step skips the hidden Top and lands on Bottom.
     run(&mut f, "toggle_layer_visibility");
-    let panel = &f.app.document_state.panel_ctx.pcb_layers;
+    let panel = &f.app.document_view.panel_ctx.pcb_layers;
     assert!(matches!(
         panel.active,
         Some(PcbLayer::Copper(CopperLayer::Inner(_)))
     ));
     run(&mut f, "next_layer");
-    let panel = &f.app.document_state.panel_ctx.pcb_layers;
+    let panel = &f.app.document_view.panel_ctx.pcb_layers;
     assert_eq!(panel.active, Some(BOTTOM));
     assert_eq!(panel.hidden.len(), 1);
 }
@@ -384,7 +384,7 @@ fn the_board_outline_row_hides_and_shows_the_board_edge() {
     );
     assert!(
         f.app
-            .document_state
+            .document_view
             .panel_ctx
             .pcb_layers
             .hidden
@@ -449,7 +449,7 @@ fn hiding_the_multi_layer_hides_vias_and_through_hole_pads() {
         !picks_a_pad(&mut f, 40.0),
         "the hidden through-hole pad is not hit"
     );
-    let panel = &f.app.document_state.panel_ctx.pcb_layers;
+    let panel = &f.app.document_view.panel_ctx.pcb_layers;
     assert!(panel.multi_layer_hidden && panel.has_hidden());
 
     run(&mut f, "save_document");

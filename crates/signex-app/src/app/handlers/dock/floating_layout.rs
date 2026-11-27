@@ -7,9 +7,9 @@ impl Signex {
     /// and region sizes. The single decision behind the live preview and
     /// the release.
     pub(crate) fn dock_drop_target(&self, index: usize) -> Option<PanelPosition> {
-        let panel = self.document_state.dock.floating.get(index)?;
+        let panel = self.document_view.dock.floating.get(index)?;
         let ui = &self.ui_state;
-        let geometry = self.document_state.dock.drop_geometry(
+        let geometry = self.document_view.dock.drop_geometry(
             ui.window_size,
             (ui.left_width, ui.right_width, ui.bottom_height),
         );
@@ -20,13 +20,13 @@ impl Signex {
     /// view to draw. Call after every move of a dragged panel.
     pub(crate) fn refresh_dock_drop_preview(&mut self) {
         let target = self
-            .document_state
+            .document_view
             .dock
             .floating
             .iter()
             .position(|fp| fp.dragging)
             .and_then(|index| self.dock_drop_target(index));
-        self.document_state.dock.drop_preview = target;
+        self.document_view.dock.drop_preview = target;
     }
 
     pub(super) fn handle_dock_floating_layout_message(
@@ -43,12 +43,12 @@ impl Signex {
                 self.close_all_context_menus();
                 let (x, y) = self.interaction_state.last_mouse_pos;
                 let kind = self
-                    .document_state
+                    .document_view
                     .dock
                     .panel_kinds(*position)
                     .get(*index)
                     .copied();
-                self.document_state.dock.tab_menu = kind.map(|kind| DockTabMenu {
+                self.document_view.dock.tab_menu = kind.map(|kind| DockTabMenu {
                     position: *position,
                     kind,
                     x,
@@ -61,11 +61,11 @@ impl Signex {
                 let target = self.dock_drop_target(index);
                 crate::diagnostics::log_debug(format!("[dock-back] fp={index} target={target:?}"));
                 if let Some(position) = target {
-                    self.document_state
+                    self.document_view
                         .dock
                         .update(DockMessage::DockFloatingTo(index, position));
                 }
-                self.document_state.dock.drop_preview = None;
+                self.document_view.dock.drop_preview = None;
                 true
             }
             _ => false,

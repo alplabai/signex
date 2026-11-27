@@ -104,6 +104,17 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `apply_layout_schematic` | Workspace layout: Schematic | window | — | — |
 | `attach_notebook_file` | Copy a file into the notebook as an attachment | design | — | — |
 | `autoplace_fields` | Autoplace fields | edit | — | `O` |
+| `block_add` | Add a block to a block diagram | edit | — | — |
+| `block_group` | Group blocks | edit | — | — |
+| `block_group_set` | Change a block group | edit | — | — |
+| `block_link` | Connect two blocks | edit | — | — |
+| `block_link_set` | Change a block connection | edit | — | — |
+| `block_port_add` | Add a port to a block | edit | — | — |
+| `block_port_remove` | Remove a port from a block | edit | — | — |
+| `block_remove` | Remove a block from a block diagram | edit | — | — |
+| `block_set` | Change a block of a block diagram | edit | — | — |
+| `block_ungroup` | Remove a block group | edit | — | — |
+| `block_unlink` | Remove a block connection | edit | — | — |
 | `board_status` | Board status counters | validation | — | — |
 | `bom_add_alternate` | Add an alternate part to a BOM line | design | — | — |
 | `bom_lines` | Read the bill of materials | file | — | — |
@@ -145,6 +156,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `edit_selected_symbol_in_symbol_editor` | Edit selected symbol in Symbol Editor | library | — | `Mod+E` |
 | `edit_text_in_place` | In-place edit selected text | edit | `F2` | — |
 | `edit_value` | Edit value | edit | — | `V` |
+| `export_block_diagram` | Export a block diagram as an SVG or PDF file | reports | — | — |
 | `export_notebook_pdf` | Export the Design Notebook as PDF | file | — | — |
 | `export_notebook_timeline` | Export a measurement timeline as a CSV file | reports | — | — |
 | `fast_grid_1` | Fast grid 1 | view | — | `Alt+1` |
@@ -172,6 +184,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `mirror_y` | Mirror along Y-axis | modify | `Y` | `Y` |
 | `move_object` | Move object | modify | `M M` | — |
 | `move_selection` | Move selection | modify | — | `M` |
+| `new_block_diagram` | New block diagram in the project | file | — | — |
 | `new_document` | New | file | `Mod+N` | `Mod+N` |
 | `new_project_with_profile` | New project from a profile | file | — | — |
 | `next_document_tab` | Next open document tab | window | `Ctrl+Tab` | — |
@@ -230,10 +243,12 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `project_set_variant_override` | Set a parameter value a variant gives a part of the project | design | — | — |
 | `project_set_version_control` | Turn commit on save on or off for the project | design | — | — |
 | `project_settings` | Read the settings of the project | design | — | — |
+| `query_block_diagram` | Query a block diagram | search | — | — |
 | `query_bom` | Query the priced BOM | design | — | — |
 | `query_library` | Query a library | library | — | — |
 | `query_net_ties` | Query net ties | file | — | — |
 | `query_pins` | Query pins | file | — | — |
+| `query_power_tree` | Query the project's power tree | design | — | — |
 | `query_rail_budget` | Query the project's rail budget | validation | — | — |
 | `read_document` | Read document | file | — | — |
 | `redo` | Redo | edit | `Mod+Shift+Z` (macOS), `Ctrl+Shift+Z`, `Ctrl+Y` | `Ctrl+Shift+Z`, `Mod+Shift+Z` (macOS), `Ctrl+Y` |
@@ -343,6 +358,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `flip_selected_x` | Flip selected x | modify | — | — |
 | `flip_selected_y` | Flip selected y | modify | — | — |
 | `force_annotate_all_schematics` | Force annotate all schematics | design | `Shift+Alt+A` | `Shift+Alt+A` |
+| `generate_block_diagram` | Generate a block diagram from the sheet hierarchy | design | — | — |
 | `go_to_net_partner` | Go to net partner on another sheet | navigation | — | — |
 | `highlight_net_under_cursor` | Highlight net under cursor | select | — | ``` |
 | `highlight_related_net_objects` | Highlight/select related net objects across sheets | select | `Alt+Click` | — |
@@ -405,6 +421,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `previous_highlighted_net_item` | Previous item on highlighted net | select | — | `Shift+Tab` |
 | `previous_sheet` | Previous sheet | navigation | — | `PageUp` |
 | `query_footprint_assignments` | List the footprint of every part | design | — | — |
+| `regenerate_block_diagram` | Regenerate the block diagram from the sheet hierarchy | design | — | — |
 | `remove_from_union` | Remove the selection from its union | edit | — | — |
 | `repair_pin_junctions` | Add a junction where a pin end touches a wire | validation | — | — |
 | `reset_schematic_designators` | Reset schematic designators | design | `T A E` | — |

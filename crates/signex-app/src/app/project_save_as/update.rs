@@ -114,14 +114,14 @@ impl Signex {
     /// offered it closes.
     pub(crate) fn open_save_project_as(&mut self, project: Option<ProjectId>) -> Task<Message> {
         let offered = matches!(
-            self.document_state
+            self.document_view
                 .error_notice
                 .as_ref()
                 .and_then(|n| n.action.as_ref()),
             Some(NoticeAction::SaveProjectAs { .. })
         );
         if offered {
-            self.document_state.error_notice = None;
+            self.document_view.error_notice = None;
         }
         self.interaction_state.editing_text = None;
         self.interaction_state.context_menu = None;

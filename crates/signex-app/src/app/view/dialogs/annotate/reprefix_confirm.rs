@@ -59,7 +59,7 @@ impl Signex {
             return container(Space::new()).boxed();
         };
         let i18n = self.ui_state.i18n.as_ref();
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
 
         let header_content: Element<'_, Message> = gr::titled_header(
             t!(i18n, ids::DIALOG_TITLE_REPREFIX).into_string(),
@@ -142,7 +142,7 @@ impl Signex {
                 ),
             ],
             Density::Regular,
-            &self.document_state.panel_ctx.tokens,
+            &self.document_view.panel_ctx.tokens,
             TS.body,
             i18n,
         )
@@ -151,7 +151,7 @@ impl Signex {
     /// The three short notes: one undo step, unsaved sheets, symbol matches.
     fn reprefix_notes<'a>(&'a self, confirm: &ReprefixConfirm) -> Element<'a, Message> {
         let i18n = self.ui_state.i18n.as_ref();
-        let muted = crate::styles::tokens::resolve(&self.document_state.panel_ctx.tokens).ink3;
+        let muted = crate::styles::tokens::resolve(&self.document_view.panel_ctx.tokens).ink3;
         let bullet = |line: Localized| -> Element<'a, Message> {
             row![
                 // raw: a bullet glyph, not language.
@@ -183,7 +183,7 @@ impl Signex {
     /// The caption over the list: how many changes it names.
     fn reprefix_caption<'a>(&'a self, confirm: &ReprefixConfirm) -> Element<'a, Message> {
         let i18n = self.ui_state.i18n.as_ref();
-        let faint = crate::styles::tokens::resolve(&self.document_state.panel_ctx.tokens).ink4;
+        let faint = crate::styles::tokens::resolve(&self.document_view.panel_ctx.tokens).ink4;
         let caption = if confirm.more > 0 {
             t!(
                 i18n,
@@ -211,7 +211,7 @@ impl Signex {
     /// a pill for a part matched by symbol, and a last row for the rest.
     fn reprefix_table<'a>(&'a self, confirm: &ReprefixConfirm) -> Element<'a, Message> {
         let i18n = self.ui_state.i18n.as_ref();
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let r = crate::styles::tokens::resolve(tokens);
         let ink = crate::styles::ti(tokens.text);
         let mono = |s: String, color: iced::Color| -> Element<'a, Message> {
@@ -291,7 +291,7 @@ impl Signex {
     /// The parts left as they are: one count pill per reason.
     fn reprefix_skips<'a>(&'a self, confirm: &ReprefixConfirm) -> Element<'a, Message> {
         let i18n = self.ui_state.i18n.as_ref();
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let faint = crate::styles::tokens::resolve(tokens).ink4;
         let mut pills: Row<Element<'a, Message>> =
             Row::new().spacing(SP.s).align_y(Alignment::Center);

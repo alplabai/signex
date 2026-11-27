@@ -222,7 +222,7 @@ impl Signex {
     pub(crate) fn raise_board_tool_form(&mut self) -> Task<Message> {
         let armed = self.own_board_tool().is_some_and(|s| has_form(s.tool));
         let kind = crate::panels::PanelKind::Properties;
-        let docked = self.document_state.dock.locate(kind).is_some();
+        let docked = self.document_view.dock.locate(kind).is_some();
         if !armed || (!docked && self.is_panel_open(kind)) {
             return Task::none();
         }

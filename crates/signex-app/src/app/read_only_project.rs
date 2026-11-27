@@ -284,7 +284,7 @@ impl Signex {
             refusal.project, refusal.source
         ));
         let detail = detail.arg("project", refusal.project.clone());
-        self.document_state.error_notice =
+        self.document_view.error_notice =
             Some(notice(detail).with_system(refusal.source.to_string()));
         true
     }

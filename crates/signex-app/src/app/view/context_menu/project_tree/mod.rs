@@ -163,7 +163,7 @@ impl Signex {
         &self,
         ctx: &crate::app::ProjectTreeContextMenuState,
     ) -> super::placement::MenuCard<'_> {
-        let panel_ctx = &self.document_state.panel_ctx;
+        let panel_ctx = &self.document_view.panel_ctx;
         // No entries (an empty-area click, or a row that no longer exists)
         // renders an empty placeholder so the overlay layer above has
         // something to render into.
@@ -189,7 +189,7 @@ impl Signex {
         // window, else the main window's.
         let panel_ctx = ctx
             .window
-            .map_or(&self.document_state.panel_ctx, |w| self.panel_ctx_for(w));
+            .map_or(&self.document_view.panel_ctx, |w| self.panel_ctx_for(w));
         let i18n = &*self.ui_state.i18n;
 
         // An empty-area click offers New Project (#2232), the dialog every

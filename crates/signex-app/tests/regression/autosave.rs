@@ -788,7 +788,7 @@ fn restoring_into_a_closed_tab_says_so_and_keeps_the_copy() {
     let (f, mut next, _) = next_run_opens_with_a_newer_copy();
     next.document_state.tabs.clear();
     answer(&mut next, signex_app::autosave::RecoveryChoice::Restore);
-    assert!(next.document_state.error_notice.is_some());
+    assert!(next.document_view.error_notice.is_some());
     assert!(sidecar_of(&f).exists());
 }
 
@@ -798,7 +798,7 @@ fn restore_over_edits_made_while_the_prompt_was_open_is_refused() {
     let earlier = std::fs::read(sidecar_of(&f)).unwrap();
     next.document_state.mark_document_dirty(&f.doc);
     answer(&mut next, signex_app::autosave::RecoveryChoice::Restore);
-    assert!(next.document_state.error_notice.is_some());
+    assert!(next.document_view.error_notice.is_some());
     assert!(sidecar_of(&f).exists(), "the copy is kept");
 
     // Neither version may be lost: the copy is offered again and autosave
@@ -823,7 +823,7 @@ fn a_restore_that_cannot_read_the_copy_lets_autosave_resume() {
     let broken = b"this is not a schematic".to_vec();
     std::fs::write(sidecar_of(&f), &broken).unwrap();
     answer(&mut next, signex_app::autosave::RecoveryChoice::Restore);
-    assert!(next.document_state.error_notice.is_some());
+    assert!(next.document_view.error_notice.is_some());
 
     edit_and_tick(&mut next, &f.doc);
     assert!(
@@ -857,7 +857,7 @@ fn a_restore_into_a_tab_that_cannot_be_activated_keeps_and_re_offers_the_copy() 
     // The tab goes away while the copy is read; the engine stays parked.
     next.document_state.tabs.clear();
     complete(&mut next, read);
-    assert!(next.document_state.error_notice.is_some());
+    assert!(next.document_view.error_notice.is_some());
     assert!(sidecar_of(&f).exists(), "the copy is kept");
     assert!(
         next.document_state.autosave.current_offer().is_some(),
@@ -955,7 +955,7 @@ fn restoring_after_the_tab_was_closed_keeps_the_copy_safe_from_autosave() {
     assert!(next.document_state.engines.contains_key(&f.doc));
 
     answer(&mut next, signex_app::autosave::RecoveryChoice::Restore);
-    assert!(next.document_state.error_notice.is_some());
+    assert!(next.document_view.error_notice.is_some());
     assert!(
         next.document_state.autosave.current_offer().is_some(),
         "the copy is offered again for when the document is reopened"
@@ -1031,7 +1031,7 @@ fn a_restore_of_a_copy_that_is_gone_resumes_autosave_and_says_so() {
     answer(&mut next, signex_app::autosave::RecoveryChoice::Restore);
 
     assert!(next.document_state.autosave.current_offer().is_none());
-    let notice = next.document_state.error_notice.as_ref().expect("notice");
+    let notice = next.document_view.error_notice.as_ref().expect("notice");
     assert!(
         notice.detail.render_en_us().contains("is gone"),
         "the dialog says the copy is gone: {}",

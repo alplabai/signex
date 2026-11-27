@@ -258,7 +258,7 @@ fn assert_replace_refused(app: &mut Signex) {
     let since = signex_app::diagnostics::newest_entry_id();
     let task = app.update(Message::FindReplaceMsg(FindReplaceMsg::ReplaceAll));
     let notice = app
-        .document_state
+        .document_view
         .error_notice
         .clone()
         .expect("a Replace Refused card");

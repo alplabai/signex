@@ -99,7 +99,7 @@ fn apply(app: &mut Signex, field: TitleBlockField, text: &str) {
 
 fn shown_title(app: &mut Signex) -> String {
     app.refresh_panel_ctx();
-    shown_title_block_value(&app.document_state.panel_ctx, TitleBlockField::Title)
+    shown_title_block_value(&app.document_view.panel_ctx, TitleBlockField::Title)
 }
 
 #[test]
@@ -121,7 +121,7 @@ fn a_title_typed_in_parameters_shows_and_is_saved_to_the_sheet() {
     );
     assert_eq!(shown_title(&mut app), "dcdc", "the applied value shows");
     assert_eq!(sheet_title(&app, &path).as_deref(), Some("dcdc"));
-    let in_panel = &app.document_state.panel_ctx.title_block;
+    let in_panel = &app.document_view.panel_ctx.title_block;
     assert_eq!(in_panel.get("title").map(String::as_str), Some("dcdc"));
 
     send(&mut app, Message::Edit(EditMsg::Undo));
@@ -143,7 +143,7 @@ fn a_title_typed_in_parameters_shows_and_is_saved_to_the_sheet() {
 fn the_built_in_rows_hold_the_sheets_resolved_values() {
     let (mut app, _path, _recorder) = app_on_sheet();
     app.refresh_panel_ctx();
-    let rows = &app.document_state.panel_ctx.builtin_parameters;
+    let rows = &app.document_view.panel_ctx.builtin_parameters;
     let value = |wanted: BuiltinParameter| {
         rows.iter()
             .find(|(parameter, _)| *parameter == wanted)
@@ -178,7 +178,7 @@ fn each_new_field_edits_saves_reopens_and_reads_in_a_note() {
     let special = app.special_strings_for_path(&path).expect("the open sheet");
     let saved = save_and_reopen(&mut app, &recorder);
     for field in NEW_FIELDS {
-        let ctx = &app.document_state.panel_ctx;
+        let ctx = &app.document_view.panel_ctx;
         assert_eq!(shown_title_block_value(ctx, field), value(field));
         let stored = saved.title_block.get(field.key()).cloned();
         assert_eq!(stored, Some(value(field)), "{field:?}");
@@ -212,7 +212,7 @@ fn the_computed_tokens_resolve_in_a_note_and_their_rows() {
     ] {
         assert_eq!(special.resolve_text(note), value, "{note}");
     }
-    let rows = &app.document_state.panel_ctx.builtin_parameters;
+    let rows = &app.document_view.panel_ctx.builtin_parameters;
     for (parameter, value) in [
         (BuiltinParameter::CurrentDate, today.as_str()),
         (BuiltinParameter::CurrentTime, time.as_str()),
@@ -236,7 +236,7 @@ fn an_empty_date_shows_today_and_a_typed_one_round_trips() {
     let today = now.format("%Y-%m-%d").to_string();
     let special = app.special_strings_for_path(&path).expect("the open sheet");
     assert_eq!(special.resolve_text("${Date}"), today);
-    let ctx = &app.document_state.panel_ctx;
+    let ctx = &app.document_view.panel_ctx;
     assert_eq!(shown_title_block_value(ctx, TitleBlockField::Date), "");
     let saved = save_and_reopen(&mut app, &recorder);
     let date = saved.title_block.get("date");
@@ -291,7 +291,7 @@ fn shown_in_row(app: &mut Signex, name: &str) -> String {
     use crate::layout_probe::{lay_out_inputs, lay_out_texts};
     use iced::{Size, Widget};
     app.refresh_panel_ctx();
-    let ctx = &app.document_state.panel_ctx;
+    let ctx = &app.document_view.panel_ctx;
     let window = Size::new(320.0, 4000.0);
     let view = || super::view_properties_parameters(ctx, iced::Color::BLACK).boxed();
     let texts = lay_out_texts(view(), window);
@@ -321,7 +321,7 @@ fn an_empty_sheet_variable_reads_not_set() {
     variables(&mut app, SheetVariableMsg::NewNameTyped("VIN".into()));
     variables(&mut app, SheetVariableMsg::Added);
     app.refresh_panel_ctx();
-    let stored = app.document_state.panel_ctx.sheet_variables.get("VIN");
+    let stored = app.document_view.panel_ctx.sheet_variables.get("VIN");
     assert_eq!(stored.map(String::as_str), Some(""), "added with no value");
     let not_set = signex_i18n::I18n::en_us()
         .message_plain(signex_i18n::ids::PROPERTIES_PARAMETERS_NOT_SET, &[]);
@@ -369,7 +369,7 @@ fn sheet_variable_rows_draw_a_result_and_an_error_line() {
     add_variable(&mut app, "RATIO", "=VOUT/VIN");
     add_variable(&mut app, "ILIM", "=VIN/RSNS");
     app.refresh_panel_ctx();
-    let ctx = &app.document_state.panel_ctx;
+    let ctx = &app.document_view.panel_ctx;
     let view = super::view_properties_parameters(ctx, iced::Color::BLACK).boxed();
     let shown: Vec<String> = lay_out_texts(view, Size::new(320.0, 4000.0))
         .into_iter()

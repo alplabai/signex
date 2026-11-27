@@ -43,7 +43,7 @@ impl Signex {
     /// The Sheets section body: the links, then one checkbox per sheet.
     pub(super) fn view_pdf_sheets<'a>(&'a self, preview: &'a PreviewState) -> Element<'a, Message> {
         let i18n = self.ui_state.i18n.as_ref();
-        let look = Look::of(&self.document_state.panel_ctx.tokens);
+        let look = Look::of(&self.document_view.panel_ctx.tokens);
         if preview.sheet_files.is_empty() {
             return caption(t!(i18n, ids::PDF_NO_SHEETS), &look);
         }
@@ -88,7 +88,7 @@ impl Signex {
     /// which takes input only for Specific.
     pub(super) fn view_pdf_pages<'a>(&'a self, preview: &'a PreviewState) -> Element<'a, Message> {
         let i18n = self.ui_state.i18n.as_ref();
-        let look = Look::of(&self.document_state.panel_ctx.tokens);
+        let look = Look::of(&self.document_view.panel_ctx.tokens);
         let current = match preview.pdf_options.page_range {
             PageRange::All => PagesChoice::All,
             PageRange::Current => PagesChoice::Current,
@@ -113,7 +113,7 @@ impl Signex {
                 &preview.specific_page_input,
             )
             .is_none();
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let field = text_input(
             t!(i18n, ids::PLACEHOLDER_PDF_PAGE),
             pages_field_text(

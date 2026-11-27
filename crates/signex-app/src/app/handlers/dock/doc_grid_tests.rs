@@ -27,7 +27,7 @@ fn a_typed_pitch_applies_only_on_enter() {
     assert_eq!(app.ui_state.visible_grid_mm, before, "not per keystroke");
     send(&mut app, DocGridMsg::DraftSubmitted(DocGridField::Visible));
     assert_eq!(app.ui_state.visible_grid_mm, 3.0);
-    assert_eq!(app.document_state.panel_ctx.visible_grid_draft, None);
+    assert_eq!(app.document_view.panel_ctx.visible_grid_draft, None);
 }
 
 #[test]
@@ -38,7 +38,7 @@ fn refused_text_stays_and_the_pitch_does_not_change() {
     send(&mut app, DocGridMsg::DraftSubmitted(DocGridField::Snap));
     assert_eq!(app.ui_state.grid_size_mm, before);
     assert_eq!(
-        app.document_state.panel_ctx.snap_grid_draft.as_deref(),
+        app.document_view.panel_ctx.snap_grid_draft.as_deref(),
         Some("abc")
     );
 }
@@ -50,7 +50,7 @@ fn picking_a_row_drops_the_typed_text() {
     let _ = app.update(Message::Dock(DockMessage::Panel(PanelMsg::SetGridSize(
         2.54,
     ))));
-    assert_eq!(app.document_state.panel_ctx.snap_grid_draft, None);
+    assert_eq!(app.document_view.panel_ctx.snap_grid_draft, None);
 }
 
 /// Text typed in one unit is never read in another.
@@ -61,5 +61,5 @@ fn changing_the_unit_drops_the_typed_text() {
     let _ = app.update(Message::Dock(DockMessage::Panel(PanelMsg::SetUnit(
         Unit::Mil,
     ))));
-    assert_eq!(app.document_state.panel_ctx.visible_grid_draft, None);
+    assert_eq!(app.document_view.panel_ctx.visible_grid_draft, None);
 }

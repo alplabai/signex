@@ -55,7 +55,7 @@ fn symbol_app() -> (Signex, PathBuf) {
 }
 
 fn shown(app: &Signex) -> &signex_app::panels::SymbolEditorPanelContext {
-    app.document_state
+    app.document_view
         .panel_ctx
         .symbol_editor
         .as_ref()

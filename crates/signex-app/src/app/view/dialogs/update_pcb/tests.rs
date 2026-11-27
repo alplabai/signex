@@ -173,7 +173,7 @@ fn the_redesign_builds_with_every_problem_and_filter() {
         Some(RowFilter::Action(RowAction::Change)),
     ];
     for theme in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
-        app.document_state.panel_ctx.tokens = theme_tokens(theme);
+        app.document_view.panel_ctx.tokens = theme_tokens(theme);
         for (n, filter) in filters.into_iter().enumerate() {
             let mut state = UpdatePcbState::new(
                 project,
@@ -261,7 +261,7 @@ fn back_annotate_and_reannotate_build_in_both_themes() {
     };
     let (mut app, _t) = crate::app::Signex::new();
     for theme in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
-        app.document_state.panel_ctx.tokens = theme_tokens(theme);
+        app.document_view.panel_ctx.tokens = theme_tokens(theme);
         for ticked in [false, true] {
             let mut state = BackAnnotateState::new(
                 ProjectId::test_id(1),

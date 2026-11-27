@@ -115,7 +115,7 @@ impl Signex {
         zoom: f64,
         has_selection: bool,
     ) -> (Element<'_, Message>, (f32, f32)) {
-        let panel_ctx = &self.document_state.panel_ctx;
+        let panel_ctx = &self.document_view.panel_ctx;
         let entries = zoom_preset_entries(&self.ui_state.i18n, zoom, has_selection);
         let metrics = MenuMetrics::GRAPHITE;
         let width = metrics.fitted_width(&entries, f32::MAX, &panel_ctx.ui_font_name);

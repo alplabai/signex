@@ -79,9 +79,9 @@ impl Signex {
             ModalId::PassiveCalculator => ui.passive_calculator_open,
             ModalId::FirstRunTour => ui.first_run_tour_open,
             ModalId::CreateChildSheet => ui.create_child_sheet_confirm.is_some(),
-            ModalId::ErrorNotice => self.document_state.error_notice.is_some(),
+            ModalId::ErrorNotice => self.document_view.error_notice.is_some(),
             ModalId::NetlistIncompletePrompt => {
-                self.document_state.netlist_incomplete_prompt.is_some()
+                self.document_view.netlist_incomplete_prompt.is_some()
             }
             ModalId::AutosaveRecovery => self.document_state.autosave.current_offer().is_some(),
             ModalId::ProjectCloseConfirm => ui.project_close_confirm.is_some(),

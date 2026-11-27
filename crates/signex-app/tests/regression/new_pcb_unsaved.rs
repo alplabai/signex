@@ -67,7 +67,7 @@ fn unsaved_project(dir: &Path) -> Signex {
 fn add_new_pcb(app: &mut Signex) {
     // A grid pick refreshes the tree, so the project row exists.
     send(app, Message::Ui(UiMsg::GridPickerSelect(1.0)));
-    let key = signex_widgets::tree_view::key_of(&app.document_state.panel_ctx.project_tree, &[0])
+    let key = signex_widgets::tree_view::key_of(&app.document_view.panel_ctx.project_tree, &[0])
         .expect("the project row");
     send(
         app,
@@ -90,12 +90,9 @@ fn tree_row<'a>(nodes: &'a [TreeNode], key: &str) -> Option<&'a TreeNode> {
 }
 
 fn board_row(app: &Signex) -> TreeNode {
-    tree_row(
-        &app.document_state.panel_ctx.project_tree,
-        "Untitled.snxpcb",
-    )
-    .cloned()
-    .expect("the board row")
+    tree_row(&app.document_view.panel_ctx.project_tree, "Untitled.snxpcb")
+        .cloned()
+        .expect("the board row")
 }
 
 #[test]
@@ -114,7 +111,7 @@ fn a_new_board_lists_as_unsaved_until_save_writes_it() {
         app.document_state.tabs.iter().any(|tab| tab.path == board),
         "the board opens in its tab"
     );
-    let info = &app.document_state.panel_ctx.projects[0];
+    let info = &app.document_view.panel_ctx.projects[0];
     assert_eq!(info.pcb_file.as_deref(), Some("Untitled.snxpcb"));
     assert!(!info.pcb_file_missing, "an unsaved board is not missing");
     assert!(info.pcb_file_dirty, "it is listed as unsaved");
@@ -126,7 +123,7 @@ fn a_new_board_lists_as_unsaved_until_save_writes_it() {
 
     assert!(board.exists(), "Save wrote the board");
     assert!(!app.document_state.is_document_dirty(&board));
-    let info = &app.document_state.panel_ctx.projects[0];
+    let info = &app.document_view.panel_ctx.projects[0];
     assert!(!info.pcb_file_missing && !info.pcb_file_dirty);
     let row = board_row(&app);
     assert_eq!(row.label, "Untitled.snxpcb");
@@ -142,6 +139,6 @@ fn a_listed_board_nothing_holds_is_missing() {
     app.document_state.projects[0].data.pcb_file = Some("Untitled.snxpcb".to_string());
     send(&mut app, Message::Ui(UiMsg::GridPickerSelect(1.0)));
 
-    assert!(app.document_state.panel_ctx.projects[0].pcb_file_missing);
+    assert!(app.document_view.panel_ctx.projects[0].pcb_file_missing);
     assert_eq!(board_row(&app).label, "Untitled.snxpcb  (missing)");
 }

@@ -84,7 +84,7 @@ impl Signex {
             self.document_state.forget_parked_mark(&to);
             self.rekey_page_setup(&old_path, &to);
             // The new file is not what any sheet symbol places.
-            self.document_state.tab_placements.forget(&old_path);
+            self.document_view.tab_placements.forget(&old_path);
             self.rekey_undocked_windows(&old_path, &to);
         }
         // Write back only a change `finish` made: a dirty mark re-written

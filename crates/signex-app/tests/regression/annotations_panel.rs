@@ -56,7 +56,7 @@ fn panel(app: &mut Signex, msg: AnnotationsMsg) {
 }
 
 fn view(app: &Signex) -> &AnnotationsView {
-    &app.document_state.panel_ctx.annotations
+    &app.document_view.panel_ctx.annotations
 }
 
 /// `YYYY-MM-DD` `days_ago` days before today (UTC), as the panel counts.
@@ -225,7 +225,7 @@ fn titles(view: &AnnotationsView) -> Vec<(String, Vec<String>)> {
 fn the_view_row_opens_the_panel_and_groups_each_files_blocks_newest_first() {
     let (_tmp, app, _b) = opened();
     assert!(
-        app.document_state
+        app.document_view
             .dock
             .locate(PanelKind::Annotations)
             .is_some(),
@@ -268,7 +268,7 @@ fn what_a_notebook_could_not_be_read_for_reaches_messages_with_file_and_line() {
     let _ = signex_app::diagnostics::init_logging();
     let (_tmp, app, _b) = opened();
     let lines: Vec<String> = app
-        .document_state
+        .document_view
         .panel_ctx
         .diagnostics
         .iter()
@@ -419,7 +419,7 @@ fn the_title_bar_refresh_reads_the_notebook_files_again() {
     let (tmp, mut app, _b) = opened();
     assert_eq!(view(&app).total, 5);
     let press =
-        signex_app::panels::title_actions(PanelKind::Annotations, &app.document_state.panel_ctx)
+        signex_app::panels::title_actions(PanelKind::Annotations, &app.document_view.panel_ctx)
             .into_iter()
             .next()
             .expect("a listed panel has Refresh")

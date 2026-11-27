@@ -547,7 +547,7 @@ mod tests {
         let (app, _task) = crate::app::Signex::new();
         let file = signex_library::SymbolFile::from_symbol(signex_library::Symbol::empty("s"));
         let editor = SymbolDocument::new(std::path::PathBuf::from("s.snxsym"), file);
-        let panel_ctx = &app.document_state.panel_ctx;
+        let panel_ctx = &app.document_view.panel_ctx;
         let build = |dpi| symbol_canvas(&editor, panel_ctx, LibraryDisplaySettings::default(), dpi);
         assert_eq!(build(1.0).device_px_per_logical_px, 1.0);
         assert_eq!(build(2.0).device_px_per_logical_px, 2.0);

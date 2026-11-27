@@ -411,9 +411,9 @@ fn arming_a_board_tool_brings_properties_to_the_front() {
         "place_board_string",
     ] {
         app.end_board_tool();
-        app.document_state.dock.show_panel(PanelKind::Messages);
+        app.document_view.dock.show_panel(PanelKind::Messages);
         run(&mut app, command);
-        let front = app.document_state.dock.is_frontmost(PanelKind::Properties);
+        let front = app.document_view.dock.is_frontmost(PanelKind::Properties);
         assert!(front, "{command}: Properties is in front");
     }
 }

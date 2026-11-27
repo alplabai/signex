@@ -23,7 +23,7 @@ fn set_row_documents(app: &mut Signex, library_id: uuid::Uuid, row_id: uuid::Uui
 }
 
 fn documents(app: &Signex) -> Vec<(String, String)> {
-    app.document_state
+    app.document_view
         .panel_ctx
         .selection_info
         .iter()

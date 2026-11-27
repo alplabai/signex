@@ -60,7 +60,7 @@ fn findings() -> Vec<ErcDiagnosticEntry> {
 
 fn context() -> PanelContext {
     let (app, _boot) = crate::app::Signex::new();
-    app.document_state.panel_ctx.clone()
+    app.document_view.panel_ctx.clone()
 }
 
 fn texts(ctx: &PanelContext) -> Vec<String> {

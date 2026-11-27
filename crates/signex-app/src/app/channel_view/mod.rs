@@ -28,7 +28,7 @@ impl Signex {
         is_main: bool,
         document: Element<'a, Message>,
     ) -> Element<'a, Message> {
-        let ctx = &self.document_state.panel_ctx;
+        let ctx = &self.document_view.panel_ctx;
         let Some(view) = ctx.compiled_design.strip.as_ref().filter(|_| is_main) else {
             return document;
         };
@@ -86,7 +86,7 @@ mod tests {
 
     fn context(theme: ThemeId) -> PanelContext {
         let (app, _boot) = crate::app::Signex::new();
-        let mut ctx = app.document_state.panel_ctx.clone();
+        let mut ctx = app.document_view.panel_ctx.clone();
         ctx.tokens = theme_tokens(theme);
         ctx.theme_id = theme;
         ctx

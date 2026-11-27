@@ -61,7 +61,7 @@ fn tabs_for(app: &Signex, path: &Path) -> usize {
 }
 
 fn logged(app: &Signex, needle: &str) -> bool {
-    app.document_state
+    app.document_view
         .panel_ctx
         .diagnostics
         .iter()
@@ -85,7 +85,7 @@ fn a_tree_schematic_opens_only_when_its_read_completes() {
     assert!(!app.document_state.is_document_dirty(&path));
     assert!(app.document_state.engines.contains_key(&path));
     assert!(!app.document_state.pending_opens.contains(&path));
-    assert!(app.document_state.error_notice.is_none());
+    assert!(app.document_view.error_notice.is_none());
 }
 
 #[test]
@@ -113,7 +113,7 @@ fn a_corrupt_tree_schematic_logs_the_reason_before_the_path_and_opens_nothing() 
     assert!(app.document_state.tabs.is_empty(), "no half-opened tab");
     assert!(!app.document_state.pending_opens.contains(&path));
     assert!(
-        app.document_state.error_notice.is_none(),
+        app.document_view.error_notice.is_none(),
         "log only, as before"
     );
     assert!(logged(&app, &format!("parse schematic {}", path.display())));
@@ -240,7 +240,7 @@ fn a_tree_symbol_opens_on_completion_and_a_corrupt_one_raises_the_card() {
     run_task(&mut app, task);
     assert_eq!(tabs_for(&app, &bad), 0, "no half-opened tab");
     assert!(!app.document_state.symbol_editors.contains_key(&bad));
-    let card = app.document_state.error_notice.as_ref().expect("card");
+    let card = app.document_view.error_notice.as_ref().expect("card");
     let detail = card.detail.render_en_us();
     assert!(
         detail.starts_with(&format!("could not parse {}", bad.display())),

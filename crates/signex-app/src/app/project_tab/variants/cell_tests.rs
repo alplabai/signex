@@ -22,7 +22,7 @@ fn the_alternate_and_the_value_cells_name_what_lite_sets() {
     for theme in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
         let (mut app, id, _dir) = app();
         open_manager(&mut app, id);
-        app.document_state.panel_ctx.tokens = theme_tokens(theme);
+        app.document_view.panel_ctx.tokens = theme_tokens(theme);
         let r1 = [PartRef::new("R1", None)];
         let alternate = alternate_parameters(Some("RC0402FR-071KL".into()), None, None);
         let command = variant_parameters_command("Lite", &r1, alternate).expect("one part");

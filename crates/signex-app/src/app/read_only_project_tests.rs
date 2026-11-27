@@ -51,7 +51,7 @@ fn a_read_only_project_save_is_refused_with_its_own_sentence() {
     );
 
     app.report_save_failure("Failed to save project file", &error);
-    let notice = app.document_state.error_notice.as_ref().expect("card");
+    let notice = app.document_view.error_notice.as_ref().expect("card");
     let detail = plain(&notice.detail.render_en_us());
     assert!(
         detail.contains("'ProjectA'")
@@ -283,20 +283,20 @@ fn add_new_in_a_read_only_project_is_refused_with_a_card() {
     let (mut app, id, _) = read_only_workspace();
     let sheet = PathBuf::from("/ro/Added.snxsch");
     assert!(app.refuse_add_in_read_only_project(id, &sheet));
-    let notice = app.document_state.error_notice.as_ref().expect("card");
+    let notice = app.document_view.error_notice.as_ref().expect("card");
     let detail = plain(&notice.detail.render_en_us());
     assert!(
         detail.contains("'ProjectA'") && detail.contains("Added.snxsch was not created"),
         "{detail}"
     );
 
-    app.document_state.error_notice = None;
+    app.document_view.error_notice = None;
     app.document_state.projects[0]
         .data
         .unknown
         .newer_minor_source = None;
     assert!(!app.refuse_add_in_read_only_project(id, &sheet));
-    assert!(app.document_state.error_notice.is_none());
+    assert!(app.document_view.error_notice.is_none());
 }
 
 #[test]

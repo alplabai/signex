@@ -236,7 +236,7 @@ fn the_per_browser_delete_confirm_fills_its_window_on_the_theme_surface() {
     for theme_id in [ThemeId::GraphiteDark, ThemeId::GraphiteLight] {
         let (mut app, _main, [a, _b]) = two_browsers();
         app.ui_state.theme_id = theme_id;
-        app.document_state.panel_ctx.tokens = app.tokens_for(theme_id);
+        app.document_view.panel_ctx.tokens = app.tokens_for(theme_id);
         let _ = app.sync_detached_modals();
         let id = window_for(&app, &a);
         let size = crate::app::handlers::erc::modal_size(ModalId::LibraryDeleteConfirm);
@@ -255,7 +255,7 @@ fn the_per_browser_delete_confirm_fills_its_window_on_the_theme_surface() {
             "{theme_id:?}: {} px short",
             size.width - right
         );
-        let paper = crate::styles::ti(app.document_state.panel_ctx.tokens.paper);
+        let paper = crate::styles::ti(app.document_view.panel_ctx.tokens.paper);
         assert_eq!(
             app.theme(id)
                 .expect("theme")

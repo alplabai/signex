@@ -160,7 +160,7 @@ fn the_pre_placement_form_sets_text_rotation_size_and_justification() {
     pre.font_size_pt = 12;
     pre.justify_h = HAlign::Right;
     pre.justify_v = VAlign::Top;
-    app.document_state.panel_ctx.pre_placement = Some(pre);
+    app.document_view.panel_ctx.pre_placement = Some(pre);
     click(&mut app, OFF_GRID);
     let label = &doc(&app).labels[0];
     assert_eq!(label.text, "D0");
@@ -171,14 +171,14 @@ fn the_pre_placement_form_sets_text_rotation_size_and_justification() {
         (HAlign::Right, VAlign::Top)
     );
     // The repeat bookkeeping steps the form's text for the next click.
-    let next = app.document_state.panel_ctx.pre_placement.as_ref().unwrap();
+    let next = app.document_view.panel_ctx.pre_placement.as_ref().unwrap();
     assert_eq!(next.label_text, "D1");
 }
 
 #[test]
 fn a_text_click_places_the_form_text_and_returns_to_select() {
     let mut app = app_with_tool(Tool::Text);
-    app.document_state.panel_ctx.pre_placement = Some(form(PrePlacementKind::TextNote, "Note"));
+    app.document_view.panel_ctx.pre_placement = Some(form(PrePlacementKind::TextNote, "Note"));
     click(&mut app, OFF_GRID);
     let note = &doc(&app).text_notes[0];
     assert_eq!((note.text.as_str(), note.position), ("Note", on_grid()));
@@ -270,7 +270,7 @@ fn shape_tools_place_a_drawing_with_the_form_width() {
     let mut pre = form(PrePlacementKind::Rectangle, "");
     pre.shape_width_mm = 0.4;
     pre.shape_fill = FillType::Outline;
-    app.document_state.panel_ctx.pre_placement = Some(pre);
+    app.document_view.panel_ctx.pre_placement = Some(pre);
     click(&mut app, OFF_GRID);
     click(&mut app, (30.4, 30.4));
     match &doc(&app).drawings[0] {
@@ -320,7 +320,7 @@ fn place_label_at_matches_a_label_click() {
         app.interaction_state.pending_port = Some((LabelType::Global, "input".into()));
         let mut pre = form(PrePlacementKind::GlobalPort, "CLK");
         pre.rotation = 180.0;
-        app.document_state.panel_ctx.pre_placement = Some(pre);
+        app.document_view.panel_ctx.pre_placement = Some(pre);
     };
     assert_method_matches_click(Tool::Label, setup, |app, at| {
         let spec = app.label_spec_from_form();
@@ -331,7 +331,7 @@ fn place_label_at_matches_a_label_click() {
 #[test]
 fn place_text_at_matches_a_text_click() {
     let setup = |app: &mut Signex| {
-        app.document_state.panel_ctx.pre_placement = Some(form(PrePlacementKind::TextNote, "Note"));
+        app.document_view.panel_ctx.pre_placement = Some(form(PrePlacementKind::TextNote, "Note"));
     };
     assert_method_matches_click(Tool::Text, setup, |app, at| {
         assert!(app.place_text_at(at, "Note".into()));
@@ -395,7 +395,7 @@ fn shape_placements_match_their_clicks() {
         let mut pre = form(PrePlacementKind::Rectangle, "");
         pre.shape_width_mm = 0.4;
         pre.shape_fill = FillType::Outline;
-        app.document_state.panel_ctx.pre_placement = Some(pre);
+        app.document_view.panel_ctx.pre_placement = Some(pre);
     };
     let second = (30.4, 30.4);
     assert_method_matches_clicks(Tool::Line, &[OFF_GRID, second], form_shape, |app, at| {

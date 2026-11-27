@@ -9,7 +9,7 @@ use std::path::PathBuf;
 //
 // Drives `apply_footprint_clipboard_op` via the public Message
 // surface so the split-borrow at dispatch/library.rs:3499 is
-// exercised end-to-end (DocumentState.pad_clipboard + the path-keyed
+// exercised end-to-end (DocumentViewState.pad_clipboard + the path-keyed
 // FootprintDocument mutated together).
 // ─────────────────────────────────────────────────────────────────
 
@@ -56,7 +56,7 @@ fn v026e_copy_with_no_selection_is_noop() {
         msg: PrimitiveEdit::Footprint(FootprintEditorMsg::CopyPad),
     }));
     assert!(
-        app.document_state.pad_clipboard.is_none(),
+        app.document_view.pad_clipboard.is_none(),
         "Copy with no selection must leave clipboard untouched"
     );
 }
@@ -76,7 +76,7 @@ fn v026e_copy_populates_clipboard_with_selected_pad() {
         msg: PrimitiveEdit::Footprint(FootprintEditorMsg::CopyPad),
     }));
     let clip = app
-        .document_state
+        .document_view
         .pad_clipboard
         .as_ref()
         .expect("Copy must populate the clipboard");
@@ -111,7 +111,7 @@ fn v026e_cut_removes_pad_populates_clipboard_and_pushes_history() {
     }));
     // Clipboard now holds the cut pad.
     let clip = app
-        .document_state
+        .document_view
         .pad_clipboard
         .as_ref()
         .expect("Cut must populate the clipboard");
@@ -142,7 +142,7 @@ fn v026e_paste_at_cursor_with_bumped_designator() {
     }
     // Stash a pad in the clipboard directly — Paste reads it, no
     // need to drive Copy first.
-    app.document_state.pad_clipboard = Some(EditorPad::new_default("99".into(), (0.0, 0.0)));
+    app.document_view.pad_clipboard = Some(EditorPad::new_default("99".into(), (0.0, 0.0)));
     let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
         path: path.clone(),
         msg: PrimitiveEdit::Footprint(FootprintEditorMsg::PastePad),
@@ -188,7 +188,7 @@ fn v026e_paste_resets_sketch_entity_links() {
         SketchEntityId::new(),
         SketchEntityId::new(),
     ]);
-    app.document_state.pad_clipboard = Some(template);
+    app.document_view.pad_clipboard = Some(template);
     let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
         path: path.clone(),
         msg: PrimitiveEdit::Footprint(FootprintEditorMsg::PastePad),
@@ -209,7 +209,7 @@ fn v026e_paste_resets_sketch_entity_links() {
 fn v026e_paste_with_empty_clipboard_is_noop() {
     use signex_app::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
     let (mut app, path) = fixture_footprint_with_pads("v026e-paste-empty", 1);
-    assert!(app.document_state.pad_clipboard.is_none());
+    assert!(app.document_view.pad_clipboard.is_none());
     let pad_count_before = app
         .document_state
         .footprint_editors

@@ -147,7 +147,10 @@ greyed with no project open; see [DRC_RULES.md](DRC_RULES.md#rules-manager), #23
 then, after a separator, Create Sheet Symbol From Sheet... and Synchronize
 Sheet Entries and Ports..., greyed with no sheet in view (see
 [Bottom-up hierarchy](#bottom-up-hierarchy), #1276). **File ▸ New** has Schematic (`new_schematic_sheet`) and PCB
-(`new_pcb_document`), each opening its setup dialog (#2232). **File ▸
+(`new_pcb_document`), each opening its setup dialog (#2232), and Block
+Diagram (`new_block_diagram`, mockup row 171, #2796): an empty `.snxblk`
+named after the project, in its folder, opened unsaved; greyed with no
+project open. **File ▸
 Import** adds DXF to Current Layer... (`import_dxf`) and DXF as Board
 Outline... (`import_dxf_outline`), greyed without a board in view; each asks
 for the file and imports it as one undo step (#2410, see

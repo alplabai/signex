@@ -15,11 +15,11 @@ impl Signex {
     /// reads which of them are unsaved (#2027).
     pub(crate) fn commit_drafts_of_project(&mut self, project_id: ProjectId) {
         let owned: Vec<std::path::PathBuf> = self
-            .document_state
+            .document_view
             .drafts
             .title_block_sheets()
             .into_iter()
-            .chain(self.document_state.drafts.sheet_variable_sheets())
+            .chain(self.document_view.drafts.sheet_variable_sheets())
             .chain(self.typed_note_sheets())
             .filter(|sheet| {
                 self.document_state
@@ -73,7 +73,7 @@ impl Signex {
         };
         if let Err(refusal) = self.refuse_project_while_delete_pending(project_id, "closed") {
             crate::diagnostics::log_warning(refusal.to_string());
-            self.document_state.error_notice = Some(crate::app::state::ErrorNotice::delete(
+            self.document_view.error_notice = Some(crate::app::state::ErrorNotice::delete(
                 crate::app::state::untranslated(refusal.to_string()),
             ));
             return Task::none();
@@ -251,7 +251,7 @@ impl Signex {
         let target_id = project_id;
         if let Err(refusal) = self.refuse_project_while_delete_pending(project_id, "closed") {
             crate::diagnostics::log_warning(refusal.to_string());
-            self.document_state.error_notice = Some(crate::app::state::ErrorNotice::delete(
+            self.document_view.error_notice = Some(crate::app::state::ErrorNotice::delete(
                 crate::app::state::untranslated(refusal.to_string()),
             ));
             self.refresh_panel_ctx();
@@ -385,7 +385,7 @@ impl Signex {
                 .map(|p| p.id)
         });
         self.document_state.net_class_history.remove(&target_id);
-        self.document_state.project_tabs.remove(&target_id);
+        self.document_view.project_tabs.remove(&target_id);
         self.forget_notebook(target_id);
         self.document_state.rules_history.remove(&target_id);
         self.document_state.general_history.remove(&target_id);
@@ -900,7 +900,7 @@ impl Signex {
             let detail =
                 signex_i18n::Translatable::new(signex_i18n::ids::DIALOG_NEW_PROJECT_QUIT_HELD);
             crate::diagnostics::log_warning(detail.render_en_us());
-            self.document_state.error_notice =
+            self.document_view.error_notice =
                 Some(crate::app::state::ErrorNotice::quit_held(detail));
             return true;
         }
@@ -915,7 +915,7 @@ impl Signex {
             },
         );
         crate::diagnostics::log_warning(detail.render_en_us());
-        self.document_state.error_notice = Some(crate::app::state::ErrorNotice::quit_held(detail));
+        self.document_view.error_notice = Some(crate::app::state::ErrorNotice::quit_held(detail));
         true
     }
 

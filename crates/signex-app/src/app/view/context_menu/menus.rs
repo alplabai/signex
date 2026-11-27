@@ -159,7 +159,7 @@ impl Signex {
                 .context_menu
                 .as_ref()
                 .is_some_and(|menu| menu.hit_object),
-            net_highlighted: self.document_state.net_nav.highlight.is_some(),
+            net_highlighted: self.document_view.net_nav.highlight.is_some(),
         };
         // The project row's tree key, the same one the project tree's own
         // menu sends, so the action follows the project if rows reorder.
@@ -180,8 +180,8 @@ impl Signex {
         // Shortcut hints read from the active keymap profile; a command
         // it does not bind has none.
         let sc = CanvasShortcuts::resolve(|id| self.keymap_shortcut_label(id));
-        let tokens = &self.document_state.panel_ctx.tokens;
-        let ui_font = &self.document_state.panel_ctx.ui_font_name;
+        let tokens = &self.document_view.panel_ctx.tokens;
+        let ui_font = &self.document_view.panel_ctx.ui_font_name;
         let active_submenu = self.interaction_state.context_submenu;
         let context = self.command_context(Some(window_id));
         if context.pcb.shown {
@@ -288,13 +288,14 @@ impl Signex {
                 // The Gerber Viewer draws in the main window only.
                 undock_unavailable: already_undocked
                     || tab.kind.is_project_page()
-                    || tab.kind.is_gerber_viewer(),
+                    || tab.kind.is_gerber_viewer()
+                    || tab.kind.is_block_diagram(),
                 has_file: crate::tab_bar::tab_file_path(tab).is_some(),
                 in_project: self.project_tree_key_of_file(&tab.path).is_some(),
                 close_shortcut: &close_shortcut,
             },
         );
-        let panel_ctx = &self.document_state.panel_ctx;
+        let panel_ctx = &self.document_view.panel_ctx;
         super::placement::menu_card(entries, &panel_ctx.tokens, &panel_ctx.ui_font_name).element
     }
 
@@ -309,6 +310,7 @@ impl Signex {
     ) -> crate::tab_bar::TabMarks<'p> {
         let ui = &self.ui_state;
         let document = &self.document_state;
+        let document_view = &self.document_view;
         let overflow_open = ui.main_window_id == Some(window_id) && ui.tab_overflow_menu_open;
         crate::tab_bar::TabMarks {
             dirty_paths,
@@ -320,7 +322,7 @@ impl Signex {
                 .map(|p| p.data.name.as_str()),
             i18n: &ui.i18n,
             projects: &document.projects,
-            ui_font: crate::fonts::iced_font_for_family(&document.panel_ctx.ui_font_name),
+            ui_font: crate::fonts::iced_font_for_family(&document_view.panel_ctx.ui_font_name),
             theme_id: ui.effective_theme_id(),
             strip_width: ui.size_of_window(window_id).0,
             overflow_open,
@@ -342,6 +344,7 @@ impl Signex {
             return Vec::new();
         }
         let document = &self.document_state;
+        let document_view = &self.document_view;
         let tabs = &document.tabs;
         let undocked: std::collections::HashSet<std::path::PathBuf> = ui
             .windows
@@ -362,7 +365,7 @@ impl Signex {
         if fit.hidden.is_empty() {
             return Vec::new();
         }
-        let tokens = &document.panel_ctx.tokens;
+        let tokens = &document_view.panel_ctx.tokens;
         let titled = (tabs.as_slice(), document.projects.as_slice());
         let entries = crate::tab_bar::overflow::hidden_tab_entries(
             titled,

@@ -10,6 +10,7 @@ pub use operands::{MAX_TARGETS, Operand, OperandKind};
 
 mod annotate;
 mod arrange;
+mod block_diagram;
 mod board;
 mod bom;
 mod categories;
@@ -350,6 +351,7 @@ const TABLES: &[&[CommandMetadata]] = &[
     grid::GRID,
     library::LIBRARY,
     workspace::WORKSPACE,
+    block_diagram::BLOCK_DIAGRAM,
     notebook::NOTEBOOK,
     bom::BOM,
 ];
@@ -468,6 +470,8 @@ const GLOBAL_COMMANDS: &[&str] = &[
     "open_erc_dialog",
     "number_schematic_sheets",
     "compile_project",
+    "generate_block_diagram",
+    "regenerate_block_diagram",
     "update_pcb_from_schematic",
     "compare_board_with_schematic",
     "back_annotate_schematics",
@@ -717,6 +721,7 @@ mod tests {
             ("grid.rs", include_str!("grid.rs")),
             ("library.rs", include_str!("library.rs")),
             ("workspace.rs", include_str!("workspace.rs")),
+            ("block_diagram.rs", include_str!("block_diagram.rs")),
             ("reuse.rs", include_str!("reuse.rs")),
             ("notebook.rs", include_str!("notebook.rs")),
             ("bom.rs", include_str!("bom.rs")),

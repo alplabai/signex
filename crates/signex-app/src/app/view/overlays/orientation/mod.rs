@@ -153,7 +153,7 @@ impl Signex {
         orientation: ViewOrientation,
         canvas: Rectangle,
     ) -> Element<'_, Message> {
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let i18n = &self.ui_state.i18n;
         let caption = orientation.caption(i18n);
         let away = orientation.away_from_home(i18n);

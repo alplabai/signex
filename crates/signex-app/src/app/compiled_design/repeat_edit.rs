@@ -42,7 +42,7 @@ impl Signex {
         if holds_it(&*self) {
             return true;
         }
-        self.document_state.panel_ctx.child_sheet_name_buf = Some((id, designator.clone()));
+        self.document_view.panel_ctx.child_sheet_name_buf = Some((id, designator.clone()));
         self.commit_child_sheet_name(id);
         holds_it(&*self)
     }

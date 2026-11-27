@@ -532,6 +532,46 @@ project-parameter-unresolved = ?
 # The banner over the Project tab of a project written by a newer version
 # (#2904). $format is the format it was written in, such as "snxprj/1.2".
 project-read-only-banner = Read-only: this project was written by a newer { -brand-name } ({ $format }). Its changes cannot be saved in this build; edit it in that version.
+# Block diagram from the sheet hierarchy (#2968), said in Messages. $path is
+# the .snxblk file, $blocks and $connections what it holds, $changes how many
+# changes a regenerate found, $reason why nothing was done.
+project-block-diagram-generated = Block diagram { $path } generated: { $blocks } blocks, { $connections } connections.
+project-block-diagram-changes = Block diagram { $path }: { $changes } changes in the hierarchy, not applied yet.
+project-block-diagram-applied = Block diagram { $path }: { $changes } changes applied; the layout is kept.
+project-block-diagram-in-sync = Block diagram { $path } matches the sheet hierarchy.
+project-block-diagram-refused = Block diagram: { $reason }
+# Why generate_block_diagram or regenerate_block_diagram did not run or wrote
+# nothing. $command is the command id, $name a document or project name,
+# $path a file, $format a format token such as "snxblk/2", $reason the
+# system's or the reader's own words.
+project-block-diagram-no-project = open a sheet of a project first
+project-block-diagram-needs-document = `{ $command }` needs the operand `document`
+project-block-diagram-not-in-project = `{ $command }` works on a project, and { $name } is not part of an open one
+project-block-diagram-no-root = the project { $name } has no root sheet
+project-block-diagram-not-snxblk = { $path } is not a block diagram file (.snxblk)
+project-block-diagram-open-in-tab = { $path } is open in a tab; close it first, so the run does not write under the open diagram
+project-block-diagram-sheet-unreadable = the sheet { $path } could not be read: { $reason }
+project-block-diagram-exists = { $path } exists; regenerate it to keep its layout, or pass overwrite=true to replace it
+project-block-diagram-unreadable = { $path } could not be read: { $reason }
+project-block-diagram-not-written = { $path } was not written: { $reason }
+project-block-diagram-read-only = { $path } was written by a newer version ({ $format }) and is read-only here
+project-block-diagram-not-run = nothing was written: { $reason }
+# The block diagram tab's Re-sync, which merges into the open diagram as an
+# undo step. $path is the .snxblk file, $changes how many changes it applied.
+project-block-diagram-applied-in-tab = Block diagram { $path }: { $changes } changes applied to the open diagram; the layout is kept. Save to keep them.
+project-block-diagram-resync-changed = { $path } was edited while Re-sync read the hierarchy; nothing was applied. Run Re-sync again.
+project-block-diagram-resync-closed = { $path } was closed while Re-sync read the hierarchy; nothing was applied.
+# Blocks whose sheet left the project, left for the review (mockup row 210)
+# or by unlink=skip. $blocks is how many.
+project-block-diagram-skipped = Block diagram { $path }: { $blocks } blocks would become unlinked; review them before they change.
+project-block-diagram-bad-unlink = `unlink` takes apply or skip, not `{ $value }`
+# A sheet that would be a block has no document id in its file yet (no build
+# has saved it since ids came in, or it is open and its new id is not saved).
+# $path is the first such sheet, $count how many.
+project-block-diagram-sheet-no-id = { $count ->
+    [one] the sheet { $path } has no document id yet; open it and save it, then run again
+   *[other] { $count } sheets have no document id yet (the first is { $path }); open and save them, then run again
+}
 # Snippets (#1283), in Messages. $name is the snippet's name, $file its file,
 # $items how many objects it holds.
 snippet-saved = Snippet { $name } saved to { $file }: { $items } objects

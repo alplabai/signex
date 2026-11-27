@@ -111,7 +111,7 @@ fn tab_designator_override_then_increments() {
     // Tab opens the pre-placement form with the session's defaults.
     let _ = app.update(Message::Tool(ToolMessage::PrePlacementTab));
     let form = app
-        .document_state
+        .document_view
         .panel_ctx
         .pre_placement
         .clone()
@@ -205,7 +205,7 @@ fn resolve_completing_after_esc_does_not_arm() {
 
     assert!(app.interaction_state.placement.is_none());
     assert!(
-        app.document_state.error_notice.is_none(),
+        app.document_view.error_notice.is_none(),
         "a cancel is not a failure"
     );
 }
@@ -282,7 +282,7 @@ fn session_refused_on_newer_minor_sheet() {
         app.interaction_state.placement.is_none(),
         "no session on a read-only sheet"
     );
-    let notice = app.document_state.error_notice.as_ref().expect("says why");
+    let notice = app.document_view.error_notice.as_ref().expect("says why");
     assert!(
         notice.detail.render_en_us().contains("read-only"),
         "{}",
@@ -409,7 +409,7 @@ fn the_latest_pick_arms_whichever_read_finishes_first() {
             Some(z.row_id),
             "Z is the part on the cursor (y_first = {y_first})"
         );
-        assert!(app.document_state.error_notice.is_none());
+        assert!(app.document_view.error_notice.is_none());
     }
 }
 
@@ -427,7 +427,7 @@ fn a_read_that_fails_after_esc_raises_no_notice_but_one_that_fails_live_does() {
         library_path: f.snxlib.clone(),
         result: Err("read failed".to_owned()),
     }));
-    assert!(app.document_state.error_notice.is_none());
+    assert!(app.document_view.error_notice.is_none());
 
     // A failure of the current pick is still reported.
     complete(
@@ -436,7 +436,7 @@ fn a_read_that_fails_after_esc_raises_no_notice_but_one_that_fails_live_does() {
         "place-364.snxsch",
         Err("read failed".to_owned()),
     );
-    assert!(app.document_state.error_notice.is_some());
+    assert!(app.document_view.error_notice.is_some());
 }
 
 #[test]

@@ -200,7 +200,7 @@ fn a_grandparent_is_refused_as_a_loop() {
     let top = write_sheet(d, "top.snxsch", &["VIN"]);
     let mut app = app_in(d);
     let mid = node(d, "mid.snxsch", vec![node(d, "main.snxsch", Vec::new())]);
-    app.document_state.panel_ctx.navigator.hierarchy = Some(SheetHierarchy {
+    app.document_view.panel_ctx.navigator.hierarchy = Some(SheetHierarchy {
         root: Some(node(d, "top.snxsch", vec![mid])),
         ..Default::default()
     });

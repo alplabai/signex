@@ -236,6 +236,15 @@ impl Signex {
         {
             return self.close_gerber_viewer_tab(idx, keep_session);
         }
+        // A block diagram is held by its slice, not by an engine or a draft.
+        if self
+            .document_state
+            .tabs
+            .get(idx)
+            .is_some_and(|tab| tab.kind.is_block_diagram())
+        {
+            return self.close_block_diagram_tab(idx, keep_session);
+        }
         // A notebook's text stays with its project (`app/notebook_tab`).
         if self
             .document_state
@@ -411,7 +420,7 @@ impl Signex {
                 .document_saves
                 .forget_disk_records(&closing_path);
         }
-        self.document_state.tab_placements.forget(&closing_path);
+        self.document_view.tab_placements.forget(&closing_path);
         // The remembered page setup is session memory for an open document;
         // once no tab holds the path any more it has nothing to restore into.
         // A dirty tab parked in the background comes back with its unsaved
@@ -431,8 +440,8 @@ impl Signex {
         }
         if !parked_dirty && no_tab_left {
             crate::app::state::forget_page_setup(
-                &mut self.document_state.page_setup_memory,
-                self.document_state.preview.as_mut(),
+                &mut self.document_view.page_setup_memory,
+                self.document_view.preview.as_mut(),
                 &closing_path,
             );
         }
@@ -579,7 +588,7 @@ impl Signex {
         path: &std::path::Path,
     ) -> Option<signex_widgets::tree_view::TreeKey> {
         use crate::app::state::scope::path_key_with;
-        let tree = self.document_state.panel_ctx.project_tree.as_slice();
+        let tree = self.document_view.panel_ctx.project_tree.as_slice();
         let mut pending: Vec<Vec<usize>> = (0..tree.len()).map(|i| vec![i]).collect();
         while let Some(index_path) = pending.pop() {
             let node = signex_widgets::tree_view::get_node(tree, &index_path)?;
@@ -623,7 +632,7 @@ impl Signex {
         let Some(key) = self.project_tree_key_of_file(&path) else {
             return Task::none();
         };
-        let tree = &mut self.document_state.panel_ctx.project_tree;
+        let tree = &mut self.document_view.panel_ctx.project_tree;
         if let Some(index_path) = signex_widgets::tree_view::resolve_path(tree, &key) {
             let mut siblings = tree.as_mut_slice();
             for &i in &index_path[..index_path.len().saturating_sub(1)] {

@@ -166,6 +166,18 @@ mod tests {
                 // #2470: Back Annotate and Re-Annotate Board on the named
                 // project or board.
                 "back_annotate_schematics",
+                // #2796: the block diagram edits, on the named diagram.
+                "block_add",
+                "block_group",
+                "block_group_set",
+                "block_link",
+                "block_link_set",
+                "block_port_add",
+                "block_port_remove",
+                "block_remove",
+                "block_set",
+                "block_ungroup",
+                "block_unlink",
                 "board_assembly_drawing",
                 "board_panel",
                 "board_report_bom",
@@ -292,6 +304,8 @@ mod tests {
                 "project_set_variant_override",
                 "project_set_version_control",
                 "project_settings",
+                // #2796: a block diagram as JSON.
+                "query_block_diagram",
                 "query_board_nets",
                 // #2938: the priced BOM of the named project.
                 "query_bom",
@@ -302,6 +316,8 @@ mod tests {
                 "query_net_ties",
                 "query_part_heights",
                 "query_pins",
+                // #1313: the project's power tree.
+                "query_power_tree",
                 "query_rail_budget",
                 "read_document",
                 "reannotate_board",
@@ -413,6 +429,7 @@ mod tests {
         }
         for name in [
             "export_assembly_svg",
+            "export_block_diagram",
             "export_board_step",
             "save_document_as",
         ] {

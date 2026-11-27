@@ -88,8 +88,8 @@ pub enum AgentMsg {
     /// row 199): answer its caller (the socket, or a headless run).
     NotebookRead(Box<crate::app::notebook_measurements::NotebookRead>),
     /// The off-thread work a query waited for finished (`query_bom`, #2938;
-    /// `query_rail_budget`, #2943): answer its caller (the socket, or a
-    /// headless run).
+    /// `query_rail_budget`, #2943; `query_power_tree`, #1313): answer its
+    /// caller (the socket, or a headless run).
     QueryAnswered(Box<QueryAnswered>),
     /// A client connected and passed the peer check (#2253).
     ConnectionOpened { pid: Option<u32> },

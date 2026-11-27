@@ -44,7 +44,7 @@ fn values(app: &Signex) -> Vec<String> {
 #[test]
 fn the_panel_groups_the_selection_by_kind_and_marks_differences_mixed() {
     let app = all_kinds();
-    let groups = &app.document_state.panel_ctx.multi_groups;
+    let groups = &app.document_view.panel_ctx.multi_groups;
     let symbols = groups.symbols.as_ref().expect("symbols");
     assert_eq!(symbols.count, 3, "the designator fields are not parts");
     assert_eq!(symbols.value, Shared::Mixed);
@@ -61,7 +61,7 @@ fn one_typed_value_reaches_every_part_and_one_undo_takes_it_back() {
     let _ = app.update(Message::Edit(EditMsg::Undo));
     assert_eq!(values(&app), ["10k", "22k", "10k"], "one undo step");
     assert!(
-        app.document_state.panel_ctx.multi_draft.is_none(),
+        app.document_view.panel_ctx.multi_draft.is_none(),
         "the draft ends with the edit"
     );
 }
@@ -174,7 +174,7 @@ fn text_that_is_not_a_number_is_refused_in_the_log_and_kept_as_the_draft() {
     assert!(logged(&["Wire width", "wide-9183", "not a number"]));
     assert_eq!(doc(&app).wires[1].stroke_width, 0.3);
     assert_eq!(
-        app.document_state.panel_ctx.multi_draft,
+        app.document_view.panel_ctx.multi_draft,
         Some((MultiField::WireWidth, "wide-9183".into())),
         "the text stays for the user to fix"
     );

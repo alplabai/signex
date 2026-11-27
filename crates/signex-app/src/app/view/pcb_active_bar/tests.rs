@@ -341,7 +341,7 @@ pub(super) fn entries(app: &Signex, menu: PcbBarMenu) -> Vec<DropdownEntry<Messa
     pcb_bar_menu_entries(
         menu,
         &app.ui_state.i18n,
-        &app.document_state.panel_ctx.tokens,
+        &app.document_view.panel_ctx.tokens,
         app.ui_state.effective_theme_id(),
         &sources,
     )
@@ -482,7 +482,7 @@ fn the_selection_filter_is_the_schematic_dropdown_with_the_board_kinds() {
 
     // The schematic's dropdown, built by the same function, opens with the
     // same All / None control.
-    let tokens = app.document_state.panel_ctx.tokens;
+    let tokens = app.document_view.panel_ctx.tokens;
     let schematic = crate::active_bar::filter_menu_entry(
         &tokens,
         crate::active_bar::FilterMenu {

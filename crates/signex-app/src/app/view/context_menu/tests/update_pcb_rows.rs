@@ -19,9 +19,9 @@ fn press_of(rows: &[DropdownEntry<Message>], label: &str) -> Option<Message> {
 #[test]
 fn the_project_row_offers_update_pcb_for_that_project() {
     let (mut app, _t) = Signex::new();
-    app.document_state.panel_ctx.project_tree =
+    app.document_view.panel_ctx.project_tree =
         vec![TreeNode::branch("proj", TreeIcon::Folder, Vec::new())];
-    let key = key_of(&app.document_state.panel_ctx.project_tree, &[0]).expect("the project row");
+    let key = key_of(&app.document_view.panel_ctx.project_tree, &[0]).expect("the project row");
     let ctx = ProjectTreeContextMenuState {
         x: 0.0,
         y: 0.0,
@@ -41,10 +41,10 @@ fn the_project_row_offers_update_pcb_for_that_project() {
 #[test]
 fn add_new_offers_a_live_pcb_row() {
     let (mut app, _t) = Signex::new();
-    app.document_state.panel_ctx.project_tree =
+    app.document_view.panel_ctx.project_tree =
         vec![TreeNode::branch("proj", TreeIcon::Folder, Vec::new())];
-    let key = key_of(&app.document_state.panel_ctx.project_tree, &[0]).expect("the project row");
-    let inks = KindInks::of(&app.document_state.panel_ctx.tokens);
+    let key = key_of(&app.document_view.panel_ctx.project_tree, &[0]).expect("the project row");
+    let inks = KindInks::of(&app.document_view.panel_ctx.tokens);
     let rows = add_new_entries(signex_i18n::I18n::en_us_ref(), TID, inks, key.clone());
     let press = press_of(&rows, "PCB").expect("a live PCB row");
     assert!(matches!(

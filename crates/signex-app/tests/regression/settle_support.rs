@@ -29,15 +29,17 @@ pub fn settle_task(app: &mut Signex, task: Task<Message>) {
 /// message would see as an extra unit.
 pub fn settle_history_panel(app: &mut Signex) {
     let d = &mut app.document_state;
+    let document_view = &mut app.document_view;
     let path = d.tabs.get(d.active_tab).map(|t| t.path.clone());
-    d.history.source_key = path.clone();
-    d.history.active_path = path;
+    document_view.history.source_key = path.clone();
+    document_view.history.active_path = path;
 }
 
 /// Show the active tab's history as a finished load leaves it, so a Restore
 /// click is not refused for want of a loaded list.
 pub fn list_active_history(app: &mut Signex) {
     let d = &mut app.document_state;
-    d.history.active_path = d.tabs.get(d.active_tab).map(|tab| tab.path.clone());
-    d.history.mode = signex_app::panels::history::HistoryRenderMode::Ready;
+    let document_view = &mut app.document_view;
+    document_view.history.active_path = d.tabs.get(d.active_tab).map(|tab| tab.path.clone());
+    document_view.history.mode = signex_app::panels::history::HistoryRenderMode::Ready;
 }

@@ -112,7 +112,7 @@ mod tests {
     }
 
     fn sheet_missing(app: &Signex) -> bool {
-        app.document_state.panel_ctx.projects[0].sheets[0].missing
+        app.document_view.panel_ctx.projects[0].sheets[0].missing
     }
 
     /// Run the probe the way the task would, then deliver its message.

@@ -266,7 +266,7 @@ fn typing_a_repeat_as_the_designator_turns_the_switch_on() {
     assert_eq!(designator(&f), "Repeat(CH, 1, 6)");
     let view = f
         .app
-        .document_state
+        .document_view
         .panel_ctx
         .compiled_design
         .sheet_symbol
@@ -281,11 +281,11 @@ fn compile_project_fills_the_panel_with_the_channels() {
     // The fixture writes the state directly; one message refreshes the panel.
     send(&mut f.app, CompiledDesignMsg::FindChanged(String::new()));
     assert_eq!(
-        f.app.document_state.panel_ctx.compiled_design.panel.status,
+        f.app.document_view.panel_ctx.compiled_design.panel.status,
         CompiledStatus::NotCompiled
     );
     send(&mut f.app, CompiledDesignMsg::CompileRequested);
-    let panel = &f.app.document_state.panel_ctx.compiled_design.panel;
+    let panel = &f.app.document_view.panel_ctx.compiled_design.panel;
     assert_eq!(panel.status, CompiledStatus::Ready);
     let names: Vec<&str> = panel.rows.iter().map(|r| r.name.as_str()).collect();
     assert_eq!(names, ["root", "child", "CH1", "CH2"]);
@@ -300,7 +300,7 @@ fn a_component_row_opens_its_sheet_and_selects_the_part() {
     let mut f = fixture("child_sheet", false);
     send(&mut f.app, CompiledDesignMsg::CompileRequested);
     let row = |app: &Signex| {
-        app.document_state
+        app.document_view
             .panel_ctx
             .compiled_design
             .panel
@@ -342,7 +342,7 @@ fn the_title_bar_recompile_compiles_the_project() {
     send(&mut f.app, CompiledDesignMsg::FindChanged(String::new()));
     let press = signex_app::panels::title_actions(
         signex_app::panels::PanelKind::CompiledDesign,
-        &f.app.document_state.panel_ctx,
+        &f.app.document_view.panel_ctx,
     )
     .into_iter()
     .next()
@@ -351,7 +351,7 @@ fn the_title_bar_recompile_compiles_the_project() {
     .expect("a project is open");
     crate::settle_support::settle(&mut f.app, Message::Dock(DockMessage::Panel(press)));
     assert_eq!(
-        f.app.document_state.panel_ctx.compiled_design.panel.status,
+        f.app.document_view.panel_ctx.compiled_design.panel.status,
         CompiledStatus::Ready
     );
 }
@@ -541,7 +541,7 @@ fn an_edit_after_a_compile_marks_its_sheet_out_of_date() {
     send(&mut f.app, CompiledDesignMsg::CompileRequested);
     assert_eq!(
         f.app
-            .document_state
+            .document_view
             .panel_ctx
             .compiled_design
             .panel
@@ -551,7 +551,7 @@ fn an_edit_after_a_compile_marks_its_sheet_out_of_date() {
     let part = f.part;
     select(&mut f.app, part, SelectedKind::Symbol);
     crate::settle_support::settle(&mut f.app, Message::Edit(EditMsg::DeleteSelected));
-    let panel = &f.app.document_state.panel_ctx.compiled_design.panel;
+    let panel = &f.app.document_view.panel_ctx.compiled_design.panel;
     assert_eq!(panel.stale_count, 1);
     assert!(
         panel.rows.iter().any(|r| r.name == "CH1" && r.is_stale),
@@ -574,7 +574,7 @@ fn a_channel_tab_refuses_an_edit_with_a_message() {
     );
     let strip = f
         .app
-        .document_state
+        .document_view
         .panel_ctx
         .compiled_design
         .strip
@@ -618,7 +618,7 @@ fn a_channel_tab_refuses_an_edit_with_a_message() {
 
 /// The child's channel strip as the panels last saw it.
 fn strip(app: &Signex) -> signex_app::panels::compiled_design::ChannelStripView {
-    app.document_state
+    app.document_view
         .panel_ctx
         .compiled_design
         .strip
@@ -634,7 +634,7 @@ fn a_ctrl_click_on_a_channel_row_opens_the_source_sheet_on_editor() {
     send(&mut f.app, CompiledDesignMsg::CompileRequested);
     let ch2 = f
         .app
-        .document_state
+        .document_view
         .panel_ctx
         .compiled_design
         .panel
@@ -704,7 +704,7 @@ fn naming_fixture() -> Fixture {
     f.app.ui_state.first_run_tour_open = false;
     let id = f.sheet_symbol;
     select(&mut f.app, id, SelectedKind::ChildSheet);
-    f.app.document_state.dock.show_panel(PanelKind::Properties);
+    f.app.document_view.dock.show_panel(PanelKind::Properties);
     f
 }
 
@@ -763,7 +763,7 @@ fn esc_closes_the_naming_menu_without_a_change() {
 /// The designators of the BOM preview's lines, Lite active.
 fn bom_designators(app: &mut Signex) -> Vec<String> {
     let _ = app.update(Message::Menu(signex_app::menu_bar::MenuMessage::ExportBom));
-    let preview = app.document_state.bom_preview.as_ref().expect("preview");
+    let preview = app.document_view.bom_preview.as_ref().expect("preview");
     preview
         .table
         .rows
@@ -776,7 +776,7 @@ fn bom_designators(app: &mut Signex) -> Vec<String> {
 /// applied as the matrix shows them: `designator` to its fit in Lite.
 fn variant_manager_lite(app: &mut Signex) -> Vec<(String, bool)> {
     let project_id = app.document_state.projects[0].id;
-    app.document_state
+    app.document_view
         .project_tabs
         .entry(project_id)
         .or_default();
@@ -786,7 +786,7 @@ fn variant_manager_lite(app: &mut Signex) -> Vec<(String, bool)> {
             signex_app::app::ProjectTabMsg::VariantPartsReadRequested { project_id },
         )),
     );
-    let tab = &app.document_state.project_tabs[&project_id];
+    let tab = &app.document_view.project_tabs[&project_id];
     let read = tab.variant_parts.as_deref().expect("a read landed");
     let matrix = read.as_ref().expect("the parts were read");
     let settings = &app.document_state.projects[0].data.variant_settings;
@@ -850,7 +850,7 @@ fn a_channel_left_out_is_tagged_in_the_panel_and_named_in_its_properties() {
     data.active_variant = Some("Lite".to_string());
     send(&mut f.app, CompiledDesignMsg::CompileRequested);
     let tags = |app: &Signex| -> Vec<(String, Option<String>)> {
-        app.document_state
+        app.document_view
             .panel_ctx
             .compiled_design
             .panel

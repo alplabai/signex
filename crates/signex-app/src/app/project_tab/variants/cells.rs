@@ -27,7 +27,7 @@ impl Signex {
         match msg {
             VariantManagerMsg::CellSelected(cell) => {
                 self.store_variant_draft(project_id);
-                if let Some(tab) = self.document_state.project_tabs.get_mut(&project_id) {
+                if let Some(tab) = self.document_view.project_tabs.get_mut(&project_id) {
                     tab.variant_manager.cell = Some(cell);
                     tab.variant_manager.draft = None;
                 }
@@ -42,7 +42,7 @@ impl Signex {
                 if moved_on {
                     self.store_variant_draft(project_id);
                 }
-                if let Some(tab) = self.document_state.project_tabs.get_mut(&project_id) {
+                if let Some(tab) = self.document_view.project_tabs.get_mut(&project_id) {
                     tab.variant_manager.draft = Some(OverrideDraft { parameter, text });
                 }
             }
@@ -93,7 +93,7 @@ impl Signex {
         command: &ProjectSectionCommand,
     ) -> bool {
         let outcome = self.apply_project_section(project_id, command);
-        let Some(tab) = self.document_state.project_tabs.get_mut(&project_id) else {
+        let Some(tab) = self.document_view.project_tabs.get_mut(&project_id) else {
             return false;
         };
         tab.variant_problem = outcome.as_ref().err().cloned();
@@ -102,7 +102,7 @@ impl Signex {
 
     /// The parts read of the project's tab, whether or not it still holds.
     pub(super) fn variant_read(&self, project_id: ProjectId) -> Option<&VariantMatrix> {
-        let tab = self.document_state.project_tabs.get(&project_id)?;
+        let tab = self.document_view.project_tabs.get(&project_id)?;
         tab.variant_parts.as_deref()?.as_ref().ok()
     }
 
@@ -117,7 +117,7 @@ impl Signex {
     }
 
     fn variant_draft(&self, project_id: ProjectId) -> Option<&OverrideDraft> {
-        let tab = self.document_state.project_tabs.get(&project_id)?;
+        let tab = self.document_view.project_tabs.get(&project_id)?;
         tab.variant_manager.draft.as_ref()
     }
 
@@ -171,7 +171,7 @@ impl Signex {
     /// is stored, as Enter stores it.
     fn store_variant_draft(&mut self, project_id: ProjectId) {
         let cell = self
-            .document_state
+            .document_view
             .project_tabs
             .get(&project_id)
             .filter(|tab| tab.variant_manager.draft.is_some())
@@ -185,7 +185,7 @@ impl Signex {
     /// the Base value again.
     fn submit_variant_override(&mut self, project_id: ProjectId, cell: VariantCell) {
         let Some(draft) = self
-            .document_state
+            .document_view
             .project_tabs
             .get_mut(&project_id)
             .and_then(|tab| tab.variant_manager.draft.take())
@@ -214,7 +214,7 @@ impl Signex {
             value,
         };
         self.apply_variant_manager_edit(project_id, &command);
-        if let Some(tab) = self.document_state.project_tabs.get_mut(&project_id) {
+        if let Some(tab) = self.document_view.project_tabs.get_mut(&project_id) {
             tab.variant_manager.draft = None;
         }
     }
@@ -227,7 +227,7 @@ impl Signex {
         let Some(project) = self.document_state.project_by_id(project_id) else {
             return;
         };
-        let tab = self.document_state.project_tabs.get(&project_id);
+        let tab = self.document_view.project_tabs.get(&project_id);
         let Some(sheet_fits) = tab.and_then(|tab| {
             sheet_fits_of(tab, project, self.document_state.sheet_edit_epoch, &from)
         }) else {
@@ -243,7 +243,7 @@ impl Signex {
             sheet_fits,
         };
         if self.apply_variant_manager_edit(project_id, &command)
-            && let Some(tab) = self.document_state.project_tabs.get_mut(&project_id)
+            && let Some(tab) = self.document_view.project_tabs.get_mut(&project_id)
         {
             tab.variant_selected = Some(name.clone());
             tab.variant_rename = Some(VariantRenameDraft {

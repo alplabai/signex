@@ -10,6 +10,7 @@ use crate::app::Signex;
 /// string. Read through `Debug`, so a field that grows a value shows up.
 pub(in crate::app) fn interaction_snapshot(app: &Signex) -> String {
     let docs = &app.document_state;
+    let document_view = &app.document_view;
     let canvas = app.interaction_state.active_canvas();
     let tabs: Vec<String> = docs
         .tabs
@@ -42,12 +43,12 @@ pub(in crate::app) fn interaction_snapshot(app: &Signex) -> String {
         app.interaction_state.shape_anchor,
         app.interaction_state.pending_port,
         app.interaction_state.corner_rule,
-        docs.panel_ctx.pre_placement,
+        document_view.panel_ctx.pre_placement,
         app.ui_state.panel_list_open,
-        docs.dock.tab_drag,
-        docs.dock.floating.len(),
-        docs.dock.drop_preview,
-        docs.dock.tab_menu.is_some(),
+        document_view.dock.tab_drag,
+        document_view.dock.floating.len(),
+        document_view.dock.drop_preview,
+        document_view.dock.tab_menu.is_some(),
         canvas.move_pick,
     )
 }

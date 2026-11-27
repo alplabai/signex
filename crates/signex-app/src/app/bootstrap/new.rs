@@ -619,12 +619,6 @@ impl Signex {
                 workspace_layouts: Box::new(workspace_layouts),
             },
             document_state: DocumentState {
-                drafts: drafts.clone(),
-                live_drawing_edit: None,
-                line_width_draft_selection: None,
-                dock,
-                dock_layout_sync,
-                search_prefs,
                 document_saves: crate::persist::DocumentSaves::default(),
                 parked_save_all_settles: Default::default(),
                 document_ids: Default::default(),
@@ -633,22 +627,18 @@ impl Signex {
                 ),
                 project_fs: Default::default(),
                 disk_poll: Default::default(),
-                navigator_job: Default::default(),
-                window_hierarchies: Default::default(),
                 ownership: Default::default(),
                 erc_fallback_noted: Default::default(),
                 profile_drift_noted: Default::default(),
                 read_only_refusal_noted: Default::default(),
                 rules_history: Default::default(),
                 general_history: Default::default(),
-                missing_fonts: Default::default(),
                 tabs: vec![],
                 active_tab: 0,
                 engines: std::collections::HashMap::new(),
                 times: crate::app::state::DocumentTimes::at(chrono::Local::now()),
                 symbol_editors: std::collections::HashMap::new(),
                 footprint_editors: std::collections::HashMap::new(),
-                pad_clipboard: None,
                 active_path: None,
                 projects: Vec::new(),
                 active_project: None,
@@ -660,7 +650,6 @@ impl Signex {
                 undo_depth,
                 dirty_docs: Default::default(),
                 net_class_history: std::collections::HashMap::new(),
-                project_tabs: std::collections::HashMap::new(),
                 next_project_id: 0,
                 next_undo_group: 0,
                 documents_epoch: 0,
@@ -674,6 +663,43 @@ impl Signex {
                 agent_edits: Default::default(),
                 check_runs: Default::default(),
                 reuse_blocks: Default::default(),
+                compiled_design: Default::default(),
+                pending_git_commits: Vec::new(),
+                inflight_git_commits: std::collections::HashSet::new(),
+                unbound_git_commits: std::collections::HashSet::new(),
+                git_commit_sequences: std::collections::HashMap::new(),
+                active_git_repos: std::collections::HashSet::new(),
+                paused_git_projects: std::collections::HashSet::new(),
+                pending_opens: Default::default(),
+                pending_restores: Default::default(),
+                branch_switch: None,
+                pending_path_ops: crate::app::path_ops::PendingPathOps::default(),
+                new_project_writes: std::collections::HashSet::new(),
+                dir_case: Default::default(),
+                setup_profiles: crate::fonts::read_setup_profiles_from(prefs),
+                removed_profile_names: Default::default(),
+                missing_profiles_warned: Default::default(),
+                altium_import_running: None,
+                project_folder_renames: std::collections::HashSet::new(),
+                project_writes: Vec::new(),
+                moved_project_dirs: Vec::new(),
+                deferred_git_commits: Vec::new(),
+                block_diagrams: Default::default(),
+                notebooks: std::collections::HashMap::new(),
+                generated_reports: std::collections::HashMap::new(),
+            },
+            document_view: DocumentViewState {
+                drafts: drafts.clone(),
+                live_drawing_edit: None,
+                line_width_draft_selection: None,
+                dock,
+                dock_layout_sync,
+                search_prefs,
+                navigator_job: Default::default(),
+                window_hierarchies: Default::default(),
+                missing_fonts: Default::default(),
+                pad_clipboard: None,
+                project_tabs: std::collections::HashMap::new(),
                 window_panel_ctx: std::collections::HashMap::new(),
                 window_panel_ctx_keys: std::collections::HashMap::new(),
                 panel_ctx: crate::panels::PanelContext {
@@ -820,34 +846,12 @@ impl Signex {
                 page_setup_memory: Default::default(),
                 tab_placements: Default::default(),
                 net_nav: Default::default(),
-                compiled_design: Default::default(),
                 raster_queue: Default::default(),
                 error_notice: None,
                 netlist_incomplete_prompt: None,
                 bom_preview: None,
-                pending_git_commits: Vec::new(),
-                inflight_git_commits: std::collections::HashSet::new(),
-                unbound_git_commits: std::collections::HashSet::new(),
-                git_commit_sequences: std::collections::HashMap::new(),
-                active_git_repos: std::collections::HashSet::new(),
-                paused_git_projects: std::collections::HashSet::new(),
-                pending_opens: Default::default(),
-                pending_restores: Default::default(),
-                branch_switch: None,
-                pending_path_ops: crate::app::path_ops::PendingPathOps::default(),
-                new_project_writes: std::collections::HashSet::new(),
-                dir_case: Default::default(),
-                setup_profiles: crate::fonts::read_setup_profiles_from(prefs),
-                removed_profile_names: Default::default(),
-                missing_profiles_warned: Default::default(),
-                altium_import_running: None,
-                project_folder_renames: std::collections::HashSet::new(),
-                project_writes: Vec::new(),
-                moved_project_dirs: Vec::new(),
-                deferred_git_commits: Vec::new(),
                 gerber_viewer: Default::default(),
-                notebooks: std::collections::HashMap::new(),
-                generated_reports: std::collections::HashMap::new(),
+                block_diagrams: Default::default(),
             },
             interaction_state: InteractionState {
                 current_tool: Tool::Select,
@@ -1005,7 +1009,7 @@ impl Signex {
         // from the saved preferences. Everything else the old
         // `render_config` global carried (canvas font/size/style) had no
         // reader in any draw path, so there is nothing left to seed.
-        app.document_state.panel_ctx.symbol_grid_style = app.ui_state.symbol_grid_style;
+        app.document_view.panel_ctx.symbol_grid_style = app.ui_state.symbol_grid_style;
 
         // Multi-window (Phase 1): open the main OS window here. Phase 2
         // will open additional windows on demand when the user drags a
@@ -1115,9 +1119,9 @@ mod tests {
     fn the_first_frame_uses_the_saved_themes_tokens() {
         let (app, _boot) = Signex::new();
         let saved = app.ui_state.theme_id;
-        assert_eq!(app.document_state.panel_ctx.theme_id, saved);
+        assert_eq!(app.document_view.panel_ctx.theme_id, saved);
         assert_eq!(
-            app.document_state.panel_ctx.tokens,
+            app.document_view.panel_ctx.tokens,
             signex_types::theme::theme_tokens(saved),
         );
     }
@@ -1140,9 +1144,9 @@ mod tests {
             let _ = app.update(Message::Preferences(PreferencesMsg::Inner(
                 PrefMsg::DraftTheme(draft),
             )));
-            assert_eq!(app.document_state.panel_ctx.theme_id, draft);
+            assert_eq!(app.document_view.panel_ctx.theme_id, draft);
             assert_eq!(
-                app.document_state.panel_ctx.tokens,
+                app.document_view.panel_ctx.tokens,
                 signex_types::theme::theme_tokens(draft),
                 "{draft:?}"
             );

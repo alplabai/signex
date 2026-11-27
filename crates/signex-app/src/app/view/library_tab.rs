@@ -21,7 +21,7 @@ impl Signex {
         window_id: iced::window::Id,
         in_main: bool,
     ) -> Option<Element<'a, Message>> {
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         if in_main && let Some(editor_id) = tab.kind.as_component_editor() {
             let address = crate::library::state::EditorAddress::new(
                 editor_id.library_path.clone(),
@@ -33,7 +33,7 @@ impl Signex {
                     editor,
                     &self.library,
                     tokens,
-                    &self.document_state.panel_ctx.canvas_colors,
+                    &self.document_view.panel_ctx.canvas_colors,
                     self.sheet_grid(),
                     self.ui_state.device_px_per_logical_px(window_id),
                     address,
@@ -79,7 +79,7 @@ impl Signex {
             return Some(
                 crate::library::editor::standalone::view_symbol(
                     editor,
-                    &self.document_state.panel_ctx,
+                    &self.document_view.panel_ctx,
                     display,
                     path,
                     self.ui_state.device_px_per_logical_px(window_id),
@@ -99,7 +99,7 @@ impl Signex {
                     self.ui_state.effective_theme_id(),
                     &self.ui_state.i18n,
                     self.shows_footprint_layer_strip(window_id),
-                    &self.document_state.panel_ctx.ui_font_name,
+                    &self.document_view.panel_ctx.ui_font_name,
                     self.library.mirror_cards.get(path),
                 )
                 .map(Message::Library)
@@ -110,7 +110,7 @@ impl Signex {
         Some(match self.library.library_browsers.get(path) {
             Some(browser) => {
                 let look = crate::library::browser::PreviewLook {
-                    canvas_colors: self.document_state.panel_ctx.canvas_colors,
+                    canvas_colors: self.document_view.panel_ctx.canvas_colors,
                     grid: self.sheet_grid(),
                     device_px_per_logical_px: self.ui_state.device_px_per_logical_px(window_id),
                 };

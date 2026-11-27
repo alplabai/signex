@@ -42,7 +42,7 @@ fn has(shown: &[String], words: &str) -> bool {
 }
 
 fn set_theme(app: &mut Signex, theme: ThemeId) {
-    app.document_state.panel_ctx.tokens = theme_tokens(theme);
+    app.document_view.panel_ctx.tokens = theme_tokens(theme);
 }
 
 /// The candidates landing for the open picker.
@@ -155,7 +155,7 @@ fn a_differing_footprint_warns_and_apply_stays_live() {
 #[test]
 fn apply_waits_for_a_pick_and_a_channel_tab_shows_the_scope() {
     let (mut app, _id, path, _dir) = app();
-    app.document_state.panel_ctx.compiled_design.strip = Some(strip(path, Some(1)));
+    app.document_view.panel_ctx.compiled_design.strip = Some(strip(path, Some(1)));
     open(&mut app, VariantEditKind::Alternate);
     land(&mut app, Candidates::default());
     let shown = texts(&app);

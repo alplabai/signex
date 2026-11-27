@@ -53,7 +53,7 @@ pub(in crate::format) fn nm_survives_round_trip(nm: i64) -> bool {
     mm_to_nm(nm_to_mm(nm), "length").is_ok()
 }
 
-pub(in crate::format) fn nm_to_mm(nm: i64) -> f64 {
+pub(crate) fn nm_to_mm(nm: i64) -> f64 {
     // Divided, not multiplied by 1e-6: the quotient is the double nearest
     // the decimal mm, so 100000 nm reads back as 0.1, not 0.09999999999999999.
     (nm as f64) / NM_PER_MM

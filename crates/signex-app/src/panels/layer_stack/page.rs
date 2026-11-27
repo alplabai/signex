@@ -371,7 +371,7 @@ mod tests {
 
     fn context(facts: LayerStackFacts) -> PanelContext {
         let (app, _boot) = crate::app::Signex::new();
-        let mut ctx = app.document_state.panel_ctx.clone();
+        let mut ctx = app.document_view.panel_ctx.clone();
         ctx.layer_stack = Some(facts);
         ctx
     }

@@ -25,7 +25,7 @@ impl Signex {
     /// Copy only the panels' view state into the panel context: a tile,
     /// group or hover change touches nothing else the context holds.
     fn sync_validation_panels(&mut self) {
-        self.document_state.panel_ctx.validation = self.validation_panels_view();
+        self.document_view.panel_ctx.validation = self.validation_panels_view();
         self.refresh_window_panel_ctxs(None);
     }
 
@@ -47,7 +47,7 @@ impl Signex {
         if let MessagesPanelMsg::ShowPressed { document, object } = msg {
             return self.show_message_target(document, object);
         }
-        let ctx = &self.document_state.panel_ctx;
+        let ctx = &self.document_view.panel_ctx;
         let task = match msg {
             MessagesPanelMsg::Copied => {
                 let verbose = crate::panels::is_verbose(&ctx.diagnostics_level);
@@ -174,7 +174,7 @@ mod tests {
             "a known identity is not asked again"
         );
         assert_eq!(
-            app.document_state.panel_ctx.validation.identity,
+            app.document_view.panel_ctx.validation.identity,
             UserIdentity::Known("C. Alp".into())
         );
     }
@@ -189,18 +189,13 @@ mod tests {
             )),
         );
         assert_eq!(
-            app.document_state.panel_ctx.validation.messages.level,
+            app.document_view.panel_ctx.validation.messages.level,
             crate::panels::MessageLevel::Error
         );
-        let newest = app
-            .document_state
-            .panel_ctx
-            .diagnostics
-            .last()
-            .map(|e| e.id);
+        let newest = app.document_view.panel_ctx.diagnostics.last().map(|e| e.id);
         let _ = panel(&mut app, PanelMsg::MessagesView(MessagesPanelMsg::Cleared));
         assert_eq!(
-            app.document_state
+            app.document_view
                 .panel_ctx
                 .validation
                 .messages

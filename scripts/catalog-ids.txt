@@ -32,6 +32,17 @@ attach_notebook_file
 auto_place
 autoplace_fields
 back_annotate_schematics
+block_add
+block_group
+block_group_set
+block_link
+block_link_set
+block_port_add
+block_port_remove
+block_remove
+block_set
+block_ungroup
+block_unlink
 board_assembly_drawing
 board_layer_stack
 board_panel
@@ -125,6 +136,7 @@ edit_selected_symbol_in_symbol_editor
 edit_text_in_place
 edit_value
 export_assembly_svg
+export_block_diagram
 export_board_pdf
 export_board_report
 export_board_step
@@ -155,6 +167,7 @@ footprint_mode_sketch
 footprint_mode_view_3d
 footprint_recompute_courtyard_outline
 force_annotate_all_schematics
+generate_block_diagram
 generate_design_notebook
 gloss_selected_routes
 go_to_net_partner
@@ -194,6 +207,7 @@ move_selection
 move_selection_xy
 move_to_front
 navigate_up_hierarchy
+new_block_diagram
 new_document
 new_pcb_document
 new_project_with_profile
@@ -338,6 +352,7 @@ project_set_variant_fit
 project_set_variant_override
 project_set_version_control
 project_settings
+query_block_diagram
 query_board_nets
 query_bom
 query_footprint_assignments
@@ -345,11 +360,13 @@ query_library
 query_net_ties
 query_part_heights
 query_pins
+query_power_tree
 query_rail_budget
 read_document
 reannotate_board
 redo
 refresh_view
+regenerate_block_diagram
 remove_board_panel
 remove_from_union
 remove_last_vertex

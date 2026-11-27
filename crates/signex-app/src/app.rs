@@ -14,6 +14,12 @@ mod actions;
 pub(crate) mod agent;
 pub(crate) mod assign_footprints;
 pub(crate) mod back_annotate;
+// Mockup row 171: the block diagram document tab.
+pub mod block_diagram;
+pub use block_diagram::{BlockDiagramMsg, BlockDiagrams};
+pub(crate) mod block_diagram_export;
+pub(crate) mod block_diagram_sync;
+pub use block_diagram_sync::BlockDiagramSyncMsg;
 pub(crate) mod board_output;
 pub(crate) mod board_panel;
 pub(crate) mod board_reannotate;
@@ -76,6 +82,8 @@ pub mod path_ops;
 pub(crate) mod pin_junction_repair;
 mod pin_table_tab;
 mod polygon_manager_tab;
+// #1313: the power tree run behind `query_power_tree`.
+mod power_tree;
 pub mod project_entry_disk;
 pub(crate) mod project_git;
 pub(crate) mod project_save_as;
@@ -152,6 +160,7 @@ pub use assign_footprints::{
     FootprintPart, PartAccess, TickedBar,
 };
 pub use back_annotate::{BackAnnotateMsg, BackAnnotateState};
+pub use block_diagram_export::BlockDiagramExportMsg;
 pub use board_output::{
     BoardOutputDialog, BoardOutputMsg, BoardOutputState, BoardPrintFlag, BoardPrintState,
     BoardReportsState,
@@ -209,8 +218,8 @@ pub use state::net_class_styles::{ResolveFailed, ResolvedStyles};
 pub use state::pcb_edit::{BoardEditError, CheckedStep};
 pub use state::project_case::CaseProbeOutcome;
 pub use state::{
-    CaseFold, DocumentState, InteractionState, KeymapRecorderState, LoadedProject, PageSetupInputs,
-    PreviewState, ProjectId, Signex, UiState,
+    CaseFold, DocumentState, DocumentViewState, InteractionState, KeymapRecorderState,
+    LoadedProject, PageSetupInputs, PreviewState, ProjectId, Signex, UiState,
 };
 pub use symbol_draft::SymbolDraft;
 pub use symbol_history::SymbolHistorySnapshot;

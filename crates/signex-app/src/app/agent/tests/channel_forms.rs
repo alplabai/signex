@@ -93,11 +93,11 @@ fn a_dock_panel_is_opened_collapsed_expanded_and_closed_by_its_key() {
     let opened = dock(&mut app, "messages", "open");
     assert_eq!(opened["status"], "answered", "{opened}");
     assert_eq!(opened["data"]["open"], true, "{opened}");
-    assert!(app.document_state.dock.is_frontmost(PanelKind::Messages));
+    assert!(app.document_view.dock.is_frontmost(PanelKind::Messages));
 
     let collapsed = dock(&mut app, "messages", "collapse");
     assert_eq!(collapsed["data"]["collapsed"], true, "{collapsed}");
-    assert!(!app.document_state.dock.is_frontmost(PanelKind::Messages));
+    assert!(!app.document_view.dock.is_frontmost(PanelKind::Messages));
     // A state, not a toggle: collapsing again leaves it collapsed.
     let again = dock(&mut app, "messages", "collapse");
     assert_eq!(again["data"]["collapsed"], true, "{again}");

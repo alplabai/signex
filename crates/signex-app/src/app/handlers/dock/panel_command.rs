@@ -52,7 +52,7 @@ pub(crate) fn set_dock_panel(app: &mut Signex, args: &CommandArgs) -> Ran {
     let task = match text(args, "state") {
         Some("open") => app.show_panel(kind),
         Some("close") => {
-            if !app.document_state.dock.close_panel(kind) && app.is_panel_open(kind) {
+            if !app.document_view.dock.close_panel(kind) && app.is_panel_open(kind) {
                 return refused(
                     Translatable::new(ids::PANELS_DOCK_COMMAND_IN_WINDOW).arg("panel", key),
                 );
@@ -60,7 +60,7 @@ pub(crate) fn set_dock_panel(app: &mut Signex, args: &CommandArgs) -> Ran {
             app.persist_dock_layout_soon()
         }
         Some(state @ ("collapse" | "expand")) => {
-            let Some(PanelSite::Docked(position, _)) = app.document_state.dock.locate(kind) else {
+            let Some(PanelSite::Docked(position, _)) = app.document_view.dock.locate(kind) else {
                 return refused(
                     Translatable::new(ids::PANELS_DOCK_COMMAND_NOT_DOCKED)
                         .arg("panel", key)
@@ -68,8 +68,8 @@ pub(crate) fn set_dock_panel(app: &mut Signex, args: &CommandArgs) -> Ran {
                 );
             };
             let collapse = state == "collapse";
-            if app.document_state.dock.is_collapsed(position) != collapse {
-                app.document_state
+            if app.document_view.dock.is_collapsed(position) != collapse {
+                app.document_view
                     .dock
                     .update(DockMessage::ToggleCollapse(position));
             }
@@ -83,7 +83,7 @@ pub(crate) fn set_dock_panel(app: &mut Signex, args: &CommandArgs) -> Ran {
 /// Where `kind` is: `open`, its `place` (`left`, `right`, `bottom`,
 /// `floating`, `window` or null) and whether its region is `collapsed`.
 fn panel_json(app: &Signex, kind: PanelKind) -> Value {
-    let site = app.document_state.dock.locate(kind);
+    let site = app.document_view.dock.locate(kind);
     let place = match site {
         Some(PanelSite::Docked(position, _)) => Some(match position {
             PanelPosition::Left => "left",
@@ -95,7 +95,7 @@ fn panel_json(app: &Signex, kind: PanelKind) -> Value {
         None => None,
     };
     let collapsed = matches!(site, Some(PanelSite::Docked(position, _))
-        if app.document_state.dock.is_collapsed(position));
+        if app.document_view.dock.is_collapsed(position));
     json!({
         "panel": panel_kind_key(kind),
         "open": app.is_panel_open(kind),

@@ -105,7 +105,7 @@ fn click(app: &mut Signex, at: Point) {
 }
 
 fn facts(app: &Signex) -> PcbPrimitiveFacts {
-    app.document_state
+    app.document_view
         .panel_ctx
         .pcb_board
         .as_ref()

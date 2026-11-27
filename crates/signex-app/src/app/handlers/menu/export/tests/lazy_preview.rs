@@ -23,14 +23,14 @@ fn open_five_page_preview(dir: &str) -> Signex {
 }
 
 fn drawn_pages(app: &Signex) -> Vec<usize> {
-    let preview = app.document_state.preview.as_ref().expect("preview");
+    let preview = app.document_view.preview.as_ref().expect("preview");
     (0..preview.pages.len())
         .filter(|&i| preview.pages[i].handle().is_some())
         .collect()
 }
 
 fn page_count(app: &Signex) -> usize {
-    app.document_state
+    app.document_view
         .preview
         .as_ref()
         .expect("preview")
@@ -95,7 +95,7 @@ fn a_page_result_from_before_an_options_change_is_dropped() {
     use crate::app::{Message, PrintPreviewMsg};
     let mut app = open_five_page_preview("/w/lazy-stale");
     let old_generation = app
-        .document_state
+        .document_view
         .preview
         .as_ref()
         .expect("preview")

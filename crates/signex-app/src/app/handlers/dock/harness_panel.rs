@@ -32,12 +32,12 @@ impl Signex {
     /// the typed draft; refused text changes nothing, so it stays in its box.
     pub(crate) fn refresh_harness_panel(&mut self) {
         let key = self.harness_facts_key();
-        if self.document_state.panel_ctx.harness.built_from == Some(key) {
+        if self.document_view.panel_ctx.harness.built_from == Some(key) {
             return;
         }
         let mut facts = self.harness_panel_facts();
         facts.built_from = Some(key);
-        *self.document_state.panel_ctx.harness = facts;
+        *self.document_view.panel_ctx.harness = facts;
     }
 
     /// A stamp of everything [`Self::harness_panel_facts`] reads: the
@@ -47,6 +47,7 @@ impl Signex {
     fn harness_facts_key(&self) -> u64 {
         use std::hash::{Hash, Hasher};
         let docs = &self.document_state;
+        let document_view = &self.document_view;
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
         let project = self.project_in_view().and_then(|id| docs.project_by_id(id));
         if let Some(project) = project {
@@ -78,7 +79,11 @@ impl Signex {
             .map(signex_engine::Engine::revision)
             .hash(&mut hasher);
         docs.active_path.hash(&mut hasher);
-        (docs.panel_ctx.selected_uuid, docs.panel_ctx.selected_kind).hash(&mut hasher);
+        (
+            document_view.panel_ctx.selected_uuid,
+            document_view.panel_ctx.selected_kind,
+        )
+            .hash(&mut hasher);
         for v in &self.ui_state.erc_violations {
             if v.rule_id.as_str() == MISMATCH_RULE {
                 (v.primary, &v.tag).hash(&mut hasher);
@@ -92,7 +97,7 @@ impl Signex {
     fn harness_panel_facts(&self) -> HarnessPanel {
         #[cfg(test)]
         HARNESS_FACT_BUILDS.with(|n| n.set(n.get() + 1));
-        let old = &self.document_state.panel_ctx.harness;
+        let old = &self.document_view.panel_ctx.harness;
         let mut facts = HarnessPanel {
             definitions_open: old.definitions_open,
             selected_definition: old.selected_definition,
@@ -126,8 +131,8 @@ impl Signex {
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_default();
         let (Some(id), Some(kind)) = (
-            self.document_state.panel_ctx.selected_uuid,
-            self.document_state.panel_ctx.selected_kind,
+            self.document_view.panel_ctx.selected_uuid,
+            self.document_view.panel_ctx.selected_kind,
         ) else {
             return facts;
         };
@@ -250,13 +255,13 @@ impl Signex {
                 }
             }
             HarnessPanelMsg::DefinitionsOpened => {
-                self.document_state.panel_ctx.harness.definitions_open = true;
+                self.document_view.panel_ctx.harness.definitions_open = true;
             }
             HarnessPanelMsg::DefinitionsClosed => {
-                self.document_state.panel_ctx.harness.definitions_open = false;
+                self.document_view.panel_ctx.harness.definitions_open = false;
             }
             HarnessPanelMsg::DefinitionPicked(index) => {
-                self.document_state.panel_ctx.harness.selected_definition = index;
+                self.document_view.panel_ctx.harness.selected_definition = index;
             }
             HarnessPanelMsg::DefinitionNameTyped { index, text } => {
                 self.rename_harness_type(index, text);
@@ -292,7 +297,7 @@ impl Signex {
                     });
                     count = defs.len();
                 });
-                self.document_state.panel_ctx.harness.selected_definition = count.saturating_sub(1);
+                self.document_view.panel_ctx.harness.selected_definition = count.saturating_sub(1);
             }
             HarnessPanelMsg::SheetEntryTypePicked { pin, harness_type } => {
                 self.set_harness_entry_type(pin, harness_type);
@@ -304,7 +309,7 @@ impl Signex {
         self.refresh_harness_panel();
         // A rebuild for an earlier change must not take the refused text.
         if refused_text.is_some() {
-            self.document_state.panel_ctx.harness.draft = refused_text;
+            self.document_view.panel_ctx.harness.draft = refused_text;
         }
         Some(task)
     }
@@ -339,7 +344,7 @@ impl Signex {
         let Some(value) = parsed.filter(|value| harness_field_holds(field, *value)) else {
             return Some((field, text));
         };
-        self.document_state.panel_ctx.harness.draft = None;
+        self.document_view.panel_ctx.harness.draft = None;
         let (mut c, stored_y) = self.document_state.edit_engine().and_then(|e| {
             let sheet = e.document();
             Some((sheet.harness.connector(id).cloned()?, sheet.page_y(value)))

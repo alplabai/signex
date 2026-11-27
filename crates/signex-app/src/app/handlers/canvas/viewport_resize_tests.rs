@@ -17,7 +17,7 @@ fn app() -> (Signex, iced::window::Id) {
     let (mut app, main) = graphite_app_with_selected_wire();
     // The first-run docks, not a layout another test saved to the shared
     // test prefs: the left dock drag below needs a left dock.
-    app.document_state.dock = crate::dock::graphite_first_run();
+    app.document_view.dock = crate::dock::graphite_first_run();
     app.ui_state.window_size = WINDOW;
     let bounds = app.canvas_bounds();
     // Stands in for the canvas event of a drawn frame.

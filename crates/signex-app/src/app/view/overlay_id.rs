@@ -893,7 +893,7 @@ mod tests {
             iced::Point::new(panel.x, panel.y),
             iced::Size::new(panel.width, panel.height),
         );
-        app.document_state.dock.floating.push(panel);
+        app.document_view.dock.floating.push(panel);
         app.interaction_state.last_mouse_pos = (panel_rect.x + 40.0, panel_rect.y + 60.0);
         let _ = app.update(Message::ContextMenu(ContextMenuMsg::ShowProjectTree(None)));
         assert!(app.interaction_state.project_tree_context_menu.is_some());

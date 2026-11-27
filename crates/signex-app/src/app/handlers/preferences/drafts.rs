@@ -230,7 +230,7 @@ impl Signex {
                 self.ui_state.preferences_draft_symbol_grid_style = style;
                 // Live preview only — `revert_preferences_drafts` pushes
                 // the committed style back if the user discards.
-                self.document_state.panel_ctx.symbol_grid_style = style;
+                self.document_view.panel_ctx.symbol_grid_style = style;
             }
             PrefMsg::DraftZoomStepPercent(percent) => {
                 // Out-of-range input is clamped, never stored raw.

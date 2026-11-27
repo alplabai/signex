@@ -96,7 +96,7 @@ fn send(app: &mut Signex, msg: PrintPreviewMsg) {
 }
 
 fn preview(app: &Signex) -> &signex_app::app::PreviewState {
-    app.document_state.preview.as_ref().expect("preview open")
+    app.document_view.preview.as_ref().expect("preview open")
 }
 
 fn first_page_aspect(app: &Signex) -> f64 {
@@ -496,7 +496,7 @@ fn b5_and_tabloid_sheets_open_on_their_presets() {
 fn opening_the_modal_and_driving_its_task_fills_the_preview() {
     let mut app = app_with_sheet("A4");
     send(&mut app, PrintPreviewMsg::Close);
-    assert!(app.document_state.preview.is_none());
+    assert!(app.document_view.preview.is_none());
 
     let task = app.update(Message::PrintPreview(PrintPreviewMsg::Requested));
     assert!(
@@ -549,7 +549,7 @@ fn page_setup_is_restored_when_the_modal_reopens_for_the_same_document() {
         PrintPreviewMsg::SetScaleMode(PdfScaleMode::OneToOne),
     );
     send(&mut app, PrintPreviewMsg::Close);
-    assert!(app.document_state.preview.is_none());
+    assert!(app.document_view.preview.is_none());
 
     send(&mut app, PrintPreviewMsg::Requested);
     let opts = &preview(&app).pdf_options;
@@ -561,7 +561,7 @@ fn page_setup_is_restored_when_the_modal_reopens_for_the_same_document() {
     // The memory is keyed by document: a different path has no entry, so it
     // would open with its own sheet size.
     send(&mut app, PrintPreviewMsg::Close);
-    let memory = &app.document_state.page_setup_memory;
+    let memory = &app.document_view.page_setup_memory;
     assert_eq!(memory.len(), 1);
     assert!(!memory.contains_key(&PathBuf::from("other.snxsch")));
 }
@@ -634,7 +634,7 @@ fn closing_the_os_window_remembers_the_page_setup() {
 
     let closed = app.update(Message::Window(WindowMsg::SecondaryWindowClosed(window)));
     drop(run(closed));
-    assert!(app.document_state.preview.is_none());
+    assert!(app.document_view.preview.is_none());
 
     send(&mut app, PrintPreviewMsg::Requested);
     assert_eq!(preview(&app).pdf_options.page_size, PageSize::IsoA3);
@@ -652,7 +652,7 @@ fn page_setup_is_filed_under_the_document_the_preview_was_opened_for() {
     app.document_state.active_path = Some(other.clone());
     send(&mut app, PrintPreviewMsg::Close);
 
-    let memory = &app.document_state.page_setup_memory;
+    let memory = &app.document_view.page_setup_memory;
     assert!(memory.contains_key(&opened_for));
     assert!(!memory.contains_key(&other));
 }
@@ -662,7 +662,7 @@ fn page_setup_is_filed_under_the_document_the_preview_was_opened_for() {
 fn remember_a3_setup(app: &mut Signex) {
     send(app, PrintPreviewMsg::SetPageSize(PageSize::IsoA3));
     send(app, PrintPreviewMsg::Close);
-    assert_eq!(app.document_state.page_setup_memory.len(), 1);
+    assert_eq!(app.document_view.page_setup_memory.len(), 1);
 }
 
 /// #982 — the memory is session-only and per open document, so closing the
@@ -678,7 +678,7 @@ fn closing_the_tab_forgets_its_page_setup() {
     )));
 
     assert!(app.document_state.tabs.is_empty());
-    assert!(app.document_state.page_setup_memory.is_empty());
+    assert!(app.document_view.page_setup_memory.is_empty());
 }
 
 #[test]
@@ -691,7 +691,7 @@ fn close_all_forgets_the_page_setup() {
         TabContextAction::CloseAll,
     )));
 
-    assert!(app.document_state.page_setup_memory.is_empty());
+    assert!(app.document_view.page_setup_memory.is_empty());
 }
 
 /// Closing a different tab must leave this document's setup alone.
@@ -712,7 +712,7 @@ fn closing_another_tab_keeps_the_page_setup() {
     )));
 
     assert!(
-        app.document_state
+        app.document_view
             .page_setup_memory
             .contains_key(&PathBuf::from("page-setup.snxsch"))
     );
@@ -731,7 +731,7 @@ fn a_preview_open_for_a_closed_tab_does_not_resurrect_its_setup() {
     )));
     send(&mut app, PrintPreviewMsg::Close);
 
-    assert!(app.document_state.page_setup_memory.is_empty());
+    assert!(app.document_view.page_setup_memory.is_empty());
 }
 
 #[test]
@@ -791,7 +791,7 @@ fn closing_the_project_forgets_its_documents_page_setup() {
 
     assert!(app.document_state.projects.is_empty());
     assert!(app.document_state.tabs.is_empty());
-    assert!(app.document_state.page_setup_memory.is_empty());
+    assert!(app.document_view.page_setup_memory.is_empty());
 }
 
 /// A dirty tab closed by the user is parked with its unsaved edits; reopening
@@ -809,7 +809,7 @@ fn a_dirty_tab_parked_on_close_keeps_its_page_setup() {
     )));
 
     assert!(app.document_state.tabs.is_empty());
-    assert_eq!(app.document_state.page_setup_memory.len(), 1);
+    assert_eq!(app.document_view.page_setup_memory.len(), 1);
 }
 
 /// Two tabs can hold one path; the document is still open until both close.
@@ -832,10 +832,10 @@ fn closing_one_of_two_tabs_on_a_path_keeps_the_page_setup() {
     };
     close(&mut app);
     assert_eq!(app.document_state.tabs.len(), 1);
-    assert_eq!(app.document_state.page_setup_memory.len(), 1);
+    assert_eq!(app.document_view.page_setup_memory.len(), 1);
 
     let _ = app.update(Message::ContextMenu(ContextMenuMsg::TabAction(
         TabContextAction::Close(0),
     )));
-    assert!(app.document_state.page_setup_memory.is_empty());
+    assert!(app.document_view.page_setup_memory.is_empty());
 }

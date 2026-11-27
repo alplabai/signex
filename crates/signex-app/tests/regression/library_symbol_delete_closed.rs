@@ -85,7 +85,7 @@ fn delete(app: &mut Signex, idx: usize) -> Task<Message> {
 }
 
 fn warning(app: &Signex) -> Option<SymbolDeleteWarning> {
-    app.document_state
+    app.document_view
         .panel_ctx
         .symbol_editor
         .as_ref()

@@ -113,6 +113,7 @@ cmd-previous-grid = Previous grid
 cmd-print = Print
 cmd-menu-print = Print...
 cmd-query-pins = Query pins
+cmd-query-power-tree = Query the project's power tree
 cmd-query-net-ties = Query net ties
 cmd-bom-lines = Read the bill of materials
 cmd-read-document = Read document
@@ -708,6 +709,7 @@ cmd-board-assembly-drawing = Open Board Print / PDF for an assembly drawing
 cmd-menu-board-assembly-drawing = Assembly Drawing…
 cmd-export-board-step = Export the board and its parts as a STEP 3D model
 cmd-menu-export-board-step = STEP 3D Model…
+cmd-export-block-diagram = Export a block diagram as an SVG or PDF file
 cmd-select-board-net = Select every track, via and pad of a board net
 cmd-menu-select-board-net = Select Net
 cmd-highlight-board-net = Highlight a board net
@@ -784,6 +786,13 @@ cmd-menu-compile-project = Compile Project
 cmd-open-compiled-design = Open Compiled Design panel
 cmd-menu-open-compiled-design = Compiled Design
 
+## Block diagram from the sheet hierarchy (#2968).
+
+cmd-generate-block-diagram = Generate a block diagram from the sheet hierarchy
+cmd-menu-generate-block-diagram = Generate Block Diagram
+cmd-regenerate-block-diagram = Regenerate the block diagram from the sheet hierarchy
+cmd-menu-regenerate-block-diagram = Regenerate Block Diagram
+
 ## Signal harnesses (#1280).
 
 cmd-open-harness-definitions = Open the harness definitions
@@ -812,6 +821,23 @@ cmd-menu-polygon-manager = Polygon Manager...
 cmd-flip-board-3d = Turn the board over in the 3D view
 cmd-cycle-board-3d-lighting = Next lighting preset in the 3D view
 cmd-copy-board-3d-screenshot = Copy a screenshot of the 3D view
+# block-diagram
+# The block diagram document (mockup row 171, #2796): File ▸ New ▸ Block
+# Diagram and the edits its tab and the command line make.
+cmd-new-block-diagram = New block diagram in the project
+cmd-menu-new-block-diagram = Block Diagram
+cmd-block-add = Add a block to a block diagram
+cmd-block-set = Change a block of a block diagram
+cmd-block-remove = Remove a block from a block diagram
+cmd-block-port-add = Add a port to a block
+cmd-block-port-remove = Remove a port from a block
+cmd-block-link = Connect two blocks
+cmd-block-link-set = Change a block connection
+cmd-block-unlink = Remove a block connection
+cmd-block-group = Group blocks
+cmd-block-group-set = Change a block group
+cmd-block-ungroup = Remove a block group
+cmd-query-block-diagram = Query a block diagram
 # Snippets and templates (#1283): a snippet is a saved circuit fragment of
 # the project or of the user's library; a template starts a sheet or project.
 cmd-save-snippet = Save the selected circuit as a snippet

@@ -20,7 +20,7 @@ fn only_lower_dirty(dir: &Path, differ: bool) -> (Signex, PathBuf, PathBuf) {
 fn assert_quit_held_open(app: &Signex, after: iced::Task<crate::app::Message>, name: &str) {
     // Exactly one cancelled system quit request: no exit, no window close.
     crate::task_driver::assert_quit_declined(after);
-    let notice = app.document_state.error_notice.as_ref().expect("notice");
+    let notice = app.document_view.error_notice.as_ref().expect("notice");
     assert!(notice.detail.render_en_us().contains(name), "{notice:?}");
 }
 
@@ -65,7 +65,7 @@ fn the_only_dirty_spelling_is_the_one_written_and_both_markers_clear() {
     assert_eq!(*sink.0.lock().unwrap(), vec![lower.clone()]);
     assert!(!app.document_state.is_document_dirty(&upper));
     assert!(!app.document_state.is_document_dirty(&lower));
-    assert!(app.document_state.error_notice.is_none());
+    assert!(app.document_view.error_notice.is_none());
 }
 
 /// Replace the sheet held under `path`, as an edit does, and mark it dirty.

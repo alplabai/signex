@@ -20,8 +20,9 @@
 //! `check_board_against_schematic` (#2462, `app::compare_board`),
 //! `board_status` (#2460), `query_rail_budget` (#2943), the BOM and part
 //! search queries `query_bom` (#2938) and `search_parts` (#1297, `bom`),
-//! `query_library` (#2944, the rows of an open library), and
-//! `list_annotations` (mockup row 198, the project's notebook files),
+//! `query_library` (#2944, the rows of an open library),
+//! `list_annotations` (mockup row 198, the project's notebook files) and
+//! `query_power_tree` (#1313, `app::power_tree`, run by `off_thread`),
 //! answered once their reads land. Each
 //! answers with data through [`CommandOutcome::Answered`], never a bare
 //! `Ran`, and reads only the documents (engines, boards, editors, projects,
@@ -50,8 +51,10 @@ mod elements;
 mod find;
 mod library;
 mod net_ties;
+mod off_thread;
 mod pins;
 pub(in crate::app::command) use pins::pin_id;
+mod power_tree;
 mod rail_budget;
 mod read;
 mod sheet_view;
@@ -89,6 +92,9 @@ const QUERY_IDS: &[&str] = &[
     "rules_preset_diff",
     "board_panel",
     "project_settings",
+    // #2796: a block diagram's blocks, ports, connections and groups.
+    "query_block_diagram",
+    "query_power_tree",
     // #1283: the snippets and templates of the project in view and the
     // library, answered once their folders are read.
     "list_snippets",
@@ -171,6 +177,8 @@ impl Signex {
             "check_erc" => return Some(self.check_erc(command, args)),
             "check_drc" => return Some(self.check_drc(command, args)),
             "check_requirements" => return Some(self.check_requirements(command, args)),
+            // The project's power tree, stitched off the UI thread (#1313).
+            "query_power_tree" => return Some(self.query_power_tree(command, args)),
             // The project's notebook files are read first (mockup row 198).
             "list_annotations" => return Some(self.list_annotations(command, args)),
             // The notebook's measurement reads wait for the notebook's files.
@@ -220,6 +228,14 @@ impl Signex {
             }
             // A profile preset may need the profile library read first.
             "rules_preset_diff" => return Some(self.rules_preset_diff(args)),
+            // #2796: a block diagram, answered by its slice; one not open is
+            // read first.
+            "query_block_diagram" => {
+                if let Some(waiting) = self.open_diagram_first(id, args) {
+                    return Some(waiting);
+                }
+                return Some((self.query_block_diagram_outcome(args), Task::none()));
+            }
             "list_snippets" => return Some(self.list_snippets(command, args)),
             "list_templates" => return Some(self.list_templates(command, args)),
             // #2938: answered once the BOM, built off the UI thread, lands.
@@ -289,5 +305,7 @@ mod check_erc_tests;
 mod check_requirements_tests;
 #[cfg(test)]
 mod library_tests;
+#[cfg(test)]
+pub(crate) mod power_tree_tests;
 #[cfg(test)]
 mod rail_budget_tests;

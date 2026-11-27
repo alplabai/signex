@@ -349,8 +349,8 @@ pub(super) fn probe(app: &Signex) -> Probe {
         erc: app.ui_state.erc_dialog_open,
         parameter_manager: app.ui_state.parameter_manager_open,
         passive_calculator: app.ui_state.passive_calculator_open,
-        print_preview: app.document_state.preview.is_some(),
-        bom_preview: app.document_state.bom_preview.is_some(),
+        print_preview: app.document_view.preview.is_some(),
+        bom_preview: app.document_view.bom_preview.is_some(),
         quit_confirm: app.ui_state.app_quit_confirm.is_some(),
         projects: app.document_state.projects.len(),
         recent: app.ui_state.recent_projects.entries().len(),
@@ -369,7 +369,7 @@ pub(super) fn probe(app: &Signex) -> Probe {
             .canvases
             .values()
             .any(|c| c.pending_fit.get().is_some()),
-        error_notice: app.document_state.error_notice.is_some(),
+        error_notice: app.document_view.error_notice.is_some(),
         refs: app
             .document_state
             .active_engine()

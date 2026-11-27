@@ -58,7 +58,7 @@ fn layers(app: &mut Signex, msg: LayersPanelMsg) {
 
 /// What a click on the eye of the section titled `title` sends.
 fn section_eye(app: &Signex, title: &str) -> Vec<PanelMsg> {
-    let ctx = app.document_state.panel_ctx.clone();
+    let ctx = app.document_view.panel_ctx.clone();
     let texts = lay_out_texts(view_panel(PanelKind::Layers, &ctx), PANEL);
     let head = texts
         .iter()
@@ -162,9 +162,9 @@ fn a_section_eye_leaves_the_rows_the_search_hides_alone() {
 fn a_typed_hex_colour_recolours_the_layer_and_keeps_the_card_open() {
     let (mut app, path) = open();
     layers(&mut app, LayersPanelMsg::ColourChipToggled(BOTTOM));
-    let ui = &app.document_state.panel_ctx.pcb_layers_ui;
+    let ui = &app.document_view.panel_ctx.pcb_layers_ui;
     assert_eq!(ui.picker, Some(BOTTOM));
-    let start = app.document_state.panel_ctx.pcb_layers.hex_of(BOTTOM);
+    let start = app.document_view.panel_ctx.pcb_layers.hex_of(BOTTOM);
     assert_eq!(ui.hex, start, "the field starts at the layer's colour");
     assert!(start.starts_with('#') && start.len() == 7, "{start}");
 
@@ -180,7 +180,7 @@ fn a_typed_hex_colour_recolours_the_layer_and_keeps_the_card_open() {
 
     layers(&mut app, LayersPanelMsg::HexEdited("#FF00FF".to_string()));
     assert_eq!(board_colour(&app), Some([255, 0, 255]));
-    let ui = &app.document_state.panel_ctx.pcb_layers_ui;
+    let ui = &app.document_view.panel_ctx.pcb_layers_ui;
     assert_eq!(ui.picker, Some(BOTTOM), "the card stays open");
     assert_eq!(ui.hex, "#FF00FF");
 
@@ -192,7 +192,7 @@ fn a_typed_hex_colour_recolours_the_layer_and_keeps_the_card_open() {
             colour: Some([1, 2, 3]),
         }),
     );
-    assert_eq!(app.document_state.panel_ctx.pcb_layers_ui.picker, None);
+    assert_eq!(app.document_view.panel_ctx.pcb_layers_ui.picker, None);
 }
 
 /// mockup row 103: Layer Stack... in the more menu runs the Layer Stack command,
@@ -200,7 +200,7 @@ fn a_typed_hex_colour_recolours_the_layer_and_keeps_the_card_open() {
 #[test]
 fn layer_stack_in_the_more_menu_opens_the_layer_stack() {
     let (mut app, _path) = open();
-    assert!(app.document_state.panel_ctx.pcb_layers.layer_stack_live);
+    assert!(app.document_view.panel_ctx.pcb_layers.layer_stack_live);
     layers(&mut app, LayersPanelMsg::MoreMenuToggled);
     layers(&mut app, LayersPanelMsg::LayerStackPicked);
     assert!(
@@ -208,18 +208,18 @@ fn layer_stack_in_the_more_menu_opens_the_layer_stack() {
             .kind
             .is_layer_stack()
     );
-    assert!(!app.document_state.panel_ctx.pcb_layers_ui.more_menu_open);
+    assert!(!app.document_view.panel_ctx.pcb_layers_ui.more_menu_open);
 }
 
 /// Esc closes the more menu and goes no further: the armed tool stays.
 #[test]
 fn esc_closes_the_more_menu_and_leaves_the_tool() {
     let (mut app, _path) = open();
-    app.document_state.dock.show_panel(PanelKind::Layers);
+    app.document_view.dock.show_panel(PanelKind::Layers);
     app.interaction_state.current_tool = crate::app::Tool::Wire;
     layers(&mut app, LayersPanelMsg::MoreMenuToggled);
     let _ = app.handle_escape_pressed(None);
-    assert!(!app.document_state.panel_ctx.pcb_layers_ui.more_menu_open);
+    assert!(!app.document_view.panel_ctx.pcb_layers_ui.more_menu_open);
     assert_eq!(app.interaction_state.current_tool, crate::app::Tool::Wire);
 }
 
@@ -232,9 +232,9 @@ fn view_from_bottom_side_flips_the_view_and_closes_the_menu() {
     layers(&mut app, LayersPanelMsg::MoreMenuToggled);
     layers(&mut app, LayersPanelMsg::BoardFlipPicked);
     assert!(app.pcb_layer_view(&path).flipped());
-    assert!(!app.document_state.panel_ctx.pcb_layers_ui.more_menu_open);
+    assert!(!app.document_view.panel_ctx.pcb_layers_ui.more_menu_open);
     assert!(
-        app.document_state.panel_ctx.pcb_layers.flipped,
+        app.document_view.panel_ctx.pcb_layers.flipped,
         "the tick follows"
     );
 }

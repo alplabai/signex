@@ -46,12 +46,7 @@ impl Signex {
     }
 
     pub(super) fn rules_tab_mut(&mut self, id: ProjectId) -> &mut RulesTabState {
-        &mut self
-            .document_state
-            .project_tabs
-            .entry(id)
-            .or_default()
-            .rules
+        &mut self.document_view.project_tabs.entry(id).or_default().rules
     }
 
     fn apply_rules_tab_message(&mut self, msg: RulesTabMsg) {

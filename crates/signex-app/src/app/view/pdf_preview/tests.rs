@@ -251,18 +251,18 @@ fn clear_and_select_all_move_the_count_the_thumbnails_and_the_footer() {
     settle(&mut app, task);
 
     let footer = |app: &Signex| {
-        let preview = app.document_state.preview.as_ref().expect("preview");
+        let preview = app.document_view.preview.as_ref().expect("preview");
         app.pdf_footer_caption(preview)
             .as_str()
             .replace(['\u{2068}', '\u{2069}'], "")
     };
     let count = |app: &Signex| {
-        let preview = app.document_state.preview.as_ref().expect("preview");
+        let preview = app.document_view.preview.as_ref().expect("preview");
         let texts = texts_of(app.view_pdf_settings_column(preview), COLUMN);
         (sheets_summary(preview), texts)
     };
     let dimmed = |app: &Signex| {
-        let preview = app.document_state.preview.as_ref().expect("preview");
+        let preview = app.document_view.preview.as_ref().expect("preview");
         rail_entries(preview)
             .iter()
             .map(|e| !e.ticked)
@@ -617,7 +617,7 @@ fn the_dialog_window_names_the_file_and_its_sheets() {
     assert_eq!(app.detached_modal_subtitle(ModalId::PrintPreview), None);
     let mut preview = four_sheets();
     preview.source = PathBuf::from("/w/dcdc.snxsch");
-    app.document_state.preview = Some(preview);
+    app.document_view.preview = Some(preview);
     let subtitle = app
         .detached_modal_subtitle(ModalId::PrintPreview)
         .map(|s| s.replace(['\u{2068}', '\u{2069}'], ""));

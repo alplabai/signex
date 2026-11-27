@@ -175,6 +175,21 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     // #2552: a move's wire handling, given by the caller, not the settings.
     ("keep_wires", OperandKind::Bool),
     ("wiring", OperandKind::Text),
+    // #2796: a block diagram's blocks, ports, connections and groups.
+    ("function", OperandKind::Text),
+    ("note", OperandKind::Text),
+    ("rails", OperandKind::Text),
+    ("specs", OperandKind::Text),
+    ("clear", OperandKind::Text),
+    ("block", OperandKind::Text),
+    ("interface", OperandKind::Text),
+    ("label", OperandKind::Text),
+    // #2796: a block diagram PDF's page orientation, `landscape` or
+    // `portrait` (its `paper` is declared with mockup row 202 above).
+    ("orientation", OperandKind::Text),
+    // #2968, mockup row 210: what a regenerate does with a block whose sheet
+    // left the project, `apply` (unlink it) or `skip` (leave it, listed).
+    ("unlink", OperandKind::Text),
     // #3038: a part's fit in a variant, and an alternate part's part number
     // (its `footprint` is declared with #2937 below).
     ("fitted", OperandKind::Bool),

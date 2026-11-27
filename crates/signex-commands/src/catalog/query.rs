@@ -64,6 +64,19 @@ pub(super) const QUERY: &[CommandMetadata] = &[
         operands: operands::QUERY_PINS,
         ..CommandMetadata::DEFAULT
     },
+    // #1313: the project's power tree and the budget per sheet; changes
+    // nothing.
+    CommandMetadata {
+        id: "query_power_tree",
+        category: "design",
+        label: command_ids::CMD_QUERY_POWER_TREE,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: operands::QUERY_POWER_TREE,
+        ..CommandMetadata::DEFAULT
+    },
     // #1277: the net ties of a sheet, with the nets each joins, or of a
     // board, with the nets each tie footprint's pads bridge.
     CommandMetadata {

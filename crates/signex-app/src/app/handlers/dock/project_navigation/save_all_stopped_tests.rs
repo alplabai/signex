@@ -81,7 +81,7 @@ fn names_on_disk(path: &Path) -> Vec<String> {
 }
 
 fn notice(app: &Signex) -> String {
-    format!("{:?}", app.document_state.error_notice.as_ref())
+    format!("{:?}", app.document_view.error_notice.as_ref())
 }
 
 /// A panicking write next to a real primitive save: the quit is declined,

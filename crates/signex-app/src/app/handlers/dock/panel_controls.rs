@@ -9,7 +9,7 @@ impl Signex {
     /// called from the document-load path so an opened sheet's stored paper
     /// size drives the drawn sheet, not the previous tab's leftovers.
     pub(crate) fn apply_page_dimensions_to_canvas(&mut self) {
-        let ctx = &self.document_state.panel_ctx;
+        let ctx = &self.document_view.panel_ctx;
         let (w, h) = crate::panels::paper_dimensions(&ctx.paper_size);
         let sheet_frame = self.sheet_frame_for_active(w, h);
         let canvas = self.interaction_state.active_canvas_mut();
@@ -25,7 +25,7 @@ impl Signex {
     /// the page through the mutation gateway. The Position rows show Y from
     /// the paper height under a Lower Left origin, so they are refreshed.
     fn set_sheet_paper_token(&mut self, token: String) {
-        self.document_state.panel_ctx.paper_size = token.clone();
+        self.document_view.panel_ctx.paper_size = token.clone();
         self.apply_page_dimensions_to_canvas();
         self.apply_engine_command(
             signex_engine::Command::SetPaperSize { paper_size: token },
@@ -55,7 +55,7 @@ impl Signex {
         let Some(sheet) = self.document_state.active_path.clone() else {
             return;
         };
-        let Some(draft) = self.document_state.drafts.take_title_block(&sheet, field) else {
+        let Some(draft) = self.document_view.drafts.take_title_block(&sheet, field) else {
             return;
         };
         self.apply_engine_command(
@@ -83,10 +83,10 @@ impl Signex {
         matches: impl Fn(&std::path::Path) -> bool,
     ) {
         // A drawing value still being typed is written with the sheet (#2768).
-        if (self.document_state.live_drawing_edit.as_ref()).is_some_and(|l| matches(&l.path)) {
+        if (self.document_view.live_drawing_edit.as_ref()).is_some_and(|l| matches(&l.path)) {
             self.commit_live_drawing_edit();
         }
-        let picked = self.document_state.drafts.take_title_blocks_where(&matches);
+        let picked = self.document_view.drafts.take_title_blocks_where(&matches);
         let active = self.document_state.active_path.clone();
         let (mine, others): (Vec<_>, Vec<_>) = picked
             .into_iter()
@@ -126,13 +126,13 @@ impl Signex {
         };
         let project = self.document_state.document_project(anchor).map(|p| p.id);
         let owned: Vec<std::path::PathBuf> = self
-            .document_state
+            .document_view
             .drafts
             .title_block_sheets()
             .into_iter()
-            .chain(self.document_state.drafts.sheet_variable_sheets())
+            .chain(self.document_view.drafts.sheet_variable_sheets())
             .chain(self.typed_note_sheets())
-            .chain((self.document_state.live_drawing_edit.iter()).map(|live| live.path.clone()))
+            .chain((self.document_view.live_drawing_edit.iter()).map(|live| live.path.clone()))
             .filter(|sheet| {
                 sheet == anchor
                     || project.is_some_and(|id| {
@@ -192,7 +192,7 @@ impl Signex {
         let Some(sheet) = self.document_state.active_path.clone() else {
             return;
         };
-        let Some(text) = self.document_state.drafts.paper_edge_text(&sheet, edge) else {
+        let Some(text) = self.document_view.drafts.paper_edge_text(&sheet, edge) else {
             return;
         };
         // `parse_field_f64` reports a `nan` / `inf` to Messages.
@@ -201,7 +201,7 @@ impl Signex {
         if crate::numeric_field::text_refused(&text, typed.is_some()) {
             return;
         }
-        let _ = self.document_state.drafts.take_paper_edge(&sheet, edge);
+        let _ = self.document_view.drafts.take_paper_edge(&sheet, edge);
         let Some(mm) = typed else {
             return;
         };
@@ -210,7 +210,7 @@ impl Signex {
             crate::panels::PaperEdge::Height => (None, Some(mm)),
         };
         let token =
-            SheetSize::resized_token(&self.document_state.panel_ctx.paper_size, width, height);
+            SheetSize::resized_token(&self.document_view.panel_ctx.paper_size, width, height);
         self.set_sheet_paper_token(token);
     }
 
@@ -227,8 +227,8 @@ impl Signex {
             crate::panels::PanelMsg::SetUnit(unit) => {
                 self.ui_state.unit = *unit;
                 // Typed pitches and lengths were read in the old unit.
-                self.document_state.panel_ctx.visible_grid_draft = None;
-                self.document_state.panel_ctx.snap_grid_draft = None;
+                self.document_view.panel_ctx.visible_grid_draft = None;
+                self.document_view.panel_ctx.snap_grid_draft = None;
                 self.interaction_state.pcb_primitive.drop_drafts();
             }
             crate::panels::PanelMsg::RunErc => {
@@ -312,7 +312,7 @@ impl Signex {
             crate::panels::PanelMsg::PcbLayers(msg) => {
                 // A picked colour closes the chip's colours.
                 if matches!(msg, crate::app::PcbViewMsg::LayerColourSet { .. }) {
-                    self.document_state.panel_ctx.pcb_layers_ui.picker = None;
+                    self.document_view.panel_ctx.pcb_layers_ui.picker = None;
                 }
                 self.apply_pcb_view_event(None, *msg);
             }
@@ -355,27 +355,22 @@ impl Signex {
                     | ProjectsMsg::FilterCleared
                     | ProjectsMsg::GroupToggled(_)
                     | ProjectsMsg::RecentToggled => {
-                        self.document_state.panel_ctx.projects_view.apply(msg);
+                        self.document_view.panel_ctx.projects_view.apply(msg);
                         Task::none()
                     }
                 };
             }
             crate::panels::PanelMsg::PropertiesTab(index) => {
-                self.document_state.panel_ctx.properties_tab = *index;
+                self.document_view.panel_ctx.properties_tab = *index;
             }
             crate::panels::PanelMsg::ToggleSection(key) => {
                 let key = key.clone();
-                if !self
-                    .document_state
-                    .panel_ctx
-                    .collapsed_sections
-                    .remove(&key)
-                {
-                    self.document_state.panel_ctx.collapsed_sections.insert(key);
+                if !self.document_view.panel_ctx.collapsed_sections.remove(&key) {
+                    self.document_view.panel_ctx.collapsed_sections.insert(key);
                 }
             }
             crate::panels::PanelMsg::SetPrePlacementText(text) => {
-                if let Some(pre_placement) = &mut self.document_state.panel_ctx.pre_placement {
+                if let Some(pre_placement) = &mut self.document_view.panel_ctx.pre_placement {
                     pre_placement.label_text = text.clone();
                 }
                 // Mirror the edit to whichever ghost is armed so the live
@@ -392,13 +387,13 @@ impl Signex {
                 self.set_placement_value(text);
             }
             crate::panels::PanelMsg::SetPrePlacementDesignator(text) => {
-                if let Some(pre_placement) = &mut self.document_state.panel_ctx.pre_placement {
+                if let Some(pre_placement) = &mut self.document_view.panel_ctx.pre_placement {
                     pre_placement.designator = text.clone();
                 }
                 self.set_placement_designator(text);
             }
             crate::panels::PanelMsg::SetPrePlacementRotation(rotation) => {
-                if let Some(pre_placement) = &mut self.document_state.panel_ctx.pre_placement {
+                if let Some(pre_placement) = &mut self.document_view.panel_ctx.pre_placement {
                     pre_placement.rotation = *rotation;
                 }
                 if let Some(g) = &mut self.interaction_state.active_canvas_mut().ghost_label {
@@ -413,12 +408,12 @@ impl Signex {
                 self.set_placement_rotation(*rotation);
             }
             crate::panels::PanelMsg::SetPrePlacementFont(font) => {
-                if let Some(pp) = &mut self.document_state.panel_ctx.pre_placement {
+                if let Some(pp) = &mut self.document_view.panel_ctx.pre_placement {
                     pp.font = font.clone();
                 }
             }
             crate::panels::PanelMsg::SetPrePlacementFontSize(pt) => {
-                if let Some(pp) = &mut self.document_state.panel_ctx.pre_placement {
+                if let Some(pp) = &mut self.document_view.panel_ctx.pre_placement {
                     pp.font_size_pt = *pt;
                 }
                 let fs_mm = *pt as f64 * signex_types::schematic::SCHEMATIC_PT_TO_MM;
@@ -430,37 +425,37 @@ impl Signex {
                 }
             }
             crate::panels::PanelMsg::TogglePrePlacementBold => {
-                if let Some(pp) = &mut self.document_state.panel_ctx.pre_placement {
+                if let Some(pp) = &mut self.document_view.panel_ctx.pre_placement {
                     pp.bold = !pp.bold;
                 }
             }
             crate::panels::PanelMsg::TogglePrePlacementItalic => {
-                if let Some(pp) = &mut self.document_state.panel_ctx.pre_placement {
+                if let Some(pp) = &mut self.document_view.panel_ctx.pre_placement {
                     pp.italic = !pp.italic;
                 }
             }
             crate::panels::PanelMsg::TogglePrePlacementUnderline => {
-                if let Some(pp) = &mut self.document_state.panel_ctx.pre_placement {
+                if let Some(pp) = &mut self.document_view.panel_ctx.pre_placement {
                     pp.underline = !pp.underline;
                 }
             }
             crate::panels::PanelMsg::SetPrePlacementShapeWidth(w) => {
                 if crate::panels::NumericFieldKey::ShapeWidth.accepts(*w)
-                    && let Some(pp) = &mut self.document_state.panel_ctx.pre_placement
+                    && let Some(pp) = &mut self.document_view.panel_ctx.pre_placement
                 {
                     pp.shape_width_mm = *w;
                 }
             }
             crate::panels::PanelMsg::SetPrePlacementWireWidth(preset) => {
-                if let Some(pp) = &mut self.document_state.panel_ctx.pre_placement {
+                if let Some(pp) = &mut self.document_view.panel_ctx.pre_placement {
                     pp.wire_width = *preset;
                 }
             }
             crate::panels::PanelMsg::SetPrePlacementWireColor(color) => {
-                if let Some(pp) = &mut self.document_state.panel_ctx.pre_placement {
+                if let Some(pp) = &mut self.document_view.panel_ctx.pre_placement {
                     pp.wire_color = *color;
                 }
-                self.document_state.panel_ctx.wire_color_picker =
+                self.document_view.panel_ctx.wire_color_picker =
                     crate::panels::WireColorPicker::Closed;
             }
             crate::panels::PanelMsg::EditWireWidth(wire_id, preset) => {
@@ -474,7 +469,7 @@ impl Signex {
                 );
             }
             crate::panels::PanelMsg::EditWireColor(wire_id, color) => {
-                self.document_state.panel_ctx.wire_color_picker =
+                self.document_view.panel_ctx.wire_color_picker =
                     crate::panels::WireColorPicker::Closed;
                 self.apply_engine_command(
                     signex_engine::Command::SetWireColor {
@@ -496,7 +491,7 @@ impl Signex {
                 );
             }
             crate::panels::PanelMsg::EditBusColor(bus_id, color) => {
-                self.document_state.panel_ctx.wire_color_picker =
+                self.document_view.panel_ctx.wire_color_picker =
                     crate::panels::WireColorPicker::Closed;
                 self.apply_engine_command(
                     signex_engine::Command::SetBusColor {
@@ -509,23 +504,23 @@ impl Signex {
             }
             crate::panels::PanelMsg::ToggleWireColorPicker => {
                 use crate::panels::WireColorPicker as Picker;
-                let ctx = &mut self.document_state.panel_ctx;
+                let ctx = &mut self.document_view.panel_ctx;
                 ctx.wire_color_picker = match ctx.wire_color_picker {
                     Picker::Closed => Picker::Palette,
                     Picker::Palette | Picker::Advanced => Picker::Closed,
                 };
             }
             crate::panels::PanelMsg::OpenWireColorAdvancedPicker => {
-                self.document_state.panel_ctx.wire_color_picker =
+                self.document_view.panel_ctx.wire_color_picker =
                     crate::panels::WireColorPicker::Advanced;
             }
             crate::panels::PanelMsg::Illustration(msg) => {
-                let subject = crate::panels::HoverSubject::of(&self.document_state.panel_ctx);
-                let hover = &mut self.document_state.panel_ctx.illustration_hover;
+                let subject = crate::panels::HoverSubject::of(&self.document_view.panel_ctx);
+                let hover = &mut self.document_view.panel_ctx.illustration_hover;
                 hover.update(subject, msg.clone());
             }
             crate::panels::PanelMsg::CancelWireColorPicker => {
-                self.document_state.panel_ctx.wire_color_picker =
+                self.document_view.panel_ctx.wire_color_picker =
                     crate::panels::WireColorPicker::Closed;
             }
             crate::panels::PanelMsg::NumericFieldTyped(key, text) => {
@@ -542,7 +537,7 @@ impl Signex {
                 // The draft is bound after the commit, to the value the
                 // model holds now: a setter's arc angle wrap must not read
                 // as an outside change.
-                self.document_state.panel_ctx.numeric_draft =
+                self.document_view.panel_ctx.numeric_draft =
                     self.numeric_field_state(*key).map(|(owner, applied)| {
                         crate::panels::NumericDraft {
                             key: *key,
@@ -555,17 +550,17 @@ impl Signex {
             crate::panels::PanelMsg::NumericFieldSubmitted(key) => {
                 // Refused text stays in the box, marked, to be fixed.
                 let ends_draft = self
-                    .document_state
+                    .document_view
                     .panel_ctx
                     .numeric_draft
                     .as_ref()
                     .is_some_and(|d| d.key == *key && !key.refuses(&d.text));
                 if ends_draft {
-                    self.document_state.panel_ctx.numeric_draft = None;
+                    self.document_view.panel_ctx.numeric_draft = None;
                 }
             }
             crate::panels::PanelMsg::SetPrePlacementShapeFill(f) => {
-                if let Some(pp) = &mut self.document_state.panel_ctx.pre_placement {
+                if let Some(pp) = &mut self.document_view.panel_ctx.pre_placement {
                     pp.shape_fill = *f;
                 }
             }
@@ -581,15 +576,15 @@ impl Signex {
                     edit,
                     crate::app::contracts::DrawingFieldEdit::StrokeColor(_)
                 ) {
-                    self.document_state.panel_ctx.wire_color_picker =
+                    self.document_view.panel_ctx.wire_color_picker =
                         crate::panels::WireColorPicker::Closed;
                 }
                 // Fire the engine-side update only if exactly one
                 // drawing is selected — the panel shows post-placement
                 // fields only in that case.
-                if let Some(uuid) = self.document_state.panel_ctx.selected_uuid.filter(|_| {
+                if let Some(uuid) = self.document_view.panel_ctx.selected_uuid.filter(|_| {
                     matches!(
-                        self.document_state.panel_ctx.selected_kind,
+                        self.document_view.panel_ctx.selected_kind,
                         Some(signex_types::schematic::SelectedKind::Drawing)
                     )
                 }) {
@@ -605,7 +600,7 @@ impl Signex {
                 // Location field that does not read refuses OK: the form
                 // stays up with the field marked, and the pause (what Esc
                 // restores) stays too.
-                let refused = (self.document_state.panel_ctx.pre_placement.as_ref())
+                let refused = (self.document_view.panel_ctx.pre_placement.as_ref())
                     .is_some_and(|pp| pp.position.has_invalid());
                 if !refused {
                     self.interaction_state.active_canvas_mut().placement_paused = false;
@@ -618,8 +613,8 @@ impl Signex {
             }
             crate::panels::PanelMsg::SetGridSize(size) => {
                 self.ui_state.grid_size_mm = *size;
-                self.document_state.panel_ctx.grid_size_mm = *size;
-                self.document_state.panel_ctx.snap_grid_draft = None;
+                self.document_view.panel_ctx.grid_size_mm = *size;
+                self.document_view.panel_ctx.snap_grid_draft = None;
                 self.interaction_state.active_canvas_mut().clear_bg_cache();
                 self.interaction_state.pcb_canvas.clear_bg_cache();
                 let size = *size;
@@ -629,18 +624,18 @@ impl Signex {
             }
             crate::panels::PanelMsg::SetVisibleGridSize(size) => {
                 self.ui_state.visible_grid_mm = *size;
-                self.document_state.panel_ctx.visible_grid_mm = *size;
-                self.document_state.panel_ctx.visible_grid_draft = None;
+                self.document_view.panel_ctx.visible_grid_mm = *size;
+                self.document_view.panel_ctx.visible_grid_draft = None;
                 self.interaction_state.active_canvas_mut().clear_bg_cache();
                 self.interaction_state.pcb_canvas.clear_bg_cache();
             }
             crate::panels::PanelMsg::ToggleSnapHotspots => {
                 self.ui_state.snap_hotspots = !self.ui_state.snap_hotspots;
-                self.document_state.panel_ctx.snap_hotspots = self.ui_state.snap_hotspots;
+                self.document_view.panel_ctx.snap_hotspots = self.ui_state.snap_hotspots;
             }
             crate::panels::PanelMsg::SetUiFont(name) => {
                 self.ui_state.ui_font_name = name.clone();
-                self.document_state.panel_ctx.ui_font_name = name.clone();
+                self.document_view.panel_ctx.ui_font_name = name.clone();
                 let name = name.clone();
                 follow = crate::fonts::background_pref_write("ui_font", move || {
                     crate::fonts::write_ui_font_pref(&name)
@@ -648,7 +643,7 @@ impl Signex {
             }
             crate::panels::PanelMsg::SetCanvasFont(name) => {
                 self.ui_state.canvas_font_name = name.clone();
-                self.document_state.panel_ctx.canvas_font_name = name.clone();
+                self.document_view.panel_ctx.canvas_font_name = name.clone();
                 self.interaction_state
                     .active_canvas_mut()
                     .clear_content_cache();
@@ -658,7 +653,7 @@ impl Signex {
             }
             crate::panels::PanelMsg::SetCanvasFontSize(size) => {
                 self.ui_state.canvas_font_size = *size;
-                self.document_state.panel_ctx.canvas_font_size = *size;
+                self.document_view.panel_ctx.canvas_font_size = *size;
                 self.interaction_state
                     .active_canvas_mut()
                     .clear_content_cache();
@@ -668,7 +663,7 @@ impl Signex {
             }
             crate::panels::PanelMsg::SetCanvasFontBold(is_bold) => {
                 self.ui_state.canvas_font_bold = *is_bold;
-                self.document_state.panel_ctx.canvas_font_bold = *is_bold;
+                self.document_view.panel_ctx.canvas_font_bold = *is_bold;
                 self.interaction_state
                     .active_canvas_mut()
                     .clear_content_cache();
@@ -678,7 +673,7 @@ impl Signex {
             }
             crate::panels::PanelMsg::SetCanvasFontItalic(is_italic) => {
                 self.ui_state.canvas_font_italic = *is_italic;
-                self.document_state.panel_ctx.canvas_font_italic = *is_italic;
+                self.document_view.panel_ctx.canvas_font_italic = *is_italic;
                 self.interaction_state
                     .active_canvas_mut()
                     .clear_content_cache();
@@ -687,10 +682,10 @@ impl Signex {
                     .clear_overlay_cache();
             }
             crate::panels::PanelMsg::OpenCanvasFontPopup => {
-                self.document_state.panel_ctx.canvas_font_popup_open = true;
+                self.document_view.panel_ctx.canvas_font_popup_open = true;
             }
             crate::panels::PanelMsg::CloseCanvasFontPopup => {
-                self.document_state.panel_ctx.canvas_font_popup_open = false;
+                self.document_view.panel_ctx.canvas_font_popup_open = false;
             }
             crate::panels::PanelMsg::EditSheetFrame(edit) => {
                 self.apply_sheet_frame_edit(*edit);
@@ -698,30 +693,29 @@ impl Signex {
             crate::panels::PanelMsg::DocumentOptions(msg) => {
                 // View state only; a submitted zone count is a frame edit.
                 let sheet = self.document_state.active_path.clone();
-                let ui = &mut self.document_state.panel_ctx.document_options;
+                let ui = &mut self.document_view.panel_ctx.document_options;
                 if let Some(edit) = ui.apply(msg.clone(), sheet) {
                     self.apply_sheet_frame_edit(edit);
                 }
             }
             crate::panels::PanelMsg::SetPageFormatMode(mode) => {
-                self.document_state.panel_ctx.page_format_mode = *mode;
+                self.document_view.panel_ctx.page_format_mode = *mode;
                 self.apply_page_dimensions_to_canvas();
             }
             crate::panels::PanelMsg::SetPaperSize(size) => {
-                let token =
-                    SheetSize::picked_token(&self.document_state.panel_ctx.paper_size, size);
+                let token = SheetSize::picked_token(&self.document_view.panel_ctx.paper_size, size);
                 self.set_sheet_paper_token(token);
             }
             crate::panels::PanelMsg::SetSheetOrientation(orientation) => {
                 let token = SheetSize::reoriented_token(
-                    &self.document_state.panel_ctx.paper_size,
+                    &self.document_view.panel_ctx.paper_size,
                     *orientation,
                 );
                 self.set_sheet_paper_token(token);
             }
             crate::panels::PanelMsg::TitleBlockTyping(field, text) => {
                 if let Some(sheet) = self.document_state.active_path.clone() {
-                    self.document_state
+                    self.document_view
                         .drafts
                         .set_title_block(&sheet, *field, text);
                 }
@@ -743,7 +737,7 @@ impl Signex {
             }
             crate::panels::PanelMsg::CustomPaperEdgeTyping(edge, text) => {
                 if let Some(sheet) = self.document_state.active_path.clone() {
-                    self.document_state
+                    self.document_view
                         .drafts
                         .set_paper_edge(&sheet, *edge, text);
                 }

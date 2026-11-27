@@ -139,7 +139,7 @@ fn close_project_commits_the_draft_before_anything_else() {
         .cloned();
     assert_eq!(stored.as_deref(), Some("X"));
     assert!(app.document_state.is_document_dirty(&sheet));
-    assert!(app.document_state.drafts.is_empty());
+    assert!(app.document_view.drafts.is_empty());
 }
 
 /// A draft on another sheet, committed by Quit, goes through the same
@@ -243,7 +243,7 @@ fn discard_all_closes_a_draft_only_project_and_writes_nothing() {
     assert!(!app.document_state.engines.contains_key(&sheet));
     assert!(!app.document_state.is_document_dirty(&sheet));
     assert!(app.document_state.dirty_document_paths().is_empty());
-    assert!(app.document_state.drafts.is_empty());
+    assert!(app.document_view.drafts.is_empty());
 }
 
 /// Closing an unrelated tab, by the user or by a discard path, does not
@@ -271,7 +271,7 @@ fn closing_an_unrelated_tab_leaves_another_sheets_draft_alone() {
             !app.document_state.is_document_dirty(&a),
             "user_route={user_route}"
         );
-        assert_eq!(app.document_state.drafts.title_blocks().len(), 1);
+        assert_eq!(app.document_view.drafts.title_blocks().len(), 1);
     }
 }
 
@@ -295,7 +295,7 @@ fn closing_the_sheet_commits_on_the_users_route_and_drops_on_a_discard() {
     let a = open(&mut app, "a", SchematicSheet::default());
     type_drawn_by(&mut app, "X");
     let _ = app.close_tab_now(0);
-    assert!(app.document_state.drafts.is_empty());
+    assert!(app.document_view.drafts.is_empty());
     assert!(
         !app.document_state.engines.contains_key(&a),
         "clean, so dropped"
@@ -372,7 +372,7 @@ fn cancel_on_remove_leaves_the_draft_pending_and_the_sheet_clean() {
     let _ = app.handle_remove_confirm(RemoveChoice::ExcludeFromProject);
     let _ = app.update(Message::Remove(RemoveMsg::Close));
     assert!(app.ui_state.remove_dialog.is_none());
-    assert_eq!(app.document_state.drafts.title_blocks().len(), 1);
+    assert_eq!(app.document_view.drafts.title_blocks().len(), 1);
     assert_eq!(drawn_by_in_engine(&app, &sheet), None);
     assert!(!app.document_state.is_document_dirty(&sheet));
     assert!(
@@ -399,7 +399,7 @@ fn save_on_the_remove_prompt_writes_the_draft() {
         saved.title_block.get("drawn_by").map(String::as_str),
         Some("X")
     );
-    assert!(app.document_state.drafts.is_empty());
+    assert!(app.document_view.drafts.is_empty());
 }
 
 /// Discard drops the draft with the sheet's edits.
@@ -412,7 +412,7 @@ fn discard_on_the_remove_prompt_drops_the_draft() {
         ExcludeDirtyChoice::Discard,
     )));
     settle(&mut app, task);
-    assert!(app.document_state.drafts.is_empty());
+    assert!(app.document_view.drafts.is_empty());
     assert!(
         recorder.0.lock().unwrap().is_empty(),
         "nothing was written for it"
@@ -427,14 +427,14 @@ fn a_rename_keeps_the_pending_drafts() {
     let (mut app, old, recorder) = app_with_draft();
     let new = PathBuf::from("renamed.snxsch");
     app.rekey_document(&old, &new);
-    let drafts = app.document_state.drafts.title_blocks();
+    let drafts = app.document_view.drafts.title_blocks();
     assert_eq!(drafts.len(), 1);
     assert_eq!(drafts[0].sheet, new, "the draft follows the sheet");
 
     let task = app.update(Message::Menu(MenuMessage::command("save_document")));
     settle(&mut app, task);
     assert_eq!(written_drawn_by(&recorder).as_deref(), Some("X"));
-    assert!(app.document_state.drafts.is_empty());
+    assert!(app.document_view.drafts.is_empty());
 }
 
 /// An undocked window showing `sheet`, registered the way `UndockTab` does.
@@ -484,7 +484,7 @@ fn a_window_draft_counts_as_unsaved_at_quit_and_is_saved() {
     let task = app.dispatch_command(&id, crate::app::command::CommandArgs::none(), Some(window));
     settle(&mut app, task);
     assert_eq!(written_drawn_by(&recorder).as_deref(), Some("X"));
-    assert!(app.document_state.drafts.is_empty());
+    assert!(app.document_view.drafts.is_empty());
 }
 
 /// Renaming the sheet re-keys the title-block and the paper-edge drafts,
@@ -497,12 +497,12 @@ fn a_rename_re_keys_title_block_and_paper_edge_drafts() {
     let _other = open(&mut app, "other", SchematicSheet::default());
     let window = undocked_window(&mut app, &old);
     type_in_window(&mut app, window, "X");
-    app.document_state
+    app.document_view
         .drafts
         .set_paper_edge(&old, PaperEdge::Width, "250");
     let new = PathBuf::from("renamed.snxsch");
     app.rekey_document(&old, &new);
-    let drafts = &app.document_state.drafts;
+    let drafts = &app.document_view.drafts;
     assert_eq!(
         drafts
             .title_block_text(&new, TitleBlockField::DrawnBy)
@@ -527,7 +527,7 @@ fn a_rename_re_keys_title_block_and_paper_edge_drafts() {
 fn tree_close_project_prompts_for_a_window_draft() {
     let (mut app, sheet, id, _recorder) = project_with_draft();
     let window = undocked_window(&mut app, &sheet);
-    app.document_state.drafts.drop_sheet(&sheet);
+    app.document_view.drafts.drop_sheet(&sheet);
     type_in_window(&mut app, window, "X");
     close_project_to_gate(&mut app, id);
     assert!(app.ui_state.project_close_confirm.is_some());
@@ -545,7 +545,7 @@ fn unsaved_documents_lists_a_case_variant_once() {
         normalize_unicode: false,
     };
     for name in ["/w/A.snxsch", "/w/a.snxsch"] {
-        app.document_state
+        app.document_view
             .drafts
             .set_title_block(Path::new(name), TitleBlockField::DrawnBy, "X");
     }
@@ -635,7 +635,7 @@ fn add_project_q(app: &mut Signex) -> (PathBuf, crate::app::ProjectId) {
         project_id: Some(id),
         kind: TabKind::Schematic,
     });
-    app.document_state
+    app.document_view
         .drafts
         .set_title_block(&sheet, TitleBlockField::DrawnBy, "Q");
     (sheet, id)
@@ -650,7 +650,7 @@ fn closing_one_project_leaves_another_projects_draft_pending() {
     close_project_to_gate(&mut app, p);
     assert!(app.ui_state.project_close_confirm.is_some(), "P prompts");
     assert_eq!(
-        app.document_state
+        app.document_view
             .drafts
             .title_block_text(&q_sheet, TitleBlockField::DrawnBy)
             .as_deref(),
@@ -670,7 +670,7 @@ fn exporting_one_project_leaves_another_projects_draft_pending() {
     let _ = app.handle_bom_preview_open();
     assert_eq!(drawn_by_in_engine(&app, &p_sheet).as_deref(), Some("X"));
     assert_eq!(
-        app.document_state
+        app.document_view
             .drafts
             .title_block_text(&q_sheet, TitleBlockField::DrawnBy)
             .as_deref(),
@@ -705,7 +705,7 @@ fn close_project_save_all_leaves_another_projects_draft_pending() {
     )));
     settle(&mut app, task);
     assert_eq!(
-        app.document_state
+        app.document_view
             .drafts
             .title_block_text(&q_sheet, TitleBlockField::DrawnBy)
             .as_deref(),
@@ -730,7 +730,7 @@ fn close_library_save_all_commits_no_schematic_draft() {
         },
     );
     assert_eq!(
-        app.document_state
+        app.document_view
             .drafts
             .title_block_text(&sheet, TitleBlockField::DrawnBy)
             .as_deref(),
@@ -750,7 +750,7 @@ fn save_as_commits_only_the_saved_documents_draft() {
     drop(app.save_active_document_as(&p_sheet, PathBuf::from("/w/p/copy.snxsch")));
     assert_eq!(drawn_by_in_engine(&app, &p_sheet).as_deref(), Some("X"));
     assert_eq!(
-        app.document_state
+        app.document_view
             .drafts
             .title_block_text(&q_sheet, TitleBlockField::DrawnBy)
             .as_deref(),
@@ -768,7 +768,7 @@ fn a_field_typed_behind_the_close_prompt_is_saved_by_save_all() {
     let (mut app, sheet, id, recorder) = project_with_draft();
     close_project_to_gate(&mut app, id);
     assert!(app.ui_state.project_close_confirm.is_some(), "the prompt");
-    app.document_state.drafts.set_title_block(
+    app.document_view.drafts.set_title_block(
         &sheet,
         TitleBlockField::DocumentNumber,
         "TYPED-BEHIND",
@@ -802,7 +802,7 @@ fn a_refused_discard_all_leaves_a_field_typed_behind_the_prompt_a_draft() {
         reason: "is not a regular file".to_string(),
         whole_path: false,
     });
-    app.document_state.drafts.set_title_block(
+    app.document_view.drafts.set_title_block(
         &sheet,
         TitleBlockField::DocumentNumber,
         "TYPED-BEHIND",
@@ -812,7 +812,7 @@ fn a_refused_discard_all_leaves_a_field_typed_behind_the_prompt_a_draft() {
     )));
     assert!(app.ui_state.project_close_confirm.is_some(), "refused");
     assert_eq!(
-        app.document_state
+        app.document_view
             .drafts
             .title_block_text(&sheet, TitleBlockField::DocumentNumber)
             .as_deref(),
@@ -892,7 +892,7 @@ fn overriding_a_project_title_block_value_is_one_undo_step_and_saved() {
     app.document_state.document_saves = DocumentSaves::new(recorder.clone());
     let source = |app: &mut Signex| {
         app.refresh_panel_ctx();
-        let ctx = &app.document_state.panel_ctx;
+        let ctx = &app.document_view.panel_ctx;
         title_block_source(
             TitleBlockField::Company,
             &ctx.title_block,

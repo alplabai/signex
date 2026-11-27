@@ -50,7 +50,7 @@ fn run(app: &mut Signex, id: &str) {
 fn every_panel_row_is_a_check_row_that_follows_the_panel() {
     let (mut app, _task) = Signex::new();
     for (label, kind) in PANEL_ROWS {
-        app.document_state.dock.close_panel(kind);
+        app.document_view.dock.close_panel(kind);
         assert_eq!(
             view_row_checked(&context(&app), label),
             Some(false),
@@ -62,7 +62,7 @@ fn every_panel_row_is_a_check_row_that_follows_the_panel() {
             Some(true),
             "{label}"
         );
-        app.document_state.dock.close_panel(kind);
+        app.document_view.dock.close_panel(kind);
         assert_eq!(
             view_row_checked(&context(&app), label),
             Some(false),
@@ -74,8 +74,8 @@ fn every_panel_row_is_a_check_row_that_follows_the_panel() {
 #[test]
 fn the_shortcut_toggles_the_check_mark() {
     let (mut app, _task) = Signex::new();
-    app.document_state.dock.close_panel(PanelKind::Properties);
-    app.document_state.dock.close_panel(PanelKind::Messages);
+    app.document_view.dock.close_panel(PanelKind::Properties);
+    app.document_view.dock.close_panel(PanelKind::Messages);
 
     run(&mut app, "toggle_properties_panel");
     assert_eq!(view_row_checked(&context(&app), "Properties"), Some(true));
@@ -88,11 +88,11 @@ fn the_shortcut_toggles_the_check_mark() {
 #[test]
 fn a_panel_hidden_behind_another_tab_stays_checked() {
     let (mut app, _task) = Signex::new();
-    app.document_state.dock.close_panel(PanelKind::Properties);
+    app.document_view.dock.close_panel(PanelKind::Properties);
     let _ = app.show_panel(PanelKind::Properties);
     // Same home region as Properties; showing it takes the front.
-    app.document_state.dock.show_panel(PanelKind::Filter);
-    assert!(!app.document_state.dock.is_frontmost(PanelKind::Properties));
+    app.document_view.dock.show_panel(PanelKind::Filter);
+    assert!(!app.document_view.dock.is_frontmost(PanelKind::Properties));
 
     assert_eq!(view_row_checked(&context(&app), "Properties"), Some(true));
 }

@@ -384,7 +384,7 @@ mod tests {
         let mut app = app_with_library_rename();
         let since = crate::diagnostics::newest_entry_id();
         let _task = app.update(crate::app::Message::Library(LibraryMessage::NewComponent));
-        let notice = app.document_state.error_notice.clone().expect("a card");
+        let notice = app.document_view.error_notice.clone().expect("a card");
         assert_eq!(notice.title.render_en_us(), "Library Change Not Applied");
         assert!(
             notice

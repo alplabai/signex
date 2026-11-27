@@ -39,7 +39,7 @@ impl Signex {
             return container(Space::new()).boxed();
         };
 
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let i18n = self.ui_state.i18n.as_ref();
         let choose = |choice| Message::Project(ProjectMsg::CloseConfirm(choice));
 

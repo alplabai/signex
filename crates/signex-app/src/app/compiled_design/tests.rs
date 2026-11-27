@@ -74,7 +74,7 @@ fn designator(app: &Signex) -> String {
 }
 
 fn type_designator(app: &mut Signex, text: &str) {
-    app.document_state.panel_ctx.child_sheet_name_buf = Some((SYMBOL, text.to_string()));
+    app.document_view.panel_ctx.child_sheet_name_buf = Some((SYMBOL, text.to_string()));
     app.commit_child_sheet_name(SYMBOL);
 }
 
@@ -91,7 +91,7 @@ fn a_selection_change_refreshes_the_repeat_rows() {
 
     app.update_selection_info();
     let rows = app
-        .document_state
+        .document_view
         .panel_ctx
         .compiled_design
         .sheet_symbol
@@ -101,7 +101,7 @@ fn a_selection_change_refreshes_the_repeat_rows() {
     app.interaction_state.active_canvas_mut().selected.clear();
     app.update_selection_info();
     assert!(
-        app.document_state
+        app.document_view
             .panel_ctx
             .compiled_design
             .sheet_symbol
@@ -121,7 +121,7 @@ fn a_selection_change_refreshes_the_kinds_the_footer_counts() {
     app.update_selection_info();
 
     let kinds: Vec<_> = app
-        .document_state
+        .document_view
         .panel_ctx
         .selection_form
         .kinds
@@ -181,7 +181,7 @@ fn a_clashing_to_is_refused_with_the_text_kept_and_marked() {
     app.submit_repeat_fields(SYMBOL);
 
     assert_eq!(designator(&app), "Repeat(CH, 1, 4)");
-    assert!(app.document_state.error_notice.is_some());
+    assert!(app.document_view.error_notice.is_some());
     let rows = app.compiled_design_view().sheet_symbol.expect("the rows");
     assert_eq!(rows.to_text, "6");
     assert!(rows.is_to_refused);

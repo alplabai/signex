@@ -419,11 +419,11 @@ fn a_toggled_section_opens_without_a_context_rebuild() {
     let fields_open = |app: &Signex| {
         let view = crate::panels::view_panel(
             crate::panels::PanelKind::Properties,
-            &app.document_state.panel_ctx,
+            &app.document_view.panel_ctx,
         );
         lay_out_texts(view, DOCK).iter().any(|t| t.text == bound)
     };
-    assert!(app.document_state.panel_ctx.symbol_editor.is_some());
+    assert!(app.document_view.panel_ctx.symbol_editor.is_some());
     assert!(!fields_open(&app), "Fields starts folded");
     panel(&mut app, PanelMsg::ToggleSection("symprops.fields".into()));
     assert!(fields_open(&app), "the toggle opened Fields");

@@ -46,7 +46,7 @@ fn the_title_bar_plus_opens_the_create_popover_for_the_selection() {
     let plus = |app: &Signex| {
         signex_app::panels::title_actions(
             signex_app::panels::PanelKind::Unions,
-            &app.document_state.panel_ctx,
+            &app.document_view.panel_ctx,
         )
         .into_iter()
         .next()

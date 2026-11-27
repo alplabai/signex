@@ -465,7 +465,7 @@ fn a_failed_create_keeps_the_dialog_and_its_setup_and_says_why() {
     assert!(state.creating.is_none());
     assert_eq!(state.setup.profile, SetupProfile::Hdi, "the setup is kept");
     assert!(
-        app.document_state.error_notice.is_none(),
+        app.document_view.error_notice.is_none(),
         "no error card over the dialog"
     );
 }
@@ -541,7 +541,7 @@ fn a_quit_while_create_writes_is_held_until_it_lands() {
 
     let quit = app.update(Message::Window(crate::app::WindowMsg::QuitRequested));
     crate::task_driver::assert_quit_declined(quit);
-    let notice = app.document_state.error_notice.as_ref().expect("notice");
+    let notice = app.document_view.error_notice.as_ref().expect("notice");
     // Since #2380 the notice holds catalog ids; read it as the user does.
     let detail = notice.detail_text(&app.ui_state.i18n);
     assert!(
