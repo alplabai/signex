@@ -61,7 +61,7 @@ pub use pcb_defaults::PcbDefaultsMsg;
 use pcb_defaults::content_pcb_defaults;
 use profiles::content_profiles;
 pub use profiles::{ProfileAction, ProfilePageMsg, ProfilesMsg};
-pub use profiles::{ProfileEditorTab, ProfileNameAction};
+pub use profiles::{ProfileEditorTab, ProfileNameAction, RuleListFilter};
 pub use schematic_display::BodyFillMsg;
 use schematic_display::{DisplayPage, content_schematic_display};
 

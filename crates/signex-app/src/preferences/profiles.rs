@@ -6,8 +6,10 @@
 mod editor;
 mod list;
 mod page_state;
+mod rule_list_filter;
 
 pub use page_state::{ProfileEditorTab, ProfileNameAction};
+pub use rule_list_filter::RuleListFilter;
 
 use std::sync::Arc;
 

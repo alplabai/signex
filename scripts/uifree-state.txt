@@ -91,9 +91,12 @@ struct crates/signex-app/src/app/state/mod.rs MovedProjectDir
 # ERC/profile/machine/io fields plus the listed extras (`pin_matrix_overrides`,
 # ERC configuration persisted beside `erc_severity_override`). Every new
 # `erc_*`, `profile_*` or `machine_*` field of UiState is scanned; the
-# exclusions are GUI state: the waiver being typed, the dialog flag, the
-# diagnostics cursor and the Preferences profile manager (selection, name
-# input, confirmations). `pending_profile_update` is an "Update from profile"
+# exclusions are GUI state, not core-bound data: the waiver being typed, the
+# dialog flag, the diagnostics cursor, the ERC rule list filter (text the
+# person types to narrow the list; written by dispatch/overlay.rs, read only
+# by the ERC dialog view, no ERC run or result reads it: classification test
+# step 3, H7) and the Preferences profile manager (selection, name input,
+# confirmations). `pending_profile_update` is an "Update from profile"
 # confirmation waiting on the person, so it stays out.
 struct crates/signex-app/src/app/core/check_runs.rs CheckRuns
 struct crates/signex-app/src/app/core/check_runs.rs KeptRun
@@ -107,7 +110,7 @@ struct crates/signex-app/src/app/state/rule_profile_ui.rs Dispatch
 struct crates/signex-app/src/app/state/rule_profile_ui.rs WriteGate
 enum crates/signex-app/src/app/state/rule_profile_ui.rs QueuedWrite
 enum crates/signex-app/src/rule_profiles/manage.rs RuleEdit
-struct crates/signex-app/src/app/state/ui.rs UiState erc_*,!erc_waive_draft,!erc_dialog_open,!erc_focus_global_index,profile_*,!profile_manager,machine_*,io,pin_matrix_overrides
+struct crates/signex-app/src/app/state/ui.rs UiState erc_*,!erc_waive_draft,!erc_dialog_open,!erc_focus_global_index,!erc_rule_list,profile_*,!profile_manager,machine_*,io,pin_matrix_overrides
 # The agent journal (slice 5a).
 struct crates/signex-app/src/app/agent/journal/queue.rs JournalQueue
 struct crates/signex-app/src/app/agent/journal/queue.rs ProjectQueue

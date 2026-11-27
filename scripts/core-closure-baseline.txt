@@ -16,4 +16,3 @@ crates/signex-app/src/app/core/block_diagram_panes.rs UnlinkRow
 crates/signex-app/src/app/core/block_diagram_view.rs BlockDiagramViewState
 crates/signex-app/src/app/core/branch_switch.rs SwitchRequest
 crates/signex-app/src/app/core/branch_switch.rs SwitchSurface
-crates/signex-app/src/app/core/rule_list_filter.rs RuleListFilter

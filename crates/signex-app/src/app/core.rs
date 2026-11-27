@@ -28,7 +28,6 @@ pub(crate) mod pending_library;
 pub(crate) mod project_id;
 pub(crate) mod rail_rename;
 pub(crate) mod resolved_placement;
-pub(crate) mod rule_list_filter;
 pub(crate) mod rule_state;
 pub(crate) mod rules_history;
 pub(crate) mod undo_groups;
