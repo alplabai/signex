@@ -593,9 +593,9 @@ To place a part, open a schematic sheet, then either:
   `P` then `P` in the default profile (`A` in Classic), or the Active Bar's
   **Part** button, which all open the same picker), select a part and press
   **Place**, or press `Enter` in the search field; or
-- press **Place** at the start of a part's row in the Components panel (it
-  shows while the pointer is over the row), double-click the row, press
-  **Place** in its details, or right-click the row and pick **Place**. The menu shows the key that places
+- point at a part's row in the Components panel and press **Place** in its
+  first cell, double-click the row, press **Place** in its details, or
+  right-click the row and pick **Place**. The menu shows the key that places
   from it, the one your shortcut profile binds to accepting a placement
   (`Enter` in the default profile; Classic binds none).
 

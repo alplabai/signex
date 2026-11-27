@@ -99,7 +99,10 @@ fn guide_describes_placing_and_has_no_merge_leftovers() {
         !GUIDE.contains("No menu item or button reaches it yet"),
         "the guide still says placement is not wired"
     );
-    assert!(GUIDE.contains("press **Place** at the end of a part's row"));
+    // #2785 moved the row's Place from the row's end to its first cell.
+    assert!(GUIDE.contains(
+        "point at a part's row in the Components panel and press **Place** in its"
+    ));
     for marker in ["<<<<<<< ", "||||||| ", ">>>>>>> "] {
         assert!(
             !GUIDE.contains(marker),
