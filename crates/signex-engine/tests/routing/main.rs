@@ -26,6 +26,7 @@ mod soak;
 mod stats;
 mod stress_report;
 mod stress_tests;
+mod thermal_relief_corpus;
 mod workers;
 
 use std::time::Instant;
