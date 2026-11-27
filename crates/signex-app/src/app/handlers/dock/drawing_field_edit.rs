@@ -15,8 +15,8 @@ use signex_types::schematic::SelectedKind;
 
 impl Signex {
     pub(super) fn type_drawing_field(&mut self, field: DrawingFieldId, text: &str) {
-        let selected = self.document_state.panel_ctx.selected_uuid;
-        let other_box = (self.document_state.live_drawing_edit.as_ref())
+        let selected = self.document_view.panel_ctx.selected_uuid;
+        let other_box = (self.document_view.live_drawing_edit.as_ref())
             .is_some_and(|live| live.field != field || Some(live.drawing) != selected);
         if other_box {
             self.commit_live_drawing_edit();
@@ -27,7 +27,7 @@ impl Signex {
             .active_render_snapshot()
             .map(|sheet| (sheet.page.origin, sheet.paper_size.clone()));
         // A prior drawing's half-typed text must not bleed into this one.
-        let ctx = &mut self.document_state.panel_ctx;
+        let ctx = &mut self.document_view.panel_ctx;
         if ctx.drawing_edit_buf_for != selected || ctx.drawing_edit_buf_page != page {
             ctx.drawing_edit_buf.clear();
             ctx.drawing_edit_buf_for = selected;
@@ -50,13 +50,13 @@ impl Signex {
     /// Refused text stays to be fixed and an empty box shows the stored
     /// value again; either way the sheet goes back to its old value.
     pub(super) fn leave_drawing_field(&mut self, field: DrawingFieldId) {
-        let live_here = (self.document_state.live_drawing_edit.as_ref())
-            .is_some_and(|live| live.field == field);
+        let live_here =
+            (self.document_view.live_drawing_edit.as_ref()).is_some_and(|live| live.field == field);
         if live_here {
             self.commit_live_drawing_edit();
             return;
         }
-        let Some(text) = self.document_state.panel_ctx.drawing_edit_buf.get(&field) else {
+        let Some(text) = self.document_view.panel_ctx.drawing_edit_buf.get(&field) else {
             return;
         };
         if !field.refuses(text) {
@@ -65,7 +65,7 @@ impl Signex {
     }
 
     fn preview_drawing_field(&mut self, field: DrawingFieldId, value: f64) {
-        let ctx = &self.document_state.panel_ctx;
+        let ctx = &self.document_view.panel_ctx;
         let target = ctx
             .selected_uuid
             .filter(|_| matches!(ctx.selected_kind, Some(SelectedKind::Drawing)));
@@ -95,9 +95,9 @@ impl Signex {
                 let Some(pair) = result.patch_pair else {
                     return;
                 };
-                let open = self.document_state.live_drawing_edit.as_ref();
+                let open = self.document_view.live_drawing_edit.as_ref();
                 let panel_open = open.map_or(panel_open, |live| live.panel_open);
-                self.document_state.live_drawing_edit = Some(LiveDrawingEdit {
+                self.document_view.live_drawing_edit = Some(LiveDrawingEdit {
                     path: path.clone(),
                     drawing: target,
                     field,
@@ -135,7 +135,7 @@ impl Signex {
     /// preview: the sheet goes back, refused text stays to be fixed. `true`
     /// when the sheet went back, which is all an Undo has to do.
     pub(crate) fn commit_live_drawing_edit(&mut self) -> bool {
-        let Some(live) = self.document_state.live_drawing_edit.clone() else {
+        let Some(live) = self.document_view.live_drawing_edit.clone() else {
             return false;
         };
         let typed = self.typed_drawing_text(live.field);
@@ -149,7 +149,7 @@ impl Signex {
         if restored {
             self.cancel_live_drawing_edit();
         } else {
-            self.document_state.live_drawing_edit = None;
+            self.document_view.live_drawing_edit = None;
             if let Some(engine) = self.document_state.engines.get_mut(&live.path) {
                 engine.commit_live_edit();
                 self.document_state.mark_history_edit_dirty(&live.path);
@@ -163,7 +163,7 @@ impl Signex {
 
     /// The text of `field` in whichever Properties holds it.
     fn typed_drawing_text(&self, field: DrawingFieldId) -> Option<String> {
-        let docs = &self.document_state;
+        let docs = &self.document_view;
         std::iter::once(&docs.panel_ctx)
             .chain(docs.window_panel_ctx.values())
             .find_map(|ctx| ctx.drawing_edit_buf.get(&field).cloned())
@@ -172,7 +172,7 @@ impl Signex {
     /// Put the sheet back as it was before the preview; the box's text is
     /// the caller's to keep or drop.
     fn cancel_live_drawing_edit(&mut self) {
-        let Some(live) = self.document_state.live_drawing_edit.take() else {
+        let Some(live) = self.document_view.live_drawing_edit.take() else {
             return;
         };
         let patch = (self.document_state.engines.get_mut(&live.path))
@@ -185,10 +185,10 @@ impl Signex {
     /// Esc in a drawing box: the old value and no typed text. `true` when
     /// there was something to restore, so the key goes no further.
     pub(crate) fn restore_drawing_field(&mut self) -> bool {
-        let typed = !self.document_state.panel_ctx.drawing_edit_buf.is_empty()
-            || (self.document_state.window_panel_ctx.values())
+        let typed = !self.document_view.panel_ctx.drawing_edit_buf.is_empty()
+            || (self.document_view.window_panel_ctx.values())
                 .any(|ctx| !ctx.drawing_edit_buf.is_empty());
-        if !typed && self.document_state.live_drawing_edit.is_none() {
+        if !typed && self.document_view.live_drawing_edit.is_none() {
             return false;
         }
         self.cancel_live_drawing_edit();
@@ -201,10 +201,10 @@ impl Signex {
     /// under another edit. Text left for another drawing goes too.
     pub(crate) fn settle_live_drawing_edit(&mut self) {
         // First: the commit reads the box's text to tell a value from a typo.
-        if let Some(live) = self.document_state.live_drawing_edit.clone() {
+        if let Some(live) = self.document_view.live_drawing_edit.clone() {
             let engine = self.document_state.engines.get(&live.path);
             let in_engine = engine.is_some_and(|e| e.live_edit_drawing() == Some(live.drawing));
-            let docs = &self.document_state;
+            let docs = &self.document_view;
             let selected = docs.panel_ctx.selected_uuid == Some(live.drawing)
                 || (docs.window_panel_ctx.values()).any(|c| c.selected_uuid == Some(live.drawing));
             let panel_closed = live.panel_open && !self.properties_panel_is_open();
@@ -216,7 +216,7 @@ impl Signex {
     }
 
     fn drop_text_of_another_drawing(&mut self) {
-        let ctx = &mut self.document_state.panel_ctx;
+        let ctx = &mut self.document_view.panel_ctx;
         if !ctx.drawing_edit_buf.is_empty() && ctx.drawing_edit_buf_for != ctx.selected_uuid {
             ctx.drawing_edit_buf.clear();
         }
@@ -225,7 +225,7 @@ impl Signex {
     /// Forget the typed text of `field` (`None`: of every box), in the main
     /// Properties and every undocked window's.
     fn drop_drawing_field_text(&mut self, field: Option<DrawingFieldId>) {
-        let docs = &mut self.document_state;
+        let docs = &mut self.document_view;
         let panels = std::iter::once(&mut docs.panel_ctx).chain(docs.window_panel_ctx.values_mut());
         for ctx in panels {
             match field {
@@ -238,7 +238,7 @@ impl Signex {
     }
 
     fn properties_panel_is_open(&self) -> bool {
-        self.document_state
+        self.document_view
             .dock
             .locate(PanelKind::Properties)
             .is_some()

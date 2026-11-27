@@ -227,7 +227,7 @@ impl Signex {
             let detail = signex_i18n::Translatable::new(signex_i18n::ids::NOTICE_PASTE_READ_ONLY)
                 .arg("path", target.display().to_string());
             crate::diagnostics::log_warning(format!("Paste failed: {}", detail.render_en_us()));
-            self.document_state.error_notice = Some(crate::app::state::ErrorNotice::new(
+            self.document_view.error_notice = Some(crate::app::state::ErrorNotice::new(
                 signex_i18n::ids::NOTICE_PASTE_FAILED,
                 detail,
             ));

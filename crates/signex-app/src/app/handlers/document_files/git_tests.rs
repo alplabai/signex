@@ -58,7 +58,7 @@ fn a_paused_repository_is_reported_once_per_project_not_every_save() {
     app.commit_save_to_project_git(&file, "Save 1");
     let task = app.drain_pending_git_commits();
     crate::app::handlers::menu::export::settle(&mut app, task);
-    let notice = app.document_state.error_notice.take().expect("reported");
+    let notice = app.document_view.error_notice.take().expect("reported");
     assert!(
         notice.detail.render_en_us().contains("paused"),
         "{notice:?}"
@@ -69,7 +69,7 @@ fn a_paused_repository_is_reported_once_per_project_not_every_save() {
     let task = app.drain_pending_git_commits();
     crate::app::handlers::menu::export::settle(&mut app, task);
     assert!(
-        app.document_state.error_notice.is_none(),
+        app.document_view.error_notice.is_none(),
         "the second refusal must stay quiet"
     );
 }
@@ -103,9 +103,9 @@ fn every_refused_commit_is_logged_but_the_card_is_raised_once() {
     let before = refusal_lines(dir.path());
 
     refused(&mut app, dir.path());
-    assert!(app.document_state.error_notice.take().is_some());
+    assert!(app.document_view.error_notice.take().is_some());
     refused(&mut app, dir.path());
-    assert!(app.document_state.error_notice.is_none());
+    assert!(app.document_view.error_notice.is_none());
 
     assert_eq!(
         refusal_lines(dir.path()) - before,
@@ -139,7 +139,7 @@ fn a_successful_commit_lifts_the_pause() {
     let mut app = git_app(dir.path());
     refused(&mut app, dir.path());
     assert!(app.document_state.paused_git_projects.contains(dir.path()));
-    app.document_state.error_notice = None;
+    app.document_view.error_notice = None;
 
     let _ = app.handle_project_git_commit_done(
         dir.path().to_path_buf(),
@@ -149,7 +149,7 @@ fn a_successful_commit_lifts_the_pause() {
     assert!(app.document_state.paused_git_projects.is_empty());
 
     refused(&mut app, dir.path());
-    assert!(app.document_state.error_notice.is_some());
+    assert!(app.document_view.error_notice.is_some());
 }
 
 /// Only a guard refusal is "paused"; a git failure is an ordinary warning.
@@ -162,7 +162,7 @@ fn a_git_failure_is_not_reported_as_paused() {
         PathBuf::from("a.snxsch"),
         Err(crate::app::GitCommitFailure::Failed("boom".into())),
     );
-    assert!(app.document_state.error_notice.is_none());
+    assert!(app.document_view.error_notice.is_none());
     assert!(app.document_state.paused_git_projects.is_empty());
 }
 

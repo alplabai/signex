@@ -25,7 +25,7 @@ impl Signex {
             .document_state
             .sheet_path_for_window(window_id, &self.ui_state)?;
         let strip = self
-            .document_state
+            .document_view
             .panel_ctx
             .compiled_design
             .strip

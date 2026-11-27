@@ -11,7 +11,7 @@ use crate::panels::{PanelKind, PartPanelEffect, PartPanelMsg};
 
 impl Signex {
     pub(super) fn handle_dock_part_message(&mut self, msg: &PartPanelMsg) -> Task<Message> {
-        let effect = self.document_state.panel_ctx.part_panel.update(msg.clone());
+        let effect = self.document_view.panel_ctx.part_panel.update(msg.clone());
         match effect {
             PartPanelEffect::None => Task::none(),
             PartPanelEffect::Action(action) => self.dispatch_library_message(
@@ -35,7 +35,7 @@ impl Signex {
     /// Fold the part sections while a pin of the selected part is focused,
     /// and give the user's state back when the focus ends.
     pub(crate) fn sync_pin_focus_sections(&mut self, is_pin_focused: bool) {
-        let ctx = &mut self.document_state.panel_ctx;
+        let ctx = &mut self.document_view.panel_ctx;
         ctx.part_panel
             .sync_pin_focus(&mut ctx.collapsed_sections, is_pin_focused);
     }

@@ -21,7 +21,7 @@ fn project_add_library_says_it_is_not_available() {
     )));
 
     let notice = app
-        .document_state
+        .document_view
         .error_notice
         .as_ref()
         .expect("the Project add-library request must be surfaced, not dropped");
@@ -44,7 +44,7 @@ fn project_add_library_at_a_path_is_not_silently_dropped() {
         },
     ));
 
-    assert!(app.document_state.error_notice.is_some());
+    assert!(app.document_view.error_notice.is_some());
     assert!(app.library.installed_libraries.is_empty());
 }
 
@@ -65,7 +65,7 @@ fn failed_installed_add_library_reaches_the_user() {
         app.library.installed_libraries.is_empty(),
         "a library that failed to mount must not be listed as installed"
     );
-    let shown = app.document_state.error_notice.is_some() || app.library.recovery.is_some();
+    let shown = app.document_view.error_notice.is_some() || app.library.recovery.is_some();
     assert!(shown, "the mount failure must be surfaced to the user");
 }
 
@@ -94,7 +94,7 @@ fn non_recoverable_mount_failure_raises_the_error_card() {
         "this failure is not recoverable, so no dialog may open"
     );
     let notice = app
-        .document_state
+        .document_view
         .error_notice
         .as_ref()
         .expect("a non-recoverable mount failure must raise the error card");
@@ -130,7 +130,7 @@ fn mount_failure_is_surfaced_even_while_a_recovery_dialog_is_open() {
         "the earlier recovery dialog must be left alone"
     );
     assert!(
-        app.document_state.error_notice.is_some(),
+        app.document_view.error_notice.is_some(),
         "the new failure produced no dialog of its own, so the card must show"
     );
 }
@@ -181,7 +181,7 @@ fn failed_promote_keeps_the_library_listed_and_shows_the_error() {
     );
     assert!(app.library.global_libraries.iter().all(|e| e.path != lib));
     let notice = app
-        .document_state
+        .document_view
         .error_notice
         .as_ref()
         .expect("the failed global_libraries.toml write must be reported");
@@ -203,7 +203,7 @@ fn open_library_failure_raises_the_error_card() {
 
     assert!(app.library.recovery.is_none());
     let notice = app
-        .document_state
+        .document_view
         .error_notice
         .as_ref()
         .expect("File > Library > Open Library must not only log a failure");

@@ -79,7 +79,7 @@ impl Signex {
             crate::diagnostics::log_info(messages::no_project("net highlight"));
             return Task::none();
         };
-        self.document_state.net_nav.index.clear_failed(project);
+        self.document_view.net_nav.index.clear_failed(project);
         match self.net_index_lookup(project) {
             IndexLookup::Ready(data) => {
                 self.highlight_with(project, &data, &target, select_here);
@@ -90,7 +90,7 @@ impl Signex {
                 // A request aimed at a point is about that point, wherever
                 // the pointer goes while the index builds.
                 if action == PendingNetAction::HighlightAtPoint
-                    && let Some(pending) = self.document_state.net_nav.pending.as_mut()
+                    && let Some(pending) = self.document_view.net_nav.pending.as_mut()
                 {
                     pending.cursor = Some((target.at.x, target.at.y));
                 }
@@ -157,7 +157,7 @@ impl Signex {
             .collect::<HashSet<_>>()
             .len();
         let said = messages::highlighted(&name, places, sheets);
-        self.document_state.net_nav.highlight = Some(NetHighlight {
+        self.document_view.net_nav.highlight = Some(NetHighlight {
             project,
             name,
             anchor,
@@ -196,7 +196,7 @@ impl Signex {
     /// sheets, opening each sheet it is on.
     pub(crate) fn step_net_highlight(&mut self, forward: bool) -> Task<Message> {
         let Some(project) = self
-            .document_state
+            .document_view
             .net_nav
             .highlight
             .as_ref()
@@ -205,7 +205,7 @@ impl Signex {
             crate::diagnostics::log_info(messages::nothing_highlighted());
             return Task::none();
         };
-        self.document_state.net_nav.index.clear_failed(project);
+        self.document_view.net_nav.index.clear_failed(project);
         match self.net_index_lookup(project) {
             IndexLookup::Ready(data) => self.step_with(&data, forward),
             IndexLookup::Building(build) => {
@@ -219,11 +219,11 @@ impl Signex {
     }
 
     fn step_with(&mut self, data: &ProjectNetData, forward: bool) -> Task<Message> {
-        let Some(highlight) = self.document_state.net_nav.highlight.as_mut() else {
+        let Some(highlight) = self.document_view.net_nav.highlight.as_mut() else {
             return Task::none();
         };
         let Some(net) = data.index.resolve(&highlight.name, &highlight.anchor) else {
-            self.document_state.net_nav.highlight = None;
+            self.document_view.net_nav.highlight = None;
             self.sync_net_highlight_to_canvases();
             crate::diagnostics::log_info(messages::highlight_gone());
             return Task::none();
@@ -266,7 +266,7 @@ impl Signex {
             crate::diagnostics::log_info(messages::no_project("the Net Inspector"));
             return Task::none();
         };
-        let highlight = &self.document_state.net_nav.highlight;
+        let highlight = &self.document_view.net_nav.highlight;
         if highlight
             .as_ref()
             .is_some_and(|h| h.project == project && h.name == name)
@@ -294,7 +294,7 @@ impl Signex {
 
     /// Remove the net highlight.
     pub(crate) fn clear_net_highlight(&mut self) -> Task<Message> {
-        if self.document_state.net_nav.highlight.take().is_none() {
+        if self.document_view.net_nav.highlight.take().is_none() {
             crate::diagnostics::log_info(messages::nothing_to_clear());
             return Task::none();
         }
@@ -307,7 +307,7 @@ impl Signex {
     /// or removes members changes what is bright; a net that no longer exists
     /// drops its highlight.
     pub(super) fn refresh_highlight_from(&mut self, project: ProjectId, data: &ProjectNetData) {
-        let Some(highlight) = self.document_state.net_nav.highlight.as_mut() else {
+        let Some(highlight) = self.document_view.net_nav.highlight.as_mut() else {
             return;
         };
         if highlight.project != project {
@@ -326,7 +326,7 @@ impl Signex {
                 }
             }
             None => {
-                self.document_state.net_nav.highlight = None;
+                self.document_view.net_nav.highlight = None;
                 crate::diagnostics::log_info(messages::highlight_gone());
             }
         }
@@ -337,7 +337,7 @@ impl Signex {
     /// the focused sheet, an undocked window its own. A sheet the net does not
     /// reach (or of another project) shows everything dimmed.
     pub(crate) fn sync_net_highlight_to_canvases(&mut self) {
-        let highlight = self.document_state.net_nav.highlight.as_ref();
+        let highlight = self.document_view.net_nav.highlight.as_ref();
         let main_path = self.document_state.active_path.clone();
         let mut per_window: Vec<(iced::window::Id, Option<std::path::PathBuf>)> = Vec::new();
         for id in self.interaction_state.canvases.keys() {
@@ -354,11 +354,7 @@ impl Signex {
                 return None;
             }
             // The placement is read once, as hover, jumps and the target read it.
-            let data = self
-                .document_state
-                .net_nav
-                .index
-                .latest(highlight.project)?;
+            let data = self.document_view.net_nav.index.latest(highlight.project)?;
             let placement = self.net_occurrence(&data, path);
             Some(highlight.bright_on(path, placement.as_ref()))
         };

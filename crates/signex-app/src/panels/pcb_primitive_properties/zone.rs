@@ -790,7 +790,7 @@ mod tests {
     fn the_copper_card_puts_unfill_between_repour_and_shelve() {
         use crate::layout_probe::{find, lay_out_texts};
         let (app, _boot) = crate::app::Signex::new();
-        let ctx = app.document_state.panel_ctx.clone();
+        let ctx = app.document_view.panel_ctx.clone();
         let look = Look::of(&ctx);
         let f = pour(Some(false));
         let texts = lay_out_texts(card_actions(look, &f), iced::Size::new(400.0, 200.0));
@@ -809,7 +809,7 @@ mod tests {
     fn the_copper_card_leads_the_pour_section() {
         use crate::layout_probe::{find, lay_out_texts};
         let (app, _boot) = crate::app::Signex::new();
-        let ctx = app.document_state.panel_ctx.clone();
+        let ctx = app.document_view.panel_ctx.clone();
         let look = Look::of(&ctx);
         let f = pour(Some(false));
         let section = super::pour(look, &f).expect("a pour has a Pour section");
@@ -834,7 +834,7 @@ mod tests {
     fn corner_size_is_greyed_and_cannot_be_typed() {
         use crate::layout_probe::{draw_pixels, lay_out_inputs};
         let (app, _boot) = crate::app::Signex::new();
-        let ctx = app.document_state.panel_ctx.clone();
+        let ctx = app.document_view.panel_ctx.clone();
         let look = Look::of(&ctx);
         let window = iced::Size::new(120.0, 30.0);
         assert!(lay_out_inputs(corner_size_value(look), window).is_empty());
@@ -845,7 +845,7 @@ mod tests {
 
     fn context() -> PanelContext {
         let (app, _boot) = crate::app::Signex::new();
-        app.document_state.panel_ctx.clone()
+        app.document_view.panel_ctx.clone()
     }
 
     fn plain(text: &str) -> String {

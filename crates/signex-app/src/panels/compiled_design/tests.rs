@@ -15,7 +15,7 @@ const CH2: usize = 4;
 /// A compiled panel with one channel row, CH2.
 fn context() -> PanelContext {
     let (app, _task) = crate::app::Signex::new();
-    let mut ctx = app.document_state.panel_ctx.clone();
+    let mut ctx = app.document_view.panel_ctx.clone();
     ctx.compiled_design.panel = CompiledPanelView {
         status: CompiledStatus::Ready,
         rows: vec![CompiledRow {

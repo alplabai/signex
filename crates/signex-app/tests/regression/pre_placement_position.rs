@@ -30,11 +30,11 @@ fn type_field(app: &mut Signex, field: PositionField, text: &str) {
 
 /// The stored Y a Y typed as `shown` stands for on the active sheet.
 fn stored_y(app: &Signex, shown: f64) -> f64 {
-    app.document_state.panel_ctx.shown_y(shown)
+    app.document_view.panel_ctx.shown_y(shown)
 }
 
 fn typed(app: &Signex, field: PositionField) -> Option<f64> {
-    app.document_state
+    app.document_view
         .panel_ctx
         .pre_placement
         .as_ref()
@@ -124,7 +124,7 @@ fn a_cursor_move_updates_the_untyped_fields_only() {
         zoom_pct: 100.0,
     }));
     let pp = app
-        .document_state
+        .document_view
         .panel_ctx
         .pre_placement
         .as_ref()
@@ -175,7 +175,7 @@ fn a_typed_position_is_read_in_the_panels_unit() {
     use signex_types::coord::Unit;
     let mut app = app_with_empty_sheet();
     app.ui_state.unit = Unit::Mil;
-    app.document_state.panel_ctx.unit = Unit::Mil;
+    app.document_view.panel_ctx.unit = Unit::Mil;
     tab_in(&mut app, Tool::Junction);
     type_field(&mut app, PositionField::X, "1000");
     let x = typed(&app, PositionField::X).expect("typed");
@@ -203,7 +203,7 @@ fn ok_with_a_field_that_does_not_read_places_nothing() {
     panel(&mut app, PanelMsg::ConfirmPrePlacement);
     assert!(doc(&app).junctions.is_empty(), "nothing placed at 50");
     let pp = app
-        .document_state
+        .document_view
         .panel_ctx
         .pre_placement
         .as_ref()

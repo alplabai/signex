@@ -148,7 +148,7 @@ fn the_rows_are_grouped_by_layer_in_pour_order() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, _path) = app_with(dir.path());
     run_command(&mut app);
-    let facts = app.document_state.panel_ctx.polygons.clone().expect("rows");
+    let facts = app.document_view.panel_ctx.polygons.clone().expect("rows");
     let order: Vec<(Uuid, usize, Option<usize>)> = facts
         .rows
         .iter()
@@ -193,7 +193,7 @@ fn a_typed_clearance_is_one_undo_step_on_the_board() {
     );
     assert_eq!(zone_of(&app, &path, TOP_GND).clearance, 0.5);
     assert!(app.document_state.is_document_dirty(&path));
-    let row = app.document_state.panel_ctx.polygons.as_ref().unwrap();
+    let row = app.document_view.panel_ctx.polygons.as_ref().unwrap();
     let row = row.row(zone(TOP_GND)).unwrap();
     assert_eq!(row.clearance_mm, 0.5, "the row follows the board");
     let _ = app.update(Message::Edit(EditMsg::Undo));
@@ -276,7 +276,7 @@ fn shelve_selected_shelves_the_ticked_pours_and_frees_their_place() {
     );
     assert!(zone_of(&app, &path, TOP_VCC).shelved);
     assert!(!zone_of(&app, &path, TOP_GND).shelved);
-    let facts = app.document_state.panel_ctx.polygons.clone().unwrap();
+    let facts = app.document_view.panel_ctx.polygons.clone().unwrap();
     let vcc = facts.row(zone(TOP_VCC)).unwrap();
     assert_eq!((vcc.state, vcc.order), (PourState::Shelved, None));
     assert_eq!(facts.row(zone(TOP_GND)).unwrap().order, Some(1));
@@ -300,10 +300,10 @@ fn a_click_in_either_view_picks_the_same_pour() {
             zone: zone(BOTTOM_GND),
         },
     );
-    let ui = &app.document_state.panel_ctx.pcb_panel.polygons;
+    let ui = &app.document_view.panel_ctx.pcb_panel.polygons;
     assert_eq!(ui.current, Some(zone(BOTTOM_GND)));
     run_command(&mut app);
-    let ui = &app.document_state.panel_ctx.pcb_panel.polygons;
+    let ui = &app.document_view.panel_ctx.pcb_panel.polygons;
     assert_eq!(ui.current, Some(zone(BOTTOM_GND)), "the tab shows it too");
 }
 
@@ -379,7 +379,7 @@ fn coming_back_from_another_board_shows_the_fills_again() {
     );
     let at = tab_of(&app, &a, true);
     show(&mut app, at);
-    let facts = app.document_state.panel_ctx.polygons.clone().expect("rows");
+    let facts = app.document_view.panel_ctx.polygons.clone().expect("rows");
     assert_eq!(facts.board, a);
     assert!(
         facts.rows.iter().all(|row| row.area_mm2.is_some()),
@@ -412,9 +412,9 @@ fn undo_drops_the_text_typed_and_not_applied() {
     };
     send(&mut app, typed);
     let _ = app.update(Message::Edit(EditMsg::Undo));
-    let ui = &app.document_state.panel_ctx.pcb_panel.polygons;
+    let ui = &app.document_view.panel_ctx.pcb_panel.polygons;
     assert_eq!(ui.draft(zone(TOP_GND), PourField::Clearance), None);
-    let facts = app.document_state.panel_ctx.polygons.as_ref().unwrap();
+    let facts = app.document_view.panel_ctx.polygons.as_ref().unwrap();
     assert_eq!(facts.row(zone(TOP_GND)).unwrap().clearance_mm, 0.0);
 }
 
@@ -433,7 +433,7 @@ fn a_right_click_on_a_pour_opens_the_manager_with_that_pour_ticked() {
     };
     assert!(app.selected_pours(&path).is_empty(), "nothing is selected");
     run_command(&mut app);
-    let ui = &app.document_state.panel_ctx.pcb_panel.polygons;
+    let ui = &app.document_view.panel_ctx.pcb_panel.polygons;
     assert_eq!(ui.selected, BTreeSet::from([hovered]));
     assert_eq!(ui.current, Some(hovered));
 }

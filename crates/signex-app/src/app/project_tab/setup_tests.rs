@@ -381,7 +381,7 @@ fn rules_the_loader_would_refuse_are_not_stored() {
         "the last good rules stay stored"
     );
     let id = app.document_state.projects[0].id;
-    let draft = app.document_state.project_tabs[&id]
+    let draft = app.document_view.project_tabs[&id]
         .setup_draft
         .as_ref()
         .unwrap();
@@ -516,7 +516,7 @@ fn re_picking_the_same_tier_restores_an_edited_fab_rule() {
 
 fn setup_draft_open(app: &Signex) -> bool {
     let id = app.document_state.projects[0].id;
-    app.document_state
+    app.document_view
         .project_tabs
         .get(&id)
         .is_some_and(|tab| tab.setup_draft.is_some())

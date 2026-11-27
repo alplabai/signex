@@ -33,7 +33,7 @@ pub enum TabKind {
     Pcb,
     /// The Gerber Viewer (mockup rows 193 and 193f), one tab at a time, on
     /// the main window only. State lives in
-    /// [`crate::app::DocumentState::gerber_viewer`]; `TabInfo.path` is the
+    /// [`crate::app::DocumentViewState::gerber_viewer`]; `TabInfo.path` is the
     /// package's first path, read only, never saved.
     GerberViewer,
     ComponentEditor(ComponentEditorTab),
@@ -53,7 +53,7 @@ pub enum TabKind {
     /// keyed by the same path that lives on `TabInfo.path`.
     LibraryBrowser(PathBuf),
     /// The project's `.snxprj` opened as a Project tab (#1202). Tab state
-    /// lives in [`crate::app::DocumentState::project_tabs`] keyed by this
+    /// lives in [`crate::app::DocumentViewState::project_tabs`] keyed by this
     /// id; `TabInfo.path` is the `.snxprj` path.
     Project(super::state::ProjectId),
     /// The project's design rules as a Rules tab (#2398). Tab state lives

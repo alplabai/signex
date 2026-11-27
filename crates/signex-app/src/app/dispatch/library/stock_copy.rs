@@ -260,7 +260,7 @@ impl Signex {
                     "Failed to copy a stock primitive",
                     &anyhow::anyhow!(reason.clone()),
                 );
-                self.document_state.error_notice = Some(ErrorNotice::open(
+                self.document_view.error_notice = Some(ErrorNotice::open(
                     signex_i18n::Translatable::new(signex_i18n::ids::NOTICE_STOCK_COPY_FAILED)
                         .arg("kind", noun)
                         .arg("library", outcome.library.display().to_string())

@@ -169,7 +169,7 @@ impl crate::app::Signex {
     pub fn with_extensions(mut self, extensions: ExtensionHost) -> Self {
         self.extensions = extensions;
         let host = &self.extensions;
-        self.document_state
+        self.document_view
             .dock
             .adopt_extension_panels(|key| host.panel(key));
         if self.extensions.is_empty() {

@@ -89,7 +89,7 @@ fn can_undo(app: &Signex, path: &Path) -> bool {
 }
 
 fn buffered(app: &Signex) -> Option<&str> {
-    let buffer = &app.document_state.panel_ctx.drawing_edit_buf;
+    let buffer = &app.document_view.panel_ctx.drawing_edit_buf;
     buffer.get(&F::RectWidth).map(String::as_str)
 }
 
@@ -144,9 +144,9 @@ fn switching_the_selection_commits_the_edit() {
 #[test]
 fn closing_properties_commits_the_edit() {
     let (mut app, path) = app();
-    app.document_state.dock.show_panel(PanelKind::Properties);
+    app.document_view.dock.show_panel(PanelKind::Properties);
     typing(&mut app, "45");
-    app.document_state.dock.close_panel(PanelKind::Properties);
+    app.document_view.dock.close_panel(PanelKind::Properties);
     panel(&mut app, PanelMsg::CancelWireColorPicker);
     assert_eq!(width(&app, 0), 45.0);
     assert!(can_undo(&app, &path));
@@ -242,7 +242,7 @@ fn a_colour_pick_closes_the_popover_as_one_step() {
     };
     let edit = DrawingFieldEdit::StrokeColor(Some(red));
     panel(&mut app, PanelMsg::UpdateDrawingEdit(edit));
-    let picker = app.document_state.panel_ctx.wire_color_picker;
+    let picker = app.document_view.panel_ctx.wire_color_picker;
     assert_eq!(picker, WireColorPicker::Closed);
     undo(&mut app);
     assert!(!can_undo(&app, &path));

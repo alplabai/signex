@@ -246,7 +246,7 @@ impl Signex {
     /// The badges changed: Properties ▸ Design notes reads them, and the
     /// selection layer of every sheet, where they are drawn, redraws.
     pub(crate) fn repaint_notebook_badges(&mut self) {
-        self.document_state.panel_ctx.notebook_badges =
+        self.document_view.panel_ctx.notebook_badges =
             Arc::clone(&self.ui_state.annotations.badges);
         self.interaction_state.canvas.clear_overlay_cache();
         for canvas in self.interaction_state.canvases.values_mut() {
@@ -257,7 +257,7 @@ impl Signex {
     /// Rebuild the rows the panel draws from the scan and the filters.
     fn refresh_annotations_view(&mut self) {
         let view = build_view(&self.ui_state.annotations, today());
-        self.document_state.panel_ctx.annotations = Arc::new(view);
+        self.document_view.panel_ctx.annotations = Arc::new(view);
     }
 
     /// Go to a reference: a part's sheet, zoomed to and selecting the part;
@@ -299,6 +299,7 @@ impl Signex {
     fn jump_to_net(&mut self, name: &str) -> Task<Message> {
         let i18n = Arc::clone(&self.ui_state.i18n);
         let ds = &self.document_state;
+        let document_view = &self.document_view;
         let active = ds
             .active_path
             .as_deref()
@@ -313,7 +314,7 @@ impl Signex {
         let planned = crate::app::runtime::net_class_styles::plan_projects(ds)
             .into_iter()
             .find(|p| p.project == project);
-        let data = planned.and_then(|p| ds.net_nav.index.fresh(project, &p.key));
+        let data = planned.and_then(|p| document_view.net_nav.index.fresh(project, &p.key));
         let Some(data) = data else {
             let line = t!(i18n, ids::ANNOTATIONS_JUMP_NET_READING, "name" => name);
             crate::diagnostics::log_info(line.into_string());

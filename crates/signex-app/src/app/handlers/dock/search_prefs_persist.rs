@@ -42,7 +42,7 @@ impl Signex {
         query: &str,
     ) -> Task<Message> {
         let armed = self
-            .document_state
+            .document_view
             .search_prefs
             .set_library_search(library, query);
         search_prefs_timer(armed)
@@ -51,14 +51,14 @@ impl Signex {
     pub(crate) fn dispatch_search_prefs_message(&mut self, msg: SearchPrefsMsg) -> Task<Message> {
         match msg {
             SearchPrefsMsg::SaveDebounceElapsed(generation) => {
-                match self.document_state.search_prefs.take_if_current(generation) {
+                match self.document_view.search_prefs.take_if_current(generation) {
                     Some(write) => write_search_prefs_task(write),
                     None => Task::none(),
                 }
             }
             SearchPrefsMsg::Saved(Ok(())) => Task::none(),
             msg @ (SearchPrefsMsg::Saved(Err(_)) | SearchPrefsMsg::SaveFailedLogged) => {
-                self.document_state.search_prefs.write_failed();
+                self.document_view.search_prefs.write_failed();
                 if let SearchPrefsMsg::Saved(Err(reason)) = msg {
                     crate::diagnostics::log_error(
                         "Search box contents were not saved; retrying on the next edit or at quit",
@@ -139,7 +139,7 @@ impl Signex {
     /// Write any pending search prefs now and wait for a write that is
     /// already running, then run `next` (the quit path).
     fn flush_search_prefs_then(&mut self, next: Task<Message>) -> Task<Message> {
-        let prefs = &mut self.document_state.search_prefs;
+        let prefs = &mut self.document_view.search_prefs;
         let barrier = prefs.barrier();
         let pending = prefs.flush().map(write_search_prefs_task);
         let drained = Task::perform(

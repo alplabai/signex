@@ -195,7 +195,7 @@ fn a_cell_edit_rewrites_only_its_rule_as_one_undo_step() {
     ));
     assert_eq!(undo_steps(&app, id), 1);
     assert!(app.document_state.is_document_dirty(&project));
-    assert!(app.document_state.project_tabs[&id].rules.edit.is_none());
+    assert!(app.document_view.project_tabs[&id].rules.edit.is_none());
 
     command(&mut app, "undo");
     assert_eq!(dsl(&app).as_deref(), Some(TEXT));
@@ -230,7 +230,7 @@ fn a_refused_cell_edit_says_why_and_changes_nothing() {
             },
         );
         send(&mut app, RulesTabMsg::CellCommitted { project_id: id });
-        let tab = &app.document_state.project_tabs[&id].rules;
+        let tab = &app.document_view.project_tabs[&id].rules;
         assert!(tab.refused.is_some(), "{text} is refused");
         assert!(tab.edit.is_some(), "the cell stays open");
         let _ = app.view_rules_tab(id);
@@ -266,7 +266,7 @@ fn a_project_without_rules_stores_them_with_its_first_rule() {
     assert!(text.starts_with("rule base on clearance"), "{text}");
     assert!(text.contains("rule track_1 on track require width >= 0.15mm then error"));
     assert_eq!(
-        app.document_state.project_tabs[&id]
+        app.document_view.project_tabs[&id]
             .rules
             .selected
             .as_deref(),
@@ -450,7 +450,7 @@ fn the_tab_shows_flags_and_results_from_the_last_run() {
         .settle(&mut app, task)
         .expect("the run lands");
     open(&mut app);
-    let analysis = app.document_state.project_tabs[&id]
+    let analysis = app.document_view.project_tabs[&id]
         .rules
         .analysis
         .clone()
@@ -484,7 +484,7 @@ fn a_rule_tab_survives_a_project_whose_board_is_closed() {
     let id = app.document_state.projects[0].id;
     send(&mut app, RulesTabMsg::OpenRequested { project: Some(id) });
     assert_eq!(app.rules_tab_in_window(true), Some(id));
-    let analysis = app.document_state.project_tabs[&id].rules.analysis.clone();
+    let analysis = app.document_view.project_tabs[&id].rules.analysis.clone();
     assert!(analysis.is_some_and(|a| !a.has_board));
     let refused = run(&mut app, "rules_effective", &["net=SIG"]);
     assert!(matches!(refused, CommandOutcome::Disabled { .. }));
@@ -492,7 +492,7 @@ fn a_rule_tab_survives_a_project_whose_board_is_closed() {
 }
 
 fn rules_tab(app: &Signex, id: ProjectId) -> &super::RulesTabState {
-    &app.document_state.project_tabs[&id].rules
+    &app.document_view.project_tabs[&id].rules
 }
 
 fn type_hash(app: &mut Signex, id: ProjectId) {
@@ -1102,7 +1102,7 @@ fn clearance_badges(app: &Signex, id: ProjectId) -> (Option<usize>, Option<usize
     let frame = app.rules_frame(
         id,
         &app.ui_state.i18n,
-        &app.document_state.panel_ctx.tokens,
+        &app.document_view.panel_ctx.tokens,
         state,
         src,
         origin,
@@ -1163,7 +1163,7 @@ fn findings_reason(app: &Signex, id: ProjectId, rule: &str) -> Option<signex_i18
     let frame = app.rules_frame(
         id,
         &app.ui_state.i18n,
-        &app.document_state.panel_ctx.tokens,
+        &app.document_view.panel_ctx.tokens,
         state,
         src,
         origin,

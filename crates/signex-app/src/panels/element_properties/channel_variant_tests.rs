@@ -66,7 +66,7 @@ fn strip(variant: Option<&str>, active: Option<u32>) -> ChannelStripView {
 
 fn context(theme: ThemeId, strip: ChannelStripView) -> PanelContext {
     let (app, _boot) = crate::app::Signex::new();
-    let mut ctx = app.document_state.panel_ctx.clone();
+    let mut ctx = app.document_view.panel_ctx.clone();
     ctx.tokens = theme_tokens(theme);
     ctx.theme_id = theme;
     ctx.compiled_design.strip = Some(strip);

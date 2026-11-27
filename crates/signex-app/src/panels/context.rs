@@ -326,7 +326,7 @@ pub struct PanelContext {
     /// `None` for any other tab kind.
     pub footprint_editor: Option<Box<FootprintEditorPanelContext>>,
     /// Per-file Git history snapshot for the right-dock History
-    /// panel. Mirrored from [`crate::app::DocumentState::history`]
+    /// panel. Mirrored from [`crate::app::DocumentViewState::history`]
     /// each refresh; the panel reads it directly without holding a
     /// borrow into the document state.
     pub history: history::HistoryPanelState,

@@ -53,7 +53,7 @@ impl Signex {
     /// The Open menu opens or closes; opening it checks the recent
     /// packages it lists.
     fn toggle_gerber_open_menu(&mut self) -> Task<Message> {
-        let viewer = &mut self.document_state.gerber_viewer;
+        let viewer = &mut self.document_view.gerber_viewer;
         viewer.open_menu = !viewer.open_menu;
         if viewer.open_menu {
             self.check_recent_gerber_packages()
@@ -70,7 +70,7 @@ impl Signex {
             return Task::none();
         }
         self.open_gerber_viewer_tab();
-        let viewer = &mut self.document_state.gerber_viewer;
+        let viewer = &mut self.document_view.gerber_viewer;
         viewer.open_menu = false;
         let job = viewer.start_read();
         let read = Task::perform(
@@ -89,7 +89,7 @@ impl Signex {
     }
 
     fn pick_gerber_paths(&mut self, kind: OpenKind) -> Task<Message> {
-        self.document_state.gerber_viewer.open_menu = false;
+        self.document_view.gerber_viewer.open_menu = false;
         let i18n = &self.ui_state.i18n;
         let base = self.ui_state.io.picker.dialog();
         Task::perform(
@@ -117,7 +117,7 @@ impl Signex {
     }
 
     fn open_recent_gerber_package(&mut self, index: usize) -> Task<Message> {
-        let viewer = &self.document_state.gerber_viewer;
+        let viewer = &self.document_view.gerber_viewer;
         match viewer.recent.entries().get(index) {
             Some(entry) if !entry.missing => self.open_gerber_paths(entry.paths.clone()),
             _ => Task::none(),
@@ -131,7 +131,7 @@ impl Signex {
         job: u64,
         result: Result<Arc<PackageRead>, ReadFailure>,
     ) -> Task<Message> {
-        let viewer = &mut self.document_state.gerber_viewer;
+        let viewer = &mut self.document_view.gerber_viewer;
         if viewer.reading != Some(job) {
             return Task::none();
         }
@@ -160,7 +160,7 @@ impl Signex {
         found: Vec<(Vec<PathBuf>, bool)>,
         now: Option<i64>,
     ) -> Task<Message> {
-        let viewer = &mut self.document_state.gerber_viewer;
+        let viewer = &mut self.document_view.gerber_viewer;
         for (paths, exists) in found {
             viewer.recent.set_missing(&paths, !exists);
         }
@@ -172,7 +172,7 @@ impl Signex {
 
     /// Find out which recent packages are still on disk, off the UI thread.
     pub(crate) fn check_recent_gerber_packages(&self) -> Task<Message> {
-        let listed = self.document_state.gerber_viewer.recent.all_paths();
+        let listed = self.document_view.gerber_viewer.recent.all_paths();
         if listed.is_empty() {
             return Task::none();
         }
@@ -194,18 +194,18 @@ impl Signex {
     }
 
     fn gerber_unit_picked(&mut self, unit: super::LengthUnit) -> Task<Message> {
-        self.document_state.gerber_viewer.unit = unit;
+        self.document_view.gerber_viewer.unit = unit;
         Task::none()
     }
 
     fn gerber_escape_pressed(&mut self) -> Task<Message> {
-        self.document_state.gerber_viewer.escape();
+        self.document_view.gerber_viewer.escape();
         Task::none()
     }
 
     /// A change to how the open package is shown; with nothing open, none.
     fn on_gerber_package(&mut self, change: impl FnOnce(&mut OpenPackage)) -> Task<Message> {
-        if let Some(open) = self.document_state.gerber_viewer.open.as_mut() {
+        if let Some(open) = self.document_view.gerber_viewer.open.as_mut() {
             change(open);
             open.revision += 1;
         }
@@ -215,7 +215,7 @@ impl Signex {
     /// A pointer move or release that matters only while a row is held:
     /// without one it changes nothing, so the board keeps its picture.
     fn while_gerber_grip(&mut self, change: impl FnOnce(&mut OpenPackage)) -> Task<Message> {
-        let viewer = &self.document_state.gerber_viewer;
+        let viewer = &self.document_view.gerber_viewer;
         if viewer.open.as_ref().is_some_and(|open| open.grip.is_some()) {
             self.on_gerber_package(change)
         } else {

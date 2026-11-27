@@ -92,7 +92,7 @@ fn a_project_held_by_a_live_headless_run_is_refused_with_a_message_and_a_notice(
         fx.app.agent.project_locks.is_empty(),
         "a refused open holds a lock"
     );
-    let notice = fx.app.document_state.error_notice.take().expect("a notice");
+    let notice = fx.app.document_view.error_notice.take().expect("a notice");
     let pid = std::process::id();
     let want = format!("is being edited by a headless signex-cli run (process {pid})");
     assert!(
@@ -156,8 +156,8 @@ fn two_windows_open_one_project_and_a_run_is_refused_while_either_has_it() {
         a.opened() && opened_in(&b_app, &a.project),
         "both windows open it"
     );
-    assert!(a.app.document_state.error_notice.is_none());
-    assert!(b_app.document_state.error_notice.is_none());
+    assert!(a.app.document_view.error_notice.is_none());
+    assert!(b_app.document_view.error_notice.is_none());
     let refuse = |why: &str| {
         let refused = client::hold(&a.dir, &a.project).err();
         assert!(refused.is_some(), "{why}: a run took an open project");
@@ -416,7 +416,7 @@ fn a_run_holding_the_project_in_another_runtime_folder_refuses_the_open() {
 
     assert!(!fx.opened(), "the project was opened over a run");
     assert!(fx.app.agent.project_locks.is_empty());
-    assert!(fx.app.document_state.error_notice.is_some());
+    assert!(fx.app.document_view.error_notice.is_some());
 }
 
 /// And the reverse: a window keeping its folder somewhere else holds it
@@ -609,7 +609,7 @@ fn an_open_refused_for_a_run_without_an_entry_names_no_process_and_no_file() {
     fx.open();
 
     assert!(!fx.opened());
-    let notice = fx.app.document_state.error_notice.take().expect("a notice");
+    let notice = fx.app.document_view.error_notice.take().expect("a notice");
     assert!(
         notice
             .detail

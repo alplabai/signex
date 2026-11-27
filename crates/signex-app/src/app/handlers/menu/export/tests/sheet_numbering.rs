@@ -229,7 +229,7 @@ fn current_page_on_a_project_child_prints_its_project_number() {
         &issues,
         &app.document_state,
         &child,
-        app.document_state.tab_placements.get(&child),
+        app.document_view.tab_placements.get(&child),
         &PageRange::Current,
     ));
     let page = &ctx.sheets[0];
@@ -277,7 +277,7 @@ fn the_preview_names_a_sheet_number_no_printed_page_carries() {
     let _ = app.handle_print_preview_requested();
     let _ = app.handle_print_preview_set_page_range_specific();
     let note = |app: &crate::app::Signex| {
-        let preview = app.document_state.preview.as_ref().expect("preview");
+        let preview = app.document_view.preview.as_ref().expect("preview");
         (preview.pages.is_empty(), preview.range_note.clone())
     };
 

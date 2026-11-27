@@ -104,7 +104,7 @@ fn a_failed_card_reads_its_findings_as_one_sentence() {
         Vec::new(),
     );
     let tab = app
-        .document_state
+        .document_view
         .project_tabs
         .get_mut(&id)
         .expect("the tab");

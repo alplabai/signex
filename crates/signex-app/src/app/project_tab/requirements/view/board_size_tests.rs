@@ -189,7 +189,7 @@ fn run_checks_measures_the_board_and_the_card_shows_it() {
     crate::task_driver::TaskDriver::new()
         .settle(&mut app, task)
         .expect("the run settles");
-    let tab = &app.document_state.project_tabs[&id].requirements;
+    let tab = &app.document_view.project_tabs[&id].requirements;
     let run = tab.last_run.as_deref().expect("a run");
     assert_eq!(run.board_mm, Some((48.5, 36.0)));
     let report = run.report.as_ref().expect("a report");
@@ -219,7 +219,7 @@ fn a_run_without_a_board_measures_nothing() {
     crate::task_driver::TaskDriver::new()
         .settle(&mut app, task)
         .expect("the run settles");
-    let tab = &app.document_state.project_tabs[&id].requirements;
+    let tab = &app.document_view.project_tabs[&id].requirements;
     assert_eq!(tab.last_run.as_deref().expect("a run").board_mm, None);
     let shown = shown_texts(&app, id);
     assert!(

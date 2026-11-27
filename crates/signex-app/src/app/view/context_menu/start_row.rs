@@ -79,7 +79,7 @@ impl Signex {
         if !self.overlay_belongs_to(None, window_id) {
             return Vec::new();
         }
-        let panel_ctx = &self.document_state.panel_ctx;
+        let panel_ctx = &self.document_view.panel_ctx;
         let menu = super::placement::menu_card(
             start_row_menu_entries(
                 &self.ui_state.i18n,

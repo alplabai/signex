@@ -93,7 +93,7 @@ fn typed(app: &mut Signex, id: uuid::Uuid, text: &str) {
 
 /// What Enter in the drawing's hex field sends, built as the view builds it.
 fn enter(app: &Signex, id: uuid::Uuid) -> PanelMsg {
-    let ctx = &app.document_state.panel_ctx;
+    let ctx = &app.document_view.panel_ctx;
     let entry = HexEntry::of(ColorRowKey::DrawingStroke(id), ctx.color_hex_draft.as_ref());
     let current = stroke(app).map(|c| [c.r, c.g, c.b, c.a]);
     entry.left(current, &|[r, g, b, a]| {
@@ -122,7 +122,7 @@ fn enter_applies_the_typed_colour_as_one_undo_step() {
         a: 255,
     };
     assert_eq!(stroke(&app), Some(fff7e0));
-    assert_eq!(app.document_state.panel_ctx.color_hex_draft, None);
+    assert_eq!(app.document_view.panel_ctx.color_hex_draft, None);
     // The blur that follows Enter finds no draft and adds nothing.
     panel(&mut app, left);
     let _ = app.update(Message::Edit(EditMsg::Undo));
@@ -138,13 +138,13 @@ fn refused_text_changes_nothing_and_stays_marked() {
     panel(&mut app, left);
     assert_eq!(stroke(&app), None);
     assert!(!can_undo(&app, &path));
-    let draft = app.document_state.panel_ctx.color_hex_draft.as_ref();
+    let draft = app.document_view.panel_ctx.color_hex_draft.as_ref();
     assert!(
         draft.is_some_and(|d| d.refused && d.text == "#FFF"),
         "{draft:?}"
     );
     typed(&mut app, id, "#FFF7");
-    let draft = app.document_state.panel_ctx.color_hex_draft.as_ref();
+    let draft = app.document_view.panel_ctx.color_hex_draft.as_ref();
     assert!(draft.is_some_and(|d| !d.refused), "typing clears the mark");
 }
 
@@ -155,7 +155,7 @@ fn esc_restores_and_the_blur_after_it_applies_nothing() {
     let blur = enter(&app, id);
     let key = ColorRowKey::DrawingStroke(id);
     panel(&mut app, PanelMsg::ColorHex(ColorHexMsg::Restored(key)));
-    assert_eq!(app.document_state.panel_ctx.color_hex_draft, None);
+    assert_eq!(app.document_view.panel_ctx.color_hex_draft, None);
     panel(&mut app, blur);
     assert_eq!(stroke(&app), None);
     assert!(!can_undo(&app, &path));
@@ -168,7 +168,7 @@ fn a_draft_does_not_follow_another_selection() {
     app.interaction_state.active_canvas_mut().selected.clear();
     app.update_selection_info();
     app.refresh_panel_ctx();
-    assert_eq!(app.document_state.panel_ctx.color_hex_draft, None);
+    assert_eq!(app.document_view.panel_ctx.color_hex_draft, None);
 }
 
 #[test]
@@ -181,11 +181,11 @@ fn a_blur_after_another_selection_colours_nothing() {
     app.interaction_state.active_canvas_mut().selected =
         vec![SelectedItem::new(ids[1], SelectedKind::Drawing)];
     app.update_selection_info();
-    assert!(app.document_state.panel_ctx.color_hex_draft.is_some());
+    assert!(app.document_view.panel_ctx.color_hex_draft.is_some());
     panel(&mut app, blur);
     assert_eq!(stroke_of(&app, 1), None, "the other keeps its colour");
     assert_eq!(stroke_of(&app, 0), None);
-    assert_eq!(app.document_state.panel_ctx.color_hex_draft, None);
+    assert_eq!(app.document_view.panel_ctx.color_hex_draft, None);
     assert!(!can_undo(&app, &path), "no undo step");
 }
 

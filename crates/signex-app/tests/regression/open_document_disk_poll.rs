@@ -44,7 +44,7 @@ fn poll(app: &mut Signex) {
 }
 
 fn card_title(app: &Signex) -> Option<String> {
-    let notice = app.document_state.error_notice.as_ref()?;
+    let notice = app.document_view.error_notice.as_ref()?;
     notice.action.is_some().then(|| notice.title.render_en_us())
 }
 
@@ -74,7 +74,7 @@ fn the_same_change_is_reported_once() {
     open(&mut app, &path);
     fs::write(&path, sheet_text("A3")).unwrap();
     poll(&mut app);
-    app.document_state.error_notice = None; // the user dismissed the card
+    app.document_view.error_notice = None; // the user dismissed the card
 
     poll(&mut app);
 
@@ -110,7 +110,7 @@ fn a_change_met_while_another_notice_shows_is_reported_once_the_slot_frees() {
     // A second change while the first card is still up must not be lost.
     fs::write(&path, sheet_text("A2")).unwrap();
     poll(&mut app);
-    app.document_state.error_notice = None;
+    app.document_view.error_notice = None;
 
     poll(&mut app);
 

@@ -15,7 +15,7 @@ fn a_command_retries_a_failed_build_once_the_root_is_fixed_on_disk() {
     p.select(label, SelectedKind::Label);
     p.send_settled(NetNavMsg::PartnerJumpRequested);
     assert!(
-        p.app.document_state.net_nav.pending.is_none(),
+        p.app.document_view.net_nav.pending.is_none(),
         "the build failed"
     );
 
@@ -24,7 +24,7 @@ fn a_command_retries_a_failed_build_once_the_root_is_fixed_on_disk() {
     p.send(NetNavMsg::PartnerJumpRequested);
 
     assert!(
-        p.app.document_state.net_nav.pending.is_some(),
+        p.app.document_view.net_nav.pending.is_some(),
         "an explicit command builds again instead of reusing the failure"
     );
 }
@@ -37,7 +37,7 @@ fn a_closed_projects_index_is_released_without_any_highlight() {
         (5.0, 0.0),
     );
     p.app
-        .document_state
+        .document_view
         .net_nav
         .hover
         .candidate
@@ -47,15 +47,15 @@ fn a_closed_projects_index_is_released_without_any_highlight() {
     p.send_settled(NetNavMsg::HoverDwellTicked);
     let a = p.app.document_state.projects[0].id;
     assert!(
-        p.app.document_state.net_nav.index.latest(a).is_some(),
+        p.app.document_view.net_nav.index.latest(a).is_some(),
         "built for the hover"
     );
-    assert!(p.app.document_state.net_nav.highlight.is_none());
+    assert!(p.app.document_view.net_nav.highlight.is_none());
 
     p.app.document_state.projects.retain(|x| x.id != a);
     p.send(NetNavMsg::HighlightClearRequested); // any update runs finish_update
 
-    assert!(p.app.document_state.net_nav.index.latest(a).is_none());
+    assert!(p.app.document_view.net_nav.index.latest(a).is_none());
 }
 
 #[test]
@@ -73,7 +73,7 @@ fn the_dwell_timer_stops_while_the_hover_waits_for_a_build() {
         (0.0, 0.0),
     );
     p.app
-        .document_state
+        .document_view
         .net_nav
         .hover
         .candidate
@@ -86,12 +86,12 @@ fn the_dwell_timer_stops_while_the_hover_waits_for_a_build() {
     p.send(NetNavMsg::HoverDwellTicked);
 
     assert!(
-        !p.app.document_state.net_nav.hover.needs_ticks(),
+        !p.app.document_view.net_nav.hover.needs_ticks(),
         "parked: no more ticks"
     );
     p.app.settle_net_index_blocking();
     assert!(
-        p.app.document_state.net_nav.hover.card.is_some(),
+        p.app.document_view.net_nav.hover.card.is_some(),
         "and the card still comes"
     );
 }
@@ -120,7 +120,7 @@ fn history_drops_a_sheet_it_cannot_open_instead_of_skipping_it_every_pass() {
         "mid skipped, third reached"
     );
     assert!(
-        !p.app.document_state.net_nav.history.contains(&mid),
+        !p.app.document_view.net_nav.history.contains(&mid),
         "and forgotten"
     );
 
@@ -149,7 +149,7 @@ fn a_highlight_from_a_multi_pin_symbol_stays_on_its_pins_net_through_a_renumber(
         .highlight_target(Some(target), PendingNetAction::HighlightUnderCursor, false);
     let h = p
         .app
-        .document_state
+        .document_view
         .net_nav
         .highlight
         .as_ref()

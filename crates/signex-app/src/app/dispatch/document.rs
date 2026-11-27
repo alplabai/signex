@@ -380,7 +380,7 @@ impl Signex {
                 | BomPreviewMsg::BodyScrolled(_)
         );
         let task = self.dispatch_bom_preview_message_inner(msg);
-        if reorders && let Some(p) = self.document_state.bom_preview.as_mut() {
+        if reorders && let Some(p) = self.document_view.bom_preview.as_mut() {
             p.refresh_rows();
         }
         task
@@ -401,13 +401,13 @@ impl Signex {
                 self.finish_update()
             }
             BomPreviewMsg::FilterChanged(text) => {
-                if let Some(p) = self.document_state.bom_preview.as_mut() {
+                if let Some(p) = self.document_view.bom_preview.as_mut() {
                     p.filter = text;
                 }
                 self.finish_update()
             }
             BomPreviewMsg::RowSelected(row) => {
-                if let Some(p) = self.document_state.bom_preview.as_mut() {
+                if let Some(p) = self.document_view.bom_preview.as_mut() {
                     p.selected_row = Some(row);
                 }
                 self.finish_update()
@@ -445,13 +445,13 @@ impl Signex {
                 self.finish_update()
             }
             BomPreviewMsg::ColumnHoverEnter(idx) => {
-                if let Some(p) = self.document_state.bom_preview.as_mut() {
+                if let Some(p) = self.document_view.bom_preview.as_mut() {
                     p.column_hover = Some(idx);
                 }
                 self.finish_update()
             }
             BomPreviewMsg::ColumnHoverExit(idx) => {
-                if let Some(p) = self.document_state.bom_preview.as_mut()
+                if let Some(p) = self.document_view.bom_preview.as_mut()
                     && p.column_hover == Some(idx)
                 {
                     p.column_hover = None;
@@ -460,7 +460,7 @@ impl Signex {
             }
             BomPreviewMsg::ColumnResizeStart(idx) => {
                 let cursor_x = self.interaction_state.last_mouse_pos.0;
-                if let Some(p) = self.document_state.bom_preview.as_mut() {
+                if let Some(p) = self.document_view.bom_preview.as_mut() {
                     let start_width = p.column_widths.get(&idx).copied().unwrap_or_else(|| {
                         // Fall back to the per-BomColumn default
                         // table the view function uses.
@@ -478,13 +478,13 @@ impl Signex {
                 self.finish_update()
             }
             BomPreviewMsg::ColumnResizeEnd => {
-                if let Some(p) = self.document_state.bom_preview.as_mut() {
+                if let Some(p) = self.document_view.bom_preview.as_mut() {
                     p.column_resize = None;
                 }
                 self.finish_update()
             }
             BomPreviewMsg::SetSidebarTab(tab) => {
-                if let Some(p) = self.document_state.bom_preview.as_mut() {
+                if let Some(p) = self.document_view.bom_preview.as_mut() {
                     p.sidebar_tab = tab;
                 }
                 self.finish_update()
@@ -505,7 +505,7 @@ impl Signex {
     /// Print-preview modal message handler (namespaced family, ADR-0001 D3).
     pub(crate) fn dispatch_print_preview_message(&mut self, msg: PrintPreviewMsg) -> Task<Message> {
         if !msg.keeps_export_status()
-            && let Some(preview) = self.document_state.preview.as_mut()
+            && let Some(preview) = self.document_view.preview.as_mut()
         {
             preview.export_status = None;
         }
@@ -645,49 +645,49 @@ impl Signex {
             // rerasterize so the Preview tab reflects the change
             // immediately.
             PrintPreviewMsg::SetIncludeNoErcMarkers(v) => {
-                if let Some(p) = self.document_state.preview.as_mut() {
+                if let Some(p) = self.document_view.preview.as_mut() {
                     p.pdf_options.include_no_erc_markers = v;
                 }
                 let task = self.handle_print_preview_rerender();
                 Task::batch([task, self.finish_update()])
             }
             PrintPreviewMsg::SetIncludeNoConnectMarkers(v) => {
-                if let Some(p) = self.document_state.preview.as_mut() {
+                if let Some(p) = self.document_view.preview.as_mut() {
                     p.pdf_options.include_no_connect_markers = v;
                 }
                 let task = self.handle_print_preview_rerender();
                 Task::batch([task, self.finish_update()])
             }
             PrintPreviewMsg::SetIncludeNotes(v) => {
-                if let Some(p) = self.document_state.preview.as_mut() {
+                if let Some(p) = self.document_view.preview.as_mut() {
                     p.pdf_options.include_notes = v;
                 }
                 let task = self.handle_print_preview_rerender();
                 Task::batch([task, self.finish_update()])
             }
             PrintPreviewMsg::SetIncludeParameterSets(v) => {
-                if let Some(p) = self.document_state.preview.as_mut() {
+                if let Some(p) = self.document_view.preview.as_mut() {
                     p.pdf_options.include_parameter_sets = v;
                 }
                 let task = self.handle_print_preview_rerender();
                 Task::batch([task, self.finish_update()])
             }
             PrintPreviewMsg::SetIncludeBlankets(v) => {
-                if let Some(p) = self.document_state.preview.as_mut() {
+                if let Some(p) = self.document_view.preview.as_mut() {
                     p.pdf_options.include_blankets = v;
                 }
                 let task = self.handle_print_preview_rerender();
                 Task::batch([task, self.finish_update()])
             }
             PrintPreviewMsg::SetIncludeCompileMasks(v) => {
-                if let Some(p) = self.document_state.preview.as_mut() {
+                if let Some(p) = self.document_view.preview.as_mut() {
                     p.pdf_options.include_compile_masks = v;
                 }
                 let task = self.handle_print_preview_rerender();
                 Task::batch([task, self.finish_update()])
             }
             PrintPreviewMsg::SetIncludeDiffPairs(v) => {
-                if let Some(p) = self.document_state.preview.as_mut() {
+                if let Some(p) = self.document_view.preview.as_mut() {
                     p.pdf_options.include_diff_pairs = v;
                 }
                 let task = self.handle_print_preview_rerender();
@@ -699,55 +699,55 @@ impl Signex {
             // support is a one-line move into the visual-toggle group
             // above.
             PrintPreviewMsg::SetUsePhysicalStructure(v) => {
-                if let Some(p) = self.document_state.preview.as_mut() {
+                if let Some(p) = self.document_view.preview.as_mut() {
                     p.pdf_options.use_physical_structure = v;
                 }
                 self.finish_update()
             }
             PrintPreviewMsg::SetPhysicalDesignators(v) => {
-                if let Some(p) = self.document_state.preview.as_mut() {
+                if let Some(p) = self.document_view.preview.as_mut() {
                     p.pdf_options.physical_designators = v;
                 }
                 self.finish_update()
             }
             PrintPreviewMsg::SetPhysicalNetLabels(v) => {
-                if let Some(p) = self.document_state.preview.as_mut() {
+                if let Some(p) = self.document_view.preview.as_mut() {
                     p.pdf_options.physical_net_labels = v;
                 }
                 self.finish_update()
             }
             PrintPreviewMsg::SetPhysicalPorts(v) => {
-                if let Some(p) = self.document_state.preview.as_mut() {
+                if let Some(p) = self.document_view.preview.as_mut() {
                     p.pdf_options.physical_ports = v;
                 }
                 self.finish_update()
             }
             PrintPreviewMsg::SetPhysicalSheetNumber(v) => {
-                if let Some(p) = self.document_state.preview.as_mut() {
+                if let Some(p) = self.document_view.preview.as_mut() {
                     p.pdf_options.physical_sheet_number = v;
                 }
                 self.finish_update()
             }
             PrintPreviewMsg::SetPhysicalDocumentNumber(v) => {
-                if let Some(p) = self.document_state.preview.as_mut() {
+                if let Some(p) = self.document_view.preview.as_mut() {
                     p.pdf_options.physical_document_number = v;
                 }
                 self.finish_update()
             }
             PrintPreviewMsg::SetIncludeProbes(v) => {
-                if let Some(p) = self.document_state.preview.as_mut() {
+                if let Some(p) = self.document_view.preview.as_mut() {
                     p.pdf_options.include_probes = v;
                 }
                 self.finish_update()
             }
             PrintPreviewMsg::SetIncludeCollapsedNotes(v) => {
-                if let Some(p) = self.document_state.preview.as_mut() {
+                if let Some(p) = self.document_view.preview.as_mut() {
                     p.pdf_options.include_collapsed_notes = v;
                 }
                 self.finish_update()
             }
             PrintPreviewMsg::SetQuality(q) => {
-                if let Some(p) = self.document_state.preview.as_mut() {
+                if let Some(p) = self.document_view.preview.as_mut() {
                     p.quality = q;
                 }
                 // Visual toggle — preview rasterises at the new
@@ -757,43 +757,43 @@ impl Signex {
                 Task::batch([task, self.finish_update()])
             }
             PrintPreviewMsg::SetBookmarkZoom(z) => {
-                if let Some(p) = self.document_state.preview.as_mut() {
+                if let Some(p) = self.document_view.preview.as_mut() {
                     p.pdf_options.bookmark_zoom = z.clamp(0.0, 1.0);
                 }
                 self.finish_update()
             }
             PrintPreviewMsg::SetGenerateNetsInfo(v) => {
-                if let Some(p) = self.document_state.preview.as_mut() {
+                if let Some(p) = self.document_view.preview.as_mut() {
                     p.pdf_options.generate_nets_info = v;
                 }
                 self.finish_update()
             }
             PrintPreviewMsg::SetBookmarkPins(v) => {
-                if let Some(p) = self.document_state.preview.as_mut() {
+                if let Some(p) = self.document_view.preview.as_mut() {
                     p.pdf_options.bookmark_pins = v;
                 }
                 self.finish_update()
             }
             PrintPreviewMsg::SetBookmarkNetLabels(v) => {
-                if let Some(p) = self.document_state.preview.as_mut() {
+                if let Some(p) = self.document_view.preview.as_mut() {
                     p.pdf_options.bookmark_net_labels = v;
                 }
                 self.finish_update()
             }
             PrintPreviewMsg::SetBookmarkPorts(v) => {
-                if let Some(p) = self.document_state.preview.as_mut() {
+                if let Some(p) = self.document_view.preview.as_mut() {
                     p.pdf_options.bookmark_ports = v;
                 }
                 self.finish_update()
             }
             PrintPreviewMsg::SetGlobalBookmarks(v) => {
-                if let Some(p) = self.document_state.preview.as_mut() {
+                if let Some(p) = self.document_view.preview.as_mut() {
                     p.pdf_options.global_bookmarks = v;
                 }
                 self.finish_update()
             }
             PrintPreviewMsg::SetPcbColourMode(m) => {
-                if let Some(p) = self.document_state.preview.as_mut() {
+                if let Some(p) = self.document_view.preview.as_mut() {
                     p.pdf_options.pcb_colour_mode = m;
                 }
                 self.finish_update()

@@ -42,7 +42,7 @@ fn ctrl_s_on_a_primitive_that_cannot_be_written_shows_the_save_failed_card() {
     crate::settle_support::settle(&mut app, Message::File(FileMsg::Save));
 
     let notice = app
-        .document_state
+        .document_view
         .error_notice
         .as_ref()
         .expect("a failed save must raise the error card");
@@ -64,7 +64,7 @@ fn saving_a_component_row_that_cannot_be_written_shows_the_save_failed_card() {
     }));
     crate::drive::drive(&mut app, task);
 
-    let notice = app.document_state.error_notice.as_ref().expect("a card");
+    let notice = app.document_view.error_notice.as_ref().expect("a card");
     assert_eq!(notice.title.render_en_us(), "Save Failed");
     assert!(app.library.editors[&address].dirty, "the draft stays dirty");
 }
@@ -140,26 +140,26 @@ fn history_restore_over_unsaved_edits_asks_before_it_acts() {
 
     restore_clicked(&mut app);
     assert_eq!(
-        app.document_state.history.pending_restore.as_deref(),
+        app.document_view.history.pending_restore.as_deref(),
         Some("abc123"),
         "the first click only arms the confirmation"
     );
-    assert!(app.document_state.error_notice.is_none(), "nothing ran yet");
+    assert!(app.document_view.error_notice.is_none(), "nothing ran yet");
 
     // Cancel disarms it.
     let task = app.update(Message::Dock(DockMessage::Panel(
         PanelMsg::HistoryRestoreCancelled,
     )));
     crate::drive::drive(&mut app, task);
-    assert!(app.document_state.history.pending_restore.is_none());
+    assert!(app.document_view.history.pending_restore.is_none());
 
     // Confirming runs the restore; the file has no owning project, so the
     // failure is shown rather than only logged.
     restore_clicked(&mut app);
     restore_clicked(&mut app);
-    assert!(app.document_state.history.pending_restore.is_none());
+    assert!(app.document_view.history.pending_restore.is_none());
     assert!(
-        app.document_state.error_notice.is_some(),
+        app.document_view.error_notice.is_some(),
         "a failed restore must raise the error card"
     );
 }
@@ -178,7 +178,7 @@ fn panel_refresh_keeps_the_live_theme_tokens() {
     open_footprint_editor(&mut app, &tmp.path().join("t.snxfpt"));
     edit_description_via_panel(&mut app);
 
-    assert_eq!(app.document_state.panel_ctx.tokens, custom);
+    assert_eq!(app.document_view.panel_ctx.tokens, custom);
 }
 
 // ---- parked-draft integrity ------------------------------------------------
@@ -261,7 +261,7 @@ fn a_parked_draft_is_reachable_even_when_its_file_is_gone() {
     reopen(&mut app, &path);
 
     assert_eq!(app.document_state.tabs.len(), 1, "the draft reopens");
-    assert!(app.document_state.error_notice.is_none());
+    assert!(app.document_view.error_notice.is_none());
 }
 
 #[test]
@@ -335,7 +335,7 @@ fn close_library_save_all_with_a_failing_row_keeps_the_library_and_drafts() {
     );
 
     assert!(app.library.editors[&address].dirty, "the draft survives");
-    let notice = app.document_state.error_notice.as_ref().expect("a card");
+    let notice = app.document_view.error_notice.as_ref().expect("a card");
     assert_eq!(notice.title.render_en_us(), "Save Failed");
 }
 
@@ -368,12 +368,12 @@ fn switching_tabs_disarms_a_pending_history_restore() {
     open_footprint_editor(&mut app, &b);
     edit_description_via_panel(&mut app);
     restore_clicked(&mut app);
-    assert!(app.document_state.history.pending_restore.is_some());
+    assert!(app.document_view.history.pending_restore.is_some());
 
     app.document_state.active_tab = 0;
     edit_description_via_panel(&mut app);
 
-    assert!(app.document_state.history.pending_restore.is_none());
+    assert!(app.document_view.history.pending_restore.is_none());
 }
 
 #[test]

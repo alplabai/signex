@@ -187,15 +187,15 @@ impl Signex {
     /// panel in its home region — see `SecondaryWindowClosed` in
     /// dispatch/mod.rs.
     pub(crate) fn handle_detach_floating_panel(&mut self, idx: usize) -> Task<Message> {
-        let Some(fp) = self.document_state.dock.floating.get(idx) else {
+        let Some(fp) = self.document_view.dock.floating.get(idx) else {
             return Task::none();
         };
         let kind = fp.kind;
         let size = iced::Size::new(fp.width.max(420.0), fp.height.max(360.0));
-        self.document_state.dock.floating.remove(idx);
+        self.document_view.dock.floating.remove(idx);
         // The drag that detached it ends here and no DragEnd follows, so
         // its drop preview goes with it.
-        self.document_state.dock.drop_preview = None;
+        self.document_view.dock.drop_preview = None;
 
         let position = self.new_window_position(
             size,

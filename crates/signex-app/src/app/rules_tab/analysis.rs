@@ -144,7 +144,7 @@ impl Signex {
         ShownKey {
             drc: (drc.generation(), running),
             selected: self
-                .document_state
+                .document_view
                 .project_tabs
                 .get(&id)
                 .and_then(|tab| tab.rules.selected.clone()),

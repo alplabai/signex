@@ -189,7 +189,7 @@ fn sketching(sketch: SketchData, first: SketchEntityId) -> (Signex, tempfile::Te
 }
 
 fn props(app: &Signex) -> BoardSketchProps {
-    app.document_state
+    app.document_view
         .panel_ctx
         .footprint_editor
         .as_ref()
@@ -202,7 +202,7 @@ fn plain(text: &str) -> String {
 }
 
 fn panel_texts(app: &Signex) -> Vec<String> {
-    let view = crate::panels::view_properties(&app.document_state.panel_ctx).boxed();
+    let view = crate::panels::view_properties(&app.document_view.panel_ctx).boxed();
     layout_probe::lay_out_texts(view, DOCK)
         .into_iter()
         .map(|laid| plain(&laid.text))
@@ -332,7 +332,7 @@ fn the_panel_shows_the_solve_state() {
     let (mut app, _tmp) = sketching(sketch, first);
     toggle_preview(&mut app);
     let state = app
-        .document_state
+        .document_view
         .panel_ctx
         .footprint_editor
         .as_ref()
@@ -375,7 +375,7 @@ fn a_failed_check_in_the_panel_selects_its_place() {
     s.cutout(stray[0]);
     let (mut app, _tmp) = sketching(s.data, first);
     toggle_preview(&mut app);
-    let view = crate::panels::view_properties(&app.document_state.panel_ctx).boxed();
+    let view = crate::panels::view_properties(&app.document_view.panel_ctx).boxed();
     let messages = layout_probe::messages_on_click(view, DOCK, "Cutout outside the outline");
     let select = messages
         .into_iter()
@@ -417,7 +417,7 @@ fn a_refusal_and_close_gap_are_in_the_panel() {
 
     let texts = panel_texts(&app);
     assert!(has(&texts, "Why it does not bake"), "{texts:#?}");
-    let view = crate::panels::view_properties(&app.document_state.panel_ctx).boxed();
+    let view = crate::panels::view_properties(&app.document_view.panel_ctx).boxed();
     let messages = layout_probe::messages_on_click(view, DOCK, "Close gap");
     let close = messages
         .into_iter()
@@ -438,7 +438,7 @@ fn a_refusal_and_close_gap_are_in_the_panel() {
 
 /// The panel's laid-out texts, without Fluent's isolation marks.
 fn laid_out(app: &Signex) -> Vec<layout_probe::LaidOutText> {
-    let view = crate::panels::view_properties(&app.document_state.panel_ctx).boxed();
+    let view = crate::panels::view_properties(&app.document_view.panel_ctx).boxed();
     layout_probe::lay_out_texts(view, DOCK)
         .into_iter()
         .map(|mut laid| {
@@ -473,7 +473,7 @@ fn the_panel_shows_bake_result_outline_checks_and_dof() {
         assert!(above < below, "{pair:?}: {texts:#?}");
     }
     let solve = app
-        .document_state
+        .document_view
         .panel_ctx
         .footprint_editor
         .as_ref()
@@ -525,7 +525,7 @@ fn a_failing_corner_and_add_fillets_are_in_the_panel() {
         has(&texts, "Inside corner R 0.00 < R 1.00 at (10.00, 10.00)"),
         "{texts:#?}"
     );
-    let view = crate::panels::view_properties(&app.document_state.panel_ctx).boxed();
+    let view = crate::panels::view_properties(&app.document_view.panel_ctx).boxed();
     // The click finds the drawn text, whose radius argument keeps its
     // isolation marks.
     let messages =

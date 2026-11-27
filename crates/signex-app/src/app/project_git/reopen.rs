@@ -123,7 +123,7 @@ impl Signex {
 
     fn report_reopen_problem(&mut self, detail: Translatable) {
         crate::diagnostics::log_warning(format!("[git] {}", detail.render_en_us()));
-        self.document_state.error_notice = Some(ErrorNotice::new(
+        self.document_view.error_notice = Some(ErrorNotice::new(
             ids::PROJECT_VCS_SWITCH_REOPEN_TITLE,
             detail,
         ));
@@ -133,6 +133,7 @@ impl Signex {
     /// leaves open.
     fn reopened_view(&self, project_id: ProjectId, scan_kept: &[PathBuf]) -> ReopenedView {
         let d = &self.document_state;
+        let document_view = &self.document_view;
         let kept: Vec<PathBuf> = scan_kept
             .iter()
             .filter(|path| {
@@ -160,7 +161,8 @@ impl Signex {
             .iter()
             .any(|tab| tab.kind.as_project() == Some(project_id));
         let section = has_tab.then(|| {
-            d.project_tabs
+            document_view
+                .project_tabs
                 .get(&project_id)
                 .map(|tab| tab.section)
                 .unwrap_or_default()
@@ -263,7 +265,7 @@ impl Signex {
         }
         if let Some(section) = view.section {
             self.open_project_tab(index);
-            if let Some(tab) = self.document_state.project_tabs.get_mut(&new_id) {
+            if let Some(tab) = self.document_view.project_tabs.get_mut(&new_id) {
                 tab.section = section;
             }
         }

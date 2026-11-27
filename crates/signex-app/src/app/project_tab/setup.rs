@@ -203,7 +203,7 @@ impl Signex {
             _ => None,
         };
         let tab = self
-            .document_state
+            .document_view
             .project_tabs
             .entry(project_id)
             .or_default();
@@ -324,7 +324,7 @@ impl Signex {
 
     /// The section shows `project_id`'s stored values again.
     fn drop_setup_draft(&mut self, project_id: ProjectId) {
-        if let Some(tab) = self.document_state.project_tabs.get_mut(&project_id) {
+        if let Some(tab) = self.document_view.project_tabs.get_mut(&project_id) {
             tab.setup_draft = None;
         }
     }

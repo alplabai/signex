@@ -57,7 +57,7 @@ fn held_refs(app: &Signex, path: &Path) -> Vec<String> {
 }
 
 fn card_names(app: &Signex, path: &Path) -> bool {
-    let action = (app.document_state.error_notice.as_ref()).and_then(|n| n.action.as_ref());
+    let action = (app.document_view.error_notice.as_ref()).and_then(|n| n.action.as_ref());
     matches!(action, Some(NoticeAction::DiskChanged { path: card, .. }) if card == path)
 }
 

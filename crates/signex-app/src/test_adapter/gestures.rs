@@ -39,7 +39,7 @@ impl TestAdapter {
     pub fn restore(&mut self, path: &Path, sha: &str) -> Result<Pending, AdapterError> {
         self.activate(path)?;
         let first = self.app.click_restore_on_listed_history(sha);
-        let armed = self.app.document_state.history.pending_restore.as_deref() == Some(sha);
+        let armed = self.app.document_view.history.pending_restore.as_deref() == Some(sha);
         let task = if armed {
             Task::batch([first, self.app.click_restore_on_listed_history(sha)])
         } else {

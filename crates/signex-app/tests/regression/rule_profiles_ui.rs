@@ -95,7 +95,7 @@ fn new_project(app: &mut Signex, tmp: &TempDir, name: &str) {
             tmp.path().join(format!("{name}.snxprj")),
         ))),
     );
-    assert!(app.document_state.error_notice.is_none());
+    assert!(app.document_view.error_notice.is_none());
 }
 
 // ---- 1. seeding ----

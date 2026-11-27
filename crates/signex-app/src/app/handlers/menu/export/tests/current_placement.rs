@@ -95,7 +95,7 @@ pub(crate) fn current_page(app: &Signex, child: &Path) -> (String, String) {
         &issues,
         &app.document_state,
         child,
-        app.document_state.tab_placements.get(child),
+        app.document_view.tab_placements.get(child),
         &PageRange::Current
     ));
     let page = &ctx.sheets[0];
@@ -184,7 +184,7 @@ fn the_print_preview_renders_the_descended_copy() {
     let (mut app, _top, child) = placed_twice_on_disk(&dir);
     descend_by_canvas(&mut app, PLACEMENT_B);
     let _ = app.handle_print_preview_requested();
-    let preview = app.document_state.preview.as_mut().expect("preview");
+    let preview = app.document_view.preview.as_mut().expect("preview");
     assert_eq!(preview.source, child);
     preview.pdf_options.page_range = PageRange::Current;
 
@@ -304,8 +304,8 @@ fn save_as_forgets_the_placement_of_the_old_file() {
     }
 
     assert_eq!(app.active_tab_path().as_deref(), Some(copy.as_path()));
-    assert_eq!(app.document_state.tab_placements.get(&child), None);
-    assert_eq!(app.document_state.tab_placements.get(&copy), None);
+    assert_eq!(app.document_view.tab_placements.get(&child), None);
+    assert_eq!(app.document_view.tab_placements.get(&copy), None);
 }
 
 /// Messages-panel warnings about `dir`'s vanished placements.
@@ -345,8 +345,8 @@ fn renaming_the_child_file_drops_its_placement_without_a_warning() {
     crate::app::path_ops::settle(&mut app, Message::Rename(RenameMsg::Submit));
 
     assert!(renamed.exists(), "the file moved");
-    assert_eq!(app.document_state.tab_placements.get(&child), None);
-    assert_eq!(app.document_state.tab_placements.get(&renamed), None);
+    assert_eq!(app.document_view.tab_placements.get(&child), None);
+    assert_eq!(app.document_view.tab_placements.get(&renamed), None);
     assert_eq!(dead_placement_warnings(dir.path()), 0);
 }
 
@@ -356,7 +356,7 @@ fn a_vanished_placement_is_reported_once_across_renders() {
     let (mut app, top, child) = placed_twice_on_disk(&dir);
     descend_by_canvas(&mut app, PLACEMENT_B);
     let _ = app.handle_print_preview_requested();
-    app.document_state
+    app.document_view
         .preview
         .as_mut()
         .expect("preview")
@@ -387,7 +387,7 @@ fn a_vanished_placement_is_reported_once_across_renders() {
         second.ctx.sheets[0].placement.to_string(),
         placement_text(PLACEMENT_A)
     );
-    assert_eq!(app.document_state.tab_placements.get(&child), None);
+    assert_eq!(app.document_view.tab_placements.get(&child), None);
     assert_eq!(dead_placement_warnings(dir.path()), 1);
 }
 
@@ -410,7 +410,7 @@ fn a_vanished_copy_of_a_declared_page_is_reported_too() {
         })
         .expect("delete the sheet symbol");
     let _ = app.handle_print_preview_requested();
-    app.document_state
+    app.document_view
         .preview
         .as_mut()
         .expect("preview")
@@ -517,7 +517,7 @@ fn a_declared_child_placed_twice_prints_the_copy_descended_through() {
             &issues,
             &app.document_state,
             &child,
-            app.document_state.tab_placements.get(&child),
+            app.document_view.tab_placements.get(&child),
             &PageRange::Current
         ),
         "a declared page keeps the caller's file filter"

@@ -36,7 +36,7 @@ impl Signex {
     }
 
     fn view_erc_dialog_body_inner(&self, draggable: bool) -> Element<'_, Message> {
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
 
         let header_content: Element<'_, Message> = super::graphite::titled_header(
             self.ui_state.i18n.message_plain(ids::DIALOG_TITLE_ERC, &[]),

@@ -262,7 +262,7 @@ impl Signex {
         path: &std::path::Path,
         fold: crate::app::state::scope::CaseFold,
     ) -> Option<usize> {
-        let navigator = &self.document_state.panel_ctx.navigator;
+        let navigator = &self.document_view.panel_ctx.navigator;
         let shown_root = navigator.hierarchy.as_ref()?.root.as_ref()?;
         if !shown_root.is_at(root?, fold) {
             return None;
@@ -472,7 +472,7 @@ mod tests {
         };
         use signex_types::schematic::InstancePath;
         let fold = crate::app::state::project_case::fold_of(app.document_state.projects.first());
-        let navigator = &mut app.document_state.panel_ctx.navigator;
+        let navigator = &mut app.document_view.panel_ctx.navigator;
         navigator.hierarchy = Some(SheetHierarchy {
             fold,
             root: Some(SheetNode {

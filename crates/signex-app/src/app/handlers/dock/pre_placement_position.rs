@@ -15,18 +15,18 @@ impl Signex {
     /// origin, #2034), or a picked justification anchor, which the ghost of
     /// a label or text follows.
     pub(super) fn handle_pre_placement_position(&mut self, msg: &PrePlacementPositionMsg) {
-        let ctx = &self.document_state.panel_ctx;
+        let ctx = &self.document_view.panel_ctx;
         match msg {
             PrePlacementPositionMsg::FieldTyped(field, text) => {
                 let stored = LengthFormat::new(&ctx.i18n, ctx.unit)
                     .parse(text)
                     .map(|mm| if field.is_y() { ctx.shown_y(mm) } else { mm });
-                if let Some(pp) = self.document_state.panel_ctx.pre_placement.as_mut() {
+                if let Some(pp) = self.document_view.panel_ctx.pre_placement.as_mut() {
                     pp.position.typed(*field, text.clone(), stored);
                 }
             }
             PrePlacementPositionMsg::AnchorPicked(h, v) => {
-                if let Some(pp) = self.document_state.panel_ctx.pre_placement.as_mut() {
+                if let Some(pp) = self.document_view.panel_ctx.pre_placement.as_mut() {
                     pp.justify_h = *h;
                     pp.justify_v = *v;
                 }
@@ -53,7 +53,7 @@ impl Signex {
     /// The cursor moved over the sheet: the untyped Location fields follow
     /// it, snapped as a click there would place.
     pub(crate) fn pre_placement_cursor_moved(&mut self, x: f64, y: f64) {
-        if self.document_state.panel_ctx.pre_placement.is_none() {
+        if self.document_view.panel_ctx.pre_placement.is_none() {
             return;
         }
         let (x, y) = if self.interaction_state.current_tool == Tool::Wire {
@@ -62,7 +62,7 @@ impl Signex {
             self.snap_to_grid(x, y)
         };
         let anchor = self.wire_anchor();
-        if let Some(pp) = self.document_state.panel_ctx.pre_placement.as_mut() {
+        if let Some(pp) = self.document_view.panel_ctx.pre_placement.as_mut() {
             pp.cursor_x_mm = x;
             pp.cursor_y_mm = y;
             pp.position.wire_anchor = anchor;
@@ -71,7 +71,7 @@ impl Signex {
 
     /// Forget the typed position, so the next object starts from the cursor.
     pub(crate) fn clear_typed_position(&mut self) {
-        if let Some(pp) = self.document_state.panel_ctx.pre_placement.as_mut() {
+        if let Some(pp) = self.document_view.panel_ctx.pre_placement.as_mut() {
             pp.position.clear_typed();
         }
     }
@@ -82,7 +82,7 @@ impl Signex {
     /// position is then forgotten.
     pub(crate) fn place_at_typed_position(&mut self) -> Task<Message> {
         let anchor = self.wire_anchor();
-        let Some(pp) = self.document_state.panel_ctx.pre_placement.as_ref() else {
+        let Some(pp) = self.document_view.panel_ctx.pre_placement.as_ref() else {
             return Task::none();
         };
         if !pp.position.is_typed() {

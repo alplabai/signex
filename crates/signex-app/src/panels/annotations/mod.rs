@@ -458,7 +458,7 @@ mod tests {
 
     fn ready_context() -> PanelContext {
         let (app, _boot) = crate::app::Signex::new();
-        let mut ctx = app.document_state.panel_ctx.clone();
+        let mut ctx = app.document_view.panel_ctx.clone();
         ctx.annotations = Arc::new(AnnotationsView {
             status: ListStatus::Ready,
             date: DateWindow::Last7Days,

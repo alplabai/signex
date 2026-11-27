@@ -877,7 +877,7 @@ mod tests {
     #[test]
     fn a_placed_symbol_row_carries_its_value_apart_from_its_context() {
         let (mut app, _task) = crate::app::Signex::new();
-        app.document_state.panel_ctx.placed_symbols =
+        app.document_view.panel_ctx.placed_symbols =
             vec![("R1".into(), "10k".into(), String::new(), String::new())];
         let catalog = build_catalog(&app);
         let row = catalog

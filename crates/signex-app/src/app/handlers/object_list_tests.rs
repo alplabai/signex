@@ -137,7 +137,7 @@ fn a_failed_read_is_tried_again_only_when_its_source_changes() {
 #[test]
 fn closing_the_panel_drops_a_read_still_on_its_way() {
     let (mut app, _boot) = Signex::new();
-    let _ = app.document_state.dock.close_panel(PanelKind::ObjectList);
+    let _ = app.document_view.dock.close_panel(PanelKind::ObjectList);
     assert!(!app.is_panel_open(PanelKind::ObjectList));
     let source = &mut app.ui_state.object_list.source;
     source.stamp = Some(1);
@@ -208,8 +208,8 @@ fn undocked() -> Undocked {
         .canvases
         .insert(window, crate::canvas::CanvasSlot::new());
     let ctx = app.new_window_panel_ctx(window);
-    app.document_state.window_panel_ctx.insert(window, ctx);
-    app.document_state
+    app.document_view.window_panel_ctx.insert(window, ctx);
+    app.document_view
         .dock
         .add_panel(PanelPosition::Right, PanelKind::ObjectList);
     Undocked {
@@ -231,7 +231,7 @@ fn names(view: &ObjectListView) -> Vec<String> {
 }
 
 fn window_view(f: &Undocked) -> &ObjectListView {
-    &f.app.document_state.window_panel_ctx[&f.window].object_list
+    &f.app.document_view.window_panel_ctx[&f.window].object_list
 }
 
 /// #2630: an undocked window's Object List lists the sheet that window
@@ -241,7 +241,7 @@ fn window_view(f: &Undocked) -> &ObjectListView {
 fn an_undocked_window_lists_and_selects_on_its_own_sheet() {
     let mut f = undocked();
     let _ = f.app.sync_object_list();
-    assert_eq!(names(&f.app.document_state.panel_ctx.object_list), ["R1"]);
+    assert_eq!(names(&f.app.document_view.panel_ctx.object_list), ["R1"]);
     assert_eq!(names(window_view(&f)), ["R2"]);
 
     let target = window_view(&f).rows[0].target.clone();
@@ -264,7 +264,7 @@ fn an_undocked_window_lists_and_selects_on_its_own_sheet() {
         "the main window keeps its sheet"
     );
     assert_eq!(window_view(&f).selected_count, 1);
-    assert_eq!(names(&f.app.document_state.panel_ctx.object_list), ["R1"]);
+    assert_eq!(names(&f.app.document_view.panel_ctx.object_list), ["R1"]);
 }
 
 /// #2630: a Project read lands in the list it was started for; one for a
@@ -330,7 +330,7 @@ fn a_refresh_inside_a_windows_swap_leaves_both_lists_settled() {
     let _ = f.app.sync_object_list();
 
     assert_eq!(generations(&f.app), before, "no list was read again");
-    assert_eq!(names(&f.app.document_state.panel_ctx.object_list), ["R1"]);
+    assert_eq!(names(&f.app.document_view.panel_ctx.object_list), ["R1"]);
     assert_eq!(names(window_view(&f)), ["R2"]);
 }
 
@@ -359,12 +359,12 @@ fn a_twice_placed_childs_part_reads_as_the_placement_in_view() {
     app.document_state.tabs.push(tab(&child));
     app.document_state.active_tab = 0;
     app.document_state.active_path = Some(child.clone());
-    app.document_state
+    app.document_view
         .dock
         .add_panel(PanelPosition::Right, PanelKind::ObjectList);
-    let listed = |app: &Signex| names(&app.document_state.panel_ctx.object_list);
+    let listed = |app: &Signex| names(&app.document_view.panel_ctx.object_list);
 
-    app.document_state
+    app.document_view
         .tab_placements
         .record(&child, Some(second));
     app.ui_state.object_list.filter = "R201".into();
@@ -372,9 +372,7 @@ fn a_twice_placed_childs_part_reads_as_the_placement_in_view() {
     assert_eq!(listed(&app), ["R201"]);
 
     // Viewing the other placement reads the rows again.
-    app.document_state
-        .tab_placements
-        .record(&child, Some(first));
+    app.document_view.tab_placements.record(&child, Some(first));
     let _ = app.sync_object_list();
     assert!(listed(&app).is_empty(), "R201 is not the placement in view");
     app.ui_state.object_list.filter.clear();
@@ -440,7 +438,7 @@ fn a_read_landing_after_its_window_closed_is_dropped() {
     );
     f.app.ui_state.windows.remove(&f.window);
     f.app.interaction_state.canvases.remove(&f.window);
-    f.app.document_state.window_panel_ctx.remove(&f.window);
+    f.app.document_view.window_panel_ctx.remove(&f.window);
     let _ = f.app.sync_object_list();
     assert!(!f.app.ui_state.object_list.windows.contains_key(&f.window));
 
@@ -471,7 +469,7 @@ fn a_closed_windows_rows_are_dropped() {
     assert!(f.app.ui_state.object_list.windows.contains_key(&f.window));
     f.app.ui_state.windows.remove(&f.window);
     f.app.interaction_state.canvases.remove(&f.window);
-    f.app.document_state.window_panel_ctx.remove(&f.window);
+    f.app.document_view.window_panel_ctx.remove(&f.window);
     let _ = f.app.sync_object_list();
     assert!(!f.app.ui_state.object_list.windows.contains_key(&f.window));
 }
@@ -495,11 +493,11 @@ fn a_wire_row_names_its_net_once_the_listing_builds_the_index() {
     assert!(app.open_or_focus_sheet_path(file));
     let path = app.document_state.active_path.clone().expect("the sheet");
     app.ui_state.object_list.scope = ObjectScope::ThisSheet;
-    app.document_state
+    app.document_view
         .dock
         .add_panel(PanelPosition::Right, PanelKind::ObjectList);
     // From a clean slate: no index, no rows read yet.
-    app.document_state.net_nav.index = Default::default();
+    app.document_view.net_nav.index = Default::default();
     app.ui_state.object_list.source.reset();
     let value = |app: &Signex| {
         let rows = &app.ui_state.object_list.source.rows;
@@ -523,7 +521,7 @@ fn a_wire_row_names_its_net_once_the_listing_builds_the_index() {
         "{:?}",
         value(&app)
     );
-    let ctx = &app.document_state.panel_ctx;
+    let ctx = &app.document_view.panel_ctx;
     let shown: Vec<String> = crate::layout_probe::lay_out_texts(
         crate::panels::object_list::view(ctx),
         iced::Size::new(600.0, 1200.0),

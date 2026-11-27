@@ -30,7 +30,7 @@ fn refresh_selection(app: &mut Signex) {
 }
 
 fn card(app: &Signex) -> &FootprintCardView {
-    app.document_state
+    app.document_view
         .panel_ctx
         .footprint_card
         .as_ref()
@@ -75,7 +75,7 @@ fn selecting_the_part_again_serves_the_card_from_the_cache() {
     let first = card(&app).key.expect("linked");
     app.interaction_state.active_canvas_mut().selected.clear();
     refresh_selection(&mut app);
-    assert!(app.document_state.panel_ctx.footprint_card.is_none());
+    assert!(app.document_view.panel_ctx.footprint_card.is_none());
 
     select_first(&mut app);
     refresh_selection(&mut app);
@@ -185,11 +185,11 @@ fn an_undocked_windows_card_is_read_again_when_the_library_data_moves() {
         signex_types::schematic::SelectedKind::Symbol,
     )];
     // A context built now reads the window's selection.
-    app.document_state.window_panel_ctx.remove(&window);
+    app.document_view.window_panel_ctx.remove(&window);
     let version = app.library.data_version + 1;
     app.library.touch_data();
     refresh_selection(&mut app);
-    let shown = app.document_state.window_panel_ctx[&window]
+    let shown = app.document_view.window_panel_ctx[&window]
         .footprint_card
         .as_ref()
         .expect("the window shows a footprint card");
@@ -199,7 +199,7 @@ fn an_undocked_windows_card_is_read_again_when_the_library_data_moves() {
     // A save moves the version again: the window's card is resolved anew.
     app.library.touch_data();
     refresh_selection(&mut app);
-    let shown = app.document_state.window_panel_ctx[&window]
+    let shown = app.document_view.window_panel_ctx[&window]
         .footprint_card
         .as_ref()
         .expect("the window still shows a footprint card");

@@ -81,7 +81,7 @@ impl Signex {
         &'a self,
         dialog: &'a SaveLayoutDialog,
     ) -> Element<'a, Message> {
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let i18n = self.ui_state.i18n.as_ref();
         let naming = self.layout_naming();
         let layouts = &self.ui_state.workspace_layouts.layouts;

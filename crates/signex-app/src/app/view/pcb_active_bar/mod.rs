@@ -49,7 +49,7 @@ impl Signex {
             return Space::new().boxed();
         }
         let tid = self.ui_state.effective_theme_id();
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let open = self.interaction_state.pcb_bar_menu;
         let items = pcb_bar_items(
             tid,
@@ -74,7 +74,7 @@ impl Signex {
             badge::off_count(&self.ui_state.pcb_pick_filter),
             tokens,
             &self.ui_state.i18n,
-            &self.document_state.panel_ctx.ui_font_name,
+            &self.document_view.panel_ctx.ui_font_name,
         );
         // Buttons take their own right press first. The rest of the bar
         // holds the release; with a dropdown open it counts as outside it.
@@ -111,7 +111,7 @@ impl Signex {
             MenuMetrics::GRAPHITE.fitted_width(
                 &entries,
                 bar_width,
-                &self.document_state.panel_ctx.ui_font_name,
+                &self.document_view.panel_ctx.ui_font_name,
             )
         });
         let panel = iced::widget::mouse_area(signex_widgets::active_bar_dropdown::view(

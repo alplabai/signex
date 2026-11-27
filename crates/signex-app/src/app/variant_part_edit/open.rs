@@ -153,7 +153,7 @@ impl Signex {
             match self.canvas_menu_channel_copies(window_id) {
                 Some(copies) => {
                     let first = copies.all.first()?.clone();
-                    let strip = self.document_state.panel_ctx.compiled_design.strip.as_ref();
+                    let strip = self.document_view.panel_ctx.compiled_design.strip.as_ref();
                     let channels = strip.and_then(|strip| {
                         let first = strip.tabs.first()?.channel.name.clone();
                         let last = strip.tabs.last()?.channel.name.clone();

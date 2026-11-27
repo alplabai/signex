@@ -93,7 +93,7 @@ fn the_symbol_bar_stops_the_wheel_but_the_canvas_beside_it_takes_it() {
     app.document_state
         .symbol_editors
         .insert(path.clone(), SymbolDocument::new(path, file));
-    let drop = crate::active_bar::symbol_editor_bar_drop(&app.document_state.panel_ctx.tokens);
+    let drop = crate::active_bar::symbol_editor_bar_drop(&app.document_view.panel_ctx.tokens);
     let y = bar_y(&app, drop);
     let beside = Point::new(app.canvas_bounds().x + 24.0, y);
     let over_bar = Point::new(WINDOW.width / 2.0, y);

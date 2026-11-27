@@ -233,7 +233,7 @@ fn select_panel(app: &mut Signex, kind: PanelKind) {
         PanelPosition::Bottom,
     ] {
         if let Some(i) = app
-            .document_state
+            .document_view
             .dock
             .panel_kinds(pos)
             .iter()

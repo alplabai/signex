@@ -528,7 +528,7 @@ pub enum ContextMenuMsg {
 pub enum ExportMsg {
     /// Open the unified PDF Export overlay (File → Export → PDF…). Now
     /// delegates to `handle_print_preview_requested`, which sets up
-    /// `document_state.preview` with the rasterized pages plus every
+    /// `document_view.preview` with the rasterized pages plus every
     /// PDF setting in one modal.
     PdfOpenDialog,
     /// Completion of PDF export — carries the request (source document,

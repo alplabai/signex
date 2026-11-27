@@ -178,7 +178,7 @@ fn select_both(app: &mut Signex) {
 }
 
 fn facts(app: &Signex) -> PcbComponentFacts {
-    app.document_state
+    app.document_view
         .panel_ctx
         .pcb_board
         .as_ref()
@@ -426,7 +426,7 @@ fn locked_primitives_stop_a_pad_edit() {
 fn adding_then_removing_a_parameter_is_one_step_each() {
     let mut f = open_board();
     select_both(&mut f.app);
-    f.app.document_state.panel_ctx.properties_tab = 1;
+    f.app.document_view.panel_ctx.properties_tab = 1;
     let edited = assert_one_step(&mut f, |f| {
         type_in(f, ComponentField::NewParameterName, "Tolerance");
         type_in(f, ComponentField::NewParameterValue, "1%");

@@ -14,7 +14,7 @@ impl Signex {
         let Some(sheet) = self.document_state.active_path.clone() else {
             return;
         };
-        let drafts = &self.document_state.drafts;
+        let drafts = &self.document_view.drafts;
         match edit {
             SheetVariableMsg::ValueTyped { name, text } => {
                 drafts.set_sheet_variable(&sheet, Some(name.as_str()), &text);
@@ -42,7 +42,7 @@ impl Signex {
     /// not an identifier, or that the sheet already has, is refused in
     /// Messages and stays typed.
     fn add_sheet_variable(&mut self, sheet: &std::path::Path) {
-        let drafts = &self.document_state.drafts;
+        let drafts = &self.document_view.drafts;
         let name = drafts
             .sheet_variable_text(sheet, None)
             .unwrap_or_default()
@@ -64,7 +64,7 @@ impl Signex {
         }
         match self.set_sheet_variable(&name, Some(String::new())) {
             Ok(_) => {
-                self.document_state.drafts.take_sheet_variable(sheet, None);
+                self.document_view.drafts.take_sheet_variable(sheet, None);
             }
             Err(why) => crate::diagnostics::log_warning(format!(
                 "Sheet variable '{name}' was not added: {why}"
@@ -148,7 +148,7 @@ impl Signex {
         matches: impl Fn(&std::path::Path) -> bool,
     ) {
         let picked = self
-            .document_state
+            .document_view
             .drafts
             .take_sheet_variables_where(matches);
         let active = self.document_state.active_path.clone();

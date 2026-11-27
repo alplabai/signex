@@ -545,7 +545,7 @@ mod tests {
     #[test]
     fn a_hidden_pin_row_is_dimmed() {
         let (app, _task) = crate::app::Signex::new();
-        let ctx = &app.document_state.panel_ctx;
+        let ctx = &app.document_view.panel_ctx;
         let r = resolve(&ctx.tokens);
         let primary = Color::from_rgb(0.9, 0.9, 0.9);
         let mut rows = pin_rows(&info());

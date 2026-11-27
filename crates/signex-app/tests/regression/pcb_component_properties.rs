@@ -181,7 +181,7 @@ fn select_r2(app: &mut Signex) {
 }
 
 fn facts(app: &Signex) -> PcbComponentFacts {
-    app.document_state
+    app.document_view
         .panel_ctx
         .pcb_board
         .as_ref()
@@ -479,7 +479,7 @@ fn several_components_share_values_and_take_one_x_as_one_step() {
 fn a_parameter_edit_is_one_step() {
     let mut f = open_board();
     select_r2(&mut f.app);
-    f.app.document_state.panel_ctx.properties_tab = 1;
+    f.app.document_view.panel_ctx.properties_tab = 1;
     let edited = assert_one_step(&mut f, |f| {
         type_and_enter(f, ComponentField::Parameter("MPN".into()), "RC0805");
     });

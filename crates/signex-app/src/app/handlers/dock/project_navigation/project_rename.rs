@@ -190,7 +190,7 @@ impl Signex {
                 // language switch leaves it as it was; store the id with #2059.
                 self.set_rename_error(&shown.render(&self.ui_state.i18n));
             } else {
-                self.document_state.error_notice =
+                self.document_view.error_notice =
                     Some(crate::app::state::ErrorNotice::rename_failed(shown));
             }
             return Task::none();
@@ -356,7 +356,7 @@ impl Signex {
             return false;
         };
         crate::diagnostics::log_warning(e.to_string());
-        self.document_state.error_notice =
+        self.document_view.error_notice =
             Some(notice(crate::app::state::untranslated(e.to_string())));
         true
     }

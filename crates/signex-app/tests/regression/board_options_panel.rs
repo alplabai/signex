@@ -77,7 +77,7 @@ fn a_shaped_outline_reads_as_its_bounding_box() {
     ))));
     drive(&mut app, task);
     let summary = app
-        .document_state
+        .document_view
         .panel_ctx
         .pcb_board
         .clone()

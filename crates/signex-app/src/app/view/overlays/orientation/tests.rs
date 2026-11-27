@@ -140,7 +140,7 @@ fn assert_cluster_inside(canvas: Rectangle, rects: ClusterRects, case: &str) {
 }
 
 fn assert_right_dock_open(app: &Signex) {
-    let dock = &app.document_state.dock;
+    let dock = &app.document_view.dock;
     assert!(dock.has_panels(PanelPosition::Right), "no right dock");
     assert!(
         !dock.is_collapsed(PanelPosition::Right),
@@ -262,7 +262,7 @@ fn the_view_options_eye_hides_the_tile_and_is_kept_with_the_board_view() {
     )));
     assert!(!app.pcb_layer_view(&path).orientation_tile_visible());
     assert!(
-        !app.document_state
+        !app.document_view
             .panel_ctx
             .pcb_layers
             .orientation_tile_visible

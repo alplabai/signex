@@ -224,7 +224,7 @@ fn a_properties_edit_in_an_undocked_window_changes_that_windows_sheet_only() {
 
     assert_eq!(f.app.panel_ctx_for(f.window).paper_size, "A2");
     assert_eq!(f.app.panel_ctx_for(f.main).paper_size, "A4");
-    assert_eq!(f.app.document_state.panel_ctx.selection_count, 0);
+    assert_eq!(f.app.document_view.panel_ctx.selection_count, 0);
 }
 
 #[test]
@@ -393,7 +393,7 @@ fn a_window_refresh_leaves_the_main_windows_navigator_on_the_main_project() {
 
     let wanted = f
         .app
-        .document_state
+        .document_view
         .navigator_job
         .wanted_fingerprint()
         .unwrap_or_default();
@@ -489,7 +489,7 @@ fn an_edit_in_a_window_updates_the_main_selection_when_main_shows_the_same_sheet
     );
     let _ = f.app.update(rename);
 
-    let main = &f.app.document_state.panel_ctx;
+    let main = &f.app.document_view.panel_ctx;
     assert!(
         main.selection_info.iter().any(|(_, v)| v == "RENAMED"),
         "main's selection still shows the old text: {:?}",
@@ -643,7 +643,7 @@ fn a_components_drag_released_in_its_own_window_ends_there() {
 fn a_title_block_draft_typed_in_a_window_survives_its_reattach() {
     let mut f = fixture();
     f.app.refresh_panel_ctx();
-    f.app.document_state.drafts.set_title_block(
+    f.app.document_view.drafts.set_title_block(
         &f.window_path,
         crate::panels::TitleBlockField::Title,
         "typed in the window",
@@ -651,15 +651,10 @@ fn a_title_block_draft_typed_in_a_window_survives_its_reattach() {
     let _ = f
         .app
         .update(Message::Window(WindowMsg::ReattachTab(f.window)));
-    assert!(
-        !f.app
-            .document_state
-            .window_panel_ctx
-            .contains_key(&f.window)
-    );
+    assert!(!f.app.document_view.window_panel_ctx.contains_key(&f.window));
     assert_eq!(
         f.app
-            .document_state
+            .document_view
             .drafts
             .title_block_text(&f.window_path, crate::panels::TitleBlockField::Title)
             .as_deref(),

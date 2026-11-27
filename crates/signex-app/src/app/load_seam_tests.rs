@@ -108,7 +108,7 @@ fn a_panel_refresh_on_open_runs_before_the_repair_dirty_mark_today() {
     let (app, path) = opened("t3.snxsch", repaired);
 
     assert!(app.document_state.is_document_dirty(&path));
-    let project = &app.document_state.panel_ctx.projects[0];
+    let project = &app.document_view.panel_ctx.projects[0];
     assert!(
         project.project_file_open,
         "fixture: the tree row is the sheet"

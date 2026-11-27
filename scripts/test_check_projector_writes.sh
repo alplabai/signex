@@ -54,8 +54,8 @@ run_case engine_map_reads pass slots.rs "$(in_fn 'let _ = self.document_state.en
         let _ = (self.document_state.engines.iter(), self.document_state.engines.len());
         let _ = self.document_state.engines.is_empty();')"
 run_case other_field_writes pass slots.rs "$(in_fn 'self.interaction_state.canvases.insert(id, slot);
-        self.document_state.panel_ctx.paper_size = token;
-        let s = &mut self.document_state.panel_ctx;')"
+        self.document_view.panel_ctx.paper_size = token;
+        let s = &mut self.document_view.panel_ctx;')"
 run_case comment_only pass slots.rs "// insert_engine, engines.remove, mark_saved and open_schematic_tab in prose only.
 $(in_fn 'self.document_state.active_path.is_some();')"
 run_case cfg_test_mod pass slots.rs "fn g() {}
@@ -85,7 +85,8 @@ run_case active_path_assign fail slots.rs "$(in_fn 'self.document_state.active_p
 run_case engines_assign fail slots.rs "$(in_fn 'self.document_state.engines = HashMap::new();')"
 run_case document_state_assign fail slots.rs "$(in_fn 'self.document_state = DocumentState::default();')"
 run_case after_cfg_test_attr fail slots.rs "$(in_fn '#[cfg(test)] let _x = 1; self.document_state.active_path = None;')"
-# Any other field reached through document_state, panel_ctx excepted.
+# Any other field reached through document_state; since slice 4a that
+# includes `panel_ctx`, which lives in document_view.
 run_case pcb_revisions_insert fail slots.rs "$(in_fn 'self.document_state.pcb_revisions.insert(p, 1);')"
 run_case arbitrary_field_push fail slots.rs "$(in_fn 'self.document_state.foo.push(1);')"
 run_case nested_field_method fail slots.rs "$(in_fn 'self.document_state.autosave.pending.clear();')"
@@ -98,11 +99,25 @@ run_case arbitrary_field_reads pass slots.rs "$(in_fn 'let _ = self.document_sta
         let _ = (self.document_state.tabs.last(), self.document_state.pcb_revisions.get(&p).copied());
         let _ = (self.document_state.recovery_check_due.is_empty(), self.document_state.tabs.cloned());
         let tab = self.document_state.active_tab;')"
-run_case panel_ctx_writes pass slots.rs "$(in_fn 'self.document_state.panel_ctx.paper_size = token;
-        self.document_state.panel_ctx.sym_count += 1;
-        self.document_state.panel_ctx.projects.push(row);
-        self.document_state.panel_ctx.symbol_lists_key = None;
-        let ctx = &mut self.document_state.panel_ctx;')"
+run_case document_state_panel_ctx_assign fail slots.rs "$(in_fn 'self.document_state.panel_ctx.paper_size = token;')"
+run_case document_state_panel_ctx_mut_ref fail slots.rs "$(in_fn 'let ctx = &mut self.document_state.panel_ctx;')"
+# The GUI view state (document_view): panel_ctx is the projector's own and
+# stays writable; any other field of it, or the whole of it, is not.
+run_case panel_ctx_writes pass slots.rs "$(in_fn 'self.document_view.panel_ctx.paper_size = token;
+        self.document_view.panel_ctx.sym_count += 1;
+        self.document_view.panel_ctx.projects.push(row);
+        self.document_view.panel_ctx.symbol_lists_key = None;
+        let ctx = &mut self.document_view.panel_ctx;')"
+run_case view_field_assign fail slots.rs "$(in_fn 'self.document_view.preview = None;')"
+run_case view_field_compound fail slots.rs "$(in_fn 'self.document_view.raster_queue.generation += 1;')"
+run_case view_field_method fail slots.rs "$(in_fn 'self.document_view.error_notice.take();')"
+run_case view_nested_field_method fail slots.rs "$(in_fn 'self.document_view.window_panel_ctx.insert(id, ctx);')"
+run_case view_field_mut_ref fail slots.rs "$(in_fn 'let p = &mut self.document_view.preview;')"
+run_case mut_document_view fail slots.rs "$(in_fn 'let v = &mut self.document_view;')"
+run_case document_view_assign fail slots.rs "$(in_fn 'self.document_view = view;')"
+run_case view_field_reads pass slots.rs "$(in_fn 'let _ = self.document_view.preview.is_some();
+        let _ = (self.document_view.window_panel_ctx.get(&id), self.document_view.history.clone());
+        let n = self.document_view.raster_queue.generation;')"
 # Marks and engine-map methods, as a call, a path call and a value.
 for mark in insert_engine remove_engine clear_active_engine mark_document_dirty \
   mark_document_dirty_display_only mark_history_edit_dirty mark_document_clean \

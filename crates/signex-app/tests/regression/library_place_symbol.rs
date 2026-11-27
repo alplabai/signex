@@ -394,7 +394,7 @@ fn placing_registers_one_lib_symbol_that_the_symbol_resolves() {
     assert_eq!(placed.row_id, Some(f.row_id));
     assert!(placed.library_id.is_some());
     assert_eq!(placed.library_version, "1.2.3");
-    assert!(app.document_state.error_notice.is_none());
+    assert!(app.document_view.error_notice.is_none());
 }
 
 #[test]
@@ -475,7 +475,7 @@ fn the_picker_message_places_end_to_end_with_no_io_in_update() {
     // Nothing was read or placed synchronously: the work is in the Task.
     assert!(doc(&app).symbols.is_empty());
     assert!(doc(&app).lib_symbols.is_empty());
-    assert!(app.document_state.error_notice.is_none());
+    assert!(app.document_view.error_notice.is_none());
 
     for message in run(task) {
         assert!(matches!(
@@ -491,7 +491,7 @@ fn the_picker_message_places_end_to_end_with_no_io_in_update() {
     assert_eq!(doc(&app).symbols.len(), 1);
     assert_eq!(doc(&app).lib_symbols.len(), 1);
     assert_eq!(doc(&app).symbols[0].row_id, Some(f.row_id));
-    assert!(app.document_state.error_notice.is_none());
+    assert!(app.document_view.error_notice.is_none());
 }
 
 #[test]
@@ -540,7 +540,7 @@ fn worker_failures_reach_the_user_and_leave_the_sheet_alone() {
     assert!(bad_row.is_err());
     complete(&mut app, &f, "place-364.snxsch", bad_row);
     assert_eq!(
-        app.document_state
+        app.document_view
             .error_notice
             .as_ref()
             .map(|n| n.title.render_en_us())
@@ -548,7 +548,7 @@ fn worker_failures_reach_the_user_and_leave_the_sheet_alone() {
         Some("Place Failed")
     );
     assert!(doc(&app).symbols.is_empty());
-    app.document_state.error_notice = None;
+    app.document_view.error_notice = None;
 
     let missing = resolve_placement(
         &PathBuf::from("nowhere.snxlib"),
@@ -568,8 +568,8 @@ fn picker_refuses_a_closed_library_or_missing_sheet_up_front() {
         table: "ICs".into(),
         row_id: signex_library::RowId(f.row_id),
     }));
-    assert!(app.document_state.error_notice.is_some(), "closed library");
-    app.document_state.error_notice = None;
+    assert!(app.document_view.error_notice.is_some(), "closed library");
+    app.document_view.error_notice = None;
 
     app.document_state.clear_active_engine();
     let _ = app.update(Message::Library(LibraryMessage::PlaceLibraryComponent {
@@ -577,7 +577,7 @@ fn picker_refuses_a_closed_library_or_missing_sheet_up_front() {
         table: "ICs".into(),
         row_id: signex_library::RowId(f.row_id),
     }));
-    assert!(app.document_state.error_notice.is_some(), "no sheet");
+    assert!(app.document_view.error_notice.is_some(), "no sheet");
     assert!(app.library.picker.is_none());
 }
 
@@ -589,14 +589,14 @@ fn a_changed_sheet_or_closed_library_is_reported_not_placed() {
 
     // The sheet the gesture started on is not the active one any more.
     complete(&mut app, &f, "other-sheet.snxsch", resolved.clone());
-    assert!(app.document_state.error_notice.is_some(), "wrong sheet");
+    assert!(app.document_view.error_notice.is_some(), "wrong sheet");
     assert!(doc(&app).symbols.is_empty());
-    app.document_state.error_notice = None;
+    app.document_view.error_notice = None;
 
     // The library was unmounted while the worker ran.
     app.library.open_libraries.clear();
     complete(&mut app, &f, "place-364.snxsch", resolved);
-    assert!(app.document_state.error_notice.is_some(), "closed library");
+    assert!(app.document_view.error_notice.is_some(), "closed library");
     assert!(doc(&app).symbols.is_empty());
 }
 
@@ -683,7 +683,7 @@ fn a_library_power_port_places_as_a_power_port() {
     let mut app = app_with_library(&f);
     place(&mut app, &f);
     place(&mut app, &f);
-    assert!(app.document_state.error_notice.is_none());
+    assert!(app.document_view.error_notice.is_none());
 
     let mut sheet = doc(&app).clone();
     let (a, b) = (&sheet.symbols[0], &sheet.symbols[1]);

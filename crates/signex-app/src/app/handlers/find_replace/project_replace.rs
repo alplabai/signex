@@ -164,7 +164,7 @@ impl Signex {
             },
         };
         crate::diagnostics::log_warning(detail.render_en_us());
-        self.document_state.error_notice = Some(crate::app::state::ErrorNotice::replace(detail));
+        self.document_view.error_notice = Some(crate::app::state::ErrorNotice::replace(detail));
         true
     }
 

@@ -392,7 +392,7 @@ pub(super) fn handle_recovery_git_missing(
                 // Defence in depth: the dialog is never opened for a
                 // read-only library, but never write to one regardless.
                 app.library.finish_recovery();
-                app.document_state.error_notice = Some(read_only_repair_notice(&path));
+                app.document_view.error_notice = Some(read_only_repair_notice(&path));
                 return Task::none();
             }
             // A re-init already running on this library: wait for it.

@@ -23,14 +23,14 @@ impl Signex {
             let message = Translatable::new(ids::NOTICE_IMPORT_RUNNING)
                 .arg("path", running.input.display().to_string());
             crate::diagnostics::log_warning(message.render_en_us());
-            self.document_state.error_notice = Some(ErrorNotice::import(message));
+            self.document_view.error_notice = Some(ErrorNotice::import(message));
             return iced::Task::none();
         }
         let binary = match altium_import::locate() {
             Ok(binary) => binary,
             Err(message) => {
                 crate::diagnostics::log_error("Altium import", &anyhow::anyhow!(message.clone()));
-                self.document_state.error_notice = Some(ErrorNotice::import(untranslated(message)));
+                self.document_view.error_notice = Some(ErrorNotice::import(untranslated(message)));
                 return iced::Task::none();
             }
         };
@@ -75,7 +75,7 @@ impl Signex {
             Ok(outcome) => outcome,
             Err(message) => {
                 crate::diagnostics::log_error("Altium import", &anyhow::anyhow!(message.clone()));
-                self.document_state.error_notice = Some(ErrorNotice::import(untranslated(message)));
+                self.document_view.error_notice = Some(ErrorNotice::import(untranslated(message)));
                 return iced::Task::none();
             }
         };
@@ -90,7 +90,7 @@ impl Signex {
             Ok(task) => task,
             Err(error) => {
                 crate::diagnostics::log_error("Open imported Altium design", &error);
-                self.document_state.error_notice = Some(ErrorNotice::import(
+                self.document_view.error_notice = Some(ErrorNotice::import(
                     Translatable::new(ids::NOTICE_IMPORT_NOT_OPENED)
                         .arg("path", outcome.open.display().to_string())
                         .arg("error", format!("{error:#}")),
@@ -100,7 +100,7 @@ impl Signex {
         };
         // Lossy steps are a review item, not an error: the files exist.
         if !outcome.warnings.is_empty() {
-            self.document_state.error_notice = Some(ErrorNotice::import_advisory(
+            self.document_view.error_notice = Some(ErrorNotice::import_advisory(
                 Translatable::new(ids::NOTICE_IMPORT_REVIEW)
                     .arg("report", altium_import::REPORT_FILE)
                     .arg("warnings", altium_import::warnings_text(&outcome.warnings)),
@@ -141,7 +141,7 @@ mod tests {
             reason.to_string()
         ))));
 
-        let card = app.document_state.error_notice.as_ref().expect("card");
+        let card = app.document_view.error_notice.as_ref().expect("card");
         assert!(card.detail.render_en_us().contains(reason));
         assert_eq!(logged(reason), before + 1);
         assert!(app.document_state.altium_import_running.is_none());
@@ -162,7 +162,7 @@ mod tests {
         ))));
 
         assert_eq!(logged(warning), before + 1, "every warning is logged");
-        let card = app.document_state.error_notice.as_ref().expect("advisory");
+        let card = app.document_view.error_notice.as_ref().expect("advisory");
         assert!(card.detail.render_en_us().contains(warning));
         assert!(
             app.document_state.pending_opens.contains(&open),
