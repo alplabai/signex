@@ -46,9 +46,10 @@
 # strings (a doc comment naming a type is no edge) and flattens `use` trees.
 # Names are matched by identifier, not resolved.
 # Known blind spots: a core type name that is also an outside name reached
-# without a `use` naming it (a glob import, a full path in a field, a type of
-# another signex-app module imported by a `crate::` path, which may be a
-# re-export of the core type) gets an edge from that outside use; a type reached
+# without a `use` naming it (a glob import, a full path in a field, an import
+# through any local path (`crate::`, `super::`, or an inline `mod`), which may
+# be a re-export of the core type; and aliases do not carry across files) gets
+# an edge from that outside use; a type reached
 # only through a free fn or a non-core, non-app/state wrapper of DocumentState
 # needs a root; a `#[path]` mount in app/state/ is not followed; a field or signature compiled out by a non-test cfg
 # (`#[cfg(any())]`) still makes an edge; and a view type added as a field or in
@@ -283,7 +284,7 @@ result="$("$AWK" -F'\t' -v state="$STATE" -v state_dir="$STATE_DIR" -v core_rel=
         if ((i in done) || intest(uf[i], ul[i])) continue
         p = up[i]; name = ""
         if (match(p, / as [A-Za-z_][A-Za-z0-9_]*$/)) { name = substr(p, RSTART + 4); p = substr(p, 1, RSTART - 1) }
-        sub(/^::/, "", p); sub(/::self$/, "", p)
+        sub(/^::/, "", p); sub(/^self::/, "", p); sub(/::self$/, "", p)
         if (name == "") { name = p; sub(/^.*::/, "", name) }
         w[1] = p; sub(/::.*$/, "", w[1])
         if (!(w[1] in ext) && !((uf[i], w[1]) in loc)) continue

@@ -263,6 +263,10 @@ impl Inner { pub fn diagram(&self) -> Option<BlockDiagram> { None } }' \
   "$CORE_REL/zz_evil.rs BlockDiagram shares its name with signex_types::block_diagram::BlockDiagram"
 DIAGRAM='impl Inner { pub fn diagram(&self) -> Option<BlockDiagram> { None } }'
 XF1="$CORE_REL/zz_evil.rs" XB1="$BLOCK" \
+  run_case import_through_self_path fail "use signex_types::block_diagram as bd;
+use self::bd::{BlockDiagram, ReadBlockDiagram};
+$DIAGRAM" "$CORE_REL/zz_evil.rs BlockDiagram shares its name with bd::BlockDiagram"
+XF1="$CORE_REL/zz_evil.rs" XB1="$BLOCK" \
   run_case import_through_module_import fail "use signex_types::block_diagram;
 use block_diagram::{BlockDiagram, ReadBlockDiagram};
 $DIAGRAM" "$CORE_REL/zz_evil.rs BlockDiagram shares its name with block_diagram::BlockDiagram"
