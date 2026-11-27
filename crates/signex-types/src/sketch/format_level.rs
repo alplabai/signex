@@ -37,7 +37,8 @@ impl SketchData {
 
     /// Whether a linear array has a depopulation (#2688): an older build
     /// does not know the key, would bake the suppressed pads and drop the
-    /// list on save. One of the triggers of `snxfpt/1.5` and `snxpcb/1.13`.
+    /// list on save. One of the triggers of `SNXFPT_FORMAT_V1_5` and
+    /// `SNXPCB_FORMAT_V1_13`.
     pub fn has_linear_suppression(&self) -> bool {
         self.arrays.iter().any(|array| {
             matches!(

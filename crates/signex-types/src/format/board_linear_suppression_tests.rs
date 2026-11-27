@@ -1,5 +1,5 @@
 //! #2688 — a board sketch's linear pattern with a suppression list writes
-//! `snxpcb/1.13`, which a build that knows only 1.12 opens read-only. A
+//! `SNXPCB_FORMAT_V1_13`, which a build that knows only 1.12 opens read-only. A
 //! board without one keeps its token, byte for byte, and restoring the last
 //! suppressed instance writes the lower token again. Policy:
 //! `docs/FORMAT_VERSIONS.md`.

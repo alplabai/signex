@@ -43,10 +43,10 @@ fn snxpcb_older_minor_saves_as_current_newer_minor_is_read_only() {
         "{out}"
     );
 
-    let newer = SnxPcb::parse(&format!("format = \"snxpcb/1.14\"\n{PCB_ID}")).unwrap();
+    let newer = SnxPcb::parse(&format!("format = \"snxpcb/1.15\"\n{PCB_ID}")).unwrap();
     assert!(newer.is_from_newer_minor());
     let err = newer.write_string().unwrap_err();
-    assert!(err.to_string().contains("snxpcb/1.14"), "{err}");
+    assert!(err.to_string().contains("snxpcb/1.15"), "{err}");
     assert!(SnxPcb::new(newer.board.clone()).write_string().is_err());
 
     assert!(SnxPcb::parse(&format!("format = \"snxpcb/2.0\"\n{PCB_ID}")).is_err());
@@ -60,7 +60,7 @@ fn snxpcb_1_10_is_readable_and_opens_for_editing() {
     assert!(SNXPCB_VERSION.readable.contains(&SNXPCB_FORMAT_V1_9));
     let file = SnxPcb::parse(&format!("format = \"{SNXPCB_FORMAT_V1_10}\"\n{PCB_ID}")).unwrap();
     assert!(!file.is_from_newer_minor());
-    assert!(snxpcb_opens_read_only("snxpcb/1.14"));
+    assert!(snxpcb_opens_read_only("snxpcb/1.15"));
     assert!(!snxpcb_opens_read_only(SNXPCB_FORMAT_V1_9));
 }
 
@@ -75,7 +75,7 @@ fn snxpcb_1_11_is_readable_and_opens_for_editing() {
     assert!(file.write_string().is_ok(), "this build saves 1.11");
     assert!(!snxpcb_opens_read_only(SNXPCB_FORMAT_V1_11));
     assert!(!snxpcb_opens_read_only(SNXPCB_FORMAT_V1_10));
-    assert!(snxpcb_opens_read_only("snxpcb/1.14"));
+    assert!(snxpcb_opens_read_only("snxpcb/1.15"));
 }
 
 /// #2942: `snxpcb/1.12` (a layout plan) is one of this build's own
@@ -88,10 +88,10 @@ fn snxpcb_1_12_is_readable_and_opens_for_editing() {
     assert!(file.write_string().is_ok(), "this build saves 1.12");
     assert!(!snxpcb_opens_read_only(SNXPCB_FORMAT_V1_12));
     assert!(!snxpcb_opens_read_only(SNXPCB_FORMAT_V1_11));
-    assert!(snxpcb_opens_read_only("snxpcb/1.14"));
+    assert!(snxpcb_opens_read_only("snxpcb/1.15"));
 }
 
-/// #2688: `snxpcb/1.13` (a linear pattern's suppression list) is this
+/// #2688: `SNXPCB_FORMAT_V1_13` (a linear pattern's suppression list) is this
 /// build's current token: it opens for editing, and it ranks above 1.12.
 #[test]
 fn snxpcb_1_13_is_current_and_opens_for_editing() {
@@ -102,7 +102,7 @@ fn snxpcb_1_13_is_current_and_opens_for_editing() {
     assert!(file.write_string().is_ok(), "this build saves 1.13");
     assert!(!snxpcb_opens_read_only(SNXPCB_FORMAT_V1_13));
     assert!(!snxpcb_opens_read_only(SNXPCB_FORMAT_V1_12));
-    assert!(snxpcb_opens_read_only("snxpcb/1.14"));
+    assert!(snxpcb_opens_read_only("snxpcb/1.15"));
 }
 
 fn pad(uuid: &str, number: &str) -> Pad {

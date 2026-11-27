@@ -3,7 +3,7 @@
 //! sketches hold no link and whose footprints generate nothing writes
 //! `snxfpt/1.1` byte for byte; one that embeds a STEP model writes
 //! `snxfpt/1.4` (#3108), and one with any of the 1.5 content
-//! (`FootprintFile::needs_1_5`) writes `snxfpt/1.5`.
+//! (`FootprintFile::needs_1_5`) writes [`SNXFPT_FORMAT_V1_5`].
 
 use signex_types::format_version::{FormatVersion, MissingToken, NewerMinor};
 
@@ -79,7 +79,7 @@ impl FootprintFile {
         }
     }
 
-    /// Whether the file holds content only `snxfpt/1.5` carries. One rule
+    /// Whether the file holds content only [`SNXFPT_FORMAT_V1_5`] carries. One rule
     /// for every 1.5 trigger; today a footprint sketch whose linear pattern
     /// has a suppression list (#2688). A file without any keeps its lower
     /// token, byte for byte.

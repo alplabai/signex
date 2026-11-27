@@ -43,8 +43,9 @@ pub enum ArrayKind {
         dy_expr: String,
         /// Per-instance suppression, as a polar array keeps it: entries are
         /// `(i, 0)` (#2688, DECISIONS 2026-11-27). `None` keeps every
-        /// instance and writes nothing; while set the footprint file needs
-        /// `snxfpt/1.5` and a board `snxpcb/1.13`.
+        /// instance and writes nothing; while set the footprint file and the
+        /// board need their tokens for it (`SNXFPT_FORMAT_V1_5`,
+        /// `SNXPCB_FORMAT_V1_13`).
         #[serde(default, skip_serializing_if = "Option::is_none")]
         depopulation: Option<GridDepopulation>,
     },

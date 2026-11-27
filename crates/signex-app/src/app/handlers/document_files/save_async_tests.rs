@@ -340,7 +340,7 @@ fn ctrl_s_on_a_newer_minor_board_writes_nothing() {
     app.document_state.projects[0].data.enable_git = true;
     let path = dir.path().join("board.snxpcb");
     let mut board = empty_board();
-    board.unknown.newer_minor_source = Some("snxpcb/1.14".into());
+    board.unknown.newer_minor_source = Some("snxpcb/1.15".into());
     app.open_pcb_tab(path.clone(), "board".into(), board);
     mark_dirty(&mut app, &path);
     press_save(&mut app);

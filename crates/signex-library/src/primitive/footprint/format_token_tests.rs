@@ -14,6 +14,7 @@ use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
 use signex_sketch::sketch::{OverrideValue, PadAttrOverride, PatternMirror};
 use signex_types::format_version::{FormatVersion, MissingToken, NewerMinor};
 
+use super::format_token::SNXFPT_FORMAT_V1_5;
 use super::*;
 
 /// The `.snxfpt` policy of a build that knows only 1.1.
@@ -401,7 +402,10 @@ fn with_linear_suppressed(f: &Fixture) -> SketchData {
 fn a_linear_suppression_round_trips_as_snxfpt_1_5() {
     let sketch = with_linear_suppressed(&fixture());
     let (text, back) = round_trip(sketch.clone());
-    assert!(text.starts_with("format = \"snxfpt/1.5\"\n"), "{text}");
+    assert!(
+        text.starts_with(&format!("format = \"{SNXFPT_FORMAT_V1_5}\"\n")),
+        "{text}"
+    );
     assert_eq!(back, sketch, "the suppression list survives");
     let again = FootprintFile::from_toml_str(&text)
         .expect("reads back")
@@ -421,7 +425,7 @@ fn a_linear_suppression_with_a_numbering_sweep_writes_1_5() {
             sweep: GridSweep::ColumnByColumn,
         };
     }
-    assert_eq!(file_of(sketch).format_token(), "snxfpt/1.5");
+    assert_eq!(file_of(sketch).format_token(), SNXFPT_FORMAT_V1_5);
 }
 
 /// Restoring the last suppressed instance writes the bytes the file had
@@ -436,7 +440,10 @@ fn a_footprint_whose_last_linear_suppression_goes_saves_as_before() {
         .to_toml_string()
         .expect("serialise");
     let mut file = FootprintFile::from_toml_str(&text).expect("1.5 reads");
-    assert_eq!(file.format, "snxfpt/1.5", "the token it was read with");
+    assert_eq!(
+        file.format, SNXFPT_FORMAT_V1_5,
+        "the token it was read with"
+    );
     if let Some(sketch) = file.footprints[0].sketch.as_mut() {
         for array in &mut sketch.arrays {
             array.kind.set_instance_suppressed(1, 0, false);
@@ -464,13 +471,15 @@ fn a_1_4_build_refuses_a_linear_suppression_by_name() {
     let refused = SNXFPT_1_4_ONLY
         .read(Some(file.format_token()))
         .expect_err("a 1.4 build refuses 1.5");
-    assert_eq!(refused.found(), Some("snxfpt/1.5"));
+    assert_eq!(refused.found(), Some(SNXFPT_FORMAT_V1_5));
     let message = refused.to_string();
-    assert!(message.contains("snxfpt/1.5"), "{message}");
+    assert!(message.contains(SNXFPT_FORMAT_V1_5), "{message}");
     assert!(message.contains("newer Signex"), "{message}");
     assert_eq!(
-        FOOTPRINT_FILE_VERSION.read(Some("snxfpt/1.5")).as_deref(),
-        Ok("snxfpt/1.5"),
+        FOOTPRINT_FILE_VERSION
+            .read(Some(SNXFPT_FORMAT_V1_5))
+            .as_deref(),
+        Ok(SNXFPT_FORMAT_V1_5),
         "this build reads it"
     );
 }

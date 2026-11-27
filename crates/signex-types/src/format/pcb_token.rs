@@ -75,7 +75,7 @@ pub const SNXPCB_FORMAT_V1_12: &str = "snxpcb/1.12";
 /// A board without any keeps its token, byte for byte.
 pub const SNXPCB_FORMAT_V1_13: &str = "snxpcb/1.13";
 
-/// Whether `board` holds content only `snxpcb/1.13` carries. One rule for
+/// Whether `board` holds content only [`SNXPCB_FORMAT_V1_13`] carries. One rule for
 /// every 1.13 trigger; today a board sketch whose linear pattern has a
 /// suppression list (#2688).
 fn needs_1_13(board: &PcbBoard) -> bool {
