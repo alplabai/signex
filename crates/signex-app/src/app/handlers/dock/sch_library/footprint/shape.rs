@@ -366,7 +366,8 @@ impl Signex {
                         *sweep_angle_expr = value;
                     }
                     (
-                        ArrayKind::Grid { depopulation, .. }
+                        ArrayKind::Linear { depopulation, .. }
+                        | ArrayKind::Grid { depopulation, .. }
                         | ArrayKind::Polar { depopulation, .. },
                         ArrayParamField::MaskExpr,
                     ) => {

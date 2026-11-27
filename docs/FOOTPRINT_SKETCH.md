@@ -405,7 +405,9 @@ click suppresses that instance (one undo step) and a second click brings it
 back. The suppression list is the one the Properties pattern form ticks,
 kept by one helper on the array type (`ArrayKind::set_instance_suppressed`).
 A linear pattern keeps its list as a circular one does, as `(i, 0)` entries
-(#2688); its form shows the per-instance checkboxes but no Mask field. A
+(#2688); its form has the Mask field and per-instance checkboxes of a
+circular one, and a masked instance keeps its number (numbering follows the
+index). A
 footprint with a linear suppression is saved as `snxfpt/1.5` and a board
 sketch with one as `snxpcb/1.13` (`docs/FORMAT_VERSIONS.md`). The pattern form's
 Numbering Mask (mockup row 126, #2845) edits the same list by pad number

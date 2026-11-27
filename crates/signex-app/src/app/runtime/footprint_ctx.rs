@@ -467,13 +467,17 @@ pub(super) fn build_footprint_editor_panel_ctx(
                 dy_expr,
                 depopulation,
                 ..
-            } => crate::panels::ArrayKindSummary::Linear {
-                count_expr: count_expr.clone(),
-                dx_expr: dx_expr.clone(),
-                dy_expr: dy_expr.clone(),
-                suppressed_instances: suppressed_indices(depopulation.as_ref()).1,
-                count_value: count_expr.trim().parse::<u32>().ok(),
-            },
+            } => {
+                let (mask_expr, suppressed_instances) = suppressed_indices(depopulation.as_ref());
+                crate::panels::ArrayKindSummary::Linear {
+                    count_expr: count_expr.clone(),
+                    dx_expr: dx_expr.clone(),
+                    dy_expr: dy_expr.clone(),
+                    mask_expr,
+                    suppressed_instances,
+                    count_value: count_expr.trim().parse::<u32>().ok(),
+                }
+            }
             ArrayKind::Grid {
                 nx_expr,
                 ny_expr,
