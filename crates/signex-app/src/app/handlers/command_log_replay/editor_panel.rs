@@ -168,6 +168,7 @@ impl Signex {
         targets: &EditorTargets,
         idx: usize,
         delta: (f64, f64),
+        with_selection: bool,
     ) -> (CommandOutcome, Task<Message>) {
         let Some(at) = self
             .document_state
@@ -182,6 +183,7 @@ impl Signex {
             idx,
             x_mm: at.0 + delta.0,
             y_mm: at.1 + delta.1,
+            with_selection,
         });
         self.run_editor_input(path, targets, std::slice::from_ref(&message))
     }

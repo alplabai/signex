@@ -19,6 +19,32 @@ use super::super::hit_test::{sketch_glyph_at, sketch_hit_other, sketch_snap};
 use super::super::{DragState, FootprintCanvas, FootprintCanvasState};
 
 impl FootprintCanvas<'_> {
+    /// A bare click (no drag) on a pad of a multi-pad selection: the press
+    /// kept the selection for a drag, so the click now selects that pad
+    /// alone (#2726). `None` for a held Ctrl/Cmd or Shift, which edited the
+    /// selection on the press.
+    pub(in crate::library::editor::footprint::canvas) fn released_on_group_pad(
+        &self,
+        cstate: &FootprintCanvasState,
+        pad_idx: usize,
+    ) -> Option<canvas::Action<LibraryMessage>> {
+        let modifiers = cstate.current_modifiers;
+        let selected = self.state.selected_pad_indices();
+        if modifiers.command()
+            || modifiers.shift()
+            || selected.len() < 2
+            || !selected.contains(&pad_idx)
+        {
+            return None;
+        }
+        Some(canvas::Action::publish(LibraryMessage::EditorEvent {
+            library_path: self.address.library_path.clone(),
+            table: self.address.table.clone(),
+            row_id: self.address.row_id,
+            msg: EditorMsg::Footprint(FootprintEditorMsg::SelectPad(Some(pad_idx))),
+        }))
+    }
+
     /// A right-click that did not pan, in sketch mode with the Select tool
     /// (mockup row 188): on a constraint glyph or value it opens the constraint menu,
     /// on a pattern glyph or value the pattern menu, at the click. `None`

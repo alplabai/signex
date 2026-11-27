@@ -349,6 +349,110 @@ fn a_drawing_click_lands_on_the_grid_node_it_showed() {
     }
 }
 
+/// Two pads selected together: A at (2, 2), B at (6, 2).
+fn two_selected_pads() -> Session {
+    let mut s = Session::new(Footprint::empty("snap"));
+    s.add_pad((2.0, 2.0));
+    s.add_pad((6.0, 2.0));
+    s.apply(Msg::SelectPads(vec![0, 1]));
+    s
+}
+
+#[test]
+fn dragging_a_pad_of_a_selection_moves_the_whole_selection() {
+    let mut s = two_selected_pads();
+    assert_eq!(s.press((2.2, 2.1)), None, "the press keeps the selection");
+    let moved = s.move_to((5.4, 4.1)).expect("the drag moves the pads");
+    assert!(
+        matches!(
+            moved,
+            Msg::MovePad {
+                idx: 0,
+                with_selection: true,
+                ..
+            }
+        ),
+        "got {moved:?}"
+    );
+    s.apply(moved);
+    s.release((5.4, 4.1));
+    assert_near(s.pad_at(0), (5.0, 4.0));
+    assert_near(s.pad_at(1), (9.0, 4.0));
+    assert_eq!(s.editor.state.selected_pad_indices(), vec![0, 1]);
+}
+
+#[test]
+fn an_alt_drag_moves_only_the_grabbed_pad() {
+    let mut s = two_selected_pads();
+    s.cstate.current_modifiers = iced::keyboard::Modifiers::ALT;
+    s.press((2.2, 2.1));
+    let moved = s.move_to((5.4, 4.1)).expect("the drag moves the pad");
+    assert!(
+        matches!(
+            moved,
+            Msg::MovePad {
+                with_selection: false,
+                ..
+            }
+        ),
+        "got {moved:?}"
+    );
+    s.apply(moved);
+    assert_near(s.pad_at(0), (5.0, 4.0));
+    assert_near(s.pad_at(1), (6.0, 2.0));
+}
+
+#[test]
+fn a_click_on_a_pad_of_a_selection_selects_that_pad_alone() {
+    let mut s = two_selected_pads();
+    match s.click((6.1, 2.1)) {
+        Some(Msg::SelectPad(Some(1))) => {}
+        other => panic!("expected SelectPad(Some(1)), got {other:?}"),
+    }
+}
+
+#[test]
+fn placing_a_pad_on_a_pad_stacks_a_new_one() {
+    let mut s = Session::new(Footprint::empty("snap"));
+    s.add_pad((5.5, 3.5));
+    s.editor.state.pads_tool = PadsTool::PlacePad;
+    match s.click((5.6, 3.6)) {
+        Some(Msg::AddPad { x_mm, y_mm }) => assert_near((x_mm, y_mm), (5.5, 3.5)),
+        other => panic!("expected an AddPad, got {other:?}"),
+    }
+}
+
+#[test]
+fn placing_a_via_or_a_hole_on_a_pad_stacks_too() {
+    for tool in [PadsTool::PlaceVia, PadsTool::PlaceHole] {
+        let mut s = Session::new(Footprint::empty("snap"));
+        s.add_pad((5.5, 3.5));
+        s.editor.state.pads_tool = tool;
+        let msg = s.click((5.6, 3.6));
+        assert!(
+            matches!(msg, Some(Msg::AddVia { .. } | Msg::AddHole { .. })),
+            "{tool:?}: got {msg:?}"
+        );
+    }
+}
+
+#[test]
+fn shift_with_place_pad_grabs_the_pad_under_the_cursor() {
+    let mut s = Session::new(Footprint::empty("snap"));
+    s.add_pad((5.5, 3.5));
+    s.editor.state.pads_tool = PadsTool::PlacePad;
+    s.cstate.current_modifiers = iced::keyboard::Modifiers::SHIFT;
+    match s.press((5.6, 3.6)) {
+        Some(Msg::SelectPad(Some(0))) => {}
+        other => panic!("expected the pad grabbed, got {other:?}"),
+    }
+    let moved = s.move_to((8.6, 3.6)).expect("the drag moves the pad");
+    assert!(
+        matches!(moved, Msg::MovePad { idx: 0, .. }),
+        "got {moved:?}"
+    );
+}
+
 #[test]
 fn the_canvas_snaps_to_the_footprints_3d_body() {
     let mut s = Session::new(Footprint::empty("snap"));

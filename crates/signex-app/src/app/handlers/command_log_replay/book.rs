@@ -125,13 +125,15 @@ pub(super) enum ReplayInput {
         targets: EditorTargets,
         messages: Vec<PrimitiveEdit>,
     },
-    /// A footprint editor pad dragged from `start` to `to`.
+    /// A footprint editor pad dragged from `start` to `to`, with the rest
+    /// of its selection when `with_selection`.
     PadDrag {
         path: PathBuf,
         targets: EditorTargets,
         idx: usize,
         start: (f64, f64),
         to: (f64, f64),
+        with_selection: bool,
     },
     /// A Properties panel edit of an editor document.
     EditorPanel {
@@ -333,6 +335,7 @@ impl ReplayInput {
                     targets,
                     idx,
                     start,
+                    with_selection,
                     ..
                 },
                 Self::PadDrag {
@@ -347,6 +350,7 @@ impl ReplayInput {
                 idx: *idx,
                 start: *start,
                 to: *to,
+                with_selection: *with_selection,
             }),
             (
                 Self::Editor {

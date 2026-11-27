@@ -176,6 +176,9 @@ struct DragState {
     /// "did this drag actually move?".
     press_screen: Point,
     moved: bool,
+    /// A pad drag carries the rest of the selection (#2726); `false` for
+    /// an Alt drag and every other drag.
+    with_selection: bool,
 }
 
 impl Default for FootprintCanvasState {
