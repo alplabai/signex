@@ -116,6 +116,17 @@ impl Signex {
         self.commit_note_drafts_where(&matches);
     }
 
+    /// Every sheet a draft is pending on: a title-block field, a sheet
+    /// variable, typed note text or a drawing value still being typed.
+    pub(crate) fn sheets_with_pending_drafts(&self) -> Vec<std::path::PathBuf> {
+        let drafts = &self.document_view.drafts;
+        (drafts.title_block_sheets().into_iter())
+            .chain(drafts.sheet_variable_sheets())
+            .chain(self.typed_note_sheets())
+            .chain((self.document_view.live_drawing_edit.iter()).map(|live| live.path.clone()))
+            .collect()
+    }
+
     /// Commit the pending drafts (title-block fields, sheet variables, typed
     /// note text) of the document `anchor` and of the other sheets of its
     /// project: the scope of an export or a project close. Another project's
@@ -126,13 +137,8 @@ impl Signex {
         };
         let project = self.document_state.document_project(anchor).map(|p| p.id);
         let owned: Vec<std::path::PathBuf> = self
-            .document_view
-            .drafts
-            .title_block_sheets()
+            .sheets_with_pending_drafts()
             .into_iter()
-            .chain(self.document_view.drafts.sheet_variable_sheets())
-            .chain(self.typed_note_sheets())
-            .chain((self.document_view.live_drawing_edit.iter()).map(|live| live.path.clone()))
             .filter(|sheet| {
                 sheet == anchor
                     || project.is_some_and(|id| {

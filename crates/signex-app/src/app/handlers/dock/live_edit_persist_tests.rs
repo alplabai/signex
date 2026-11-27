@@ -157,7 +157,6 @@ fn save_on_a_typo_writes_the_value_from_before_the_edit() {
 }
 
 #[test]
-#[ignore = "#3194: Save All is gated on a dirty document, so a preview-only sheet is neither settled nor written"]
 fn save_all_writes_the_typed_value_as_a_committed_step() {
     let (mut app, sheet, _id, recorder) = typing_in_project();
     let task = app.update(Message::Menu(MenuMessage::command("save_all")));
@@ -196,7 +195,6 @@ fn pdf_export_settles_the_preview_before_it_reads() {
 /// Close Project reads the dirty marks at its gate: a sheet whose only change
 /// is the preview must prompt, and Save All must write the typed value.
 #[test]
-#[ignore = "#3194: Close Project closes a preview-only sheet with no prompt and drops the typed value"]
 fn close_project_then_save_all_writes_the_typed_value() {
     use crate::app::{ContextMenuMsg, ProjectCloseChoice, ProjectMsg, ProjectTreeAction};
     let (mut app, sheet, id, recorder) = typing_in_project();

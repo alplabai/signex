@@ -83,8 +83,8 @@ pub(crate) struct CommandContext {
     /// against. False in a Component Preview and in an undocked window whose
     /// tab is gone, which refuse Save whatever the project holds.
     pub document_has_file: bool,
-    /// Some document or Component Preview row has unsaved edits, which
-    /// File ▸ Save All writes.
+    /// Some document or Component Preview row has unsaved edits, or a drawing
+    /// value is still being typed (#3194), which File ▸ Save All writes.
     pub has_dirty_documents: bool,
     /// A document tab is open, which Close Document closes.
     pub has_document: bool,
@@ -302,7 +302,8 @@ impl Signex {
             can_redo,
             project_dirty: self.active_project_is_dirty(),
             document_has_file: own.has_file,
-            has_dirty_documents: !self.unsaved_set().is_empty(),
+            has_dirty_documents: !self.unsaved_set().is_empty()
+                || self.document_view.live_drawing_edit.is_some(),
             has_document: !document.tabs.is_empty(),
             has_open_project: document.active_project.is_some(),
             has_parent_sheet: self.active_sheet_has_parent(),
