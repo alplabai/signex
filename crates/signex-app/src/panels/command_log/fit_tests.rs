@@ -129,7 +129,9 @@ fn the_empty_card_keeps_its_key_line() {
     assert!(ctx.command_log.log.is_empty());
     for window in [DEFAULT_DOCK, MOCK_DOCK] {
         let texts = laid_out(ctx, window);
-        let source = find(&texts, &say(ctx, ids::COMMAND_LOG_SOURCE)).bounds;
+        // The toolbar's last line: an empty session veils its filters
+        // (`inert`), which a text probe does not read, so Follow newest marks it.
+        let source = find(&texts, &say(ctx, ids::COMMAND_LOG_FOLLOW_NEWEST)).bounds;
         let title = find(&texts, &say(ctx, ids::COMMAND_LOG_EMPTY_TITLE)).bounds;
         let body = find(&texts, &say(ctx, ids::COMMAND_LOG_EMPTY_BODY)).bounds;
         let key = find(&texts, &say(ctx, ids::COMMAND_LOG_EMPTY_KEY)).bounds;

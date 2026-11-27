@@ -146,7 +146,7 @@ fn an_arc_that_sweeps_nothing_is_refused_and_changes_nothing() {
         "radius_x=2.54".to_string(),
         "radius_y=1.27".to_string(),
         "start_angle=30".to_string(),
-        "end_angle=390".to_string(),
+        "end_angle=-330".to_string(),
     ];
     let outcome = run(&mut app, "draw_elliptical_arc", &operands);
     assert!(

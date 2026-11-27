@@ -259,3 +259,48 @@ fn the_contents_and_pin_tables_print_their_golden_text_and_links() {
         &golden_text(&project(), &opts()),
     );
 }
+
+/// `links: false` writes no link at all, the contents rows' included, and
+/// answers none (#1298, #2663; DECISIONS 2026-11-27).
+#[test]
+fn links_off_drops_the_contents_rows_links() {
+    let options = PdfOptions {
+        links: false,
+        ..opts()
+    };
+    assert!(
+        pdf_table_links(&project(), &options)
+            .expect("links")
+            .is_empty()
+    );
+    let output = PdfExporter.export(&project(), &options).expect("pdf");
+    let text = String::from_utf8_lossy(&output.bytes);
+    assert!(output.table_links.is_empty());
+    assert!(!text.contains("/Annots"), "{text}");
+    assert!(!text.contains("/Subtype /Link"), "{text}");
+}
+
+/// The contents rows' links and a text link on the same page share the
+/// page's one `/Annots` array, each a distinct annotation object.
+#[test]
+fn the_contents_rows_share_the_pages_one_annots_array_with_the_other_links() {
+    let mut ctx = project();
+    let note: signex_types::schematic::TextNote = serde_json::from_value(serde_json::json!({
+        "uuid": uuid::Uuid::from_u128(9),
+        "text": "[site](https://example.com)",
+        "position": { "x": 120.0, "y": 20.0 },
+        "font_size": 2.54,
+    }))
+    .expect("text note");
+    ctx.sheets[0].schematic.text_notes.push(note);
+    let output = PdfExporter.export(&ctx, &opts()).expect("pdf");
+    let text = String::from_utf8_lossy(&output.bytes);
+    assert_eq!(output.table_links.len(), 2);
+    assert_eq!(text.matches("/Annots").count(), 1, "one array, on page 1");
+    assert_eq!(text.matches("/Subtype /Link").count(), 3, "{text}");
+    assert_eq!(text.matches("/S /GoTo").count(), 2);
+    assert!(text.contains("/URI (https://example.com)"), "{text}");
+    let annots = &text[text.find("/Annots [").expect("the array")..];
+    let annots = &annots[..annots.find(']').expect("closed")];
+    assert_eq!(annots.matches(" 0 R").count(), 3, "{annots}");
+}

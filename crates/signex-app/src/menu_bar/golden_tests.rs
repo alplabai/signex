@@ -738,8 +738,9 @@ fn model_shortcuts_follow_the_active_keymap() {
     // Toggle Ratsnest and 3D Board (#2390, #2403, #2405) and Place ▸ Compile
     // Mask (#2420) add nine. Edit ▸ Origin ▸ Set adds `E O S` (2026-11-18).
     // File ▸ Save All adds `Mod+Alt+S` (#2844). View ▸ Notebook Badges
-    // adds `B` (mockup row 197).
-    assert_eq!(checked, 61, "the default profile labels 61 menu rows");
+    // adds `B` (mockup row 197). View ▸ Next Grid adds `G`, bound on
+    // boards in Signex Standard (#3062).
+    assert_eq!(checked, 62, "the default profile labels 62 menu rows");
 }
 
 fn check_shortcuts(menu: &Menu, ctx: &MenuContext, checked: &mut usize) {

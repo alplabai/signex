@@ -266,3 +266,18 @@ fn an_undocked_window_fits_the_bar_to_its_own_canvas() {
     assert_eq!(span.width, OWN_WIDTH - 2.0 * DOCK_HANDLE - LEFT - RIGHT);
     assert_inside(placed(&app, span), span);
 }
+
+/// In a tiled main window the focused pane's canvas starts under its tab
+/// strip, and the bar sits there with it: its trigger takes a press at the
+/// canvas's top, below the chrome.
+#[test]
+fn in_a_tiled_window_the_bar_sits_under_the_pane_strip() {
+    let (mut app, main) = app_in_sketch();
+    let untiled = app.canvas_bounds().y;
+    tile(&mut app, 2);
+    assert!(
+        app.canvas_bounds().y > untiled,
+        "the pane's tab strip is above the canvas"
+    );
+    assert!(press_trigger(&app, main, WINDOW, FpActiveBarMenu::Snap));
+}

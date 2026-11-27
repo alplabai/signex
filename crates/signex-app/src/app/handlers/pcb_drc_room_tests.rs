@@ -182,7 +182,8 @@ fn a_room_finding_is_named_by_its_part_and_room_in_messages_and_check_drc() {
     let lines = press_run_drc(&mut app);
     let room_lines: Vec<&String> = lines
         .iter()
-        .filter(|l| l.contains("outside room"))
+        // The finding's own line, not the run's "1 part outside room" count (#2435).
+        .filter(|l| l.contains("mm outside room"))
         .collect();
     assert_eq!(room_lines.len(), 1, "{lines:?}");
     assert!(

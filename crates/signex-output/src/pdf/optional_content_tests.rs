@@ -246,7 +246,15 @@ fn a_part_not_fitted_draws_in_its_own_group() {
     }
     let ops = page_ops(&fitted, &layered(&[], false), 0);
     assert_eq!(run_of(&ops, PdfLayer::NotFittedParts), None);
-    assert!(run_of(&ops, PdfLayer::Parts).is_some_and(|parts| parts.contains(&run)));
+    // Its drawing as a fitted part prints it: with the not-fitted look on
+    // (#1294, the default) the group's run is greyed and crossed out.
+    let plain = PdfOptions {
+        draw_not_fitted: false,
+        ..layered(&[], false)
+    };
+    let plain_run = run_of(&page_ops(&ctx, &plain, 0), PdfLayer::NotFittedParts)
+        .expect("the DNP part is in the group with the look off");
+    assert!(run_of(&ops, PdfLayer::Parts).is_some_and(|parts| parts.contains(&plain_run)));
 }
 
 /// #2610: the printed variant decides: a part not fitted in Lite only is in

@@ -29,6 +29,9 @@ fn app_with_footprint(dir: &Path, positions: &[(f64, f64)]) -> (Signex, PathBuf)
     editor.with_parts(|state, primitive| {
         FootprintEditorState::sync_pads_to_primitive(state, primitive);
     });
+    // `add_pad_at` selects the pad it adds; the fixture starts with none.
+    editor.state.selected_pad = None;
+    editor.state.selected_pads_extra.clear();
     editor.set_dirty(false);
     editor.history.undo_steps_mut().clear();
     app.document_state
@@ -318,12 +321,15 @@ fn without_operands_each_says_what_it_needs() {
     let dir = tempfile::tempdir().expect("tempdir");
     let (mut app, _path) = app_with_footprint(dir.path(), &PADS);
     for id in ["footprint_move_pads", "footprint_align_pads"] {
-        let reason = refusal(headless(&mut app, id, &[]));
+        let command = AppCommandId::new(id).expect("a catalog id");
+        // No operands at all, as a bare headless run sends: the parse would
+        // refuse a missing required operand before the handler is asked.
+        let (outcome, _) = app.run_headless_command_in_test(&command, CommandArgs::none());
+        let reason = refusal(outcome);
         assert!(
             reason.contains("needs the operand `document`"),
             "{id}: {reason}"
         );
-        let command = AppCommandId::new(id).expect("a catalog id");
         let why = super::operand_handlers::needs_operands_reason(&command).expect("a reason");
         assert!(why.contains("Move Selection By or Align Selection"), "{id}");
     }

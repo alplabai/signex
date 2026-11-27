@@ -92,7 +92,8 @@ fn a_missing_file_shows_the_banner_with_relink_and_remove() {
         "File not found.",
         "Relink…",
         "Remove image",
-        "not found · last 1200 × 584 px",
+        // The width is a catalog number argument, grouped in en-US.
+        "not found · last 1,200 × 584 px",
     ] {
         assert!(
             texts.iter().any(|t| t == wanted),

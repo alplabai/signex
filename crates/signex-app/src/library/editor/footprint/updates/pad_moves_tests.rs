@@ -18,6 +18,9 @@ fn editor_with(positions: &[(f64, f64)]) -> FootprintDocument {
     for &(x, y) in positions {
         e.state.add_pad_at(x, y);
     }
+    // `add_pad_at` selects the pad it adds; the fixture starts with none.
+    e.state.selected_pad = None;
+    e.state.selected_pads_extra.clear();
     e.set_dirty(false);
     e.history.undo_steps_mut().clear();
     e

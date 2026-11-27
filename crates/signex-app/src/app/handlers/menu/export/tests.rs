@@ -1024,6 +1024,7 @@ mod not_fitted;
 mod pages_field;
 mod pdf_command;
 mod sheet_numbering;
+mod stitch_once;
 mod tree_nesting_pins;
 mod variant_bom;
 mod variant_pdf;
