@@ -613,7 +613,7 @@ fn top_of(texts: &[(String, iced::Rectangle)], words: &str) -> f32 {
 
 fn stored_layers(app: &Signex) -> u8 {
     let data = &app.document_state.projects[0].data;
-    crate::app::NewProjectState::of_project(data, &app.ui_state.setup_profiles)
+    crate::app::NewProjectState::of_project(data, &app.document_state.setup_profiles)
         .setup
         .pcb
         .copper_layers
@@ -635,7 +635,7 @@ fn the_board_rules_preview_sits_under_the_cards_with_every_value() {
     );
     assert!(shows(&texts, "tracks, via and stack-up"));
     let data = &app.document_state.projects[0].data;
-    let pcb = crate::app::NewProjectState::of_project(data, &app.ui_state.setup_profiles)
+    let pcb = crate::app::NewProjectState::of_project(data, &app.document_state.setup_profiles)
         .setup
         .pcb;
     let i18n = signex_i18n::I18n::en_us();

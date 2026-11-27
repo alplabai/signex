@@ -125,12 +125,7 @@ fn a_room_finding_is_counted_in_the_other_tile() {
         .iter()
         .filter(|k| DrcCategory::of(**k) == DrcCategory::Other)
         .count();
-    let panel = app
-        .document_view
-        .panel_ctx
-        .pcb_drc
-        .as_ref()
-        .expect("panel");
+    let panel = app.document_view.panel_ctx.pcb_drc.as_ref().expect("panel");
     assert_eq!(panel.other, others);
     assert_eq!(
         panel.clearance + panel.short + panel.unconnected + panel.keepout + panel.other,
@@ -164,12 +159,7 @@ fn a_room_finding_is_counted_in_the_other_tile() {
         let _ = app.update(Message::Dock(DockMessage::Panel(msg)));
     }
     app.refresh_panel_ctx();
-    let panel = app
-        .document_view
-        .panel_ctx
-        .pcb_drc
-        .as_ref()
-        .expect("panel");
+    let panel = app.document_view.panel_ctx.pcb_drc.as_ref().expect("panel");
     assert_eq!(panel.view.category, Some(DrcCategory::Other));
     let texts: Vec<String> = panel_texts(&app).into_iter().map(|t| t.text).collect();
     assert!(

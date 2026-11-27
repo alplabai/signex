@@ -976,7 +976,7 @@ impl Signex {
     /// Each menu's open handler calls this first, so exactly one is ever
     /// open.
     pub(crate) fn close_all_context_menus(&mut self) {
-        let document = &mut self.document_state;
+        let document = &mut self.document_view;
         let panels =
             std::iter::once(&mut document.panel_ctx).chain(document.window_panel_ctx.values_mut());
         for ctx in panels {
