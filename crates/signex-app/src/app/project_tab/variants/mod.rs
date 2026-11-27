@@ -46,6 +46,7 @@ mod summary;
 mod tab;
 #[cfg(test)]
 mod tests;
+mod view_state;
 
 use manager::VariantCell;
 pub use manager::VariantManagerMsg;
@@ -53,6 +54,7 @@ pub(crate) use part_commands::{
     alternate_parameters, project_duplicate_variant, project_set_variant_alternate,
     project_set_variant_fit, project_set_variant_override, variant_parameters_command,
 };
+pub use view_state::VariantManagerUi;
 
 use crate::app::core::parts_read_error::PartsReadError;
 
