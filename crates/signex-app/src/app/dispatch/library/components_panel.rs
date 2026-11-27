@@ -501,7 +501,7 @@ impl Signex {
             // Recoverable failures open their recovery dialog; anything
             // else must still reach the user, so raise the error card.
             if !route_open_error(&mut self.library, &path, &e) {
-                self.document_state.error_notice = Some(open_error_notice(
+                self.document_view.error_notice = Some(open_error_notice(
                     &self.library,
                     &path,
                     signex_i18n::ids::NOTICE_LIBRARY_CANNOT_ADD,
@@ -534,7 +534,7 @@ impl Signex {
     /// has no backing flow yet (project libraries come from `.snxprj`),
     /// so say so instead of silently dropping the request.
     fn reject_project_add_library(&mut self) -> Task<Message> {
-        self.document_state.error_notice = Some(crate::app::state::ErrorNotice::unavailable(
+        self.document_view.error_notice = Some(crate::app::state::ErrorNotice::unavailable(
             signex_i18n::ids::NOTICE_PROJECT_ADD_LIBRARY_UNAVAILABLE,
         ));
         Task::none()
@@ -557,7 +557,7 @@ impl Signex {
             signex_i18n::Translatable::new(signex_i18n::ids::NOTICE_GLOBAL_LIBRARIES_NOT_SAVED)
                 .arg("action", action)
                 .arg("error", err.to_string());
-        self.document_state.error_notice = Some(
+        self.document_view.error_notice = Some(
             crate::app::state::ErrorNotice::save_with_no_open_edits(detail),
         );
     }

@@ -51,14 +51,14 @@ impl Signex {
                 project_name,
             });
         }
-        self.document_state
+        self.document_view
             .window_hierarchies
             .want(requests, navigator_root.as_slice());
     }
 
     /// Start the assemblies `want_window_hierarchies` asked for.
     pub(crate) fn start_window_hierarchy_assemblies(&mut self) -> Vec<Task<Message>> {
-        let started = self.document_state.window_hierarchies.begin_all();
+        let started = self.document_view.window_hierarchies.begin_all();
         if started.is_empty() {
             return Vec::new();
         }
@@ -100,12 +100,13 @@ impl Signex {
             ));
         }
         let applied = self
-            .document_state
+            .document_view
             .window_hierarchies
             .finish(root, generation, assembly);
         if applied {
             self.refresh_window_designators();
             self.refresh_window_not_fitted();
+            self.refresh_all_variant_values();
         }
         // `update` starts any follow-up assembly once this message is handled.
         Task::none()
@@ -116,9 +117,9 @@ impl Signex {
     #[doc(hidden)]
     pub(super) fn settle_window_hierarchies(&mut self) {
         self.want_window_hierarchies();
-        self.document_state.window_hierarchies.abandon_running();
+        self.document_view.window_hierarchies.abandon_running();
         loop {
-            let started = self.document_state.window_hierarchies.begin_all();
+            let started = self.document_view.window_hierarchies.begin_all();
             if started.is_empty() {
                 break;
             }
@@ -126,7 +127,7 @@ impl Signex {
             for (generation, request) in started {
                 let root = request.root.clone();
                 let assembly = assemble_navigator(&open, request);
-                self.document_state.window_hierarchies.finish(
+                self.document_view.window_hierarchies.finish(
                     &root,
                     generation,
                     Ok(Box::new(assembly)),
@@ -135,6 +136,7 @@ impl Signex {
         }
         self.refresh_window_designators();
         self.refresh_window_not_fitted();
+        self.refresh_all_variant_values();
     }
 
     /// The hierarchy that describes the project owning the sheet at `path`,
@@ -144,7 +146,8 @@ impl Signex {
     /// - for a sheet no project owns, the Navigator's when it is focused.
     pub(crate) fn hierarchy_describing(&self, path: &Path) -> Option<(&SheetHierarchy, bool)> {
         let ds = &self.document_state;
-        let navigator = ds.panel_ctx.navigator.hierarchy.as_ref();
+        let document_view = &self.document_view;
+        let navigator = document_view.panel_ctx.navigator.hierarchy.as_ref();
         let Some(owner_root) = ds.document_project(path).and_then(project_root_sheet_path) else {
             return navigator
                 .filter(|_| ds.active_path.as_deref() == Some(path))
@@ -157,10 +160,10 @@ impl Signex {
         };
         match navigator.filter(navigator_is_owners) {
             Some(h) => Some((h, self.navigator_is_settled())),
-            None => ds
+            None => document_view
                 .window_hierarchies
                 .hierarchy_of(&owner_root)
-                .map(|h| (h, ds.window_hierarchies.is_settled(&owner_root))),
+                .map(|h| (h, document_view.window_hierarchies.is_settled(&owner_root))),
         }
     }
 
@@ -172,6 +175,7 @@ impl Signex {
     /// come), or the root sheet itself (always the root chain).
     pub(crate) fn designator_write_refusal(&self, path: &Path) -> Option<&'static str> {
         let ds = &self.document_state;
+        let document_view = &self.document_view;
         let project = ds.document_project(path)?;
         let root = project_root_sheet_path(project)?;
         let key = |p: &Path| crate::app::sheet_hierarchy::sheet_path_key(p, project.case_fold);
@@ -179,10 +183,13 @@ impl Signex {
             return None;
         }
         // No job known for the project: fail closed, as if still being read.
-        let exhausted = if ds.navigator_job.wanted_root() == Some(root.as_path()) {
-            ds.navigator_job.is_exhausted()
+        let exhausted = if document_view.navigator_job.wanted_root() == Some(root.as_path()) {
+            document_view.navigator_job.is_exhausted()
         } else {
-            ds.window_hierarchies.is_exhausted(&root).unwrap_or(false)
+            document_view
+                .window_hierarchies
+                .is_exhausted(&root)
+                .unwrap_or(false)
         };
         Some(if exhausted {
             concat!(

@@ -60,7 +60,7 @@ fn restore_is_refused_while_a_save_commit_is_queued() {
     let pending = &app.document_state.pending_git_commits;
     assert_eq!(pending.len(), 1);
     assert_eq!(pending[0].message, "Save part.snxfpt");
-    assert!(app.document_state.error_notice.is_some(), "user is told");
+    assert!(app.document_view.error_notice.is_some(), "user is told");
 }
 
 #[test]

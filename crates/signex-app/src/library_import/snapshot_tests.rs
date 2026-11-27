@@ -269,7 +269,7 @@ fn an_update_is_refused_while_the_library_has_unsaved_work() {
         .unwrap();
 
     assert!(app.library.import.last.is_none(), "nothing ran");
-    let card = app.document_state.error_notice.as_ref().expect("refused");
+    let card = app.document_view.error_notice.as_ref().expect("refused");
     use signex_i18n::RenderTranslatable as _;
     assert!(
         card.detail.render_en_us().contains("conformance-symbols"),
@@ -299,7 +299,7 @@ fn a_library_id_already_open_elsewhere_is_not_recorded() {
             .any(|e| e.path == second_file),
         "no dangling global entry"
     );
-    let card = app.document_state.error_notice.as_ref().expect("reported");
+    let card = app.document_view.error_notice.as_ref().expect("reported");
     use signex_i18n::RenderTranslatable as _;
     assert!(card.detail.render_en_us().contains("same library id"));
 }

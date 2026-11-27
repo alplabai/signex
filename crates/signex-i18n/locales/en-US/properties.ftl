@@ -444,6 +444,20 @@ properties-channel-title = Channel { $channel }
 properties-channel-caption = { $file } · { $index } of { $count } · read-only view
 properties-channel-designator-map = Designator map
 properties-channel-logical = Logical
+# The Variant section of a channel tab (mockup row 151, #2662).
+properties-channel-variant = Variant
+properties-channel-variant-active = Active
+properties-channel-variant-this = This channel
+properties-channel-variant-base = Base fits every channel as the sheets say. Pick a variant to see which channels it leaves out.
+# $variant is the active variant.
+properties-channel-variant-not-compiled = Compile the project to see how each channel fits in { $variant }.
+properties-channel-variant-all-fitted = In { $variant }, every channel is fitted. Edit in the Variant Manager tab.
+# $channels lists the channels left out ("CH3 and CH4"), $count how many.
+properties-channel-variant-left-out =
+    { $count ->
+        [one] In { $variant }, { $channels } is Not fitted. Edit in the Variant Manager tab.
+       *[other] In { $variant }, { $channels } are Not fitted. Edit in the Variant Manager tab.
+    }
 
 ## Shared Properties rows (#2523)
 

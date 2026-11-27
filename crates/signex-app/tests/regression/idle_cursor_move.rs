@@ -20,7 +20,7 @@ fn idle_move(app: &mut Signex) {
 }
 
 fn has_diagnostic(app: &Signex, needle: &str) -> bool {
-    app.document_state
+    app.document_view
         .panel_ctx
         .diagnostics
         .iter()
@@ -40,14 +40,14 @@ fn idle_cursor_move_repairs_panel_ctx_mirrors_left_stale_by_other_dispatchers() 
     let (mut app, _t) = Signex::new();
     // Leave the mirror stale directly: a dispatcher that flips the flag and
     // skips `finish_update` is what the repair on idle moves is for.
-    app.ui_state.grid_visible = !app.document_state.panel_ctx.grid_visible;
+    app.ui_state.grid_visible = !app.document_view.panel_ctx.grid_visible;
     assert_ne!(
-        app.document_state.panel_ctx.grid_visible, app.ui_state.grid_visible,
+        app.document_view.panel_ctx.grid_visible, app.ui_state.grid_visible,
         "the mirror must start stale"
     );
     idle_move(&mut app);
     assert_eq!(
-        app.document_state.panel_ctx.grid_visible,
+        app.document_view.panel_ctx.grid_visible,
         app.ui_state.grid_visible
     );
 }
@@ -56,10 +56,10 @@ fn idle_cursor_move_repairs_panel_ctx_mirrors_left_stale_by_other_dispatchers() 
 fn idle_cursor_move_refreshes_the_history_dirty_bit() {
     let (mut app, _t) = Signex::new();
     let p = std::path::PathBuf::from("history-dirty.snxsch");
-    app.document_state.history.active_path = Some(p.clone());
+    app.document_view.history.active_path = Some(p.clone());
     app.document_state.mark_document_dirty(&p);
     idle_move(&mut app);
-    assert!(app.document_state.panel_ctx.history.dirty);
+    assert!(app.document_view.panel_ctx.history.dirty);
 }
 
 #[test]

@@ -122,7 +122,7 @@ impl Signex {
     pub(crate) fn dispatch_library_message(&mut self, msg: LibraryMessage) -> Task<Message> {
         if let Some(refusal) = self.library_write_refusal(&msg) {
             crate::diagnostics::log_warning(refusal.render_en_us());
-            self.document_state.error_notice =
+            self.document_view.error_notice =
                 Some(crate::app::state::ErrorNotice::library_change(refusal));
             return self.finish_update();
         }

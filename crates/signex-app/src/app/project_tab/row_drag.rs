@@ -68,7 +68,7 @@ impl ProjectTabState {
 
 impl Signex {
     pub(super) fn act_on_row_drag(&mut self, project_id: ProjectId, msg: RowDragMsg) {
-        let Some(tab) = self.document_state.project_tabs.get_mut(&project_id) else {
+        let Some(tab) = self.document_view.project_tabs.get_mut(&project_id) else {
             return;
         };
         match msg {
@@ -149,6 +149,6 @@ mod tests {
         send(&mut app, id, start());
         send(&mut app, id, RowDragMsg::Released);
         assert_eq!(order(&app), before);
-        assert!(!app.document_state.project_tabs[&id].is_dragging_row());
+        assert!(!app.document_view.project_tabs[&id].is_dragging_row());
     }
 }

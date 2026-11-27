@@ -53,7 +53,7 @@ impl Signex {
         let Some(board) = self.document_state.pcb_board(&dialog.board) else {
             return container(Space::new()).boxed();
         };
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let i18n = self.ui_state.i18n.as_ref();
         let plan = dialog.preview(board);
         let (sheets, channels) = dialog.counts();

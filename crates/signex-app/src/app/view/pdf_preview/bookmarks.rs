@@ -26,7 +26,7 @@ impl Signex {
         preview: &'a PreviewState,
     ) -> Element<'a, Message> {
         let i18n = self.ui_state.i18n.as_ref();
-        let look = Look::of(&self.document_state.panel_ctx.tokens);
+        let look = Look::of(&self.document_view.panel_ctx.tokens);
         let options = &preview.pdf_options;
         let order = segmented(
             [
@@ -74,7 +74,7 @@ impl Signex {
         preview: &'a PreviewState,
     ) -> Element<'a, Message> {
         let i18n = self.ui_state.i18n.as_ref();
-        let look = Look::of(&self.document_state.panel_ctx.tokens);
+        let look = Look::of(&self.document_view.panel_ctx.tokens);
         let options = &preview.pdf_options;
         let zoom = row![
             caption(t!(i18n, ids::PDF_ZOOM_FAR), &look),

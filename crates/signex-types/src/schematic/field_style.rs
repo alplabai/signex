@@ -99,6 +99,7 @@ mod tests {
             on_board: true,
             exclude_from_sim: false,
             locked: false,
+            net_tie: false,
             fields: Default::default(),
             custom_properties: Vec::new(),
             pin_uuids: Default::default(),

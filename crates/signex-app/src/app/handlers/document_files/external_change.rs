@@ -225,14 +225,14 @@ impl Signex {
         self.document_state.sync_history_dirty(&path);
         // One card at a time: a second drifted sheet of a Save All is in
         // Messages and asks again on its next save.
-        if self.document_state.error_notice.is_none() {
-            self.document_state.error_notice = Some(ErrorNotice::disk_changed(path, drift));
+        if self.document_view.error_notice.is_none() {
+            self.document_view.error_notice = Some(ErrorNotice::disk_changed(path, drift));
         }
     }
 
     /// The file the open conflict card is about, leaving the card up.
     fn disk_conflict_path(&self) -> Option<PathBuf> {
-        let notice = self.document_state.error_notice.as_ref()?;
+        let notice = self.document_view.error_notice.as_ref()?;
         let Some(NoticeAction::DiskChanged { path, .. }) = &notice.action else {
             return None;
         };
@@ -241,7 +241,7 @@ impl Signex {
 
     fn take_disk_conflict(&mut self) -> Option<PathBuf> {
         let path = self.disk_conflict_path()?;
-        self.document_state.error_notice = None;
+        self.document_view.error_notice = None;
         Some(path)
     }
 
@@ -251,7 +251,7 @@ impl Signex {
     /// dialog writes nothing and the next save asks again.
     pub(crate) fn handle_disk_conflict_save_as(&mut self) -> Task<Message> {
         let offered = self
-            .document_state
+            .document_view
             .error_notice
             .as_ref()
             .is_some_and(ErrorNotice::offers_save_as);
@@ -274,7 +274,7 @@ impl Signex {
         if task.units() == 0 {
             return task;
         }
-        self.document_state.error_notice = None;
+        self.document_view.error_notice = None;
         crate::diagnostics::log_info(format!(
             "[save] Saving {} under a new name as the user chose; the changed file is kept",
             file_label(&path)
@@ -316,8 +316,8 @@ impl Signex {
              written. Pick a new name, or choose Overwrite to replace their version",
             file_label(&conflicted)
         ));
-        if self.document_state.error_notice.is_none() {
-            self.document_state.error_notice =
+        if self.document_view.error_notice.is_none() {
+            self.document_view.error_notice =
                 Some(ErrorNotice::disk_changed(conflicted, DiskDrift::Changed));
         }
         Task::none()
@@ -470,8 +470,8 @@ impl Signex {
                 "[reload] {name} was edited while it reloaded; the edits were kept, nothing \
                  was reloaded"
             ));
-            if self.document_state.error_notice.is_none() {
-                self.document_state.error_notice =
+            if self.document_view.error_notice.is_none() {
+                self.document_view.error_notice =
                     Some(ErrorNotice::disk_changed(path, DiskDrift::Changed));
             }
             return Task::none();

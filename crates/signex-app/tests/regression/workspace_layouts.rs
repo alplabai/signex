@@ -51,9 +51,9 @@ struct Fixture {
 fn fixture() -> Fixture {
     let (mut app, _boot) = Signex::new();
     let dock_writes = Arc::new(DockRecorder::default());
-    app.document_state.dock_layout_sync = DockLayoutSync::new(
+    app.document_view.dock_layout_sync = DockLayoutSync::new(
         dock_writes.clone(),
-        DockLayoutSnapshot::capture(&app.document_state.dock),
+        DockLayoutSnapshot::capture(&app.document_view.dock),
     );
     let layout_writes = Arc::new(LayoutsRecorder::default());
     // A fresh list: the test user's own prefs never leak in.
@@ -119,7 +119,7 @@ fn applying_a_built_in_rebuilds_the_dock_and_writes_it_once() {
         WorkspaceLayoutMsg::ApplyRequested(LayoutId::Builtin(BuiltinLayout::Schematic)),
     );
 
-    let dock = &app.document_state.dock;
+    let dock = &app.document_view.dock;
     assert_eq!(
         dock.panel_kinds(PanelPosition::Left),
         [PanelKind::Projects, PanelKind::Components]
@@ -157,7 +157,7 @@ fn applying_a_built_in_rebuilds_the_dock_and_writes_it_once() {
     assert_eq!(written.len(), 1, "one dock write for the apply");
     assert_eq!(
         written[0],
-        DockLayoutSnapshot::capture(&app.document_state.dock)
+        DockLayoutSnapshot::capture(&app.document_view.dock)
     );
     // The list was written too, with the active layout.
     let lists = layout_writes.writes.lock().unwrap().clone();
@@ -180,7 +180,7 @@ fn an_unreadable_stored_list_is_never_written_or_edited() {
     let apply = WorkspaceLayoutMsg::ApplyRequested(LayoutId::Builtin(BuiltinLayout::Review));
     let _ = run(send(&mut f.app, apply));
     assert_eq!(
-        f.app.document_state.dock.panel_kinds(PanelPosition::Right),
+        f.app.document_view.dock.panel_kinds(PanelPosition::Right),
         [PanelKind::History],
         "Apply still arranges the panels"
     );
@@ -252,7 +252,7 @@ fn applying_keeps_the_open_documents() {
     assert_eq!(app.document_state.tabs.len(), tabs);
     assert_eq!(app.document_state.active_tab, active);
     assert_eq!(
-        app.document_state.dock.panel_kinds(PanelPosition::Bottom),
+        app.document_view.dock.panel_kinds(PanelPosition::Bottom),
         [PanelKind::Layers]
     );
 }
@@ -272,7 +272,7 @@ fn save_layout_names_the_arrangement_and_replaces_only_your_own() {
     let bench = app.ui_state.workspace_layouts.layouts.user()[0].clone();
     assert_eq!(
         bench.dock,
-        Some(DockLayoutSnapshot::capture(&app.document_state.dock))
+        Some(DockLayoutSnapshot::capture(&app.document_view.dock))
     );
     assert!(bench.from_current);
     assert_eq!(
@@ -432,7 +432,7 @@ fn update_from_current_edits_a_built_in_and_reset_brings_it_back() {
         WorkspaceLayoutMsg::ApplyRequested(schematic.clone()),
     );
     // Close Messages, then store that as the Schematic layout.
-    app.document_state.dock.close_panel(PanelKind::Messages);
+    app.document_view.dock.close_panel(PanelKind::Messages);
     let _ = send(&mut app, ManageLayoutsMsg::Requested);
     let _ = send(&mut app, ManageLayoutsMsg::RowSelected(schematic.clone()));
     let _ = send(&mut app, ManageLayoutsMsg::UpdateFromCurrentRequested);
@@ -448,7 +448,7 @@ fn update_from_current_edits_a_built_in_and_reset_brings_it_back() {
             .is_edited(BuiltinLayout::Schematic)
     );
     assert_eq!(
-        app.document_state.dock.panel_kinds(PanelPosition::Bottom),
+        app.document_view.dock.panel_kinds(PanelPosition::Bottom),
         [PanelKind::Messages],
         "Reset applies the built-in as shipped"
     );

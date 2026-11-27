@@ -43,6 +43,8 @@ define_ids! {
     PANELS_STATUS_BAR_DRAG_WIRES_HORIZONTAL_FIRST = "panels-status-bar-drag-wires-horizontal-first";
     PANELS_STATUS_BAR_DRAG_WIRES_VERTICAL_FIRST = "panels-status-bar-drag-wires-vertical-first";
     PANELS_STATUS_BAR_DRAG_WIRES_STRAIGHT = "panels-status-bar-drag-wires-straight";
+    PANELS_STATUS_BAR_DRAG_WIRES_45_START = "panels-status-bar-drag-wires-45-start";
+    PANELS_STATUS_BAR_DRAG_WIRES_45_END = "panels-status-bar-drag-wires-45-end";
     PANELS_STATUS_BAR_MOVE_WITHOUT_WIRES = "panels-status-bar-move-without-wires";
     PANELS_STATUS_BAR_MEASURE_FIRST = "panels-status-bar-measure-first";
     PANELS_STATUS_BAR_MEASURE_SECOND = "panels-status-bar-measure-second";
@@ -365,6 +367,7 @@ define_ids! {
     PANELS_HARNESS_DEFS_TITLE = "panels-harness-defs-title";
     PANELS_HARNESS_DEFS_CAPTION = "panels-harness-defs-caption";
     PANELS_HARNESS_DEFS_USES = "panels-harness-defs-uses";
+    PANELS_HARNESS_DEFS_UNDEFINED_USES = "panels-harness-defs-undefined-uses";
     PANELS_HARNESS_DEFS_NAME = "panels-harness-defs-name";
     PANELS_HARNESS_DEFS_DESCRIPTION = "panels-harness-defs-description";
     PANELS_HARNESS_DEFS_KIND = "panels-harness-defs-kind";
@@ -459,6 +462,7 @@ define_ids! {
     PANELS_COMPILED_DESIGN_MSG_NO_PROJECT = "panels-compiled-design-msg-no-project";
     PANELS_COMPILED_DESIGN_NAMING_REFUSED = "panels-compiled-design-naming-refused";
     PANELS_COMPILED_DESIGN_FIT_REFUSED = "panels-compiled-design-fit-refused";
+    PANELS_COMPILED_DESIGN_NOT_FITTED = "panels-compiled-design-not-fitted";
     // sch-panels-tidy
     PANELS_CANVAS_FONT_SUMMARY = "panels-canvas-font-summary";
     // harness-connector-properties
@@ -520,4 +524,9 @@ define_ids! {
     PANELS_PCB_CLASSES_DIFF_PAIR = "panels-pcb-classes-diff-pair";
     // quit-list-snxout-cap
     PANELS_TAB_KIND_OUTPUT_JOB = "panels-tab-kind-output-job";
+    // #2470: the refusals of `set_dock_panel`.
+    PANELS_DOCK_COMMAND_UNKNOWN_PANEL = "panels-dock-command-unknown-panel";
+    PANELS_DOCK_COMMAND_UNKNOWN_STATE = "panels-dock-command-unknown-state";
+    PANELS_DOCK_COMMAND_IN_WINDOW = "panels-dock-command-in-window";
+    PANELS_DOCK_COMMAND_NOT_DOCKED = "panels-dock-command-not-docked";
 }

@@ -196,7 +196,7 @@ fn a_reload_clears_the_owners_form_and_lets_the_tool_place_again() {
     let mut paused = Paused::new(true);
     let sheet = paused.owner_sheet();
     paused.reload(&sheet);
-    let ctx = &paused.app.document_state.window_panel_ctx[&paused.window];
+    let ctx = &paused.app.document_view.window_panel_ctx[&paused.window];
     let form = ctx.annotation.dimension_tool.as_ref().expect("armed form");
     assert!(!form.is_paused && !form.has_from, "the form starts over");
 
@@ -236,7 +236,7 @@ fn a_main_move_takes_the_ended_form_off_a_windows_properties() {
     let path = PathBuf::from("board.snxpcb");
     paused.app.open_pcb_tab(path, "board".into(), board());
     paused.app.sync_window_panel_ctx_shared();
-    let ctx = &paused.app.document_state.window_panel_ctx[&paused.window];
+    let ctx = &paused.app.document_view.window_panel_ctx[&paused.window];
     assert!(ctx.annotation.is_placement_form_idle);
     assert!(ctx.annotation.dimension_tool.is_none());
     assert!(ctx.pre_placement.is_some(), "the typed values stay");
@@ -281,7 +281,7 @@ fn a_main_move_clears_the_ghost_of_a_window_paused_on_a_label() {
     let slot = &mut app.interaction_state.canvases.get_mut(&window).unwrap();
     assert!(slot.placement_paused, "paused in the window");
     slot.tool_preview = Some("Label".to_string());
-    let form = app.document_state.panel_ctx.pre_placement.clone();
+    let form = app.document_view.panel_ctx.pre_placement.clone();
 
     app.open_pcb_tab("board.snxpcb".into(), "board".into(), board());
 
@@ -289,7 +289,7 @@ fn a_main_move_clears_the_ghost_of_a_window_paused_on_a_label() {
     assert!(!slot.placement_paused && slot.tool_preview.is_none());
     assert!(slot.ghost_label.is_none());
     assert_eq!(
-        app.document_state.panel_ctx.pre_placement.is_some(),
+        app.document_view.panel_ctx.pre_placement.is_some(),
         form.is_some(),
         "the typed form stays for the next placement"
     );
@@ -300,7 +300,7 @@ fn a_reload_keeps_the_typed_form_of_a_paused_label() {
     let (mut app, paths) = app_on_sheet_a(&[]);
     let _ = app.update(Message::Tool(ToolMessage::SelectTool(Tool::Label)));
     tab_key(&mut app);
-    let form = app.document_state.panel_ctx.pre_placement.as_mut();
+    let form = app.document_view.panel_ctx.pre_placement.as_mut();
     form.expect("the Tab form").label_text = "TYPED".to_string();
 
     let sheet = SchematicSheet::default();
@@ -310,7 +310,7 @@ fn a_reload_keeps_the_typed_form_of_a_paused_label() {
 
     assert!(!app.interaction_state.canvas.placement_paused);
     assert!(app.interaction_state.placement_pause.is_none());
-    let form = app.document_state.panel_ctx.pre_placement.as_ref();
+    let form = app.document_view.panel_ctx.pre_placement.as_ref();
     assert_eq!(form.expect("kept").label_text, "TYPED");
     assert_eq!(paths.len(), 1);
 }

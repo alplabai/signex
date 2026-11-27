@@ -63,7 +63,7 @@ impl Signex {
     }
 
     fn view_annotate_dialog_body_inner(&self, draggable: bool) -> Element<'_, Message> {
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let r = crate::styles::tokens::resolve(tokens);
         let border_c = crate::styles::ti(tokens.border);
 
@@ -136,7 +136,7 @@ impl Signex {
     /// The footer: both resets (each through its confirm) at the left; the
     /// undo caption, Close and Accept Changes with its count at the right.
     fn annotate_footer(&self) -> Element<'_, Message> {
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let i18n = self.ui_state.i18n.as_ref();
         let muted = crate::styles::tokens::resolve(tokens).ink4;
         // A run reads, numbers and writes off the UI thread; the buttons that

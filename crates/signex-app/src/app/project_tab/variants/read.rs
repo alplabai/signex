@@ -58,7 +58,7 @@ impl Signex {
             return Task::none();
         };
         let current = self
-            .document_state
+            .document_view
             .project_tabs
             .get(&project_id)
             .is_none_or(|tab| {
@@ -72,22 +72,9 @@ impl Signex {
         if current && !force {
             return Task::none();
         }
-        let mut metadata = export_metadata_with(Some(project), &HashMap::new());
-        // The clock and file times the computed tokens print, as the BOM
-        // export reads them.
-        metadata.document_facts = self.document_state.times.facts();
         let parameters = project.data.parameters.clone();
-        let read = PartsRead {
-            open: open_sheets_snapshot(&self.document_state),
-            pages: project_pages(Some(project)),
-            root: project_root_sheet_path(project),
-            dir: project.dir().to_path_buf(),
-            fold: crate::app::state::project_case::fold_of(Some(project)),
-            variants: project.data.variant_definitions.clone(),
-            metadata,
-            naming: SavedChannelNaming::of(&project.data),
-        };
-        let Some(tab) = self.document_state.project_tabs.get_mut(&project_id) else {
+        let read = self.parts_read_of(project);
+        let Some(tab) = self.document_view.project_tabs.get_mut(&project_id) else {
             return Task::none();
         };
         tab.variant_parts_parameters = Some(parameters);
@@ -121,7 +108,7 @@ impl Signex {
         epoch: u64,
         parts: Arc<Result<VariantMatrix, PartsReadError>>,
     ) {
-        let Some(tab) = self.document_state.project_tabs.get_mut(&project_id) else {
+        let Some(tab) = self.document_view.project_tabs.get_mut(&project_id) else {
             return;
         };
         if tab.variant_parts_generation != generation {
@@ -130,6 +117,34 @@ impl Signex {
         tab.variant_parts = Some(parts);
         tab.variant_parts_epoch = epoch;
         tab.variant_parts_reading = false;
+    }
+
+    /// The project's parts as the Variant Manager reads them, read now: the
+    /// headless variant edits (#3038) name a part as the matrix lists it.
+    /// Blocking, as the other catalog queries over the project's sheets.
+    pub(in crate::app::project_tab) fn read_variant_parts_now(
+        &self,
+        project: &crate::app::state::LoadedProject,
+    ) -> Result<VariantMatrix, PartsReadError> {
+        read_parts(self.parts_read_of(project))
+    }
+
+    /// What a parts read of `project` needs, captured from memory.
+    fn parts_read_of(&self, project: &crate::app::state::LoadedProject) -> PartsRead {
+        let mut metadata = export_metadata_with(Some(project), &HashMap::new());
+        // The clock and file times the computed tokens print, as the BOM
+        // export reads them.
+        metadata.document_facts = self.document_state.times.facts();
+        PartsRead {
+            open: open_sheets_snapshot(&self.document_state),
+            pages: project_pages(Some(project)),
+            root: project_root_sheet_path(project),
+            dir: project.dir().to_path_buf(),
+            fold: crate::app::state::project_case::fold_of(Some(project)),
+            variants: project.data.variant_definitions.clone(),
+            metadata,
+            naming: SavedChannelNaming::of(&project.data),
+        }
     }
 }
 

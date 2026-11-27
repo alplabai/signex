@@ -55,6 +55,7 @@ pub fn rasterize_page(
         cell: &cell,
         variant_settings: Some(&ctx.metadata.variant_settings),
         placed_fits: expr_tables.placed_fits.as_ref(),
+        drawn_values: expr_tables.drawn_values.as_ref(),
     };
 
     let mut svg_ctx = SvgRenderContext::from_sheet(

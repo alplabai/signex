@@ -165,7 +165,7 @@ fn a_library_that_cannot_be_created_stays_pending_and_is_reported() {
     assert!(project.pending_libraries.contains_key(&fx.lib_id));
     assert!(project.data.libraries.is_empty());
     assert!(is_dirty(&fx), "never clean while a library is pending");
-    assert!(fx.app.document_state.error_notice.is_some());
+    assert!(fx.app.document_view.error_notice.is_some());
     assert!(
         crate::diagnostics::logged_count(&needle) > before,
         "the failure reaches the Messages panel"
@@ -310,7 +310,7 @@ fn quit_save_all_waits_for_the_project_write() {
         drop(deliver(&mut fx.app, message));
     }
 
-    assert!(fx.app.document_state.error_notice.is_none());
+    assert!(fx.app.document_view.error_notice.is_none());
     assert!(!is_dirty(&fx));
     assert!(fx.lib.exists());
 }
@@ -327,7 +327,7 @@ fn quit_save_all_with_a_write_in_flight_stays_open() {
     for message in outputs(task) {
         drop(deliver(&mut fx.app, message));
     }
-    assert!(fx.app.document_state.error_notice.is_some(), "stays open");
+    assert!(fx.app.document_view.error_notice.is_some(), "stays open");
     assert!(is_dirty(&fx));
 
     drop(deliver(&mut fx.app, run(running)));
@@ -579,7 +579,7 @@ fn a_library_whose_version_control_cannot_be_completed_is_refused_loudly() {
     let project = &fx.app.document_state.projects[0];
     assert!(project.pending_libraries.contains_key(&fx.lib_id));
     assert!(project.data.libraries.is_empty());
-    let notice = fx.app.document_state.error_notice.clone().expect("card");
+    let notice = fx.app.document_view.error_notice.clone().expect("card");
     // The sentence names the operation; the reason is the error chain, shown
     // in the card's system block (mockup row 11).
     assert_eq!(notice.detail.render_en_us(), "Failed to save project file");

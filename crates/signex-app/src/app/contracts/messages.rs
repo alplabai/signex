@@ -257,7 +257,7 @@ pub enum OverlayMsg {
     /// never reappears. Fired by the card's ✕ button, by Esc, and by
     /// the first canvas interaction after launch.
     DismissFirstRunTour,
-    /// Dismiss the shared error card (`DocumentState::error_notice`).
+    /// Dismiss the shared error card (`DocumentViewState::error_notice`).
     /// Fired by its OK button, its click-outside backdrop, and Esc.
     ///
     /// Lived on `ExportMsg` as `DismissError` until #532. The card was
@@ -361,7 +361,7 @@ pub enum UiMsg {
     },
     /// Async result of a per-file Git history load issued by the
     /// right-dock History panel. `generation` is the value of
-    /// `DocumentState.history.generation` when the load was kicked off;
+    /// `DocumentViewState.history.generation` when the load was kicked off;
     /// the handler discards stale results whose generation no longer
     /// matches (the user has switched tabs since). `path` is the file
     /// the load targeted, for diagnostic logging only. `window` is the

@@ -232,7 +232,7 @@ fn a_read_only_save_refusal_offers_save_project_as_and_it_opens_on_that_project(
         panic!("a read-only project's save is refused");
     };
     app.report_save_failure("Failed to save project file", &error);
-    let notice = app.document_state.error_notice.as_ref().expect("card");
+    let notice = app.document_view.error_notice.as_ref().expect("card");
     assert_eq!(
         notice.action,
         Some(NoticeAction::SaveProjectAs { project: id })
@@ -240,7 +240,7 @@ fn a_read_only_save_refusal_offers_save_project_as_and_it_opens_on_that_project(
     let _ = app.update(Message::from(SaveProjectAsMsg::Requested {
         project: Some(id),
     }));
-    assert!(app.document_state.error_notice.is_none(), "the card closes");
+    assert!(app.document_view.error_notice.is_none(), "the card closes");
     let dialog = app.ui_state.save_project_as.as_deref().expect("dialog");
     assert_eq!(dialog.project, id);
     assert_eq!(dialog.read_only_format.as_deref(), Some("snxprj/1.2"));

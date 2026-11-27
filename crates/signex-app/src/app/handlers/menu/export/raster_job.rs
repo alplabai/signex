@@ -169,7 +169,7 @@ impl Signex {
     /// request (or the preview closing) cancels it.
     pub(super) fn launch_raster(&mut self, job: PreviewRasterJob) -> Task<Message> {
         let (task, handle) = job.into_task().abortable();
-        self.document_state.raster_queue.track(handle);
+        self.document_view.raster_queue.track(handle);
         task
     }
 }
@@ -184,7 +184,7 @@ impl Signex {
         outline: &[signex_output::PreviewPageInfo],
         pages: Arc<Vec<(usize, signex_output::PreviewPage)>>,
     ) -> Task<Message> {
-        let Some(preview) = self.document_state.preview.as_mut() else {
+        let Some(preview) = self.document_view.preview.as_mut() else {
             return Task::none();
         };
         let pages = Arc::try_unwrap(pages).unwrap_or_else(|shared| (*shared).clone());
@@ -199,7 +199,7 @@ impl Signex {
             // Only a real empty range reaches here; a crashed render is
             // `RasterFailed` (#1092).
             log::warn!("Print preview: no pages rendered");
-            self.document_state.error_notice = Some(crate::app::state::ErrorNotice::export(
+            self.document_view.error_notice = Some(crate::app::state::ErrorNotice::export(
                 signex_i18n::ids::NOTICE_PREVIEW_NO_PAGES,
             ));
         }
@@ -213,7 +213,7 @@ impl Signex {
         generation: u64,
         pages: Arc<Vec<(usize, signex_output::PreviewPage)>>,
     ) {
-        let Some(preview) = self.document_state.preview.as_mut() else {
+        let Some(preview) = self.document_view.preview.as_mut() else {
             return;
         };
         let pages = Arc::try_unwrap(pages).unwrap_or_else(|shared| (*shared).clone());
@@ -227,14 +227,14 @@ impl Signex {
     /// the renders already running for it.
     pub(crate) fn rasterize_selected_preview_page(&mut self) -> Task<Message> {
         let Some(request) = self
-            .document_state
+            .document_view
             .preview
             .as_mut()
             .and_then(|preview| preview.take_selected_page_request())
         else {
             return Task::none();
         };
-        let (_, latest) = self.document_state.raster_queue.current();
+        let (_, latest) = self.document_view.raster_queue.current();
         self.launch_raster(PreviewRasterJob::page(
             request.generation,
             latest,
@@ -249,21 +249,21 @@ impl Signex {
     /// A background rasterisation crashed. The newest one is reported in
     /// the Messages panel and the error card; the previous pages stay up.
     pub(crate) fn handle_print_preview_raster_failed(&mut self, generation: u64, reason: &str) {
-        let Some(preview) = self.document_state.preview.as_ref() else {
+        let Some(preview) = self.document_view.preview.as_ref() else {
             return;
         };
         if !preview.is_current_raster(generation) {
             log::debug!("Print preview: dropped a superseded render failure: {reason}");
             return;
         }
-        if let Some(preview) = self.document_state.preview.as_mut() {
+        if let Some(preview) = self.document_view.preview.as_mut() {
             preview.forget_requested_pages();
         }
         crate::diagnostics::log_error(
             "Print preview render failed",
             &anyhow::anyhow!(reason.to_string()),
         );
-        self.document_state.error_notice = Some(crate::app::state::ErrorNotice::export(
+        self.document_view.error_notice = Some(crate::app::state::ErrorNotice::export(
             signex_i18n::Translatable::new(signex_i18n::ids::NOTICE_PREVIEW_RENDER_FAILED)
                 .arg("reason", reason.to_string()),
         ));
@@ -309,7 +309,7 @@ mod tests {
         let (mut app, _boot) = crate::app::Signex::new();
         let mut preview = crate::app::state::PreviewState::blank_for_tests();
         preview.begin_raster(generation);
-        app.document_state.preview = Some(preview);
+        app.document_view.preview = Some(preview);
         app
     }
 
@@ -321,11 +321,7 @@ mod tests {
 
         app.handle_print_preview_raster_failed(5, reason);
 
-        let notice = app
-            .document_state
-            .error_notice
-            .as_ref()
-            .expect("error card");
+        let notice = app.document_view.error_notice.as_ref().expect("error card");
         let detail = notice.detail.render_en_us();
         assert!(detail.contains(reason), "card names the reason: {detail}");
         assert_eq!(
@@ -344,7 +340,7 @@ mod tests {
         app.handle_print_preview_raster_failed(5, reason);
 
         assert!(
-            app.document_state.error_notice.is_none(),
+            app.document_view.error_notice.is_none(),
             "no card for a stale render"
         );
         assert_eq!(

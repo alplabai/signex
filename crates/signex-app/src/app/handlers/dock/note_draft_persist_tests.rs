@@ -179,7 +179,7 @@ fn a_save_while_typing_writes_the_typed_note() {
         .sheet;
     assert_eq!(sheet.text_notes[0].text, "note!");
     assert_eq!(note_text(&app, &a), "note!");
-    let draft = app.document_state.panel_ctx.placed.note.as_ref();
+    let draft = app.document_view.panel_ctx.placed.note.as_ref();
     assert!(draft.is_some_and(|d| !d.edited), "the box is applied once");
 }
 
@@ -296,7 +296,7 @@ fn exclude_on_a_sheet_with_only_a_typed_note_asks_first() {
         app.document_state.engines.contains_key(&sheet),
         "still open"
     );
-    let draft = app.document_state.panel_ctx.placed.note.as_ref();
+    let draft = app.document_view.panel_ctx.placed.note.as_ref();
     assert!(draft.is_some_and(|d| d.edited), "the text waits in the box");
 }
 
@@ -339,7 +339,7 @@ fn discard_on_the_exclude_prompt_drops_the_typed_note() {
         .sheet;
     assert_eq!(read.text_notes[0].text, "note", "the old text stays");
 
-    let docs = &app.document_state;
+    let docs = &app.document_view;
     let panels = std::iter::once(&docs.panel_ctx.placed)
         .chain(docs.window_panel_ctx.values().map(|ctx| &ctx.placed));
     for placed in panels {

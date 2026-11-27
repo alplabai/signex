@@ -34,6 +34,10 @@ mod diff_pair_classes;
 pub use diff_pair_classes::{
     ClassMember, class_members, diff_pairs_with_classes, pair_count, pairs_by_every_suffix,
 };
+mod diff_pair_partners;
+pub use diff_pair_partners::{
+    ListedPair, LonePairMember, PairFoundBy, listed_pairs, lone_pair_members,
+};
 
 mod net_class;
 pub use net_class::{
@@ -86,6 +90,11 @@ pub use project::{
 mod compiled;
 #[cfg(test)]
 mod compiled_tests;
+
+mod block_diagram;
+#[cfg(test)]
+mod block_diagram_tests;
+pub use block_diagram::derive_block_diagram;
 pub use compiled::{
     CompiledDesign, CompiledNet, CompiledPart, CompiledSheet, CompiledSheetNet, CompiledTarget,
     SheetTitle, compile_design,
@@ -106,3 +115,7 @@ pub use harness::{
 
 mod names_in_use;
 pub use names_in_use::sheet_net_names;
+
+#[cfg(test)]
+mod net_tie_tests;
+pub mod power_tree;

@@ -60,7 +60,7 @@ fn typed_text(app: &Signex, address: &EditorAddress) -> Option<String> {
 }
 
 fn notice_detail(app: &Signex) -> String {
-    app.document_state
+    app.document_view
         .error_notice
         .as_ref()
         .map(|notice| notice.detail.render_en_us())

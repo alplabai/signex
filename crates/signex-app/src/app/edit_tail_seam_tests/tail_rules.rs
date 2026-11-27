@@ -170,7 +170,7 @@ fn row_4_the_active_tail_moves_the_panel_and_the_drawn_page() {
     assert_eq!(drawn_page(&app), crate::panels::paper_dimensions("A4"));
     let patch = paper_on_engine(&mut app, &a);
     assert!(app.finish_schematic_mutation(Some(patch), None, true, true));
-    assert_eq!(app.document_state.panel_ctx.paper_size, "A3");
+    assert_eq!(app.document_view.panel_ctx.paper_size, "A3");
     assert_eq!(drawn_page(&app), crate::panels::paper_dimensions("A3"));
 }
 
@@ -180,7 +180,7 @@ fn row_4_the_by_path_tail_moves_the_panel_and_the_drawn_page() {
     assert_eq!(drawn_page(&app), crate::panels::paper_dimensions("A4"));
     let patch = paper_on_engine(&mut app, &a);
     app.after_sheet_change(&a, patch);
-    assert_eq!(app.document_state.panel_ctx.paper_size, "A3");
+    assert_eq!(app.document_view.panel_ctx.paper_size, "A3");
     assert_eq!(drawn_page(&app), crate::panels::paper_dimensions("A3"));
 }
 
@@ -192,7 +192,7 @@ fn row_4_an_undo_and_redo_by_path_of_a_paper_change_redraw_the_drawn_page() {
     assert_eq!(app.execute_on_sheet(&a, paper("A3")), Ok(true));
     assert_eq!(drawn_page(&app), crate::panels::paper_dimensions("A3"));
     assert_eq!(app.step_sheet_on(&a, true), Ok(true));
-    assert_eq!(app.document_state.panel_ctx.paper_size, "A4");
+    assert_eq!(app.document_view.panel_ctx.paper_size, "A4");
     assert_eq!(drawn_page(&app), crate::panels::paper_dimensions("A4"));
     assert_eq!(app.step_sheet_on(&a, false), Ok(true));
     assert_eq!(drawn_page(&app), crate::panels::paper_dimensions("A3"));

@@ -156,7 +156,7 @@ fn a_failed_move_does_not_blame_a_dialog_reopened_for_another_file() {
         .as_ref()
         .expect("sheet dialog");
     assert!(dialog.error.is_none(), "{:?}", dialog.error);
-    let notice = fx.app.document_state.error_notice.as_ref().expect("notice");
+    let notice = fx.app.document_view.error_notice.as_ref().expect("notice");
     assert!(
         notice.detail.render_en_us().contains("Rename failed"),
         "{}",

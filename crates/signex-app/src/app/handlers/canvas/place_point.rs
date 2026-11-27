@@ -46,6 +46,7 @@ pub(crate) fn power_commands(
         on_board: true,
         exclude_from_sim: false,
         locked: false,
+        net_tie: false,
         fields: std::collections::HashMap::new(),
         custom_properties: Vec::new(),
         pin_uuids: std::collections::HashMap::new(),

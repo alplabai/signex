@@ -284,7 +284,7 @@ fn a_copy_that_is_not_a_readable_primitive_is_refused_and_kept() {
         let mut app = fresh_run(&recovery, &doc);
         assert!(app.document_state.autosave.current_offer().is_some());
         answer(&mut app, RecoveryChoice::Restore);
-        assert!(app.document_state.error_notice.is_some());
+        assert!(app.document_view.error_notice.is_some());
         assert!(sidecar::sidecar_path(&recovery, &doc).exists());
         assert_eq!(name_in_editor(&app, kind, &doc), "Original");
     });

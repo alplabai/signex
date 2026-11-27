@@ -511,7 +511,8 @@ impl Signex {
         plan: &mut ReadPlan,
     ) {
         match id {
-            // #1297: the row `change_component` swaps a part for.
+            // #1297, #2954: the row `change_component` swaps a part for, read
+            // as a placement reads it.
             "place_component" | "change_component" => self.plan_part_read(args, plan),
             "place_sheet_symbol" => {
                 if let Ok((dir, path, _)) =
@@ -541,6 +542,14 @@ impl Signex {
             "import_graphics" => {
                 if let Ok(path) = super::placement_extras_operands::path_operand(args) {
                     plan.texts.push(path);
+                }
+            }
+            // #1283: a snippet's file, placed as a design block is.
+            "place_snippet" => {
+                if let Ok((_, _, file)) = super::reuse_operands::snippet_file(self, args, target)
+                    && !self.document_state.engines.contains_key(&file)
+                {
+                    plan.children.push(file);
                 }
             }
             // #2937: the library footprint a swap or an assignment names.
@@ -614,7 +623,8 @@ impl Signex {
         placed
     }
 
-    /// The library row a `place_component` names, when it names one.
+    /// The library row a `place_component` or `change_component` names,
+    /// when it names one.
     fn plan_part_read(&self, args: &CommandArgs, plan: &mut ReadPlan) {
         let named = text(args, "library").ok().zip(text(args, "part").ok());
         let Some((library, part)) = named else { return };

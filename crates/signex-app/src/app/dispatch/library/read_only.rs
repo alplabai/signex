@@ -32,7 +32,7 @@ impl Signex {
         } else {
             crate::app::state::ErrorNotice::read_only(&name)
         };
-        self.document_state.error_notice = Some(notice);
+        self.document_view.error_notice = Some(notice);
         true
     }
 

@@ -162,7 +162,7 @@ fn the_prompt_lists_the_missing_child_it_refuses_over() {
     crate::app::handlers::menu::export::settle(&mut app, task);
 
     let prompt = app
-        .document_state
+        .document_view
         .netlist_incomplete_prompt
         .clone()
         .expect("the incomplete-export prompt");

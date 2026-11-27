@@ -150,11 +150,13 @@ fn assert_wire_ids(answer: &Value, loaded: &[Wire], after: &[Wire]) {
     assert_eq!(ids("removed_wires"), removed, "{answer}");
 }
 
-const MODES: [(DragWiringMode, &str); 4] = [
+const MODES: [(DragWiringMode, &str); 6] = [
     (DragWiringMode::Auto, "auto"),
     (DragWiringMode::HorizontalFirst, "horizontal_first"),
     (DragWiringMode::VerticalFirst, "vertical_first"),
     (DragWiringMode::Straight, "straight"),
+    (DragWiringMode::Angle45Start, "angle45_start"),
+    (DragWiringMode::Angle45End, "angle45_end"),
 ];
 
 /// A diagonal step of U1 on the linear-regulator sample, so each wire that

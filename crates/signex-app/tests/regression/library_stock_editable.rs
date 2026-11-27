@@ -85,7 +85,7 @@ fn add_row(w: &mut World) {
         .library_at(&w.stock)
         .and_then(|lib| lib.tables.keys().next().cloned())
         .expect("a stock table");
-    w.app.document_state.error_notice = None;
+    w.app.document_view.error_notice = None;
     let task = w
         .app
         .update(Message::Library(LibraryMessage::BrowserAddComponent {
@@ -136,7 +136,7 @@ fn an_editable_stock_library_saves_a_row_to_disk() {
 
     add_row(&mut w);
 
-    assert!(w.app.document_state.error_notice.is_none());
+    assert!(w.app.document_view.error_notice.is_none());
     assert_ne!(before, bytes_of(&w.dir), "the row must reach the disk");
 }
 
@@ -168,7 +168,7 @@ fn a_locked_stock_library_refuses_the_same_row_save() {
 
     let notice = w
         .app
-        .document_state
+        .document_view
         .error_notice
         .as_ref()
         .expect("the refusal reaches the user");

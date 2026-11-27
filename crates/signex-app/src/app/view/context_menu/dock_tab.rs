@@ -58,10 +58,10 @@ pub(super) fn dock_tab_menu_entries(
 impl Signex {
     /// The open dock tab menu, or an empty element when none is open.
     pub(in crate::app::view) fn view_dock_tab_context_menu(&self) -> Element<'_, Message> {
-        let Some(menu) = self.document_state.dock.tab_menu else {
+        let Some(menu) = self.document_view.dock.tab_menu else {
             return iced::widget::Space::new().boxed();
         };
-        let panel_ctx = &self.document_state.panel_ctx;
+        let panel_ctx = &self.document_view.panel_ctx;
         super::placement::menu_card(
             dock_tab_menu_entries(
                 &self.ui_state.i18n,

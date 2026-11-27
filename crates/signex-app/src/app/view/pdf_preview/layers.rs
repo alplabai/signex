@@ -16,6 +16,7 @@ use crate::app::state::PreviewState;
 pub(super) fn layer_label(layer: PdfLayer) -> MessageId {
     match layer {
         PdfLayer::WiresAndBuses => ids::PDF_LAYER_WIRES,
+        PdfLayer::SignalHarnesses => ids::PDF_LAYER_HARNESSES,
         PdfLayer::Parts => ids::PDF_LAYER_PARTS,
         PdfLayer::NetLabelsAndPorts => ids::PDF_LAYER_NET_LABELS,
         PdfLayer::PowerPorts => ids::PDF_LAYER_POWER_PORTS,
@@ -28,7 +29,7 @@ impl Signex {
     /// The PDF Layers section body.
     pub(super) fn view_pdf_layers<'a>(&'a self, preview: &'a PreviewState) -> Element<'a, Message> {
         let i18n = self.ui_state.i18n.as_ref();
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let look = Look::of(tokens);
         let layers = &preview.dialog.layers;
         let watermark_on = preview.dialog.watermark.is_on;

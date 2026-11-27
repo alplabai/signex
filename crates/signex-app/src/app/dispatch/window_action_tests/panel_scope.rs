@@ -33,7 +33,7 @@ fn tab_of(path: &Path, kind: TabKind) -> TabInfo {
     }
 }
 
-fn app_with_main() -> Signex {
+pub(super) fn app_with_main() -> Signex {
     let (mut app, _boot) = Signex::new();
     app.ui_state.first_run_tour_open = false;
     app.ui_state.main_window_id = Some(iced::window::Id::unique());
@@ -153,7 +153,7 @@ fn three_sheets() -> (Signex, [PathBuf; 3]) {
     (app, paths)
 }
 
-fn undock(app: &mut Signex, path: &Path) -> iced::window::Id {
+pub(super) fn undock(app: &mut Signex, path: &Path) -> iced::window::Id {
     let index = app
         .document_state
         .tabs
@@ -415,7 +415,7 @@ fn footprint_window_over_a_sheet() -> (Signex, PathBuf, PathBuf, iced::window::I
     (app, a, b, window)
 }
 
-fn run_in(app: &mut Signex, id: &str, window: iced::window::Id) {
+pub(super) fn run_in(app: &mut Signex, id: &str, window: iced::window::Id) {
     let command = crate::keymap::AppCommandId::new(id).expect("a catalog id");
     let args = crate::app::command::CommandArgs::none();
     let _ = app.dispatch_command(&command, args, Some(window));

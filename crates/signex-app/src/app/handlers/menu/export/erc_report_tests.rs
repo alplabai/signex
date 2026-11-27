@@ -55,9 +55,9 @@ fn rows_match_the_messages_panel() {
 #[test]
 fn menu_entry_refuses_with_a_message_when_erc_never_ran() {
     let (mut app, _task) = Signex::new();
-    assert!(app.document_state.error_notice.is_none());
+    assert!(app.document_view.error_notice.is_none());
     let _ = app.update(Message::Menu(MenuMessage::ExportErcReport));
-    let notice = app.document_state.error_notice.as_ref().expect("notice");
+    let notice = app.document_view.error_notice.as_ref().expect("notice");
     assert!(
         notice
             .detail
@@ -72,7 +72,7 @@ fn menu_entry_refuses_with_a_message_when_erc_never_ran() {
 fn refusal_names_the_real_menu_path() {
     let (mut app, _task) = Signex::new();
     let _ = app.update(Message::Menu(MenuMessage::ExportErcReport));
-    let notice = app.document_state.error_notice.as_ref().expect("notice");
+    let notice = app.document_view.error_notice.as_ref().expect("notice");
     assert!(
         notice
             .detail
@@ -109,7 +109,7 @@ fn the_refusal_card_renders_the_menu_path_in_the_view() {
     let (mut app, _task) = Signex::new();
     app.ui_state.first_run_tour_open = false;
     let _ = app.update(Message::Menu(MenuMessage::ExportErcReport));
-    let notice = app.document_state.error_notice.as_ref().expect("notice");
+    let notice = app.document_view.error_notice.as_ref().expect("notice");
     assert_eq!(notice.detail.render_en_us(), DETAIL);
 
     let window = iced::window::Id::unique();
@@ -130,7 +130,7 @@ fn the_refusal_card_renders_the_menu_path_in_the_view() {
         !xa.iter().any(|t| t.contains("Electrical Rules Check")),
         "the menu path follows the language switch: {xa:#?}"
     );
-    let notice = app.document_state.error_notice.as_ref().expect("notice");
+    let notice = app.document_view.error_notice.as_ref().expect("notice");
     let card = notice.detail.render(&*app.ui_state.i18n);
     let path = crate::menu_bar::erc_menu_path().render(&*app.ui_state.i18n);
     assert!(card.contains(&path), "{card:?} names {path:?}");
@@ -146,7 +146,7 @@ fn picking_a_path_without_erc_surfaces_the_refusal() {
     let _ = app.update(Message::Export(ExportMsg::ErcReportPathChosen(Ok(
         PathBuf::from("erc.csv"),
     ))));
-    let notice = app.document_state.error_notice.as_ref().expect("notice");
+    let notice = app.document_view.error_notice.as_ref().expect("notice");
     assert!(
         notice.detail.render_en_us().contains("has not been run"),
         "{}",
@@ -164,7 +164,7 @@ fn erc_ran_clean_exports_a_header_only_report_without_refusal() {
     let _ = app.update(Message::Export(ExportMsg::ErcReportPathChosen(Ok(
         PathBuf::from("erc.txt"),
     ))));
-    assert!(app.document_state.error_notice.is_none());
+    assert!(app.document_view.error_notice.is_none());
 }
 
 #[test]

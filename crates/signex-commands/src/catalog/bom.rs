@@ -47,13 +47,18 @@ pub const SEARCH_PARTS: &[Operand] = &[
     optional("refresh", OperandKind::Bool),
     optional("limit", OperandKind::Text),
 ];
-/// `change_component` from operands (#1297): the placed part `id` on the
-/// sheet `document` swapped for a library row (`library` and `part`).
+/// `change_component` from operands (#1297, #2954): the placed part `id` on
+/// the sheet `document` swapped for a library row (`library` and `part`);
+/// `pins` maps old pins to new ones by hand (`1:2,3:-`), `drop` names the
+/// user parameters cleared, `dry_run` answers without changing anything.
 pub const CHANGE_COMPONENT: &[Operand] = &[
     required("document", OperandKind::Document),
     required("id", OperandKind::Text),
     required("library", OperandKind::Text),
     required("part", OperandKind::Text),
+    optional("pins", OperandKind::Text),
+    optional("drop", OperandKind::Text),
+    optional("dry_run", OperandKind::Bool),
 ];
 
 pub(super) const BOM: &[CommandMetadata] = &[

@@ -19,7 +19,7 @@ fn power_path() -> PathBuf {
 
 fn context(view: ObjectListView) -> PanelContext {
     let (app, _boot) = crate::app::Signex::new();
-    let mut ctx = app.document_state.panel_ctx.clone();
+    let mut ctx = app.document_view.panel_ctx.clone();
     ctx.object_list = view;
     ctx
 }
@@ -130,4 +130,39 @@ fn the_chips_and_scope_send_their_picks() {
         ),
         "{pressed:?}"
     );
+}
+
+/// #3039, mockup row 57: a sheet name wider than the Sheet column stays on
+/// one line inside it, cut with an ellipsis, and a hover names it in full.
+#[test]
+fn a_long_sheet_name_is_cut_inside_its_column_and_named_in_full_on_hover() {
+    const LONG: &str = "linear-regulator-with-power-on-led";
+    let ctx = context(ObjectListView::default());
+    let window = iced::Size::new(400.0, 80.0);
+    let clean = |s: &str| s.replace(['\u{2068}', '\u{2069}'], "");
+    let bounds_in = |element: Element<'_, PanelMsg>, window: iced::Size| {
+        lay_out_texts(element, window)
+            .into_iter()
+            .find(|t| clean(&t.text) == LONG)
+            .expect("the sheet name is laid out")
+            .bounds
+    };
+    let natural = bounds_in(
+        iced::Widget::boxed(text(UserText::new(LONG)).size(TS.caption)),
+        iced::Size::new(10_000.0, 80.0),
+    );
+    assert!(
+        natural.width > SHEET_W,
+        "the name must be wider than the column"
+    );
+    let shown = bounds_in(sheet_cell(&ctx, LONG, iced::Color::BLACK), window);
+    assert!(shown.width <= SHEET_W + 0.5, "{shown:?}");
+    assert!(shown.height <= natural.height + 0.5, "one line: {shown:?}");
+    let probes = crate::layout_probe::probe_points(
+        sheet_cell(&ctx, LONG, iced::Color::BLACK),
+        window,
+        &[shown.center()],
+    );
+    let tips: Vec<String> = probes[0].tips.iter().map(|t| clean(t)).collect();
+    assert_eq!(tips, [LONG]);
 }

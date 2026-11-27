@@ -1,14 +1,15 @@
-//! The window-layout commands on the agent channel (#2249): Tile
-//! Horizontally, Tile Vertically and Untile, open to agents by the
-//! maintainer's rule that everything is AI-controllable. They name no
-//! document, run the same handler as the menu row and answer with the layout
-//! they left. See `docs/AGENT_SOCKET.md`, "Allowlist".
+//! The window-layout commands on the agent channel (#2249, #2470): Tile
+//! Horizontally, Tile Vertically, Untile, Fit (`zoom_to_fit`) and the dock's
+//! `set_dock_panel`, open to agents by the maintainer's rule that everything
+//! is AI-controllable. They name no document, run the same handler as the
+//! menu row (the operand handler for the dock) and answer with what they
+//! left. See `docs/AGENT_SOCKET.md`, "Allowlist".
 
 use iced::Task;
 use serde_json::{Value, json};
 
-use crate::app::command::CommandOutcome;
 use crate::app::command::enablement::disabled_reason;
+use crate::app::command::{CommandArgs, CommandOutcome};
 use crate::app::{DocumentKey, Message, Signex, TileLayout};
 use crate::keymap::AppCommandId;
 
@@ -19,6 +20,7 @@ impl Signex {
     pub(crate) fn run_agent_window_layout(
         &mut self,
         command: &AppCommandId,
+        args: &CommandArgs,
     ) -> (CommandOutcome, Task<Message>) {
         // A greyed row's refusal is the command's own, not an access event.
         self.agent.reached_handler = true;
@@ -30,14 +32,42 @@ impl Signex {
             return (outcome, Task::none());
         }
         let task = match command.as_str() {
+            "set_dock_panel" => {
+                return crate::app::handlers::dock::panel_command::set_dock_panel(self, args);
+            }
+            "zoom_to_fit" => self.update(Message::CanvasEvent(crate::canvas::CanvasEvent::FitAll)),
             "tile_windows_horizontally" => self.tile(TileLayout::Stacked),
             "tile_windows_vertically" => self.tile(TileLayout::SideBySide),
             _ => self.untile_documents(),
         };
         self.agent.serving = true;
-        let layout = self.window_layout_json();
+        let answer = if command.as_str() == "zoom_to_fit" {
+            self.view_json()
+        } else {
+            self.window_layout_json()
+        };
         self.agent.serving = false;
-        (CommandOutcome::Answered(layout), task)
+        (CommandOutcome::Answered(answer), task)
+    }
+
+    /// What Fit framed: the main window's active document, by id and name
+    /// when it belongs to an open project, as a tiled pane is named.
+    fn view_json(&self) -> Value {
+        let key = self
+            .document_state
+            .tabs
+            .get(self.document_state.active_tab)
+            .and_then(DocumentKey::of);
+        let entries = self.document_entries();
+        let entry = entries
+            .iter()
+            .find(|entry| key.is_some() && entry.key == key);
+        json!({
+            "fitted": {
+                "document": entry.and_then(|e| e.id).map(|id| id.to_string()),
+                "name": entry.map(|e| e.name.clone()),
+            }
+        })
     }
 
     /// The main window's layout: `tiled`, the `layout` (`stacked`,

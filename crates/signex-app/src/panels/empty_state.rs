@@ -270,7 +270,7 @@ mod tests {
     #[test]
     fn a_planned_panel_shows_one_card_without_a_second_title() {
         let (app, _boot) = crate::app::Signex::new();
-        let ctx = app.document_state.panel_ctx.clone();
+        let ctx = app.document_view.panel_ctx.clone();
         for (kind, what) in [
             (ids::PANELS_KIND_FAVORITES, ids::PANELS_STUB_FAVORITES),
             (ids::PANELS_KIND_SNIPPETS, ids::PANELS_STUB_SNIPPETS),

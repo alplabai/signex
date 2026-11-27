@@ -198,6 +198,8 @@ define_ids! {
     SMART_PASTE_PASTE_COPIES = "dialog-smart-paste-paste-copies";
     SMART_PASTE_NOTHING_COPIED = "dialog-smart-paste-nothing-copied";
     SMART_PASTE_SHEET_CHANGED = "dialog-smart-paste-sheet-changed";
+    SMART_PASTE_CHOICES_INVALID = "dialog-smart-paste-choices-invalid";
+    SMART_PASTE_NOT_PLACED = "dialog-smart-paste-not-placed";
     DIALOG_GRID_NOTE = "dialog-grid-note";
     DIALOG_GRID_BOTH_AXES = "dialog-grid-both-axes";
     DIALOG_GRID_MULTIPLIER_OPTION = "dialog-grid-multiplier-option";

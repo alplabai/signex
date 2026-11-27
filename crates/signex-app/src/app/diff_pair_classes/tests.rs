@@ -246,7 +246,7 @@ fn project_undo_steps_an_edit_made_without_a_project_tab() {
     send(&mut app, DiffPairClassesMsg::ClassDeleted(0));
     send(&mut app, DiffPairClassesMsg::OkRequested);
     assert!(classes_of(&app).is_empty());
-    app.document_state.project_tabs.remove(&PROJECT);
+    app.document_view.project_tabs.remove(&PROJECT);
 
     assert!(app.step_project_tab_history(PROJECT, true));
     assert_eq!(classes_of(&app), [class("USB")]);

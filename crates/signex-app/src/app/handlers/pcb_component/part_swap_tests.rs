@@ -23,9 +23,9 @@ use crate::menu_bar::MenuMessage;
 use crate::pcb_canvas::PcbCanvasMsg;
 
 const FP: Uuid = Uuid::from_u128(0xf0);
-const UNIT_A: Uuid = Uuid::from_u128(0xa);
-const UNIT_B: Uuid = Uuid::from_u128(0xb);
-const SHEET: &str = "top.snxsch";
+pub(crate) const UNIT_A: Uuid = Uuid::from_u128(0xa);
+pub(crate) const UNIT_B: Uuid = Uuid::from_u128(0xb);
+pub(crate) const SHEET: &str = "top.snxsch";
 
 fn lib_pin(unit: u32, number: &str, x: f64) -> LibPin {
     LibPin {
@@ -78,7 +78,7 @@ fn unit(uuid: Uuid, unit: u32, y: f64) -> Symbol {
 }
 
 /// The world tip of `pin` of `symbol` on `sheet`.
-fn tip(sheet: &SchematicSheet, symbol: Uuid, pin: &str) -> Point {
+pub(crate) fn tip(sheet: &SchematicSheet, symbol: Uuid, pin: &str) -> Point {
     let placed = sheet.symbols.iter().find(|s| s.uuid == symbol).unwrap();
     let lib = sheet.resolve_lib_symbol(placed).unwrap();
     pin_tips(&lib, placed)
@@ -88,8 +88,8 @@ fn tip(sheet: &SchematicSheet, symbol: Uuid, pin: &str) -> Point {
 }
 
 /// Gate 1 of U1 at the origin, gate 2 at y = 20, a wire running up 10 mm
-/// from each of pins 1 and 2.
-fn sheet() -> SchematicSheet {
+/// from each of pins 1 and 2. The schematic swap tests (#1261) share it.
+pub(crate) fn sheet() -> SchematicSheet {
     let mut sheet = SchematicSheet {
         uuid: Uuid::now_v7(),
         paper_size: "A4".to_string(),
@@ -157,7 +157,7 @@ fn app_with(dir: &Path, board: PcbBoard) -> (Signex, PathBuf, PathBuf) {
     (app, board_path, sheet_path)
 }
 
-fn pad_nets(app: &Signex, board: &Path) -> Vec<(String, String)> {
+pub(crate) fn pad_nets(app: &Signex, board: &Path) -> Vec<(String, String)> {
     app.document_state
         .pcb_board(board)
         .expect("board")

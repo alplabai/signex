@@ -537,8 +537,8 @@ impl Signex {
                 true
             }
             PanelMsg::HistoryRestoreCancelled => {
-                self.document_state.history.pending_restore = None;
-                self.document_state.panel_ctx.history = self.document_state.history.clone();
+                self.document_view.history.pending_restore = None;
+                self.document_view.panel_ctx.history = self.document_view.history.clone();
                 true
             }
             PanelMsg::FpEditorRestorePadStackDefaults => {

@@ -68,7 +68,7 @@ fn placing_the_stock_resistor_puts_a_symbol_on_the_sheet() {
     );
     click(&mut app, PLACE_AT);
 
-    assert!(app.document_state.error_notice.is_none());
+    assert!(app.document_view.error_notice.is_none());
     assert_eq!(doc(&app).symbols.len(), 1);
     assert_eq!(doc(&app).symbols[0].row_id, Some(resistor.row_id));
     assert!(

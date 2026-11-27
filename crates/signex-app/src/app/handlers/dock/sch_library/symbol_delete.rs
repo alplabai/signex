@@ -501,7 +501,7 @@ mod tests {
     }
 
     fn warning(app: &Signex) -> Option<&SymbolDeleteWarning> {
-        app.document_state
+        app.document_view
             .panel_ctx
             .symbol_editor
             .as_ref()?
@@ -528,7 +528,7 @@ mod tests {
     fn delete_anyway_in_the_modal_deletes_the_symbol() {
         let (mut app, path) = app_asking();
         assert_eq!(count(&app, &path), 2, "nothing deleted before the answer");
-        let tokens = app.document_state.panel_ctx.tokens;
+        let tokens = app.document_view.panel_ctx.tokens;
         let i18n = signex_i18n::I18n::en_us();
         let warning = warning(&app).expect("the modal is up").clone();
 
@@ -570,7 +570,7 @@ mod tests {
     #[test]
     fn cancel_in_the_modal_keeps_the_symbol() {
         let (mut app, path) = app_asking();
-        let tokens = app.document_state.panel_ctx.tokens;
+        let tokens = app.document_view.panel_ctx.tokens;
         let i18n = signex_i18n::I18n::en_us();
         let warning = warning(&app).expect("the modal is up").clone();
 

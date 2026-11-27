@@ -23,7 +23,7 @@ impl Signex {
     ) -> Vec<String> {
         let Some(data) = self
             .project_of_sheet(path)
-            .and_then(|project| self.document_state.net_nav.index.latest(project))
+            .and_then(|project| self.document_view.net_nav.index.latest(project))
         else {
             return Vec::new();
         };
@@ -51,7 +51,7 @@ impl Signex {
         }
         let Some(data) = self
             .project_of_sheet(path)
-            .and_then(|project| self.document_state.net_nav.index.latest(project))
+            .and_then(|project| self.document_view.net_nav.index.latest(project))
         else {
             return Vec::new();
         };
@@ -88,7 +88,7 @@ impl Signex {
         project: ProjectId,
         names: &[String],
     ) -> Option<(PathBuf, InstancePath)> {
-        let data = self.document_state.net_nav.index.latest(project)?;
+        let data = self.document_view.net_nav.index.latest(project)?;
         let member = (0..data.index.net_count())
             .filter_map(|i| data.index.net(i))
             .filter(|net| names.iter().any(|name| name.trim() == net.name.trim()))

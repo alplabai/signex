@@ -9,7 +9,9 @@ use signex_engine::ProjectSectionCommand;
 use signex_i18n::{I18n, ids};
 use signex_output::VariantMatrix;
 use signex_types::pcb::SymbolLink;
-use signex_types::project::{BASE_VARIANT, PlacedPart, ProjectData, SheetFit, is_base_variant};
+use signex_types::project::{
+    BASE_VARIANT, PlacedPart, ProjectData, SheetFit, VariantSettings, is_base_variant,
+};
 
 use super::super::{ProjectTabState, VariantRenameDraft};
 use super::manager::{OverrideDraft, VariantCell, VariantManagerMsg};
@@ -25,7 +27,7 @@ impl Signex {
         match msg {
             VariantManagerMsg::CellSelected(cell) => {
                 self.store_variant_draft(project_id);
-                if let Some(tab) = self.document_state.project_tabs.get_mut(&project_id) {
+                if let Some(tab) = self.document_view.project_tabs.get_mut(&project_id) {
                     tab.variant_manager.cell = Some(cell);
                     tab.variant_manager.draft = None;
                 }
@@ -40,7 +42,7 @@ impl Signex {
                 if moved_on {
                     self.store_variant_draft(project_id);
                 }
-                if let Some(tab) = self.document_state.project_tabs.get_mut(&project_id) {
+                if let Some(tab) = self.document_view.project_tabs.get_mut(&project_id) {
                     tab.variant_manager.draft = Some(OverrideDraft { parameter, text });
                 }
             }
@@ -68,6 +70,18 @@ impl Signex {
             } => {
                 self.pick_channel_part_fit(project_id, variant, &part, fitted);
             }
+            VariantManagerMsg::CompareOpened => self.open_variant_compare(project_id),
+            VariantManagerMsg::CompareSidePicked { from, name } => {
+                self.pick_compare_side(project_id, from, name);
+            }
+            VariantManagerMsg::CompareSwapped => self.swap_compare_sides(project_id),
+            VariantManagerMsg::CompareClosed => self.close_variant_compare(project_id),
+            VariantManagerMsg::BomRequested { variant } => {
+                return self.open_variant_bom(project_id, variant);
+            }
+            VariantManagerMsg::AlternateRequested { cell } => {
+                return self.open_alternate_of_cell(project_id, &cell);
+            }
         }
         iced::Task::none()
     }
@@ -79,7 +93,7 @@ impl Signex {
         command: &ProjectSectionCommand,
     ) -> bool {
         let outcome = self.apply_project_section(project_id, command);
-        let Some(tab) = self.document_state.project_tabs.get_mut(&project_id) else {
+        let Some(tab) = self.document_view.project_tabs.get_mut(&project_id) else {
             return false;
         };
         tab.variant_problem = outcome.as_ref().err().cloned();
@@ -88,7 +102,7 @@ impl Signex {
 
     /// The parts read of the project's tab, whether or not it still holds.
     pub(super) fn variant_read(&self, project_id: ProjectId) -> Option<&VariantMatrix> {
-        let tab = self.document_state.project_tabs.get(&project_id)?;
+        let tab = self.document_view.project_tabs.get(&project_id)?;
         tab.variant_parts.as_deref()?.as_ref().ok()
     }
 
@@ -103,7 +117,7 @@ impl Signex {
     }
 
     fn variant_draft(&self, project_id: ProjectId) -> Option<&OverrideDraft> {
-        let tab = self.document_state.project_tabs.get(&project_id)?;
+        let tab = self.document_view.project_tabs.get(&project_id)?;
         tab.variant_manager.draft.as_ref()
     }
 
@@ -140,32 +154,24 @@ impl Signex {
         let Some(project) = self.document_state.project_by_id(project_id) else {
             return false;
         };
-        let placed = PlacedPart::new(&cell.designator, part);
-        let settings = &project.data.variant_settings;
-        if settings
-            .part(cell.variant.as_deref(), placed)
-            .is_some_and(|own| own.fitted.is_some())
-        {
-            return false;
-        }
         let Some(matrix) = self.variant_read(project_id) else {
             return false;
         };
-        let sheets = matrix.column(cell.variant.as_deref()).and_then(|column| {
-            let row = matrix
-                .rows
-                .iter()
-                .find(|row| row.designator == cell.designator)?;
-            row.fitted.get(column).copied()
-        });
-        sheets == Some(picked)
+        let placed = PlacedPart::new(&cell.designator, part);
+        fit_repeats_sheets(
+            &project.data.variant_settings,
+            matrix,
+            cell.variant.as_deref(),
+            placed,
+            picked,
+        )
     }
 
     /// Typing moved on to another parameter or another cell: what was typed
     /// is stored, as Enter stores it.
     fn store_variant_draft(&mut self, project_id: ProjectId) {
         let cell = self
-            .document_state
+            .document_view
             .project_tabs
             .get(&project_id)
             .filter(|tab| tab.variant_manager.draft.is_some())
@@ -179,7 +185,7 @@ impl Signex {
     /// the Base value again.
     fn submit_variant_override(&mut self, project_id: ProjectId, cell: VariantCell) {
         let Some(draft) = self
-            .document_state
+            .document_view
             .project_tabs
             .get_mut(&project_id)
             .and_then(|tab| tab.variant_manager.draft.take())
@@ -208,7 +214,7 @@ impl Signex {
             value,
         };
         self.apply_variant_manager_edit(project_id, &command);
-        if let Some(tab) = self.document_state.project_tabs.get_mut(&project_id) {
+        if let Some(tab) = self.document_view.project_tabs.get_mut(&project_id) {
             tab.variant_manager.draft = None;
         }
     }
@@ -221,7 +227,7 @@ impl Signex {
         let Some(project) = self.document_state.project_by_id(project_id) else {
             return;
         };
-        let tab = self.document_state.project_tabs.get(&project_id);
+        let tab = self.document_view.project_tabs.get(&project_id);
         let Some(sheet_fits) = tab.and_then(|tab| {
             sheet_fits_of(tab, project, self.document_state.sheet_edit_epoch, &from)
         }) else {
@@ -237,7 +243,7 @@ impl Signex {
             sheet_fits,
         };
         if self.apply_variant_manager_edit(project_id, &command)
-            && let Some(tab) = self.document_state.project_tabs.get_mut(&project_id)
+            && let Some(tab) = self.document_view.project_tabs.get_mut(&project_id)
         {
             tab.variant_selected = Some(name.clone());
             tab.variant_rename = Some(VariantRenameDraft {
@@ -260,25 +266,55 @@ fn sheet_fits_of(
     if !super::read_holds(tab, matrix, project, sheet_epoch) {
         return None;
     }
-    let Some(column) = matrix.column(from.as_deref()) else {
-        return Some(Vec::new());
+    Some(sheet_fits_in(matrix, from.as_deref()))
+}
+
+/// The fit `from`'s sheets give each part of `matrix` (a parts read, no
+/// settings over it) where it differs from Base: what Duplicate copies.
+pub(super) fn sheet_fits_in(matrix: &VariantMatrix, from: Option<&str>) -> Vec<SheetFit> {
+    let Some(column) = matrix.column(from) else {
+        return Vec::new();
     };
-    Some(
-        matrix
+    matrix
+        .rows
+        .iter()
+        .filter(|row| {
+            row.fitted
+                .get(column)
+                .is_some_and(|&f| f != row.base_fitted())
+        })
+        .map(|row| SheetFit {
+            designator: row.designator.clone(),
+            part: row.link.clone(),
+            fitted: !row.base_fitted(),
+        })
+        .collect()
+}
+
+/// Whether picking `picked` for `placed` in `variant` repeats what is there:
+/// the settings give the part no fit of its own and its sheets (`matrix`, a
+/// parts read) fit it as `picked` already. Such a pick records nothing.
+pub(super) fn fit_repeats_sheets(
+    settings: &VariantSettings,
+    matrix: &VariantMatrix,
+    variant: Option<&str>,
+    placed: PlacedPart<'_>,
+    picked: bool,
+) -> bool {
+    if settings
+        .part(variant, placed)
+        .is_some_and(|own| own.fitted.is_some())
+    {
+        return false;
+    }
+    let sheets = matrix.column(variant).and_then(|column| {
+        let row = matrix
             .rows
             .iter()
-            .filter(|row| {
-                row.fitted
-                    .get(column)
-                    .is_some_and(|&f| f != row.base_fitted())
-            })
-            .map(|row| SheetFit {
-                designator: row.designator.clone(),
-                part: row.link.clone(),
-                fitted: !row.base_fitted(),
-            })
-            .collect(),
-    )
+            .find(|row| row.designator == placed.designator)?;
+        row.fitted.get(column).copied()
+    });
+    sheets == Some(picked)
 }
 
 /// The first free "<from> copy", then "<from> copy 2", ... in the language

@@ -85,10 +85,33 @@ pub(crate) fn overwrite(args: &CommandArgs) -> bool {
     matches!(args.operand("overwrite"), Some(OperandValue::Bool(true)))
 }
 
+/// Refuse a write target inside a `.git` folder (any case), and on Windows
+/// a name the file system would change or split: one ending in a dot or a
+/// space, or holding `:` (an alternate data stream). The `path` of an
+/// export or of the fabrication outputs' folder (#2470).
+pub(crate) fn reserved_target(target: &std::path::Path) -> Result<(), Translatable> {
+    let shown = || target.display().to_string();
+    for part in target.components() {
+        let std::path::Component::Normal(name) = part else {
+            continue;
+        };
+        let name = name.to_string_lossy();
+        if name.eq_ignore_ascii_case(".git") {
+            return Err(Translatable::new(ids::NOTEBOOK_TAB_CMD_GIT_TARGET).arg("value", shown()));
+        }
+        if cfg!(windows) && (name.ends_with('.') || name.ends_with(' ') || name.contains(':')) {
+            return Err(
+                Translatable::new(ids::NOTEBOOK_TAB_CMD_RESERVED_NAME).arg("value", shown())
+            );
+        }
+    }
+    Ok(())
+}
+
 /// The file an export writes, `path` resolved against the project folder
 /// `project_dir`: refused unless its extension is `extension`, when it
-/// names a Signex document (`.snx*`), and when it exists without
-/// `overwrite`.
+/// names a Signex document (`.snx*`) or a reserved place
+/// ([`reserved_target`]), and when it exists without `overwrite`.
 pub(crate) fn export_target(
     project_dir: &std::path::Path,
     path: &std::path::Path,
@@ -110,6 +133,7 @@ pub(crate) fn export_target(
     if ext.starts_with("snx") {
         return Err(Translatable::new(ids::NOTEBOOK_TAB_CMD_SNX_TARGET).arg("value", shown));
     }
+    reserved_target(&target)?;
     if ext != extension {
         return Err(Translatable::new(ids::NOTEBOOK_TAB_CMD_BAD_TARGET_EXT)
             .arg("ext", format!(".{extension}"))

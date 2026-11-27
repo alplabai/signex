@@ -318,7 +318,7 @@ impl Signex {
     pub(super) fn library_row_ref(&self, tree_path: &[usize]) -> Option<crate::app::LibraryRowRef> {
         let project_idx = *tree_path.first()?;
         let node = signex_widgets::tree_view::get_node(
-            self.document_state.panel_ctx.project_tree.as_slice(),
+            self.document_view.panel_ctx.project_tree.as_slice(),
             tree_path,
         )?;
         Some(crate::app::LibraryRowRef {

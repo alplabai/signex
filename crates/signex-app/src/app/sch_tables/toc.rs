@@ -101,28 +101,15 @@ fn title_on_disk(path: &std::path::Path) -> Option<signex_net::SheetTitle> {
         .map(|sheet| signex_net::SheetTitle::of(&sheet))
 }
 
-/// Write `text` to `path` unless a file is there already. The name is
-/// claimed with `create_new` first, so a file made there after the check is
-/// never overwritten; the text then replaces only that empty claim, through
-/// the atomic write, and a failed write gives the name back.
+/// Write `text` to `path` unless a file is there already
+/// ([`crate::app::path_op_jobs::write_new`]).
 fn write_new(path: &std::path::Path, text: &str) -> Result<(), String> {
-    match std::fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(path)
-    {
-        Ok(claim) => drop(claim),
-        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
-            return Err("exists".to_string());
+    crate::app::path_op_jobs::write_new(path, text.as_bytes(), false).map_err(|e| {
+        if e.kind() == std::io::ErrorKind::AlreadyExists {
+            "exists".to_string()
+        } else {
+            e.to_string()
         }
-        Err(e) => return Err(e.to_string()),
-    }
-    signex_types::atomic_io::atomic_write(path, text.as_bytes()).map_err(|e| {
-        // Only the empty claim made above is removed; nothing else was there.
-        if let Err(cleanup) = std::fs::remove_file(path) {
-            tracing::warn!(path = %path.display(), error = %cleanup, "could not remove the empty contents file");
-        }
-        e.to_string()
     })
 }
 
@@ -262,7 +249,7 @@ impl Signex {
         path: &std::path::Path,
         fold: crate::app::state::scope::CaseFold,
     ) -> Option<usize> {
-        let navigator = &self.document_state.panel_ctx.navigator;
+        let navigator = &self.document_view.panel_ctx.navigator;
         let shown_root = navigator.hierarchy.as_ref()?.root.as_ref()?;
         if !shown_root.is_at(root?, fold) {
             return None;
@@ -321,6 +308,17 @@ mod tests {
         assert_eq!(std::fs::read_to_string(&path).expect("read"), "mine");
         let fresh = dir.path().join("other.snxsch");
         assert_eq!(write_new(&fresh, "new"), Ok(()));
+    }
+
+    /// The root sheet's folder went away meanwhile: the write fails and
+    /// makes neither the folder nor an orphan contents sheet.
+    #[test]
+    fn a_contents_file_in_a_missing_folder_fails_and_creates_nothing() {
+        let dir = tempfile::tempdir().expect("dir");
+        let gone = dir.path().join("gone");
+        let path = gone.join(CONTENTS_FILE);
+        assert!(write_new(&path, "rows").is_err());
+        assert!(!gone.exists(), "the folder is not made again");
     }
 
     fn title(title: &str, revision: &str) -> SheetTitle {
@@ -472,7 +470,7 @@ mod tests {
         };
         use signex_types::schematic::InstancePath;
         let fold = crate::app::state::project_case::fold_of(app.document_state.projects.first());
-        let navigator = &mut app.document_state.panel_ctx.navigator;
+        let navigator = &mut app.document_view.panel_ctx.navigator;
         navigator.hierarchy = Some(SheetHierarchy {
             fold,
             root: Some(SheetNode {

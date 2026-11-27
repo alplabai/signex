@@ -36,10 +36,10 @@ fn board() -> PcbBoard {
 
 fn context_with(view: &PcbLayerView, ui: LayersPanelUi) -> PanelContext {
     let (mut app, _boot) = Signex::new();
-    app.document_state.panel_ctx.pcb_layers =
+    app.document_view.panel_ctx.pcb_layers =
         PcbLayersPanel::new(&board(), view, app.ui_state.i18n.clone());
-    app.document_state.panel_ctx.pcb_layers_ui = ui;
-    app.document_state.panel_ctx.clone()
+    app.document_view.panel_ctx.pcb_layers_ui = ui;
+    app.document_view.panel_ctx.clone()
 }
 
 fn context(view: &PcbLayerView) -> PanelContext {
@@ -733,7 +733,7 @@ fn additional_options_are_closed_with_a_count_and_list_greyed_checkboxes() {
 #[test]
 fn the_empty_panel_says_a_board_is_needed() {
     let (app, _boot) = Signex::new();
-    let ctx = app.document_state.panel_ctx.clone();
+    let ctx = app.document_view.panel_ctx.clone();
     let texts = texts(&ctx);
     find(&texts, "Layers");
     find(&texts, "Open a board or a footprint to see its layers.");

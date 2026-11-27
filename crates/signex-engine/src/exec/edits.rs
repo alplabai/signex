@@ -356,6 +356,9 @@ impl Engine {
                 SymbolFlag::OnBoard => {
                     self.set_symbol_flag(before, symbol_id, |s| &mut s.on_board, value)
                 }
+                SymbolFlag::NetTie => {
+                    self.set_symbol_flag(before, symbol_id, |s| &mut s.net_tie, value)
+                }
             },
             Command::SetWireWidth { wire_id, width_mm } => {
                 self.set_wire_width(before, wire_id, width_mm)
@@ -658,6 +661,25 @@ mod tests {
         assert!(!engine.document().symbols[0].dnp);
         assert!(engine.undo().unwrap().is_some());
         assert!(!engine.document().symbols[0].locked);
+        assert!(!engine.can_undo());
+    }
+
+    #[test]
+    fn set_symbol_net_tie_applies_and_one_undo_reverts() {
+        let (mut engine, id) = engine_with_symbol();
+        let r = engine
+            .execute(Command::SetSymbolFlag {
+                symbol_id: id,
+                flag: SymbolFlag::NetTie,
+                value: true,
+            })
+            .unwrap();
+        assert!(r.changed);
+        let symbol = &engine.document().symbols[0];
+        assert!(symbol.net_tie);
+        assert!(symbol.in_bom && symbol.on_board, "only the tie flag moves");
+        assert!(engine.undo().unwrap().is_some());
+        assert!(!engine.document().symbols[0].net_tie);
         assert!(!engine.can_undo());
     }
 

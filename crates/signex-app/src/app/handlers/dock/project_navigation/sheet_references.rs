@@ -610,11 +610,7 @@ mod tests {
 
         assert!(child.exists(), "the file must not move");
         assert!(!dir.path().join("renamed.snxsch").exists());
-        let notice = app
-            .document_state
-            .error_notice
-            .as_ref()
-            .expect("error card");
+        let notice = app.document_view.error_notice.as_ref().expect("error card");
         assert!(
             notice.detail.render_en_us().contains("Parent.snxsch"),
             "{notice:?}"

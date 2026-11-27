@@ -32,7 +32,7 @@ fn the_board_host_offers_its_targets_and_v_score_bakes_as_one_step() {
     send(&mut f, menu_row("board_sketch"));
     let ctx = f
         .app
-        .document_state
+        .document_view
         .panel_ctx
         .footprint_editor
         .as_ref()

@@ -63,9 +63,14 @@ the board BOM stays one of the four kinds.
 
 Agents and the CLI: `board_report_<kind> document=<board>` answers with
 `{kind, columns, rows, document}`; it is on the agent channel.
-`export_board_report document=<board> kind=<kind> path=<file>` writes the CSV
-and answers with the path and row count; it takes a path, so it is CLI only
-(`export` capability). The board must be open.
+`export_board_report document=<board> kind=<kind> path=<file> [overwrite=true]`
+writes the CSV
+and answers, once it is written, with the path and row count (`export`
+capability). The path follows the export rule of the notebook exports
+(#2470): a `.csv` file, never a Signex document or inside `.git`, an existing
+file replaced only with `overwrite=true`. On the agent channel it must lie in
+the board's project folder ([AGENT_SOCKET.md](AGENT_SOCKET.md), "Allowlist").
+The board must be open.
 
 ## Print and PDF
 
@@ -123,14 +128,18 @@ lists them as not printed. With no set ticked the plan shows "Pick at least
 one layer set to print." and Export PDF… is disabled. The footer has Export
 Assembly SVG… on the left, Cancel and Export PDF… on the right.
 
-Headless and CLI: `export_board_pdf document=<board> path=<file>` with the
+Headless and CLI: `export_board_pdf document=<board> path=<file>
+[overwrite=true]` with the
 optional `layers` (comma-separated set ids `top`, `bottom`, `inner`,
 `mechanical`, `assembly_top`, `assembly_bottom`), `pages` (`per_set`,
 `composite`), `scale` (`fit`, `one_to_one`) and the switches `monochrome`,
 `mirror_bottom`, `outline`, `drill_marks`, `title_block`; anything left out
 is the default above. The answer lists each page's sets, mirror, scale,
 printed size in mm and whether the board runs off the page, and the export's
-warnings. CLI only (`export` capability).
+warnings, once the file is written (`export` capability). The path follows the
+same export rule as the CSV (a `.pdf` file; `overwrite=true` to replace
+one), and on the agent channel it must lie in the board's project folder
+(#2470).
 
 Not yet: footprint designator and comment texts on the layer set pages, a
 raster preview of the pages, a system printer, and a page size other than A4

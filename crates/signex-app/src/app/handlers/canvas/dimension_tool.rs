@@ -123,8 +123,8 @@ impl Signex {
             return;
         }
         let form = self.dimension_tool_form();
-        if self.document_state.panel_ctx.annotation.dimension_tool != form {
-            self.document_state.panel_ctx.annotation.dimension_tool = form;
+        if self.document_view.panel_ctx.annotation.dimension_tool != form {
+            self.document_view.panel_ctx.annotation.dimension_tool = form;
         }
     }
 
@@ -180,7 +180,7 @@ impl Signex {
                     let sheet = engine.document();
                     field.edit(&text, |y| sheet.page_y(y))
                 });
-                self.document_state.panel_ctx.annotation.draft = Some((id, field, text));
+                self.document_view.panel_ctx.annotation.draft = Some((id, field, text));
                 if let Some(edit) = edit {
                     self.apply_dimension_tool_edit(&edit);
                 }
@@ -189,7 +189,7 @@ impl Signex {
                 return self.submit_dimension_tool_field(field);
             }
             AnnotationPanelMsg::Picked(edit) => {
-                self.document_state.panel_ctx.annotation.draft = None;
+                self.document_view.panel_ctx.annotation.draft = None;
                 self.apply_dimension_tool_edit(&edit);
             }
             // The box captured the key: this is the press's one Esc. Only the
@@ -216,7 +216,7 @@ impl Signex {
         if is_paused && !self.dimension_form_draft_reads() {
             return Task::none();
         }
-        let draft = &mut self.document_state.panel_ctx.annotation.draft;
+        let draft = &mut self.document_view.panel_ctx.annotation.draft;
         draft.take_if(|(id, f, _)| id.is_nil() && *f == field);
         self.sync_annotation_draft();
         if !is_paused {
@@ -253,7 +253,7 @@ impl Signex {
 
     /// Whether the text typed in the form, if any, reads for its own box.
     fn dimension_form_draft_reads(&self) -> bool {
-        let draft = self.document_state.panel_ctx.annotation.draft.as_ref();
+        let draft = self.document_view.panel_ctx.annotation.draft.as_ref();
         draft
             .filter(|(id, _, _)| id.is_nil())
             .is_none_or(|(_, field, text)| {
@@ -280,7 +280,7 @@ impl Signex {
             // An emptied box holds nothing typed: Override is off again.
             AnnotationEdit::OverrideText(text) if form.is_paused && text.is_empty() => {
                 tool.dimension.override_text = None;
-                self.document_state.panel_ctx.annotation.draft = None;
+                self.document_view.panel_ctx.annotation.draft = None;
                 return;
             }
             // Nothing is measured yet, so there is no value to start from.
@@ -334,7 +334,7 @@ impl Signex {
 
     /// Text typed in the form belongs to the dimension under way.
     pub(crate) fn drop_dimension_form_draft(&mut self) {
-        let draft = &mut self.document_state.panel_ctx.annotation.draft;
+        let draft = &mut self.document_view.panel_ctx.annotation.draft;
         if matches!(draft, Some((id, _, _)) if id.is_nil()) {
             *draft = None;
         }
@@ -356,7 +356,7 @@ impl Signex {
             is_armed.then(|| Box::new((tool.dimension.clone(), tool.points.clone())));
         if is_armed {
             // A folded section has no box to take the keys.
-            self.document_state
+            self.document_view
                 .panel_ctx
                 .collapsed_sections
                 .remove(crate::panels::DIMENSION_TEXT_SECTION);
@@ -392,7 +392,7 @@ impl Signex {
         let tool = &mut self.interaction_state.annotation_tool;
         if let Some(values) = tool.paused_with.take() {
             (tool.dimension, tool.points) = *values;
-            self.document_state.panel_ctx.annotation.draft = None;
+            self.document_view.panel_ctx.annotation.draft = None;
             self.sync_annotation_draft();
         }
     }

@@ -226,7 +226,7 @@ impl Signex {
     }
 
     pub(crate) fn view_layer_stack_tab(&self) -> Element<'_, Message> {
-        crate::panels::layer_stack::view(&self.document_state.panel_ctx)
+        crate::panels::layer_stack::view(&self.document_view.panel_ctx)
             .map(|msg| Message::Dock(DockMessage::Panel(msg)))
             .boxed()
     }

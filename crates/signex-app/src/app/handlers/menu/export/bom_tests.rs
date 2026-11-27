@@ -158,7 +158,7 @@ fn app_with_sheet() -> Signex {
 }
 
 fn options(app: &Signex) -> signex_output::BomOptions {
-    app.document_state
+    app.document_view
         .bom_preview
         .as_ref()
         .expect("preview open")
@@ -180,7 +180,7 @@ fn the_not_fitted_option_sets_both_flags_together() {
     let on = options(&app);
     assert!(on.include_dnp && on.include_not_fitted);
     assert!(
-        app.document_state
+        app.document_view
             .bom_preview
             .as_ref()
             .unwrap()
@@ -195,7 +195,7 @@ fn the_not_fitted_option_sets_both_flags_together() {
 
     // A state with the flags apart reads as clear, so no part enters the
     // export behind a box that looks ticked off.
-    let preview = app.document_state.bom_preview.as_mut().unwrap();
+    let preview = app.document_view.bom_preview.as_mut().unwrap();
     preview.options.include_dnp = true;
     assert!(!preview.includes_not_fitted());
 }
@@ -221,21 +221,21 @@ fn the_dialog_closes_only_after_a_completed_export() {
         signex_output::BomGrouping::Flat,
     )));
     let _ = app.handle_bom_preview_export();
-    assert!(app.document_state.bom_preview.is_some(), "Export keeps it");
+    assert!(app.document_view.bom_preview.is_some(), "Export keeps it");
 
     let opts = options(&app);
     let _ = app.handle_export_bom_finished(source.clone(), opts, Err("cancelled".to_string()));
     assert_eq!(options(&app).grouping, signex_output::BomGrouping::Flat);
 
     let _ = app.handle_bom_written(source.clone(), written(Err("disk full".to_string())));
-    assert!(app.document_state.bom_preview.is_some(), "a failed write");
+    assert!(app.document_view.bom_preview.is_some(), "a failed write");
 
     let other = PathBuf::from("another-sheet.snxsch");
     let _ = app.handle_bom_written(other, written(Ok(())));
-    assert!(app.document_state.bom_preview.is_some(), "another document");
+    assert!(app.document_view.bom_preview.is_some(), "another document");
 
     let _ = app.handle_bom_written(source, written(Ok(())));
-    assert!(app.document_state.bom_preview.is_none(), "written, closed");
+    assert!(app.document_view.bom_preview.is_none(), "written, closed");
 }
 
 /// #2792: while Export waits on its save dialog the dialog takes no setting,
@@ -268,7 +268,7 @@ fn the_filter_never_changes_the_export() {
     let mut app = app_with_sheet();
     let before = options(&app);
     let rows_before = app
-        .document_state
+        .document_view
         .bom_preview
         .as_ref()
         .unwrap()
@@ -278,7 +278,7 @@ fn the_filter_never_changes_the_export() {
     let _ = app.update(Message::BomPreview(BomPreviewMsg::FilterChanged(
         "no such part".into(),
     )));
-    let preview = app.document_state.bom_preview.as_ref().unwrap();
+    let preview = app.document_view.bom_preview.as_ref().unwrap();
     assert!(preview.visible_lines.is_empty());
     assert_eq!(preview.table.rows.len(), rows_before);
     assert_eq!(preview.options.columns, before.columns);
@@ -288,7 +288,7 @@ fn the_filter_never_changes_the_export() {
     let _ = app.update(Message::BomPreview(BomPreviewMsg::FilterChanged(
         String::new(),
     )));
-    let preview = app.document_state.bom_preview.as_ref().unwrap();
+    let preview = app.document_view.bom_preview.as_ref().unwrap();
     assert_eq!(preview.visible_lines.len(), preview.row_order.len());
 }
 
@@ -298,7 +298,7 @@ fn the_filter_never_changes_the_export() {
 fn an_issue_click_selects_its_line_and_clears_a_hiding_filter() {
     let mut app = app_with_sheet();
     let (issue, row) = {
-        let preview = app.document_state.bom_preview.as_ref().unwrap();
+        let preview = app.document_view.bom_preview.as_ref().unwrap();
         let at = preview
             .validation_report
             .issues
@@ -311,7 +311,7 @@ fn an_issue_click_selects_its_line_and_clears_a_hiding_filter() {
         "no such part".into(),
     )));
     let _ = app.update(Message::BomPreview(BomPreviewMsg::IssueSelected(issue)));
-    let preview = app.document_state.bom_preview.as_ref().unwrap();
+    let preview = app.document_view.bom_preview.as_ref().unwrap();
     assert_eq!(preview.selected_row, Some(row));
     assert!(preview.filter.is_empty());
     assert!(!preview.visible_lines.is_empty());
@@ -323,7 +323,7 @@ fn an_issue_click_selects_its_line_and_clears_a_hiding_filter() {
 fn flags_follow_the_report_and_a_reroll_drops_the_selection() {
     let mut app = app_with_sheet();
     {
-        let preview = app.document_state.bom_preview.as_ref().unwrap();
+        let preview = app.document_view.bom_preview.as_ref().unwrap();
         assert_eq!(preview.row_flags.len(), preview.table.rows.len());
         assert!(
             preview.row_flags.iter().any(Option::is_some),
@@ -332,22 +332,14 @@ fn flags_follow_the_report_and_a_reroll_drops_the_selection() {
     }
     let _ = app.update(Message::BomPreview(BomPreviewMsg::RowSelected(0)));
     assert_eq!(
-        app.document_state
-            .bom_preview
-            .as_ref()
-            .unwrap()
-            .selected_row,
+        app.document_view.bom_preview.as_ref().unwrap().selected_row,
         Some(0)
     );
     let _ = app.update(Message::BomPreview(BomPreviewMsg::SetGrouping(
         signex_output::BomGrouping::Flat,
     )));
     assert_eq!(
-        app.document_state
-            .bom_preview
-            .as_ref()
-            .unwrap()
-            .selected_row,
+        app.document_view.bom_preview.as_ref().unwrap().selected_row,
         None
     );
 }

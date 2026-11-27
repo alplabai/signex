@@ -236,8 +236,8 @@ impl Signex {
         path: PathBuf,
         placement: Option<InstancePath>,
     ) {
-        let switched = self.document_state.tab_placements.get(&path) != placement.as_ref();
-        self.document_state.tab_placements.record(&path, placement);
+        let switched = self.document_view.tab_placements.get(&path) != placement.as_ref();
+        self.document_view.tab_placements.record(&path, placement);
         // Jumping within the shown placement keeps an open edit's text.
         if switched {
             self.close_text_edit("the sheet is shown through another placement now");
@@ -262,7 +262,7 @@ impl Signex {
             .active_path
             .clone()
             .or_else(|| self.active_tab_path())?;
-        self.shown_placement_of(&active, &self.document_state.panel_ctx)
+        self.shown_placement_of(&active, &self.document_view.panel_ctx)
     }
 
     /// The placement the sheet at `active` is shown through (see
@@ -274,7 +274,7 @@ impl Signex {
         active: &std::path::Path,
         ctx: &crate::panels::PanelContext,
     ) -> Option<InstancePath> {
-        if let Some(recorded) = self.document_state.tab_placements.get(active) {
+        if let Some(recorded) = self.document_view.tab_placements.get(active) {
             return Some(recorded.clone());
         }
         let hierarchy = ctx.navigator.hierarchy.as_ref()?;

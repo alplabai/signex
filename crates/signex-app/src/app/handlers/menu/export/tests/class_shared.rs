@@ -48,7 +48,7 @@ fn one_commit_stitches_the_project_once_for_the_styles_and_the_index() {
     );
     let project = app.document_state.projects[0].id;
     assert!(
-        app.document_state
+        app.document_view
             .net_nav
             .index
             .fresh(project, &key_of(&app))
@@ -103,7 +103,7 @@ fn a_label_on_a_sheet_placed_twice_names_the_net_the_canvas_styles() {
         "the second placement's net styles the shared wire"
     );
     let pick = app
-        .document_state
+        .document_view
         .panel_ctx
         .net_classes
         .label
@@ -198,13 +198,13 @@ fn each_placement_of_a_child_sheet_draws_and_names_its_own_net() {
 
     let mut drawn = 0;
     for placement in placements {
-        app.document_state
+        app.document_view
             .tab_placements
             .record(&child_path, Some(placement));
         app.sync_label_class_pick();
         let styled = app.active_class_styles().contains_key(&wire);
         let picked = app
-            .document_state
+            .document_view
             .panel_ctx
             .net_classes
             .label

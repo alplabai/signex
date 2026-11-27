@@ -35,7 +35,7 @@ struct PanelLoop {
 impl PanelLoop {
     fn new() -> Self {
         let (mut app, _boot) = Signex::new();
-        let ctx = &mut app.document_state.panel_ctx;
+        let ctx = &mut app.document_view.panel_ctx;
         ctx.visible_grid_mm = 2.54;
         ctx.grid_size_mm = 1.27;
         ctx.grid_visible = true;
@@ -51,7 +51,7 @@ impl PanelLoop {
 
     /// The top of the Units row, the first row under the drawing.
     fn drawing_end(&self) -> f32 {
-        let ctx = &self.app.document_state.panel_ctx;
+        let ctx = &self.app.document_view.panel_ctx;
         let units = ctx.i18n.message_plain(ids::PANELS_PROPERTIES_UNITS, &[]);
         let view = view_properties_general(ctx, iced::Color::BLACK).boxed();
         find(&lay_out_texts(view, WINDOW), &units).bounds.y
@@ -59,7 +59,7 @@ impl PanelLoop {
 
     /// One frame: the pointer moves to `at`, messages go through `update`.
     fn move_to(&mut self, at: Point) {
-        let ctx = &self.app.document_state.panel_ctx;
+        let ctx = &self.app.document_view.panel_ctx;
         let view = view_properties_general(ctx, iced::Color::BLACK).boxed();
         let cache = self.cache.take().unwrap_or_default();
         let mut ui = UserInterface::build(view, WINDOW, cache, &mut self.renderer);
@@ -88,7 +88,7 @@ impl PanelLoop {
     }
 
     fn is_lit(&self) -> bool {
-        let hover = &self.app.document_state.panel_ctx.document_options.hover;
+        let hover = &self.app.document_view.panel_ctx.document_options.hover;
         hover.hovered().is_some()
     }
 }

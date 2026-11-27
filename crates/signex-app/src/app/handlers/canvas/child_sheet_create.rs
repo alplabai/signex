@@ -96,7 +96,7 @@ impl Signex {
     /// Say why nothing was created, on screen and in the Messages panel.
     fn refuse_child_sheet(&mut self, detail: Translatable) {
         crate::diagnostics::log_warning(detail.render_en_us());
-        self.document_state.error_notice = Some(crate::app::state::ErrorNotice::create(detail));
+        self.document_view.error_notice = Some(crate::app::state::ErrorNotice::create(detail));
     }
 
     pub(crate) fn handle_create_child_sheet_path_changed(&mut self, text: String) -> Task<Message> {
@@ -434,7 +434,7 @@ impl Signex {
             )),
             Err(ChildSheetWriteError::Failed(e)) => {
                 crate::diagnostics::log_error("Create child sheet", &anyhow::anyhow!("{e}"));
-                self.document_state.error_notice =
+                self.document_view.error_notice =
                     Some(crate::app::state::ErrorNotice::create(untranslated(e)));
                 return Task::none();
             }

@@ -19,8 +19,8 @@ impl Signex {
     /// every update ends here; it clones nothing unless a label is selected.
     pub(crate) fn sync_label_class_pick(&mut self) {
         let pick = self.selected_label_class_pick();
-        if self.document_state.panel_ctx.net_classes.label != pick {
-            self.document_state.panel_ctx.net_classes.label = pick;
+        if self.document_view.panel_ctx.net_classes.label != pick {
+            self.document_view.panel_ctx.net_classes.label = pick;
         }
     }
 
@@ -30,7 +30,8 @@ impl Signex {
     /// label's net yet (the picker then appears once it has).
     pub(crate) fn selected_label_class_pick(&self) -> Option<LabelClassPick> {
         let document = &self.document_state;
-        let ctx = &document.panel_ctx;
+        let document_view = &self.document_view;
+        let ctx = &document_view.panel_ctx;
         if ctx.selected_kind != Some(SelectedKind::Label) {
             return None;
         }

@@ -58,6 +58,9 @@ pub(crate) enum NewProjectLayout {
 pub(crate) struct NewProjectPlan {
     pub layout: NewProjectLayout,
     pub setup: Option<signex_types::project::ProjectSetup>,
+    /// The folder of a project template of the library (#1283): read before
+    /// anything is made, and put on the project and its first sheet.
+    pub template: Option<PathBuf>,
 }
 
 /// Where a New Project lands: its folder, its `.snxprj`, and whether the
@@ -251,19 +254,32 @@ pub(super) fn write_new_project_files(chosen: &Path, seed: &RuleSeed) -> Result<
     write_new_project_files_with(chosen, seed, &NewProjectPlan::default())
 }
 
-/// The New Project writes for a dialog-made plan: the layout, and the
-/// setup stored in the `.snxprj` and applied to the first sheet.
+/// The New Project writes for a dialog-made plan: the layout, the setup
+/// stored in the `.snxprj` and applied to the first sheet, and the project
+/// template put on both after it (#1283). A template that cannot be read
+/// refuses the project before anything is made.
 pub(crate) fn write_new_project_files_with(
     chosen: &Path,
     seed: &RuleSeed,
     plan: &NewProjectPlan,
 ) -> Result<PathBuf> {
     let (_, stem) = new_project_parts(chosen)?;
+    let template = plan
+        .template
+        .as_deref()
+        .map(crate::app::design_reuse::read_project_template)
+        .transpose()
+        .map_err(anyhow::Error::msg)?;
     let target = resolve_new_project(chosen, plan.layout)?;
     let mut created = Created::default();
-    let result = write_into(&target, &stem, &mut created, plan.setup.as_ref(), &|dir| {
-        signex_types::project_vcs_files::ensure_project_gitignore(dir)
-    });
+    let result = write_into(
+        &target,
+        &stem,
+        &mut created,
+        plan.setup.as_ref(),
+        template.as_ref(),
+        &|dir| signex_types::project_vcs_files::ensure_project_gitignore(dir),
+    );
     if result.is_err() {
         created.roll_back(&target.folder);
     }
@@ -378,12 +394,14 @@ fn write_setup(project_path: &Path, setup: &signex_types::project::ProjectSetup)
 }
 
 /// `ensure_gitignore` writes the managed `.gitignore` block; it is a
-/// parameter so a failing writer can be tested.
+/// parameter so a failing writer can be tested. A project `template`
+/// (#1283) is put on the project and its sheet once both are written.
 fn write_into(
     target: &NewProjectTarget,
     stem: &str,
     created: &mut Created,
     setup: Option<&signex_types::project::ProjectSetup>,
+    template: Option<&crate::app::design_reuse::ProjectTemplate>,
     ensure_gitignore: &dyn Fn(
         &Path,
     ) -> Result<(), signex_types::project_vcs_files::ManagedFileError>,
@@ -418,9 +436,17 @@ fn write_into(
         std::io::Write::write_all(f, serialised.as_bytes())
     })
     .map_err(|e| anyhow::anyhow!("write blank schematic {}: {e}", sch_path.display()))?;
-    created.files.push(sch_path);
+    created.files.push(sch_path.clone());
     if let Some(setup) = setup {
         write_setup(&target.project_path, setup)?;
+    }
+    if let Some(template) = template {
+        crate::app::design_reuse::apply_project_template_to(
+            template,
+            &target.project_path,
+            &sch_path,
+        )
+        .map_err(anyhow::Error::msg)?;
     }
     // The project exists now; a `.gitignore` problem is reported but never
     // fails the creation.
@@ -444,7 +470,7 @@ mod tests {
                 .unwrap();
         let mut created = Created::default();
 
-        let result = write_into(&target, "GI", &mut created, None, &|_| {
+        let result = write_into(&target, "GI", &mut created, None, None, &|_| {
             Err(
                 signex_types::project_vcs_files::ManagedFileError::NotRegularFile {
                     path: ".gitignore".into(),
@@ -701,7 +727,10 @@ mod tests {
         let mut setup = signex_types::project::ProjectSetup::default();
         setup.set_layers(6);
         let mut created = Created::default();
-        write_into(&target, "First", &mut created, Some(&setup), &|_| Ok(())).unwrap();
+        write_into(&target, "First", &mut created, Some(&setup), None, &|_| {
+            Ok(())
+        })
+        .unwrap();
         let data = signex_types::project::parse_project(&target.project_path).unwrap();
         assert_eq!(data.project_defaults, setup.defaults());
         assert!(data.designator_standard().is_some());
@@ -767,6 +796,7 @@ mod tests {
         let plan = NewProjectPlan {
             layout: NewProjectLayout::NamedFolder,
             setup: Some(ProjectSetup::default()),
+            template: None,
         };
         let other = tempfile::tempdir().unwrap();
         let chosen = other.path().join("Setup.snxprj");
@@ -791,6 +821,7 @@ mod tests {
         let plan = NewProjectPlan {
             layout: NewProjectLayout::NamedFolder,
             setup: Some(setup),
+            template: None,
         };
         let written =
             write_new_project_files_with(&tmp.path().join("Fab.snxprj"), &seed, &plan).unwrap();
@@ -815,6 +846,7 @@ mod tests {
         let plain = NewProjectPlan {
             layout: NewProjectLayout::NamedFolder,
             setup: Some(ProjectSetup::default()),
+            template: None,
         };
         let written =
             write_new_project_files_with(&tmp.path().join("Plain.snxprj"), &seed, &plain).unwrap();
@@ -845,6 +877,7 @@ mod tests {
             let plan = NewProjectPlan {
                 layout: NewProjectLayout::NamedFolder,
                 setup: Some(setup),
+                template: None,
             };
             let name = format!("{tier:?}.snxprj");
             let written =
@@ -855,6 +888,7 @@ mod tests {
         let plain = NewProjectPlan {
             layout: NewProjectLayout::NamedFolder,
             setup: Some(ProjectSetup::default()),
+            template: None,
         };
         let written =
             write_new_project_files_with(&tmp.path().join("Plain.snxprj"), &seed, &plain).unwrap();
@@ -882,6 +916,7 @@ mod tests {
             let plan = NewProjectPlan {
                 layout: NewProjectLayout::NamedFolder,
                 setup: Some(setup),
+                template: None,
             };
             let name = format!("Slot{tier:?}.snxprj");
             let written =
@@ -894,6 +929,7 @@ mod tests {
         let plain = NewProjectPlan {
             layout: NewProjectLayout::NamedFolder,
             setup: Some(ProjectSetup::default()),
+            template: None,
         };
         let written =
             write_new_project_files_with(&tmp.path().join("SlotPlain.snxprj"), &seed, &plain)

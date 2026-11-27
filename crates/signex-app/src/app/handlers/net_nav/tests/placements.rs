@@ -45,7 +45,7 @@ fn stepping_to_a_member_of_another_placement_switches_to_it() {
     p.send_settled(NetNavMsg::HighlightStepRequested { forward: false });
 
     assert_eq!(
-        p.app.document_state.tab_placements.get(&child),
+        p.app.document_view.tab_placements.get(&child),
         Some(&via(TWICE_B))
     );
     assert_eq!(p.selected().first().map(|i| i.uuid), Some(id(TWICE_LABEL)));
@@ -67,7 +67,7 @@ fn the_highlight_stays_on_its_own_placements_net_after_an_edit() {
 
     let name = p
         .app
-        .document_state
+        .document_view
         .net_nav
         .highlight
         .as_ref()
@@ -81,7 +81,7 @@ fn the_highlight_stays_on_its_own_placements_net_after_an_edit() {
 
 fn highlight_name(p: &Project) -> Option<String> {
     p.app
-        .document_state
+        .document_view
         .net_nav
         .highlight
         .as_ref()
@@ -189,7 +189,7 @@ fn a_partner_jump_lands_in_the_placement_of_its_own_net() {
     p.send_settled(NetNavMsg::PartnerJumpRequested);
     assert_eq!(p.active(), Some(child.clone()));
     assert_eq!(
-        p.app.document_state.tab_placements.get(&child),
+        p.app.document_view.tab_placements.get(&child),
         Some(&via(TWICE_A))
     );
 
@@ -197,7 +197,7 @@ fn a_partner_jump_lands_in_the_placement_of_its_own_net() {
     p.select(TWICE_ENTRY_B, SelectedKind::SheetPin);
     p.send_settled(NetNavMsg::PartnerJumpRequested);
     assert_eq!(
-        p.app.document_state.tab_placements.get(&child),
+        p.app.document_view.tab_placements.get(&child),
         Some(&via(TWICE_B))
     );
     assert_eq!(p.selected().first().map(|i| i.uuid), Some(id(TWICE_LABEL)));
@@ -239,7 +239,7 @@ fn an_unfocused_window_reads_the_placement_its_designators_show() {
     let project = p.app.document_state.projects[0].id;
     let data = p
         .app
-        .document_state
+        .document_view
         .net_nav
         .index
         .latest(project)

@@ -75,7 +75,7 @@ fn the_document_filter_keeps_the_rows_that_name_its_sheet() {
 #[test]
 fn a_row_that_names_a_sheet_shows_it_and_offers_show() {
     let (app, _boot) = crate::app::Signex::new();
-    let mut ctx = app.document_state.panel_ctx.clone();
+    let mut ctx = app.document_view.panel_ctx.clone();
     let item = SelectedItem::new(uuid::Uuid::now_v7(), SelectedKind::Symbol);
     ctx.diagnostics = vec![
         entry(1, DiagnosticLevel::Info, "SIGNEX-PROJECT", "no sheet here"),
@@ -218,7 +218,7 @@ fn copy_writes_the_shown_rows_as_tab_separated_lines() {
 #[test]
 fn the_panel_draws_the_chips_and_an_error_row_and_a_chip_picks_its_level() {
     let (app, _boot) = crate::app::Signex::new();
-    let mut ctx = app.document_state.panel_ctx.clone();
+    let mut ctx = app.document_view.panel_ctx.clone();
     ctx.diagnostics = log();
     ctx.diagnostics_level = "info".into();
     let window = iced::Size::new(1200.0, 2000.0);
@@ -246,7 +246,7 @@ fn the_panel_draws_the_chips_and_an_error_row_and_a_chip_picks_its_level() {
 #[test]
 fn a_linked_row_shows_its_command_and_pressing_it_sends_the_link() {
     let (app, _boot) = crate::app::Signex::new();
-    let mut ctx = app.document_state.panel_ctx.clone();
+    let mut ctx = app.document_view.panel_ctx.clone();
     let named = std::path::PathBuf::from("/w/a.snxsch");
     let mut linked = entry(
         1,
@@ -283,7 +283,7 @@ fn a_linked_row_shows_its_command_and_pressing_it_sends_the_link() {
 #[test]
 fn a_row_without_a_link_shows_no_command() {
     let (app, _boot) = crate::app::Signex::new();
-    let mut ctx = app.document_state.panel_ctx.clone();
+    let mut ctx = app.document_view.panel_ctx.clone();
     ctx.diagnostics = log();
     ctx.diagnostics_level = "info".into();
     let shown: Vec<String> = lay_out_texts(view_messages(&ctx), iced::Size::new(1200.0, 2000.0))
@@ -299,7 +299,7 @@ fn a_row_without_a_link_shows_no_command() {
 #[test]
 fn an_empty_log_shows_the_centred_empty_state() {
     let (app, _boot) = crate::app::Signex::new();
-    let mut ctx = app.document_state.panel_ctx.clone();
+    let mut ctx = app.document_view.panel_ctx.clone();
     ctx.diagnostics = Vec::new();
     let shown: Vec<String> = lay_out_texts(view_messages(&ctx), iced::Size::new(560.0, 150.0))
         .into_iter()
@@ -322,7 +322,7 @@ fn an_empty_log_shows_the_centred_empty_state() {
 #[test]
 fn each_level_chip_tag_takes_its_level_tone() {
     let (app, _boot) = crate::app::Signex::new();
-    let tokens = &app.document_state.panel_ctx.tokens;
+    let tokens = &app.document_view.panel_ctx.tokens;
     for (level, tone) in [
         (DiagnosticLevel::Error, PillTone::Err),
         (DiagnosticLevel::Warning, PillTone::Warn),
@@ -342,7 +342,7 @@ fn each_level_chip_tag_takes_its_level_tone() {
 #[test]
 fn the_level_chips_draw_a_tag_and_a_count_each() {
     let (app, _boot) = crate::app::Signex::new();
-    let mut ctx = app.document_state.panel_ctx.clone();
+    let mut ctx = app.document_view.panel_ctx.clone();
     ctx.diagnostics = log();
     ctx.diagnostics_level = "info".into();
     let entries = ctx.diagnostics.clone();
@@ -369,7 +369,7 @@ fn the_level_chips_draw_a_tag_and_a_count_each() {
 #[test]
 fn the_filter_field_leads_with_the_search_glyph() {
     let (app, _boot) = crate::app::Signex::new();
-    let ctx = app.document_state.panel_ctx.clone();
+    let ctx = app.document_view.panel_ctx.clone();
     let inputs =
         crate::layout_probe::lay_out_inputs(filter_field(&ctx), iced::Size::new(600.0, 100.0));
     let input = inputs

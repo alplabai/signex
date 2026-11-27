@@ -180,6 +180,7 @@ fn the_dialog_lists_and_executes_what_the_operand_form_answers() {
             board: &tmp.path().join("demo.snxpcb"),
             board_revision: list.revision,
             execute_blocked: None,
+            net_classes: Vec::new(),
         },
     );
 
@@ -421,7 +422,7 @@ fn the_dialog_does_not_open_over_a_waiting_run() {
     assert!(app.ui_state.update_pcb.is_some(), "the run");
     assert!(app.agent.update_pcb_job.is_some(), "the run is kept");
     assert!(
-        app.document_state.error_notice.is_some(),
+        app.document_view.error_notice.is_some(),
         "the person is told"
     );
     let (outcome, _) = app.settle_deferred(ticket, task);

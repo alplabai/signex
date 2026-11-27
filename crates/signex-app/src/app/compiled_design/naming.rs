@@ -58,7 +58,7 @@ impl Signex {
     /// one sheet symbol selected, Properties in front.
     pub(crate) fn naming_menu_escape(&self) -> Option<Message> {
         let shows = self.ui_state.compiled_design.naming_menu.is_some()
-            && self.document_state.dock.is_frontmost(PanelKind::Properties)
+            && self.document_view.dock.is_frontmost(PanelKind::Properties)
             && self.sheet_symbol_repeat_view().is_some();
         shows.then(|| Message::from(CompiledDesignMsg::NamingMenuClosed))
     }

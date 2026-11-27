@@ -93,13 +93,13 @@ fn a_failed_history_read_leaves_an_entry_that_is_no_longer_the_one_asked_for() {
     let (third, root) = (p.third.clone(), p.root.clone());
     p.focus(&third);
     assert_eq!(
-        p.app.document_state.net_nav.history.peek(false),
+        p.app.document_view.net_nav.history.peek(false),
         Some(root.as_path())
     );
 
     let _ = p.app.sheet_read_failed(&mid, generation, true);
 
-    let history = &p.app.document_state.net_nav.history;
+    let history = &p.app.document_view.net_nav.history;
     assert_eq!(
         history.peek(false),
         Some(root.as_path()),
@@ -136,14 +136,14 @@ fn a_history_read_landing_after_the_user_moved_on_keeps_the_stacks() {
         .update(Message::Ui(UiMsg::NetNav(NetNavMsg::SheetBackRequested)));
     p.focus(&third);
     assert_eq!(
-        p.app.document_state.net_nav.history.peek(false),
+        p.app.document_view.net_nav.history.peek(false),
         Some(root.as_path())
     );
 
     crate::app::path_ops::settle_task(&mut p.app, step);
 
     assert_eq!(
-        p.app.document_state.net_nav.history.peek(false),
+        p.app.document_view.net_nav.history.peek(false),
         Some(root.as_path()),
         "root's back entry survives the late step"
     );

@@ -71,9 +71,13 @@ the part no longer has is stale. When the design cannot be read whole (a
 sheet missing or unreadable, or no sheet at all) nothing is called stale, and
 under Fail the export is refused instead of passing unchecked.
 
-The file is a `.pdf`, never a Signex document (`.snx*`). The command's `path`
-is replaced, like the default file, only with `overwrite=true`; in the dialog
-the person picked it.
+The file is a `.pdf`, never a Signex document (`.snx*`), never inside a
+`.git` folder (in any case), and on Windows never a name ending in a dot or a
+space or holding `:` (#2470). The command's `path` is replaced, like the
+default file, only with `overwrite=true`; in the dialog the person picked it.
+The same rule (`notebook_project::export_target`) holds for the dialog's
+Export, the measurement lane's CSV export in the notebook tab, and the board
+report and board PDF commands.
 
 ## Bookmarks
 

@@ -51,8 +51,8 @@ impl Paused {
             tab_key(&mut app);
         }
         app.sync_window_panel_ctx_shared();
-        app.document_state.panel_ctx.has_schematic = true;
-        let window_ctx = app.document_state.window_panel_ctx.get_mut(&window);
+        app.document_view.panel_ctx.has_schematic = true;
+        let window_ctx = app.document_view.window_panel_ctx.get_mut(&window);
         window_ctx.expect("the window's context").has_schematic = true;
         let (owner, other) = if in_window {
             (Some(window), None)
@@ -86,8 +86,8 @@ impl Paused {
 
     fn ctx(&self, window: WindowId) -> &PanelContext {
         match window {
-            Some(id) => &self.app.document_state.window_panel_ctx[&id],
-            None => &self.app.document_state.panel_ctx,
+            Some(id) => &self.app.document_view.window_panel_ctx[&id],
+            None => &self.app.document_view.panel_ctx,
         }
     }
 
@@ -332,10 +332,10 @@ fn another_windows_form_is_read_only_and_the_owners_is_not() {
         let form = p.ctx(p.owner).pre_placement.clone();
         match p.other {
             Some(id) => {
-                let ctx = p.app.document_state.window_panel_ctx.get_mut(&id);
+                let ctx = p.app.document_view.window_panel_ctx.get_mut(&id);
                 ctx.expect("the window's context").pre_placement = form;
             }
-            None => p.app.document_state.panel_ctx.pre_placement = form,
+            None => p.app.document_view.panel_ctx.pre_placement = form,
         }
         assert!(p.ctx(p.other).annotation.is_tool_paused_elsewhere);
         assert!(!p.ctx(p.owner).annotation.is_tool_paused_elsewhere);

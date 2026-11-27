@@ -124,4 +124,6 @@ define_ids! {
     NOTEBOOK_TAB_CMD_FILE_APPEARED = "notebook-tab-cmd-file-appeared";
     NOTEBOOK_TAB_CMD_CHANGED_ON_DISK = "notebook-tab-cmd-changed-on-disk";
     NOTEBOOK_TAB_CMD_WRITE_OUTSIDE = "notebook-tab-cmd-write-outside";
+    NOTEBOOK_TAB_CMD_GIT_TARGET = "notebook-tab-cmd-git-target";
+    NOTEBOOK_TAB_CMD_RESERVED_NAME = "notebook-tab-cmd-reserved-name";
 }

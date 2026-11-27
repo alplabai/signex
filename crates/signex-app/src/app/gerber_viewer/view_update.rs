@@ -14,12 +14,12 @@ use crate::app::{Message, Signex};
 impl Signex {
     /// A file is dragged over a window: the drop frame counts it.
     pub(super) fn gerber_file_hovered(&mut self, path: PathBuf) -> Task<Message> {
-        self.document_state.gerber_viewer.hovered.push(path);
+        self.document_view.gerber_viewer.hovered.push(path);
         Task::none()
     }
 
     pub(super) fn gerber_hover_left(&mut self) -> Task<Message> {
-        self.document_state.gerber_viewer.hovered.clear();
+        self.document_view.gerber_viewer.hovered.clear();
         Task::none()
     }
 
@@ -32,7 +32,7 @@ impl Signex {
         window: window::Id,
         path: PathBuf,
     ) -> Task<Message> {
-        let viewer = &mut self.document_state.gerber_viewer;
+        let viewer = &mut self.document_view.gerber_viewer;
         if viewer.hovered.is_empty() {
             let first = viewer.dropped.is_empty();
             viewer.dropped.push(path);
@@ -49,7 +49,7 @@ impl Signex {
     }
 
     pub(super) fn gerber_drop_settled(&mut self, window: window::Id) -> Task<Message> {
-        let paths = self.document_state.gerber_viewer.take_drop();
+        let paths = self.document_view.gerber_viewer.take_drop();
         self.open_dropped_paths(window, paths)
     }
 

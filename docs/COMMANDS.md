@@ -84,6 +84,12 @@ a file. Without operands, in a window, they open the picker, arm the tool or
 act on the selection as before; rules in [CLI.md](CLI.md), "Placing parts
 and hierarchy".
 
+`change_component id=.. library=.. part=..` swaps a placed part for a row of
+an open library in one undo step, its pins mapped by number or by hand
+(`pins=1:2,3:-`), and answers with the pin table (old pin, new pin, net);
+without operands it opens the Change Component dialog on the selection.
+Rules in [CLI.md](CLI.md), "Changing a part's component".
+
 Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 
 ## General
@@ -98,8 +104,20 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `apply_layout_schematic` | Workspace layout: Schematic | window | — | — |
 | `attach_notebook_file` | Copy a file into the notebook as an attachment | design | — | — |
 | `autoplace_fields` | Autoplace fields | edit | — | `O` |
+| `block_add` | Add a block to a block diagram | edit | — | — |
+| `block_group` | Group blocks | edit | — | — |
+| `block_group_set` | Change a block group | edit | — | — |
+| `block_link` | Connect two blocks | edit | — | — |
+| `block_link_set` | Change a block connection | edit | — | — |
+| `block_port_add` | Add a port to a block | edit | — | — |
+| `block_port_remove` | Remove a port from a block | edit | — | — |
+| `block_remove` | Remove a block from a block diagram | edit | — | — |
+| `block_set` | Change a block of a block diagram | edit | — | — |
+| `block_ungroup` | Remove a block group | edit | — | — |
+| `block_unlink` | Remove a block connection | edit | — | — |
 | `board_status` | Board status counters | validation | — | — |
 | `bom_add_alternate` | Add an alternate part to a BOM line | design | — | — |
+| `bom_lines` | Read the bill of materials | file | — | — |
 | `bom_remove_alternate` | Remove an alternate part from a BOM line | design | — | — |
 | `bom_set_alternate_order` | Move an alternate part in a BOM line's order | design | — | — |
 | `break_wire` | Break wire | modify | `E W` | — |
@@ -114,6 +132,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `check_requirements` | Check project requirements | validation | — | — |
 | `close_active_document` | Close active document | file | `Ctrl+F4`, `Mod+W` (macOS) | — |
 | `close_all_documents` | Close all documents | window | — | — |
+| `compare_variants` | Compare two variants of the project | design | — | — |
 | `copy` | Copy | edit | `Mod+C` | `Mod+C` |
 | `copy_attributes_or_add_vertex` | Copy attributes from object under cursor or add vertex while drawing | interactive | `Insert`, `Alt+I` (macOS) | — |
 | `cross_probe` | Cross probe the selection to the board or schematic | select | `T C` | `Shift+C` |
@@ -137,6 +156,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `edit_selected_symbol_in_symbol_editor` | Edit selected symbol in Symbol Editor | library | — | `Mod+E` |
 | `edit_text_in_place` | In-place edit selected text | edit | `F2` | — |
 | `edit_value` | Edit value | edit | — | `V` |
+| `export_block_diagram` | Export a block diagram as an SVG or PDF file | reports | — | — |
 | `export_notebook_pdf` | Export the Design Notebook as PDF | file | — | — |
 | `export_notebook_timeline` | Export a measurement timeline as a CSV file | reports | — | — |
 | `fast_grid_1` | Fast grid 1 | view | — | `Alt+1` |
@@ -155,6 +175,8 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `keymap_clear` | Take a command's keys away in a custom keyboard profile | preferences | — | — |
 | `list_annotations` | List the annotation blocks of the project's Design Notebook | design | — | — |
 | `list_documents` | List documents | file | — | — |
+| `list_snippets` | List the snippets of the project and the library | file | — | — |
+| `list_templates` | List the sheet and project templates | file | — | — |
 | `manage_workspace_layouts` | Manage workspace layouts | window | — | — |
 | `mark_notebook_attachment_valid` | Mark a stale attachment or reading as still valid | design | — | — |
 | `measure_distance` | Measure distance | view | `Ctrl+M` | `Ctrl+M` |
@@ -162,6 +184,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `mirror_y` | Mirror along Y-axis | modify | `Y` | `Y` |
 | `move_object` | Move object | modify | `M M` | — |
 | `move_selection` | Move selection | modify | — | `M` |
+| `new_block_diagram` | New block diagram in the project | file | — | — |
 | `new_document` | New | file | `Mod+N` | `Mod+N` |
 | `new_project_with_profile` | New project from a profile | file | — | — |
 | `next_document_tab` | Next open document tab | window | `Ctrl+Tab` | — |
@@ -201,6 +224,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `print` | Print | file | `Mod+P` | `Mod+P` |
 | `project_add_requirement` | Add a requirement to the project | design | — | — |
 | `project_add_variant` | Add a variant to the project | design | — | — |
+| `project_duplicate_variant` | Duplicate a variant of the project | design | — | — |
 | `project_enable_requirement` | Turn a project requirement on or off | design | — | — |
 | `project_move_library` | Move a library in the library order of the project | design | — | — |
 | `project_move_sheet` | Move a sheet in the page order of the project | design | — | — |
@@ -209,14 +233,22 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `project_rename_variant` | Rename a variant of the project | design | — | — |
 | `project_run_requirements` | Run the project's requirement checks in the Project tab | validation | — | — |
 | `project_set_active_variant` | Choose the active variant of the project | design | — | — |
+| `project_set_annotate_numbering` | Set how Annotate numbers the designators of the project | design | — | — |
 | `project_set_annotate_undo` | Set how many undo steps an annotate run of the project is | design | — | — |
+| `project_set_default_variant` | Choose the default variant of the project | design | — | — |
 | `project_set_rail` | Set a power rail's voltage and tolerance | design | — | — |
 | `project_set_requirement` | Set a field of a project requirement | design | — | — |
+| `project_set_variant_alternate` | Set the alternate part a variant uses for a part of the project | design | — | — |
+| `project_set_variant_fit` | Set whether a variant fits a part of the project | design | — | — |
+| `project_set_variant_override` | Set a parameter value a variant gives a part of the project | design | — | — |
 | `project_set_version_control` | Turn commit on save on or off for the project | design | — | — |
 | `project_settings` | Read the settings of the project | design | — | — |
+| `query_block_diagram` | Query a block diagram | search | — | — |
 | `query_bom` | Query the priced BOM | design | — | — |
 | `query_library` | Query a library | library | — | — |
+| `query_net_ties` | Query net ties | file | — | — |
 | `query_pins` | Query pins | file | — | — |
+| `query_power_tree` | Query the project's power tree | design | — | — |
 | `query_rail_budget` | Query the project's rail budget | validation | — | — |
 | `read_document` | Read document | file | — | — |
 | `redo` | Redo | edit | `Mod+Shift+Z` (macOS), `Ctrl+Shift+Z`, `Ctrl+Y` | `Ctrl+Shift+Z`, `Mod+Shift+Z` (macOS), `Ctrl+Y` |
@@ -240,6 +272,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `select_all` | Select all | select | `Mod+A` | `Mod+A` |
 | `send_drawings_backward` | Send drawings backward | edit | — | — |
 | `send_drawings_to_back` | Send drawings to back | edit | — | — |
+| `set_dock_panel` | Open, close, collapse or expand a dock panel | panels | — | — |
 | `show_all_design_objects` | Show all design objects | view | — | — |
 | `show_current_command_hotkeys` | Show graphical editing hotkey list for current command | help | `F1` | — |
 | `show_current_command_shortcuts` | Show valid shortcuts for the current interactive command | help | `Shift+F1` | — |
@@ -251,6 +284,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `toggle_cross_select_mode` | Toggle Cross Select Mode | select | `Mod+Shift+X` | — |
 | `toggle_electrical_grid` | Toggle electrical grid | view | `Shift+E` | — |
 | `toggle_floating_panels` | Toggle floating panels | window | `F4` | — |
+| `toggle_live_erc` | Turn live electrical rules checking on or off | validation | — | — |
 | `toggle_properties_panel` | Toggle Properties panel | panels | `F11` | — |
 | `toggle_schematic_filter_panel` | Toggle schematic filter panel | panels | `F12` | — |
 | `toggle_schematic_list_panel` | Toggle Object List panel | panels | `Shift+F12` | — |
@@ -261,6 +295,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `undo_last_segment` | Undo last segment while drawing | interactive | — | `Backspace` |
 | `unselect_all` | Unselect all | select | — | `Mod+Shift+A` |
 | `untile_documents` | Untile documents | window | `W U` | `Shift+Alt+U` |
+| `variant_bom` | Read the BOM of a variant of the project | design | — | — |
 | `zoom_in_at_cursor` | Zoom in at cursor | view | `PageUp` | `F1` |
 | `zoom_out_at_cursor` | Zoom out at cursor | view | `PageDown` | `F2` |
 | `zoom_to_all_objects` | Zoom to all objects | view | — | `Ctrl+Home` |
@@ -323,12 +358,14 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `flip_selected_x` | Flip selected x | modify | — | — |
 | `flip_selected_y` | Flip selected y | modify | — | — |
 | `force_annotate_all_schematics` | Force annotate all schematics | design | `Shift+Alt+A` | `Shift+Alt+A` |
+| `generate_block_diagram` | Generate a block diagram from the sheet hierarchy | design | — | — |
 | `go_to_net_partner` | Go to net partner on another sheet | navigation | — | — |
 | `highlight_net_under_cursor` | Highlight net under cursor | select | — | ``` |
 | `highlight_related_net_objects` | Highlight/select related net objects across sheets | select | `Alt+Click` | — |
 | `import_parameters` | Import parameters from a CSV file, with a preview to apply | design | — | — |
 | `lasso_select` | Lasso select | select | — | — |
 | `leave_sheet` | Leave sheet / go to parent sheet | navigation | — | `Alt+Backspace` |
+| `list_diff_pairs` | List the differential pairs of a project's schematic | design | — | — |
 | `move_selection_xy` | Move selection x y | modify | — | — |
 | `move_to_front` | Move to front | modify | — | — |
 | `navigate_up_hierarchy` | Navigate up hierarchy | navigation | — | `Alt+Up` |
@@ -373,6 +410,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `place_sheet_entry` | Place sheet entry | place | — | — |
 | `place_sheet_symbol` | Place sheet symbol | place | `P S` | `S` |
 | `place_signal_harness` | Place signal harness | place | — | — |
+| `place_snippet` | Place a saved snippet | place | — | — |
 | `place_symbol` | Place symbol | place | — | `A` |
 | `place_table` | Place table | place | — | — |
 | `place_text` | Place text | place | — | `T` |
@@ -383,25 +421,31 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `previous_highlighted_net_item` | Previous item on highlighted net | select | — | `Shift+Tab` |
 | `previous_sheet` | Previous sheet | navigation | — | `PageUp` |
 | `query_footprint_assignments` | List the footprint of every part | design | — | — |
+| `regenerate_block_diagram` | Regenerate the block diagram from the sheet hierarchy | design | — | — |
 | `remove_from_union` | Remove the selection from its union | edit | — | — |
 | `repair_pin_junctions` | Add a junction where a pin end touches a wire | validation | — | — |
 | `reset_schematic_designators` | Reset schematic designators | design | `T A E` | — |
 | `rotate_selection` | Rotate selection counter-clockwise | modify | — | — |
 | `rotate_selection_cw` | Rotate selection clockwise | modify | — | — |
 | `run_erc` | Run electrical rules check | validation | `F8` | `F8` |
+| `save_snippet` | Save the selected circuit as a snippet | design | — | — |
 | `select_connection` | Select connection | select | — | — |
 | `select_expand_connection` | Select / expand connection | select | — | `Mod+4` |
 | `select_node_or_connection_item` | Select node / connection item under cursor | select | — | `Alt+3` |
 | `send_to_back` | Send to back | modify | — | — |
 | `send_to_back_of` | Send to back of | modify | — | — |
+| `set_net_tie` | Mark a placed part as a net tie | edit | — | — |
 | `set_object_position` | Set the position of a placed object | edit | — | — |
 | `set_object_rotation` | Set the rotation of a placed part or label | edit | — | — |
+| `set_object_text` | Set a part's designator or value, a label's name or a text note's text | edit | — | — |
 | `set_selection_filters` | Set the schematic selection filter | select | — | — |
 | `set_sheet_symbol_size` | Set the size of a sheet symbol | edit | — | — |
 | `set_sheet_variable` | Set a sheet variable | edit | — | — |
 | `set_symbol_parameter` | Set a parameter of a placed part | edit | — | — |
 | `sheet_navigation_back` | Sheet navigation back | navigation | — | `Alt+Left` |
 | `sheet_navigation_forward` | Sheet navigation forward | navigation | — | `Alt+Right` |
+| `swap_schematic_gates` | Swap two equivalent gates of a part on its schematic; Update PCB carries the swap to the board | modify | — | — |
+| `swap_schematic_pins` | Swap the nets of two equivalent pins of a part on its schematic; Update PCB carries the swap to the board | modify | — | — |
 | `sync_sheet_entries` | Synchronize the selected sheet symbol's entries and its sheet's ports, with a preview | design | — | — |
 | `sync_sheet_pins` | Sync the selected sheet symbol's pins with its child sheet | design | — | — |
 | `toggle_notebook_badges` | Show or hide the Notebook badges on the schematic | view | `B` | — |

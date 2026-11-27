@@ -48,7 +48,7 @@ impl Signex {
     /// line, and Cancel / Move. Enter in either field moves.
     pub(super) fn view_move_selection_body(&self) -> Element<'_, Message> {
         use iced::widget::{Widget, column, container, row};
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let i18n = &self.ui_state.i18n;
         let ms = &self.ui_state.move_selection;
         let unit = self.ui_state.unit;
@@ -105,7 +105,7 @@ impl Signex {
 
     /// The framed preview of the move, on the sheet grid (mockup row 66).
     fn move_selection_preview(&self, dx_mm: f64, dy_mm: f64) -> Element<'_, Message> {
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let i18n = &self.ui_state.i18n;
         let fmt = LengthFormat::new(i18n, self.ui_state.unit);
         let grid_mm = crate::canvas::grid::pitch_mm_exact(self.ui_state.grid_size_mm);
@@ -183,7 +183,7 @@ fn offset_field<'a>(
 ) -> Element<'a, Message> {
     use iced::widget::{Widget, column, container, stack};
     use signex_widgets::{text, text_input};
-    let tokens = &app.document_state.panel_ctx.tokens;
+    let tokens = &app.document_view.panel_ctx.tokens;
     let muted = crate::styles::ti(tokens.text_secondary);
     let ink3 = crate::styles::tokens::resolve(tokens).ink3;
     let suffix = UserText::new(unit.to_string());

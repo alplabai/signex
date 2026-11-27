@@ -1,6 +1,7 @@
 # ast-grep rule for scripts/check_projector_writes.sh, run on app/projector
 # only: a write to the engine map, the active path, the whole document state
-# or any field reached through it but `panel_ctx`. The script adds the names
+# or any field reached through it, and a write to the GUI view state
+# (`document_view`) or any field of it but `panel_ctx`. The script adds the names
 # of the marks and wrappers, part of them read from
 # scripts/sheet-change-wrappers.txt. Code nodes only, so a comment never
 # matches. Kept out of ast-grep/rules on purpose, like
@@ -48,8 +49,8 @@ rule:
         field: left
         kind: field_expression
         has: {field: field, regex: '^(engines|active_path|document_state)$'}
-    # Any other field reached through `document_state`, except the GUI's own
-    # `panel_ctx`: a method that is not a read ...
+    # Any other field reached through `document_state`: a method that is not
+    # a read ...
     - kind: call_expression
       has:
         field: function
@@ -60,14 +61,45 @@ rule:
               kind: field_expression
               all:
                 - not:
-                    has: {field: field, regex: '^(document_state|panel_ctx|engines|active_path)$'}
+                    has: {field: field, regex: '^(document_state|engines|active_path)$'}
                 - has: {stopBy: end, kind: field_identifier, regex: '^document_state$'}
-                - not:
-                    has: {stopBy: end, kind: field_identifier, regex: '^panel_ctx$'}
           - not:
               has:
                 field: field
-                regex: '^(get|contains_key|keys|values|iter|len|is_empty|clone|as_deref|as_ref|is_some|is_none|copied|cloned|first|last)$'
+                regex: &reads '^(get|contains_key|keys|values|iter|len|is_empty|clone|as_deref|as_ref|is_some|is_none|copied|cloned|first|last)$'
+    # ... a `&mut` of it ...
+    - kind: reference_expression
+      all:
+        - has: {kind: mutable_specifier}
+        - has:
+            field: value
+            has: {stopBy: end, kind: field_identifier, regex: '^document_state$'}
+    # ... or an assignment to it, plain or compound.
+    - any:
+        - kind: assignment_expression
+        - kind: compound_assignment_expr
+      has:
+        field: left
+        has: {stopBy: end, kind: field_identifier, regex: '^document_state$'}
+    # The GUI state moved out of `document_state` (`document_view`, #2326
+    # slice 4a): the same three writes to it or any field of it except the
+    # GUI's own projection `panel_ctx`. A method that is not a read ...
+    - kind: call_expression
+      has:
+        field: function
+        kind: field_expression
+        all:
+          - has:
+              field: value
+              kind: field_expression
+              all:
+                - not:
+                    has: {field: field, regex: '^(document_view|panel_ctx)$'}
+                - has: {stopBy: end, kind: field_identifier, regex: '^document_view$'}
+                - not:
+                    has: {stopBy: end, kind: field_identifier, regex: '^panel_ctx$'}
+          - not:
+              has: {field: field, regex: *reads}
     # ... a `&mut` of it ...
     - kind: reference_expression
       all:
@@ -75,7 +107,7 @@ rule:
         - has:
             field: value
             all:
-              - has: {stopBy: end, kind: field_identifier, regex: '^document_state$'}
+              - has: {stopBy: end, kind: field_identifier, regex: '^document_view$'}
               - not:
                   has: {stopBy: end, kind: field_identifier, regex: '^panel_ctx$'}
     # ... or an assignment to it, plain or compound.
@@ -85,7 +117,7 @@ rule:
       has:
         field: left
         all:
-          - has: {stopBy: end, kind: field_identifier, regex: '^document_state$'}
+          - has: {stopBy: end, kind: field_identifier, regex: '^document_view$'}
           - not:
               has: {stopBy: end, kind: field_identifier, regex: '^panel_ctx$'}
   not:

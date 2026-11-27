@@ -58,7 +58,7 @@ fn a_command_with_no_project_in_view_refuses_with_a_notice() {
     let _ = app.update(Message::from(CompareBoardMsg::Requested));
     assert!(app.ui_state.compare_board.is_none(), "no dialog");
     assert!(
-        app.document_state.error_notice.is_some(),
+        app.document_view.error_notice.is_some(),
         "the notice card says why"
     );
 }

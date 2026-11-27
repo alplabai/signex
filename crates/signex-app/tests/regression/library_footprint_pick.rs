@@ -272,7 +272,7 @@ fn a_multi_selection_picks_a_footprint_its_rows_share() {
     assert_eq!(doc(&app).symbols.len(), 2);
     let before = doc(&app).symbols[0].footprint.clone();
     crate::field_edit_support::select_everything(&mut app);
-    let choices = &app.document_state.panel_ctx.multi_footprint_choices;
+    let choices = &app.document_view.panel_ctx.multi_footprint_choices;
     assert_eq!(choices.len(), 7, "{choices:?}");
     assert!(choices.iter().any(|c| c.binding == binding_key(&alt)));
 
@@ -321,7 +321,7 @@ fn the_properties_picker_lists_the_row_footprints_with_the_current_one_selected(
     let id = select_first(&mut app);
     check_drift(&mut app);
 
-    let items = &app.document_state.panel_ctx.footprint_choices;
+    let items = &app.document_view.panel_ctx.footprint_choices;
     assert_eq!(items.len(), 7);
     assert_eq!(items.iter().filter(|i| i.selected).count(), 1);
     assert!(items[0].selected, "the default is selected");
@@ -329,7 +329,7 @@ fn the_properties_picker_lists_the_row_footprints_with_the_current_one_selected(
     switch(&mut app, id, &alt);
     check_drift(&mut app);
     let selected: Vec<&str> = app
-        .document_state
+        .document_view
         .panel_ctx
         .footprint_choices
         .iter()

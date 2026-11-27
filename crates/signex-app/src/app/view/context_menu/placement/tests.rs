@@ -147,7 +147,7 @@ fn a_menu_opens_at_the_cursor_and_clamps_only_at_its_own_windows_edge() {
 /// The app as the maintainer ran it: Graphite, a tall window.
 fn graphite_app() -> (Signex, iced::window::Id) {
     let (mut app, _boot) = Signex::new();
-    app.document_state.panel_ctx.tokens = theme_tokens(ThemeId::GraphiteLight);
+    app.document_view.panel_ctx.tokens = theme_tokens(ThemeId::GraphiteLight);
     let main = app
         .ui_state
         .main_window_id
@@ -160,6 +160,7 @@ fn open_canvas_menu(app: &mut Signex, at: (f32, f32)) {
         x: at.0,
         y: at.1,
         world: None,
+        hit_object: false,
         window: None,
     });
 }

@@ -24,7 +24,7 @@ fn new_project_creates_a_gitignore_that_is_exactly_the_managed_block() {
         Message::File(FileMsg::NewProject(Some(tmp.path().join("Fresh.snxprj")))),
     );
 
-    assert!(app.document_state.error_notice.is_none());
+    assert!(app.document_view.error_notice.is_none());
     assert_eq!(
         std::fs::read_to_string(tmp.path().join("Fresh").join(".gitignore")).unwrap(),
         block()
@@ -44,7 +44,7 @@ fn a_folder_that_already_has_a_gitignore_is_refused_and_left_as_it_was() {
         Message::File(FileMsg::NewProject(Some(tmp.path().join("Fresh.snxprj")))),
     );
 
-    assert!(app.document_state.error_notice.is_some());
+    assert!(app.document_view.error_notice.is_some());
     assert_eq!(
         std::fs::read_to_string(folder.join(".gitignore")).unwrap(),
         "mine\n"

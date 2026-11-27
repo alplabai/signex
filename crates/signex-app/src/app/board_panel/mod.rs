@@ -71,7 +71,7 @@ impl Signex {
     /// A new panel opens the Panel section of Properties and scrolls it into
     /// view: it sits under Grid Manager and Guide Manager (mockup row 93).
     fn reveal_panel_section(&mut self) -> Task<Message> {
-        self.document_state
+        self.document_view
             .panel_ctx
             .collapsed_sections
             .insert(pcb_board_properties::panel_section_open_key());
