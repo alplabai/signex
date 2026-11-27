@@ -6,10 +6,16 @@
 //! `snxout/1`; keys this build does not know are kept. See
 //! `docs/OUTPUT_JOBS.md`.
 
+mod gerber;
 mod history;
 mod kind;
 mod profile;
 
+pub use gerber::{
+    GERBER_ALL_COPPER, GERBER_DECIMAL_DIGITS, GERBER_INTEGER_DIGITS, GerberApertures, GerberFormat,
+    GerberSettings, GerberUnits, GerberZeros, gerber_layers_text, is_gerber_layer_id,
+    parse_gerber_layers,
+};
 pub use history::{
     MAX_HISTORY, MAX_RECORD_WARNINGS, RunRecord, RunResult, RunTrigger, append_run_record,
 };
@@ -94,6 +100,20 @@ pub struct JobOutput {
     /// An ODB++ output's job as its folder tree rather than one archive.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub odb_folder: Option<bool>,
+    /// A Gerber output's settings (`gerber.rs`); each one left out is its
+    /// default, the writer's own, so a job written before them reads back
+    /// and writes the same files.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gerber_units: Option<GerberUnits>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gerber_format: Option<GerberFormat>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gerber_zeros: Option<GerberZeros>,
+    /// The layer ids written; every layer when absent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gerber_layers: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gerber_apertures: Option<GerberApertures>,
     #[serde(default, flatten, skip_serializing_if = "UnknownFields::is_empty")]
     pub unknown: UnknownFields,
 }
@@ -108,6 +128,11 @@ impl JobOutput {
             file: None,
             dpi: None,
             odb_folder: None,
+            gerber_units: None,
+            gerber_format: None,
+            gerber_zeros: None,
+            gerber_layers: None,
+            gerber_apertures: None,
             unknown: UnknownFields::default(),
         }
     }
@@ -115,6 +140,18 @@ impl JobOutput {
     /// The output's kind, when this build writes it.
     pub fn known_kind(&self) -> Option<OutputKind> {
         OutputKind::from_id(&self.kind)
+    }
+
+    /// The Gerber settings the output is written with, a default for each
+    /// one left out.
+    pub fn gerber_settings(&self) -> GerberSettings {
+        GerberSettings {
+            units: self.gerber_units.unwrap_or_default(),
+            format: self.gerber_format.unwrap_or_default(),
+            zeros: self.gerber_zeros.unwrap_or_default(),
+            layers: self.gerber_layers.clone(),
+            apertures: self.gerber_apertures.unwrap_or_default(),
+        }
     }
 }
 
@@ -169,6 +206,8 @@ pub enum OutputJobFault {
     BadFile { name: String, file: String },
     #[error("output {name:?}: {dpi} dpi is outside 36 to 1200")]
     BadDpi { name: String, dpi: u32 },
+    #[error("output {name:?}: {layers:?} is not a list of Gerber layer ids")]
+    BadGerberLayers { name: String, layers: String },
     #[error("a profile needs a name")]
     NoProfileName,
     #[error("two profiles are named {0:?}")]
@@ -230,6 +269,9 @@ pub struct PlannedOutput {
     /// An ODB++ output's job as its folder tree.
     #[serde(skip)]
     pub odb_folder: bool,
+    /// A Gerber output's settings, the writer's own by default.
+    #[serde(skip)]
+    pub gerber: GerberSettings,
 }
 
 /// What a run writes, and the outputs it leaves out.
@@ -301,6 +343,14 @@ impl OutputJob {
                 return Some(OutputJobFault::BadDpi {
                     name: name.to_string(),
                     dpi,
+                });
+            }
+            if let Some(layers) = &output.gerber_layers
+                && (layers.is_empty() || !layers.iter().all(|id| is_gerber_layer_id(id)))
+            {
+                return Some(OutputJobFault::BadGerberLayers {
+                    name: name.to_string(),
+                    layers: layers.join(","),
                 });
             }
         }
@@ -402,6 +452,7 @@ impl OutputJob {
                 file,
                 dpi: output.dpi.unwrap_or(DEFAULT_PNG_DPI),
                 odb_folder: output.odb_folder.unwrap_or(false),
+                gerber: output.gerber_settings(),
             });
         }
         match only {

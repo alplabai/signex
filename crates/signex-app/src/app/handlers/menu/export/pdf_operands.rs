@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
 
 use iced::Task;
 use serde_json::{Value, json};
+use signex_i18n::{Translatable, ids};
 use signex_output::{ExportContext, PageSize, PdfLayer, PdfOptions, Watermark, WatermarkPages};
 use signex_types::schematic::{SheetOrientation, SheetSize};
 
@@ -24,8 +25,8 @@ use crate::app::{Message, Signex};
 
 type Ran = (CommandOutcome, Task<Message>);
 
-fn refused(reason: impl Into<String>) -> Ran {
-    (CommandOutcome::disabled(reason), Task::none())
+fn refused(reason: Translatable) -> Ran {
+    (CommandOutcome::Disabled { reason }, Task::none())
 }
 
 fn text_operand<'a>(args: &'a CommandArgs, name: &str) -> Option<&'a str> {
@@ -58,10 +59,12 @@ fn watermark_of(
     args: &CommandArgs,
     revision: String,
     date: String,
-) -> Result<Option<Watermark>, String> {
+) -> Result<Option<Watermark>, Translatable> {
     let Some(text) = text_operand(args, "watermark") else {
         if let Some(name) = WATERMARK_STYLE.iter().find(|n| args.operand(n).is_some()) {
-            return Err(format!("`{name}` needs `watermark`"));
+            return Err(
+                Translatable::new(ids::PDF_PREVIEW_COMMAND_NEEDS_WATERMARK).arg("name", *name)
+            );
         }
         return Ok(None);
     };
@@ -72,7 +75,7 @@ fn watermark_of(
         ..WatermarkDraft::default()
     };
     match text.trim().to_ascii_lowercase().as_str() {
-        "" => return Err("`watermark` is draft, confidential or the text to print".into()),
+        "" => return Err(Translatable::new(ids::PDF_PREVIEW_COMMAND_WATERMARK_TEXT)),
         "draft" => draft.pick_preset(WatermarkPreset::Draft),
         "confidential" => draft.pick_preset(WatermarkPreset::Confidential),
         _ => draft.set_text(text.to_owned()),
@@ -82,17 +85,17 @@ fn watermark_of(
     }
     if let Some(opacity) = text_operand(args, "watermark_opacity") {
         if parse_watermark_opacity(opacity).is_none() {
-            return Err(format!(
-                "`watermark_opacity` is a whole percent from 0 to 100, not `{opacity}`"
-            ));
+            return Err(
+                Translatable::new(ids::PDF_PREVIEW_COMMAND_WATERMARK_OPACITY).arg("value", opacity),
+            );
         }
         draft.set_opacity(opacity.to_owned());
     }
     if let Some(angle) = text_operand(args, "watermark_angle") {
         if parse_watermark_angle(angle).is_none() {
-            return Err(format!(
-                "`watermark_angle` is degrees from -360 to 360, not `{angle}`"
-            ));
+            return Err(
+                Translatable::new(ids::PDF_PREVIEW_COMMAND_WATERMARK_ANGLE).arg("value", angle)
+            );
         }
         draft.set_angle(angle.to_owned());
     }
@@ -100,7 +103,11 @@ fn watermark_of(
         draft.settings.pages = match pages.trim() {
             "all" => WatermarkPages::All,
             "first" => WatermarkPages::FirstOnly,
-            other => return Err(format!("`watermark_pages` is all or first, not `{other}`")),
+            other => {
+                return Err(
+                    Translatable::new(ids::PDF_PREVIEW_COMMAND_WATERMARK_PAGES).arg("value", other)
+                );
+            }
         };
     }
     draft.with_revision = flag_operand(args, "watermark_revision").unwrap_or(false);
@@ -129,23 +136,24 @@ fn watermark_answer(watermark: Option<&Watermark>) -> Value {
 impl Signex {
     /// The open sheet `document` names. Refused with the reason when it names
     /// none, names another kind, or the sheet is not open.
-    fn named_export_sheet(&self, args: &CommandArgs) -> Result<PathBuf, String> {
+    fn named_export_sheet(&self, args: &CommandArgs) -> Result<PathBuf, Translatable> {
         let Some(OperandValue::Document(named)) = args.operand("document") else {
-            return Err("needs the operand `document`".to_string());
+            return Err(Translatable::new(ids::PDF_PREVIEW_COMMAND_NEEDS_DOCUMENT));
         };
-        let entry = self.resolve_document_target(named)?;
+        let entry = self.resolve_document_target(named).map_err(|reason| {
+            Translatable::new(ids::PDF_PREVIEW_COMMAND_DOCUMENT).arg("reason", reason)
+        })?;
         if entry.kind != DocumentKind::Schematic {
-            return Err(format!(
-                "{} is a {}, not a schematic sheet",
-                entry.name,
-                entry.kind.as_str()
-            ));
+            return Err(Translatable::new(ids::PDF_PREVIEW_COMMAND_NOT_A_SHEET)
+                .arg("name", entry.name.as_str())
+                .arg("kind", entry.kind.as_str()));
         }
-        let path = entry
-            .path
-            .ok_or_else(|| format!("{} has no file", entry.name))?;
+        let path = entry.path.ok_or_else(|| {
+            Translatable::new(ids::PDF_PREVIEW_COMMAND_NO_FILE).arg("name", entry.name.as_str())
+        })?;
         if !self.document_state.engines.contains_key(&path) {
-            return Err(format!("{} is not open: open the sheet first", entry.name));
+            return Err(Translatable::new(ids::PDF_PREVIEW_COMMAND_NOT_OPEN)
+                .arg("name", entry.name.as_str()));
         }
         Ok(path)
     }
@@ -191,7 +199,7 @@ fn set_page_operands(
     source: &Path,
     ctx: &ExportContext,
     options: &mut PdfOptions,
-) -> Result<Value, String> {
+) -> Result<Value, Translatable> {
     options.variant = Some(app.printed_variant(source, text_operand(args, "variant"))?);
     if let Some(pages) = text_operand(args, "pages") {
         options.page_range = page_range_operand(pages)?;
@@ -204,7 +212,10 @@ fn set_page_operands(
         &ctx.sheets,
         ctx.current_sheet_index(),
     )
-    .map_err(|error| error.to_string())?;
+    .map_err(|error| {
+        Translatable::new(ids::PDF_PREVIEW_COMMAND_PAGES_NOT_PRINTED)
+            .arg("reason", error.to_string())
+    })?;
     Ok(json!(pages))
 }
 
@@ -218,18 +229,18 @@ pub(crate) fn export_schematic_pdf(app: &mut Signex, args: &CommandArgs) -> Ran 
         Err(reason) => return refused(reason),
     };
     let Some(OperandValue::Path(path)) = args.operand("path") else {
-        return refused("needs the operand `path`");
+        return refused(Translatable::new(ids::PDF_PREVIEW_COMMAND_NEEDS_PATH));
     };
     let path = PathBuf::from(path);
     let Some((ctx, issues)) = super::build_export_scope_for_source(&app.document_state, &source)
     else {
-        return refused("the sheet is not open");
+        return refused(Translatable::new(ids::PDF_PREVIEW_COMMAND_SHEET_CLOSED));
     };
     if issues.channel_naming_unreadable {
-        return refused("the project's channel naming cannot be read: fix it in Project Options");
+        return refused(Translatable::new(ids::PDF_PREVIEW_COMMAND_CHANNEL_NAMING));
     }
     if ctx.sheets.is_empty() {
-        return refused("the document prints no sheet");
+        return refused(Translatable::new(ids::PDF_PREVIEW_COMMAND_NO_SHEET));
     }
     let revision = ctx.metadata.revision.clone();
     let watermark = match watermark_of(args, revision, super::print_preview::export_date()) {

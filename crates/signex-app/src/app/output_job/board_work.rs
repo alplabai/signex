@@ -130,6 +130,7 @@ impl Signex {
             },
             folder: PathBuf::new(),
             designator_standard: self.document_state.designator_standard_for(&path),
+            gerber: output.gerber.clone(),
         };
         Ok(JobWork::Board {
             output: output.name.clone(),

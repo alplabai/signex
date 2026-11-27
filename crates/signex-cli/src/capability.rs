@@ -114,6 +114,11 @@ const SAVES: &[&str] = &[
     "set_job_output",
     "set_job_profile",
     "set_job_triggers",
+    "set_job_gerber_units",
+    "set_job_gerber_format",
+    "set_job_gerber_zeros",
+    "set_job_gerber_layers",
+    "set_job_gerber_apertures",
     // Writes the design checklist as a template into the user's config
     // folder (#1291, mockup row 206).
     "project_save_checklist_template",
@@ -383,6 +388,11 @@ mod tests {
             (Capability::Save, "set_job_output"),
             (Capability::Save, "set_job_profile"),
             (Capability::Save, "set_job_triggers"),
+            (Capability::Save, "set_job_gerber_units"),
+            (Capability::Save, "set_job_gerber_format"),
+            (Capability::Save, "set_job_gerber_zeros"),
+            (Capability::Save, "set_job_gerber_layers"),
+            (Capability::Save, "set_job_gerber_apertures"),
             (Capability::Export, "project_export_checklist_csv"),
             (Capability::Export, "export_block_diagram"),
             (Capability::Export, "export_notebook_timeline"),

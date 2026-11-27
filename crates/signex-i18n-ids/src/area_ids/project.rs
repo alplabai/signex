@@ -427,4 +427,9 @@ define_ids! {
     SNIPPET_SAVED = "snippet-saved";
     SNIPPET_NOT_WRITTEN = "snippet-not-written";
     SNIPPET_REFUSED = "snippet-refused";
+    PROJECT_CROSS_REFS_DOCUMENT = "project-cross-refs-document";
+    PROJECT_CROSS_REFS_NOT_OPEN = "project-cross-refs-not-open";
+    PROJECT_CROSS_REFS_NOT_A_SHEET = "project-cross-refs-not-a-sheet";
+    PROJECT_CROSS_REFS_NO_INDEX = "project-cross-refs-no-index";
+    PROJECT_CROSS_REFS_INDEX_FAILED = "project-cross-refs-index-failed";
 }

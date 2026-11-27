@@ -66,12 +66,12 @@ the golden is read, so an export that depends on a hash order fails as
 such. Regenerate with `UPDATE_GOLDEN=1 cargo test -p signex-app
 variant_pdf`; a diff is a behaviour change of the PDF.
 
-What differs between the variants today is the variant name: the
-`${VARIANT}` text and the " [Full]" or " [Lite]" sheet bookmark tag. The
-not-fitted drawing styles and a variant's changed values are not drawn on
-the PDF yet (the not-fitted parts layer is its own issue, see the
-2026-11-19 Export PDF row in docs/DECISIONS.md); when they are, the goldens
-change with them.
+What differs between the variants: the variant name (the `${VARIANT}` text
+and the " [Full]" or " [Lite]" sheet bookmark tag), a variant's changed
+values, and the parts a variant leaves out, drawn greyed and crossed out
+(#1294) and, in a layered PDF, in the Not-fitted parts group (#2610). The
+goldens are written with the "Cross out not-fitted parts" preference on, its
+default.
 
 A part that is not fitted in the printed variant (or marked DNP) prints
 greyed with a cross over its body while `draw_not_fitted` is on: the user's
@@ -154,8 +154,11 @@ With `layers: Some(PdfLayerVisibility)` the export writes optional content:
 | `NotFittedParts` | Not-fitted parts | Parts not fitted in the printed variant or marked DNP: their bodies, pins, body fills and text (#2610) |
 | `Watermark` | Watermark | The watermark |
 
-A part goes in Not-fitted parts when `variant_fit::is_fitted` says it is not
-fitted in `PdfOptions::variant` (Base for `None`), read from its own sheet.
+A part goes in Not-fitted parts when it is not fitted in
+`PdfOptions::variant` (Base for `None`), by the rule the not-fitted look
+reads (`svg::not_fitted::not_fitted_on_page`, the project's placed fits when
+the caller gives them); the group follows the variant whatever
+`draw_not_fitted` says.
 Power ports never do. The group is written whenever layers are, like the
 other drawing groups, and it is visible on open unless the dialog's
 "Not-fitted parts (variant)" row is unticked; switched off in the reader it
@@ -196,7 +199,8 @@ away from Specific and back keeps the list in the box and prints it.
 starting from the options the dialog opens with (the sheet's paper, the
 theme's colours, the project's active variant). `pages` is `all`, `current`
 or the Pages list; `layers` is `all` or the ids of the groups visible on open
-(`wires`, `parts`, `net_labels`, `power_ports`, `title_block`, `not_fitted`,
+(`wires`, `harnesses`, `parts`, `net_labels`, `power_ports`, `title_block`,
+`not_fitted`,
 `watermark`) and writes a flat PDF when left out; `variant` is Base or a
 variant the project defines. The watermark and link operands are under
 "Links" and in `docs/DECISIONS.md`. The answer names the sheet count, the

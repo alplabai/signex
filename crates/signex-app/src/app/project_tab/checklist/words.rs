@@ -1,7 +1,7 @@
 //! The catalog words of the Design Checklist tab: templates, stages, states,
 //! links, results, notices and the reason an edit was refused.
 
-use signex_i18n::{I18n, Localized, MessageId, ids, t};
+use signex_i18n::{I18n, Localized, MessageId, Translatable, ids, t};
 use signex_types::project::{
     ChecklistLink, ChecklistProblem, ChecklistStage, ChecklistTemplate, ItemState, LinkResult,
     ObjectTarget,
@@ -171,4 +171,50 @@ pub(super) fn problem_words(problem: &ChecklistProblem, i18n: &I18n) -> Localize
             t!(i18n, ids::CHECKLIST_PROBLEM_NOT_STORED, "reason" => reason.as_str())
         }
     }
+}
+
+/// Why a checklist command was refused, as an agent or the CLI reads it:
+/// the problem in the command's words (backquoted values, the choices).
+pub(super) fn problem_refusal(problem: &ChecklistProblem) -> Translatable {
+    use ChecklistProblem as P;
+    match problem {
+        P::Unreadable => Translatable::new(ids::CHECKLIST_REFUSAL_UNREADABLE),
+        P::AlreadyStarted => Translatable::new(ids::CHECKLIST_REFUSAL_ALREADY_STARTED),
+        P::NotStarted => Translatable::new(ids::CHECKLIST_REFUSAL_NOT_STARTED),
+        P::NoTemplate => Translatable::new(ids::CHECKLIST_REFUSAL_NO_TEMPLATE),
+        P::UnknownTemplate(text) => {
+            Translatable::new(ids::CHECKLIST_REFUSAL_UNKNOWN_TEMPLATE).arg("text", text.as_str())
+        }
+        P::UnknownSavedTemplate(name) => {
+            Translatable::new(ids::CHECKLIST_REFUSAL_UNKNOWN_SAVED_TEMPLATE)
+                .arg("name", name.as_str())
+        }
+        P::EmptyName => Translatable::new(ids::CHECKLIST_REFUSAL_EMPTY_NAME),
+        P::UnknownItem(id) => {
+            Translatable::new(ids::CHECKLIST_REFUSAL_UNKNOWN_ITEM).arg("id", id.as_str())
+        }
+        P::UnknownStage(text) => {
+            Translatable::new(ids::CHECKLIST_REFUSAL_UNKNOWN_STAGE).arg("text", text.as_str())
+        }
+        P::UnknownState(text) => {
+            Translatable::new(ids::CHECKLIST_REFUSAL_UNKNOWN_STATE).arg("text", text.as_str())
+        }
+        P::UnknownField(text) => {
+            Translatable::new(ids::CHECKLIST_REFUSAL_UNKNOWN_FIELD).arg("text", text.as_str())
+        }
+        P::UnknownLink(text) => {
+            Translatable::new(ids::CHECKLIST_REFUSAL_UNKNOWN_LINK).arg("text", text.as_str())
+        }
+        P::EmptyTitle => Translatable::new(ids::CHECKLIST_REFUSAL_EMPTY_TITLE),
+        P::NeedsReason => Translatable::new(ids::CHECKLIST_REFUSAL_NEEDS_REASON),
+        P::NotStored(reason) => {
+            Translatable::new(ids::CHECKLIST_REFUSAL_NOT_STORED).arg("reason", reason.as_str())
+        }
+    }
+}
+
+/// A refusal another part of the app worded, about the project the command
+/// names (`rules_project_named`).
+pub(super) fn project_refusal(reason: String) -> Translatable {
+    Translatable::new(ids::CHECKLIST_REFUSAL_PROJECT).arg("reason", reason)
 }

@@ -13,7 +13,10 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use iced::Task;
-use signex_types::output_job::{BeforeClose, OnErrors, OnWarnings, OutputKind};
+use signex_types::output_job::{
+    BeforeClose, GerberApertures, GerberFormat, GerberUnits, GerberZeros, OnErrors, OnWarnings,
+    OutputKind,
+};
 
 use super::auto::AutoRuns;
 use super::document::SaveSlots;
@@ -87,6 +90,18 @@ pub enum TriggerEdit {
     TagEdited(String),
 }
 
+/// An edit of a Gerber output's settings (#1299, mockup row 114, the
+/// Gerber output's form): one per setting.
+#[derive(Debug, Clone, PartialEq)]
+pub enum GerberEdit {
+    UnitsPicked(GerberUnits),
+    FormatPicked(GerberFormat),
+    ZerosPicked(GerberZeros),
+    /// A layer id ticked or unticked in the list; `None` is "Every layer".
+    LayerToggled(Option<String>),
+    AperturesPicked(GerberApertures),
+}
+
 /// A switch of the shown profile's container (mockup row 114, "Output
 /// container").
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -138,6 +153,11 @@ pub enum JobTabMsg {
         job: PathBuf,
         name: String,
         text: String,
+    },
+    GerberEdited {
+        job: PathBuf,
+        name: String,
+        edit: GerberEdit,
     },
     OdbFolderToggled {
         job: PathBuf,
@@ -326,6 +346,7 @@ impl Signex {
             | M::OutputFileEdited { .. }
             | M::OutputDpiEdited { .. }
             | M::OdbFolderToggled { .. }
+            | M::GerberEdited { .. }
             | M::ProfileNamingConfirmed { .. }
             | M::ProfileDuplicated { .. }
             | M::ProfileDeleted { .. }

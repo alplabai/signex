@@ -731,6 +731,11 @@ define_ids! {
         CMD_SET_JOB_TRIGGERS = "cmd-set-job-triggers";
         CMD_STOP_OUTPUT_JOB = "cmd-stop-output-job";
         CMD_VIEW_OUTPUT_JOB_RUN = "cmd-view-output-job-run";
+        CMD_SET_JOB_GERBER_UNITS = "cmd-set-job-gerber-units";
+        CMD_SET_JOB_GERBER_FORMAT = "cmd-set-job-gerber-format";
+        CMD_SET_JOB_GERBER_ZEROS = "cmd-set-job-gerber-zeros";
+        CMD_SET_JOB_GERBER_LAYERS = "cmd-set-job-gerber-layers";
+        CMD_SET_JOB_GERBER_APERTURES = "cmd-set-job-gerber-apertures";
         CMD_EXPORT_BLOCK_DIAGRAM = "cmd-export-block-diagram";
         CMD_SELECT_BOARD_NET = "cmd-select-board-net";
         CMD_MENU_SELECT_BOARD_NET = "cmd-menu-select-board-net";

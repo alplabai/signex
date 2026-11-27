@@ -45,6 +45,9 @@ pub(crate) struct GenerateJob {
     /// The standard `board`'s designators are shown under (#1416): the
     /// test netlist writes them stored.
     pub designator_standard: Option<signex_types::designator::DesignatorStandard>,
+    /// How the Gerber images are written: an Export Job's Gerber output's
+    /// settings (#1299), the writer's own from the dialog.
+    pub gerber: signex_types::output_job::GerberSettings,
 }
 
 /// One written file as the `fabrication_outputs` answer lists it (#2470):
@@ -115,6 +118,7 @@ pub(crate) fn make_generate(job: GenerateJob) -> Result<Made, FabProblem> {
     let notes = if job.kinds.has_fab_files() {
         let options = FabOptions {
             designator_standard: job.designator_standard,
+            gerber_settings: job.gerber.clone(),
             ..fab_options(&job.kinds, &name)
         };
         fab_files(&board, &options, &mut made)?

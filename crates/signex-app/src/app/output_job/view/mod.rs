@@ -8,6 +8,7 @@
 mod automation;
 mod flow;
 mod form;
+mod gerber_form;
 mod kit;
 mod outputs;
 mod side;

@@ -12,12 +12,14 @@ use std::path::PathBuf;
 use iced::Task;
 use serde_json::{Value, json};
 use signex_engine::ProjectChecklistCommand;
+use signex_i18n::{Translatable, ids};
 use signex_types::project::{
     CHECKLIST_TEMPLATES, ChecklistProblem, ChecklistStage, ChecklistTemplate, SavedTemplate,
     TEMPLATE_LIBRARY_FILE, TemplateLibrary, TemplateRef,
 };
 
-use super::commands::{Ran, edit, edit_in_tab, refused, required};
+use super::commands::{Ran, edit, edit_in_tab, named_project, refused, required};
+use super::words::problem_refusal;
 use super::{ChecklistMsg, ChecklistNotice, SavedTemplates, message};
 use crate::app::agent::WaitingCommand;
 use crate::app::command::{CommandArgs, CommandOutcome};
@@ -137,8 +139,10 @@ fn templates_json(saved: &[SavedTemplate]) -> Value {
 }
 
 /// The catalog id `id`, for a command that waits for its file work.
-fn command_id(id: &str) -> Result<AppCommandId, String> {
-    AppCommandId::new(id).map_err(|error| error.to_string())
+fn command_id(id: &str) -> Result<AppCommandId, Translatable> {
+    AppCommandId::new(id).map_err(|error| {
+        Translatable::new(ids::CHECKLIST_REFUSAL_COMMAND).arg("reason", error.to_string())
+    })
 }
 
 /// Wait for the library read of `then`, for the command `id`.
@@ -162,7 +166,7 @@ fn deferred_read(
 /// `project_checklist_templates {document}`: the built-in templates and the
 /// user's saved ones, each with its item count per stage.
 pub(crate) fn project_checklist_templates(app: &mut Signex, args: &CommandArgs) -> Ran {
-    match app.rules_project_named(args) {
+    match named_project(app, args) {
         Ok(id) => deferred_read(
             app,
             id,
@@ -177,17 +181,17 @@ pub(crate) fn project_checklist_templates(app: &mut Signex, args: &CommandArgs) 
 /// `project_save_checklist_template {document, name}`: the checklist's
 /// items saved under `name` (one of that name is replaced).
 pub(crate) fn project_save_checklist_template(app: &mut Signex, args: &CommandArgs) -> Ran {
-    let id = match app.rules_project_named(args) {
+    let id = match named_project(app, args) {
         Ok(id) => id,
         Err(reason) => return refused(reason),
     };
-    let name = match required(args, "name", "the template's name") {
+    let name = match required(args, "name", ids::CHECKLIST_OPERAND_TEMPLATE_NAME) {
         Ok(name) => name,
         Err(reason) => return refused(reason),
     };
     let template = match app.checklist_as_template(id, name) {
         Ok(template) => template,
-        Err(problem) => return refused(problem.to_string()),
+        Err(problem) => return refused(problem_refusal(&problem)),
     };
     let command = match command_id("project_save_checklist_template") {
         Ok(command) => command,
@@ -219,7 +223,7 @@ pub(super) fn start_from_saved(
 /// `project_reset_checklist {document}`: the template the checklist started
 /// from, its items put back in place of every item, as one undo step.
 pub(crate) fn project_reset_checklist(app: &mut Signex, args: &CommandArgs) -> Ran {
-    let id = match app.rules_project_named(args) {
+    let id = match named_project(app, args) {
         Ok(id) => id,
         Err(reason) => return refused(reason),
     };
@@ -235,7 +239,7 @@ pub(crate) fn project_reset_checklist(app: &mut Signex, args: &CommandArgs) -> R
             args,
             LibraryUse::Reset(name),
         ),
-        Err(problem) => refused(problem.to_string()),
+        Err(problem) => refused(problem_refusal(&problem)),
     }
 }
 
@@ -352,7 +356,10 @@ impl Signex {
             }
             Err(why) => {
                 tab.notice = Some(ChecklistNotice::TemplateNotSaved(why.clone()));
-                CommandOutcome::disabled(format!("the template was not saved: {why}"))
+                CommandOutcome::Disabled {
+                    reason: Translatable::new(ids::CHECKLIST_REFUSAL_TEMPLATE_NOT_SAVED)
+                        .arg("reason", why),
+                }
             }
         };
         self.answer_checklist_wait(project_id, waiting, move |_| outcome)
@@ -375,9 +382,10 @@ impl Signex {
             Err(why) => {
                 tab.saved = SavedTemplates::Unreadable(why.clone());
                 tab.notice = Some(ChecklistNotice::LibraryUnreadable(why.clone()));
-                let reason = format!("the checklist templates could not be read: {why}");
+                let reason =
+                    Translatable::new(ids::CHECKLIST_REFUSAL_LIBRARY_UNREADABLE).arg("reason", why);
                 return self.answer_checklist_wait(project_id, waiting, move |_| {
-                    CommandOutcome::disabled(reason)
+                    CommandOutcome::Disabled { reason }
                 });
             }
         };
@@ -396,9 +404,9 @@ impl Signex {
         self.answer_checklist_wait(project_id, waiting, move |app| {
             let Some(template) = found else {
                 let problem = ChecklistProblem::UnknownSavedTemplate(name);
-                let reason = problem.to_string();
+                let reason = problem_refusal(&problem);
                 app.checklist_tab(project_id).problem = Some(problem);
-                return CommandOutcome::disabled(reason);
+                return CommandOutcome::Disabled { reason };
             };
             let command = if reset {
                 ProjectChecklistCommand::Reset {

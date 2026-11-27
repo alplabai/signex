@@ -93,6 +93,9 @@ pub(super) fn view<'a>(frame: &Frame<'a>) -> Element<'a, Message> {
             ))
             .push(kit::quiet(look, look.t(ids::OUTPUT_JOB_FORM_DPI_NOTE)));
     }
+    if kind == OutputKind::Gerber {
+        form = form.push(super::gerber_form::fields(frame, job.clone(), output));
+    }
     if kind == OutputKind::Odb {
         form = form.push(kit::tick(
             output.odb_folder.unwrap_or(false),

@@ -198,6 +198,11 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("before_close", OperandKind::Text),
     ("tag", OperandKind::Text),
     ("run", OperandKind::Text),
+    // #1299: a Gerber output's number format, zeros and aperture form
+    // (its `units` and `layers` are declared above).
+    ("format", OperandKind::Text),
+    ("zeros", OperandKind::Text),
+    ("apertures", OperandKind::Text),
     // #2796: a block diagram's blocks, ports, connections and groups.
     ("function", OperandKind::Text),
     ("note", OperandKind::Text),

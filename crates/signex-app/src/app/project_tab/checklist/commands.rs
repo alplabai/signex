@@ -8,19 +8,21 @@
 use iced::Task;
 use serde_json::{Value, json};
 use signex_engine::ProjectChecklistCommand;
+use signex_i18n::{MessageId, Translatable, ids};
 use signex_types::project::{
     ChecklistField, ChecklistProblem, ChecklistStage, ItemState, LinkResult, TemplateRef,
 };
 
 use super::ChecklistFilter;
+use super::words::{problem_refusal, project_refusal};
 use crate::app::command::{CommandArgs, CommandOutcome, OperandValue};
 use crate::app::state::ProjectId;
 use crate::app::{Message, Signex};
 
 pub(super) type Ran = (CommandOutcome, Task<Message>);
 
-pub(super) fn refused(reason: impl Into<String>) -> Ran {
-    (CommandOutcome::disabled(reason), Task::none())
+pub(super) fn refused(reason: Translatable) -> Ran {
+    (CommandOutcome::Disabled { reason }, Task::none())
 }
 
 pub(super) fn text<'a>(args: &'a CommandArgs, name: &str) -> Option<&'a str> {
@@ -30,13 +32,26 @@ pub(super) fn text<'a>(args: &'a CommandArgs, name: &str) -> Option<&'a str> {
     }
 }
 
-/// The text operand `name`, or why it is missing.
+/// The text operand `name`, or why it is missing; `what` says what it
+/// takes.
 pub(super) fn required<'a>(
     args: &'a CommandArgs,
-    name: &str,
-    what: &str,
-) -> Result<&'a str, String> {
-    text(args, name).ok_or_else(|| format!("needs the operand `{name}`: {what}"))
+    name: &'static str,
+    what: MessageId,
+) -> Result<&'a str, Translatable> {
+    text(args, name).ok_or_else(|| {
+        Translatable::new(ids::CHECKLIST_REFUSAL_NEEDS_OPERAND)
+            .arg("name", name)
+            .arg("what", Translatable::new(what))
+    })
+}
+
+/// The project `args` names, or why it names none.
+pub(super) fn named_project(
+    app: &mut Signex,
+    args: &CommandArgs,
+) -> Result<ProjectId, Translatable> {
+    app.rules_project_named(args).map_err(project_refusal)
 }
 
 /// Apply `command` to project `id` and answer with the checklist and
@@ -50,7 +65,7 @@ pub(super) fn edit(app: &mut Signex, id: ProjectId, command: &ProjectChecklistCo
             }
             (CommandOutcome::Answered(answer), Task::none())
         }
-        Err(problem) => refused(problem.to_string()),
+        Err(problem) => refused(problem_refusal(&problem)),
     }
 }
 
@@ -70,7 +85,9 @@ pub(super) fn edit_in_tab(
             }
             CommandOutcome::Answered(answer)
         }
-        Err(problem) => CommandOutcome::disabled(problem.to_string()),
+        Err(problem) => CommandOutcome::Disabled {
+            reason: problem_refusal(&problem),
+        },
     }
 }
 
@@ -78,15 +95,11 @@ pub(super) fn edit_in_tab(
 /// items are worded in the app's language, as the tab's Start words them;
 /// `user:<name>` starts from the user's saved template of that name.
 pub(crate) fn project_start_checklist(app: &mut Signex, args: &CommandArgs) -> Ran {
-    let id = match app.rules_project_named(args) {
+    let id = match named_project(app, args) {
         Ok(id) => id,
         Err(reason) => return refused(reason),
     };
-    let key = match required(
-        args,
-        "template",
-        "release_review, prototype_build, blank or user:<name>",
-    ) {
+    let key = match required(args, "template", ids::CHECKLIST_OPERAND_TEMPLATE) {
         Ok(key) => key.trim(),
         Err(reason) => return refused(reason),
     };
@@ -96,20 +109,22 @@ pub(crate) fn project_start_checklist(app: &mut Signex, args: &CommandArgs) -> R
             edit(app, id, &command)
         }
         Some(TemplateRef::Saved(name)) => super::templates::start_from_saved(app, id, args, name),
-        None => refused(ChecklistProblem::UnknownTemplate(key.to_string()).to_string()),
+        None => refused(problem_refusal(&ChecklistProblem::UnknownTemplate(
+            key.to_string(),
+        ))),
     }
 }
 
 /// `project_add_checklist_item {document, stage, text}`; answers with the
 /// new item's id as `item`.
 pub(crate) fn project_add_checklist_item(app: &mut Signex, args: &CommandArgs) -> Ran {
-    let id = match app.rules_project_named(args) {
+    let id = match named_project(app, args) {
         Ok(id) => id,
         Err(reason) => return refused(reason),
     };
     let (stage, title) = match (
-        required(args, "stage", "schematic, layout or fabrication"),
-        required(args, "text", "the item's title"),
+        required(args, "stage", ids::CHECKLIST_OPERAND_STAGE),
+        required(args, "text", ids::CHECKLIST_OPERAND_TITLE),
     ) {
         (Ok(stage), Ok(title)) => (stage.to_string(), title.to_string()),
         (Err(reason), _) | (_, Err(reason)) => return refused(reason),
@@ -140,20 +155,22 @@ pub(crate) fn project_add_checklist_item(app: &mut Signex, args: &CommandArgs) -
 
 /// `project_set_checklist_item {document, item, field, value}`.
 pub(crate) fn project_set_checklist_item(app: &mut Signex, args: &CommandArgs) -> Ran {
-    let id = match app.rules_project_named(args) {
+    let id = match named_project(app, args) {
         Ok(id) => id,
         Err(reason) => return refused(reason),
     };
-    let item = match required(args, "item", "an item id") {
+    let item = match required(args, "item", ids::CHECKLIST_OPERAND_ITEM) {
         Ok(item) => item.trim().to_string(),
         Err(reason) => return refused(reason),
     };
-    let key = match required(args, "field", "title, stage, owner, link or notes") {
+    let key = match required(args, "field", ids::CHECKLIST_OPERAND_FIELD) {
         Ok(key) => key.trim(),
         Err(reason) => return refused(reason),
     };
     let Some(field) = ChecklistField::parse(key) else {
-        return refused(ChecklistProblem::UnknownField(key.to_string()).to_string());
+        return refused(problem_refusal(&ChecklistProblem::UnknownField(
+            key.to_string(),
+        )));
     };
     let command = ProjectChecklistCommand::SetField {
         item,
@@ -166,20 +183,22 @@ pub(crate) fn project_set_checklist_item(app: &mut Signex, args: &CommandArgs) -
 
 /// `project_set_checklist_state {document, item, state, reason?}`.
 pub(crate) fn project_set_checklist_state(app: &mut Signex, args: &CommandArgs) -> Ran {
-    let id = match app.rules_project_named(args) {
+    let id = match named_project(app, args) {
         Ok(id) => id,
         Err(reason) => return refused(reason),
     };
-    let item = match required(args, "item", "an item id") {
+    let item = match required(args, "item", ids::CHECKLIST_OPERAND_ITEM) {
         Ok(item) => item.trim().to_string(),
         Err(reason) => return refused(reason),
     };
-    let key = match required(args, "state", "open, done or waived") {
+    let key = match required(args, "state", ids::CHECKLIST_OPERAND_STATE) {
         Ok(key) => key.trim(),
         Err(reason) => return refused(reason),
     };
     let Some(state) = ItemState::parse(key) else {
-        return refused(ChecklistProblem::UnknownState(key.to_string()).to_string());
+        return refused(problem_refusal(&ChecklistProblem::UnknownState(
+            key.to_string(),
+        )));
     };
     let command = ProjectChecklistCommand::SetState {
         item,
@@ -192,11 +211,11 @@ pub(crate) fn project_set_checklist_state(app: &mut Signex, args: &CommandArgs) 
 
 /// `project_remove_checklist_item {document, item}`.
 pub(crate) fn project_remove_checklist_item(app: &mut Signex, args: &CommandArgs) -> Ran {
-    let id = match app.rules_project_named(args) {
+    let id = match named_project(app, args) {
         Ok(id) => id,
         Err(reason) => return refused(reason),
     };
-    match required(args, "item", "an item id") {
+    match required(args, "item", ids::CHECKLIST_OPERAND_ITEM) {
         Ok(item) => {
             let command = ProjectChecklistCommand::RemoveItem {
                 item: item.trim().to_string(),
@@ -211,7 +230,7 @@ pub(crate) fn project_remove_checklist_item(app: &mut Signex, args: &CommandArgs
 /// tab, or the Run check of item `item`. The results land in the tab;
 /// `project_checklist` answers with them.
 pub(crate) fn project_run_checklist(app: &mut Signex, args: &CommandArgs) -> Ran {
-    let id = match app.rules_project_named(args) {
+    let id = match named_project(app, args) {
         Ok(id) => id,
         Err(reason) => return refused(reason),
     };
@@ -223,7 +242,9 @@ pub(crate) fn project_run_checklist(app: &mut Signex, args: &CommandArgs) -> Ran
             .and_then(|project| project.data.design_checklist().ok().flatten())
             .is_some_and(|checklist| checklist.item(item).is_some());
         if !known {
-            return refused(ChecklistProblem::UnknownItem(item.clone()).to_string());
+            return refused(problem_refusal(&ChecklistProblem::UnknownItem(
+                item.clone(),
+            )));
         }
     }
     (CommandOutcome::Ran, app.run_checklist_in_tab(id, only))
@@ -234,11 +255,12 @@ impl Signex {
     /// stored, the counts per stage and per filter chip, what each item's
     /// link says now, and the ids the filter shows. Mine is the items `owner`
     /// owns, else the user's.
-    pub(crate) fn project_checklist(&mut self, args: &CommandArgs) -> Result<Value, String> {
-        let id = self.rules_project_named(args)?;
+    pub(crate) fn project_checklist(&mut self, args: &CommandArgs) -> Result<Value, Translatable> {
+        let id = named_project(self, args)?;
         let filter = match text(args, "filter") {
-            Some(key) => ChecklistFilter::parse(key)
-                .ok_or_else(|| format!("`{key}` is no filter; all, open, done, waived or mine"))?,
+            Some(key) => ChecklistFilter::parse(key).ok_or_else(|| {
+                Translatable::new(ids::CHECKLIST_REFUSAL_BAD_FILTER).arg("filter", key)
+            })?,
             None => ChecklistFilter::All,
         };
         Ok(self.project_checklist_json(id, filter, text(args, "owner")))

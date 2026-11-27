@@ -6,6 +6,7 @@
 use std::collections::BTreeSet;
 use std::path::Path;
 
+use signex_i18n::{Translatable, ids};
 use signex_output::{PageRange, PdfLayer, PdfLayerVisibility};
 use signex_types::project::{BASE_VARIANT, is_base_variant};
 
@@ -14,38 +15,36 @@ use crate::app::Signex;
 
 /// The page range `pages` names: `all`, `current`, or sheet numbers and
 /// ranges as the Pages box takes them (`1-2, 4`, mockup row 111).
-pub(crate) fn page_range_operand(pages: &str) -> Result<PageRange, String> {
+pub(crate) fn page_range_operand(pages: &str) -> Result<PageRange, Translatable> {
     match pages.trim() {
         "all" => Ok(PageRange::All),
         "current" => Ok(PageRange::Current),
-        list => parse_page_list(list).map(PageRange::Specific).ok_or_else(|| {
-            format!(
-                "`pages` is all, current or sheet numbers and ranges such as `1-2, 4`, not `{list}`"
-            )
-        }),
+        list => parse_page_list(list)
+            .map(PageRange::Specific)
+            .ok_or_else(|| {
+                Translatable::new(ids::PDF_PREVIEW_COMMAND_BAD_PAGES).arg("value", list)
+            }),
     }
 }
 
 /// The PDF layers `layers` names: `all`, or the ids (`PdfLayer::id`) of the
 /// groups visible when the PDF opens; every other group opens hidden.
-pub(crate) fn layers_operand(layers: &str) -> Result<PdfLayerVisibility, String> {
+pub(crate) fn layers_operand(layers: &str) -> Result<PdfLayerVisibility, Translatable> {
     if layers.trim() == "all" {
         return Ok(PdfLayerVisibility::default());
     }
     let mut shown = BTreeSet::new();
     for id in layers.split(',').filter(|id| !id.trim().is_empty()) {
         let layer = PdfLayer::from_id(id).ok_or_else(|| {
-            let ids: Vec<&str> = PdfLayer::ALL.iter().map(|layer| layer.id()).collect();
-            format!(
-                "`{}` is not a PDF layer (all, or one of {})",
-                id.trim(),
-                ids.join(", ")
-            )
+            let known: Vec<&str> = PdfLayer::ALL.iter().map(|layer| layer.id()).collect();
+            Translatable::new(ids::PDF_PREVIEW_COMMAND_BAD_LAYER)
+                .arg("value", id.trim())
+                .arg("layers", known.join(", "))
         })?;
         shown.insert(layer);
     }
     if shown.is_empty() {
-        return Err("`layers` names no PDF layer".to_string());
+        return Err(Translatable::new(ids::PDF_PREVIEW_COMMAND_NO_LAYER));
     }
     Ok(PdfLayerVisibility {
         hidden_on_open: PdfLayer::ALL
@@ -62,7 +61,7 @@ impl Signex {
         &self,
         source: &Path,
         variant: Option<&str>,
-    ) -> Result<String, String> {
+    ) -> Result<String, Translatable> {
         let project = self.document_state.document_project(source);
         let Some(name) = variant.map(str::trim) else {
             return Ok(project
@@ -78,9 +77,8 @@ impl Signex {
         }
         let mut names = vec![BASE_VARIANT.to_string()];
         names.extend(defined.iter().cloned());
-        Err(format!(
-            "`variant` is one of {}, not `{name}`",
-            names.join(", ")
-        ))
+        Err(Translatable::new(ids::PDF_PREVIEW_COMMAND_BAD_VARIANT)
+            .arg("variants", names.join(", "))
+            .arg("value", name))
     }
 }

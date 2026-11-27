@@ -31,6 +31,8 @@ file = "dcdc-buck.pdf"            # default: the kind's name, below
 [[outputs]]
 name = "Gerber"
 kind = "gerber"                   # a board output: `file` is the stem its files start with
+gerber_units = "inch"             # the Gerber settings, each left out for the writer's own (below)
+gerber_format = "2:5"
 
 [[outputs]]
 name = "ODB++"
@@ -98,11 +100,41 @@ A job cannot run (and is not saved) when a `folder` leaves the job's folder
 (an absolute path, a drive, `..`, an empty step) or a `file` is not a plain
 file name, when two outputs share a name or a file (names compare exactly,
 files without case; two board outputs of one kind share a stem), when a
-`dpi` is out of range, when two profiles share a name (without case), when
+`dpi` is out of range, when a `gerber_layers` list is empty or holds a word
+that is not a layer id, when two profiles share a name (without case), when
 `default_profile` names no profile, or when a wait is longer than an hour.
 An output of a `kind` this build does not know is kept in the file; a run of
 every output leaves it out and says so, and a run of that output alone is
 refused.
+
+## Gerber settings
+
+A Gerber output takes five settings (#1299). Each one left out of the file
+is the Fabrication Outputs writer's own, and the defaults write the bytes
+that writer writes, so a job saved before the settings existed writes the
+same files. The Export Job tab's form of a Gerber output shows a field for
+each; picking a default stores the setting as left out.
+
+| Key | Values | Default |
+|---|---|---|
+| `gerber_units` | `mm`, `inch` (`%MOMM`, `%MOIN`) | `mm` |
+| `gerber_format` | integer and decimal digits, `I:D`, integer 1 to 6, decimal 4 to 6 (`%FSLAXIDYID`) | `4:6` |
+| `gerber_zeros` | `leading` (leading zeros left out, a plain integer), `trailing` (`%FST`, trailing zeros left out, every integer digit written), `none` (every digit written) | `leading` |
+| `gerber_layers` | a list of layer ids; left out, every layer | every layer |
+| `gerber_apertures` | `standard` (a standard circle, rectangle or obround where a pad has one, a macro for the rest), `macros` (every aperture a macro) | `standard` |
+
+A layer id is the file's suffix without the copper layer's number:
+`copper-top`, `copper-bottom`, `copper-inner2` (and on), `legend-top`,
+`legend-bottom`, `soldermask-top`, `soldermask-bottom`, `paste-top`,
+`paste-bottom`, `profile` and `vscore`; `copper` takes every copper layer.
+An id the board has no image for writes nothing. The drill files and the
+other board outputs do not follow these settings. In inches a coordinate is
+rounded to the format's last digit and an aperture to a millionth of an
+inch; the job file (`.gbrjob`) lists the images written. With `trailing`
+and a board wider than the format's integer digits hold, the integer part
+is written in full. A `gerber_units`, `gerber_format`, `gerber_zeros` or
+`gerber_apertures` value outside the table makes the job file unreadable:
+it is refused with the reason and never written over.
 
 ## Profiles
 
@@ -221,13 +253,21 @@ nothing, so it has none to view.
 | `set_job_triggers` | — | `path= profile= [on_save=] [sources=a,b] [wait=] [keep_up_to_date=] [before_close=] [tag=]` |
 | `stop_output_job` | — | `path=` |
 | `view_output_job_run` | — | `path= [run=<history row>]` |
+| `set_job_gerber_units` | — | `path= name=<Gerber output> units=<mm or inch>` |
+| `set_job_gerber_format` | — | `path= name= format=<I:D>` |
+| `set_job_gerber_zeros` | — | `path= name= zeros=<leading, trailing or none>` |
+| `set_job_gerber_layers` | — | `path= name= layers=<all, or ids comma separated>` |
+| `set_job_gerber_apertures` | — | `path= name= apertures=<standard or macros>` |
 | `export_sheet_png` | picks a folder for the pages of the schematic in view, at 300 dpi | `document=<sheet> path=<folder> [dpi=<n>]` |
 
 The edits of a job open in a tab change its draft and answer `saved: false`;
 any other job file is read, changed and written, and answered `saved: true`.
 `run_output_job` and `export_sheet_png` need `--allow export`; the commands
 that write the job file (`new_output_job`, `add_job_output`,
-`set_job_output`, `set_job_profile`, `set_job_triggers`) need `--save`.
+`set_job_output`, `set_job_profile`, `set_job_triggers` and the five
+`set_job_gerber_*`) need `--save`. A `set_job_gerber_*` command answers with
+the output's five settings (`output`, `units`, `format`, `zeros`, `layers`,
+`apertures`) and is refused for an output that is not a Gerber output.
 `run_output_job` answers, once the run ends, with:
 
 ```json

@@ -496,6 +496,58 @@ pub(super) const DOCUMENTS: &[CommandMetadata] = &[
         operands: super::job_operands::JOB_RUN_VIEW,
         ..CommandMetadata::DEFAULT
     },
+    // #1299: a Gerber output's settings, one command each, as the Export
+    // Job tab's Gerber fields set them.
+    CommandMetadata {
+        id: "set_job_gerber_units",
+        category: "design",
+        label: command_ids::CMD_SET_JOB_GERBER_UNITS,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: super::job_operands::JOB_GERBER_UNITS,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "set_job_gerber_format",
+        category: "design",
+        label: command_ids::CMD_SET_JOB_GERBER_FORMAT,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: super::job_operands::JOB_GERBER_FORMAT,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "set_job_gerber_zeros",
+        category: "design",
+        label: command_ids::CMD_SET_JOB_GERBER_ZEROS,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: super::job_operands::JOB_GERBER_ZEROS,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "set_job_gerber_layers",
+        category: "design",
+        label: command_ids::CMD_SET_JOB_GERBER_LAYERS,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: super::job_operands::JOB_GERBER_LAYERS,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "set_job_gerber_apertures",
+        category: "design",
+        label: command_ids::CMD_SET_JOB_GERBER_APERTURES,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: super::job_operands::JOB_GERBER_APERTURES,
+        ..CommandMetadata::DEFAULT
+    },
     // #2796, mockup row 171: a block diagram (`.snxblk`) as an SVG or PDF
     // file. In a window it asks for the diagram and the file; headless it
     // writes `document` to `path`. No menu row: the diagram tab's toolbar

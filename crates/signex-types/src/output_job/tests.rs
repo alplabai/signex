@@ -219,3 +219,55 @@ fn the_file_is_written_atomically_and_read_back() {
     write_output_job(&path, &sample()).unwrap();
     assert_eq!(read_output_job(&path).unwrap(), sample());
 }
+
+/// The Gerber settings round-trip, a job without them reads the writer's
+/// own settings, and a bad format or layer list is refused (#1299).
+#[test]
+fn a_gerber_outputs_settings_round_trip_and_default_to_the_writers_own() {
+    let mut job = sample();
+    let mut gerber = JobOutput::new("Gerber", OutputKind::Gerber);
+    assert_eq!(gerber.gerber_settings(), GerberSettings::default());
+    gerber.gerber_units = Some(GerberUnits::Inch);
+    gerber.gerber_format = GerberFormat::parse("2:5");
+    gerber.gerber_zeros = Some(GerberZeros::Trailing);
+    gerber.gerber_layers = Some(vec!["copper".into(), "profile".into()]);
+    gerber.gerber_apertures = Some(GerberApertures::Macros);
+    job.outputs.push(gerber);
+    let text = encode_output_job(&job).unwrap();
+    assert!(text.contains("gerber_units = \"inch\""), "{text}");
+    assert!(text.contains("gerber_format = \"2:5\""), "{text}");
+    assert!(text.contains("gerber_zeros = \"trailing\""), "{text}");
+    assert!(text.contains("gerber_apertures = \"macros\""), "{text}");
+    let back = parse_output_job(&text).unwrap();
+    assert_eq!(back, job);
+    let settings = back.outputs[4].gerber_settings();
+    assert_eq!(settings.units, GerberUnits::Inch);
+    assert_eq!(settings.format.to_string(), "2:5");
+    let plan = back.plan("demo", Some("Gerber")).unwrap();
+    assert_eq!(plan.outputs[0].gerber, settings);
+
+    let old = format!(
+        "format = \"{SNXOUT_FORMAT_V1}\"\nfolder = \"out\"\n\n\
+         [[outputs]]\nname = \"Gerber\"\nkind = \"gerber\"\nenabled = true\n"
+    );
+    let old = parse_output_job(&old).unwrap();
+    assert_eq!(old.outputs[0].gerber_settings(), GerberSettings::default());
+    let again = encode_output_job(&old).unwrap();
+    assert!(!again.contains("gerber_"), "nothing is added: {again}");
+
+    let bad = text.replacen("\"2:5\"", "\"9:9\"", 1);
+    assert!(matches!(
+        parse_output_job(&bad),
+        Err(OutputJobError::Parse(_))
+    ));
+    job.outputs[4].gerber_layers = Some(Vec::new());
+    assert!(matches!(
+        job.fault(),
+        Some(OutputJobFault::BadGerberLayers { .. })
+    ));
+    job.outputs[4].gerber_layers = Some(vec!["Top Copper".into()]);
+    assert!(matches!(
+        job.fault(),
+        Some(OutputJobFault::BadGerberLayers { .. })
+    ));
+}

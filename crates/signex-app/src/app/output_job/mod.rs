@@ -13,6 +13,7 @@ mod auto;
 mod board_work;
 mod commands;
 mod document;
+mod gerber_commands;
 mod operands;
 mod pipeline;
 mod png;
@@ -25,6 +26,8 @@ mod write;
 mod auto_tests;
 #[cfg(test)]
 mod command_tests;
+#[cfg(test)]
+mod gerber_tests;
 #[cfg(test)]
 mod pipeline_tests;
 #[cfg(test)]
@@ -51,10 +54,16 @@ pub(crate) use commands::{
     set_job_profile, set_job_triggers, stop_output_job, view_output_job_run,
 };
 pub use document::{JobDocMsg, ListPurpose};
+pub(crate) use gerber_commands::{
+    set_job_gerber_apertures, set_job_gerber_format, set_job_gerber_layers, set_job_gerber_units,
+    set_job_gerber_zeros,
+};
 pub(crate) use operands::{export_sheet_png, run_output_job};
 pub use pipeline::{Built, Packaged, RunMsg, ValidateOutcome};
 pub use run::RunAsk;
-pub use tab::{JobTabMsg, NamingMode, OutputJobUi, PackagingSwitch, TabPage, TriggerEdit};
+pub use tab::{
+    GerberEdit, JobTabMsg, NamingMode, OutputJobUi, PackagingSwitch, TabPage, TriggerEdit,
+};
 pub use write::{CheckCounts, JobReport, WrittenOutput};
 
 impl From<OutputJobMsg> for Message {

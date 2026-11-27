@@ -465,6 +465,11 @@ set_footprint_position
 set_footprint_rotation
 set_footprint_side
 set_footprint_text
+set_job_gerber_apertures
+set_job_gerber_format
+set_job_gerber_layers
+set_job_gerber_units
+set_job_gerber_zeros
 set_job_output
 set_job_profile
 set_job_triggers

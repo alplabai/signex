@@ -243,7 +243,7 @@ impl Signex {
                 };
                 let outcome = match answer {
                     Ok(value) => CommandOutcome::Answered(value),
-                    Err(reason) => CommandOutcome::disabled(reason),
+                    Err(reason) => CommandOutcome::Disabled { reason },
                 };
                 return Some((outcome, Task::none()));
             }

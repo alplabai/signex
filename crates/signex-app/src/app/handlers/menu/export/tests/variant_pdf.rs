@@ -216,6 +216,18 @@ fn the_pdf_goldens_differ_where_the_variants_do() {
     };
     assert_ne!(texts(&base), texts(&full), "Full prints its name");
     assert_ne!(texts(&full), texts(&lite), "Lite prints its name");
+    // Lite leaves parts out: they draw greyed and crossed out (#1294), so
+    // its drawing is not Base's.
+    let drawing = |golden: &str| {
+        (golden.lines())
+            .find(|line| line.starts_with("drawing "))
+            .map(str::to_string)
+    };
+    assert_ne!(
+        drawing(&base),
+        drawing(&lite),
+        "Lite draws its not-fitted parts"
+    );
     for golden in [&base, &full, &lite] {
         assert!(golden.starts_with("pages "), "{golden}");
         assert!(!texts(golden).is_empty(), "the pages print text");

@@ -7,6 +7,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use iced::Task;
+use signex_i18n::{Translatable, ids};
 use signex_types::schematic::LabelType;
 
 use crate::app::command::{CommandArgs, CommandOutcome};
@@ -80,9 +81,9 @@ impl Signex {
                 (CommandOutcome::Deferred { ticket }, build)
             }
             IndexLookup::Unavailable => (
-                CommandOutcome::disabled(
-                    "the project's net index could not be built; see Messages".to_string(),
-                ),
+                CommandOutcome::Disabled {
+                    reason: Translatable::new(ids::PROJECT_CROSS_REFS_NO_INDEX),
+                },
                 Task::none(),
             ),
         }
@@ -110,9 +111,10 @@ impl Signex {
         for query in mine {
             let outcome = match &data {
                 Ok(data) => CommandOutcome::Answered(self.cross_refs_answer(&query.document, data)),
-                Err(reason) => CommandOutcome::disabled(format!(
-                    "the project's net index could not be built: {reason}"
-                )),
+                Err(reason) => CommandOutcome::Disabled {
+                    reason: Translatable::new(ids::PROJECT_CROSS_REFS_INDEX_FAILED)
+                        .arg("reason", reason.as_str()),
+                },
             };
             tasks.push(self.finish_waiting_command(query.waiting, &query.document, |_| outcome));
         }

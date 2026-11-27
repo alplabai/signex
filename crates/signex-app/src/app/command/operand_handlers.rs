@@ -233,6 +233,27 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("set_job_output", crate::app::output_job::set_job_output),
     ("set_job_profile", crate::app::output_job::set_job_profile),
     ("set_job_triggers", crate::app::output_job::set_job_triggers),
+    // #1299: a Gerber output's settings.
+    (
+        "set_job_gerber_units",
+        crate::app::output_job::set_job_gerber_units,
+    ),
+    (
+        "set_job_gerber_format",
+        crate::app::output_job::set_job_gerber_format,
+    ),
+    (
+        "set_job_gerber_zeros",
+        crate::app::output_job::set_job_gerber_zeros,
+    ),
+    (
+        "set_job_gerber_layers",
+        crate::app::output_job::set_job_gerber_layers,
+    ),
+    (
+        "set_job_gerber_apertures",
+        crate::app::output_job::set_job_gerber_apertures,
+    ),
     ("stop_output_job", crate::app::output_job::stop_output_job),
     (
         "view_output_job_run",
@@ -721,6 +742,11 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
         | "set_job_output"
         | "set_job_profile"
         | "set_job_triggers"
+        | "set_job_gerber_units"
+        | "set_job_gerber_format"
+        | "set_job_gerber_zeros"
+        | "set_job_gerber_layers"
+        | "set_job_gerber_apertures"
         | "stop_output_job"
         | "view_output_job_run" => Some(
             "this command needs the operand `path` and the job's settings — \

@@ -23,7 +23,7 @@ use crate::keymap::AppCommandId;
 type Ran = (CommandOutcome, Task<Message>);
 
 /// An edit of a job's content; `Ok` carries what the answer adds.
-type JobEdit = Box<dyn FnOnce(&mut OutputJob) -> Result<Value, String> + Send>;
+pub(super) type JobEdit = Box<dyn FnOnce(&mut OutputJob) -> Result<Value, String> + Send>;
 
 fn bool_operand(args: &CommandArgs, name: &str) -> Option<bool> {
     match args.operand(name) {
@@ -58,7 +58,12 @@ fn refused(job: &Path, why: impl Into<String>) -> Ran {
 impl Signex {
     /// Apply `edit` to `job`: to its draft when one is held, else to its
     /// file, read and written off the UI thread.
-    fn edit_job_by_command(&mut self, command: &str, args: &CommandArgs, edit: JobEdit) -> Ran {
+    pub(super) fn edit_job_by_command(
+        &mut self,
+        command: &str,
+        args: &CommandArgs,
+        edit: JobEdit,
+    ) -> Ran {
         let job = match job_operand(self, args) {
             Ok(job) => job,
             Err((job, why)) => return refused(&job, why),

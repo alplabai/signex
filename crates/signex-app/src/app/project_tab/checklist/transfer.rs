@@ -11,10 +11,11 @@ use std::path::{Path, PathBuf};
 use iced::Task;
 use serde_json::json;
 use signex_engine::ProjectChecklistCommand;
-use signex_i18n::ids;
+use signex_i18n::{Translatable, ids};
 use signex_types::project::{ChecklistProblem, NewChecklistItem, parse_project};
 
-use super::commands::{Ran, edit_in_tab, refused};
+use super::commands::{Ran, edit_in_tab, named_project, refused};
+use super::words::problem_refusal;
 use super::{ChecklistMsg, ChecklistNotice, message};
 use crate::app::agent::WaitingCommand;
 use crate::app::command::{CommandArgs, CommandOutcome, OperandValue};
@@ -60,12 +61,25 @@ fn read_import(path: &Path) -> Result<Imported, ChecklistNotice> {
 }
 
 /// Why an import was refused, for a command's answer.
-fn import_refusal(notice: &ChecklistNotice) -> String {
+fn import_refusal(notice: &ChecklistNotice) -> Translatable {
     match notice {
-        ChecklistNotice::NothingToImport(from) => format!("{from} has no design checklist"),
-        ChecklistNotice::ImportFailed(why) => format!("the project could not be read: {why}"),
-        other => format!("{other:?}"),
+        ChecklistNotice::NothingToImport(from) => {
+            Translatable::new(ids::CHECKLIST_REFUSAL_NOTHING_TO_IMPORT)
+                .arg("project", from.as_str())
+        }
+        ChecklistNotice::ImportFailed(why) => {
+            Translatable::new(ids::CHECKLIST_REFUSAL_IMPORT_FAILED).arg("reason", why.as_str())
+        }
+        other => Translatable::new(ids::CHECKLIST_REFUSAL_IMPORT_FAILED)
+            .arg("reason", format!("{other:?}")),
     }
+}
+
+/// The refusal of a command without its `path`; `what` says what it is.
+fn needs_path(what: signex_i18n::MessageId) -> Translatable {
+    Translatable::new(ids::CHECKLIST_REFUSAL_NEEDS_OPERAND)
+        .arg("name", "path")
+        .arg("what", Translatable::new(what))
 }
 
 /// Read the project at `path` to import, off the UI thread.
@@ -93,16 +107,16 @@ fn import_task(
 /// `project_export_checklist_csv {document, path}`: the checklist written
 /// to `path` as CSV; answers with the file and the number of items.
 pub(crate) fn project_export_checklist_csv(app: &mut Signex, args: &CommandArgs) -> Ran {
-    let id = match app.rules_project_named(args) {
+    let id = match named_project(app, args) {
         Ok(id) => id,
         Err(reason) => return refused(reason),
     };
     let Some(path) = path_operand(args) else {
-        return refused("needs the operand `path`: the CSV file");
+        return refused(needs_path(ids::CHECKLIST_OPERAND_CSV));
     };
     let rows = match app.checklist_rows(id) {
         Ok(rows) => rows,
-        Err(problem) => return refused(problem.to_string()),
+        Err(problem) => return refused(problem_refusal(&problem)),
     };
     let answer = json!({"path": path.display().to_string(), "rows": rows});
     let task = app.write_checklist_csv(id, path);
@@ -112,16 +126,19 @@ pub(crate) fn project_export_checklist_csv(app: &mut Signex, args: &CommandArgs)
 /// `project_import_checklist {document, path}`: this project's checklist
 /// started from the one of the project at `path`.
 pub(crate) fn project_import_checklist(app: &mut Signex, args: &CommandArgs) -> Ran {
-    let id = match app.rules_project_named(args) {
+    let id = match named_project(app, args) {
         Ok(id) => id,
         Err(reason) => return refused(reason),
     };
     let Some(path) = path_operand(args) else {
-        return refused("needs the operand `path`: the project to import from");
+        return refused(needs_path(ids::CHECKLIST_OPERAND_IMPORT));
     };
     let command = match AppCommandId::new("project_import_checklist") {
         Ok(command) => command,
-        Err(reason) => return refused(reason),
+        Err(reason) => {
+            let reason = Translatable::new(ids::CHECKLIST_REFUSAL_COMMAND).arg("reason", reason);
+            return refused(reason);
+        }
     };
     let waiting = app.wait_for_command(&command, args);
     let ticket = waiting.ticket;
@@ -239,7 +256,7 @@ impl Signex {
             Err(notice) => {
                 let reason = import_refusal(&notice);
                 app.checklist_tab(project_id).notice = Some(notice);
-                CommandOutcome::disabled(reason)
+                CommandOutcome::Disabled { reason }
             }
         })
     }

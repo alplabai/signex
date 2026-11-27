@@ -83,3 +83,40 @@ pub const JOB_RUN_VIEW: &[Operand] = &[
     required("path", OperandKind::Path),
     optional("run", OperandKind::Text),
 ];
+
+/// A Gerber output's units: `mm` or `inch`.
+pub const JOB_GERBER_UNITS: &[Operand] = &[
+    required("path", OperandKind::Path),
+    required("name", OperandKind::Text),
+    required("units", OperandKind::Text),
+];
+
+/// A Gerber output's coordinate format: integer and decimal digits, `4:6`.
+pub const JOB_GERBER_FORMAT: &[Operand] = &[
+    required("path", OperandKind::Path),
+    required("name", OperandKind::Text),
+    required("format", OperandKind::Text),
+];
+
+/// Which zeros a Gerber output's coordinates leave out: `leading`,
+/// `trailing` or `none`.
+pub const JOB_GERBER_ZEROS: &[Operand] = &[
+    required("path", OperandKind::Path),
+    required("name", OperandKind::Text),
+    required("zeros", OperandKind::Text),
+];
+
+/// The layers a Gerber output writes: `all`, or layer ids, comma separated
+/// (`copper` takes every copper layer).
+pub const JOB_GERBER_LAYERS: &[Operand] = &[
+    required("path", OperandKind::Path),
+    required("name", OperandKind::Text),
+    required("layers", OperandKind::Text),
+];
+
+/// How a Gerber output defines its apertures: `standard` or `macros`.
+pub const JOB_GERBER_APERTURES: &[Operand] = &[
+    required("path", OperandKind::Path),
+    required("name", OperandKind::Text),
+    required("apertures", OperandKind::Text),
+];

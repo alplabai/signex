@@ -12,11 +12,13 @@ use std::path::PathBuf;
 
 use iced::Task;
 use serde_json::{Value, json};
-use signex_types::project::{ChecklistLink, ObjectTarget, sheet_targets};
+use signex_i18n::{Translatable, ids};
+use signex_types::project::{ChecklistLink, ChecklistProblem, ObjectTarget, sheet_targets};
 use signex_types::schematic::SelectedItem;
 
 use super::ChecklistNotice;
-use super::commands::{Ran, refused, required};
+use super::commands::{Ran, named_project, refused, required};
+use super::words::problem_refusal;
 use crate::app::command::{CommandArgs, CommandOutcome};
 use crate::app::handlers::canvas::{AfterOpen, SheetOpen};
 use crate::app::state::{LoadedProject, ProjectId};
@@ -127,17 +129,17 @@ pub(crate) fn link_choices_json(choices: &[LinkChoice]) -> Value {
 /// `project_open_checklist_link {document, item}`: show what item `item`'s
 /// link names; answers with where it led.
 pub(crate) fn project_open_checklist_link(app: &mut Signex, args: &CommandArgs) -> Ran {
-    let id = match app.rules_project_named(args) {
+    let id = match named_project(app, args) {
         Ok(id) => id,
         Err(reason) => return refused(reason),
     };
-    let item = match required(args, "item", "an item id") {
+    let item = match required(args, "item", ids::CHECKLIST_OPERAND_ITEM) {
         Ok(item) => item.trim().to_string(),
         Err(reason) => return refused(reason),
     };
     match app.open_checklist_link(id, &item) {
         (Ok(answer), task) => (CommandOutcome::Answered(answer), task),
-        (Err(reason), task) => (CommandOutcome::disabled(reason), task),
+        (Err(reason), task) => (CommandOutcome::Disabled { reason }, task),
     }
 }
 
@@ -188,8 +190,8 @@ impl Signex {
     pub(crate) fn project_checklist_link_choices(
         &mut self,
         args: &CommandArgs,
-    ) -> Result<Value, String> {
-        let id = self.rules_project_named(args)?;
+    ) -> Result<Value, Translatable> {
+        let id = named_project(self, args)?;
         Ok(link_choices_json(&self.checklist_link_choices(id)))
     }
 
@@ -234,7 +236,7 @@ impl Signex {
         &mut self,
         project_id: ProjectId,
         item: &str,
-    ) -> (Result<Value, String>, Task<Message>) {
+    ) -> (Result<Value, Translatable>, Task<Message>) {
         let link = self
             .document_state
             .project_by_id(project_id)
@@ -243,15 +245,21 @@ impl Signex {
         let link = match link {
             None => {
                 return (
-                    Err(format!("the design checklist has no item `{item}`")),
+                    Err(problem_refusal(&ChecklistProblem::UnknownItem(
+                        item.to_string(),
+                    ))),
                     Task::none(),
                 );
             }
-            Some(None) => return (Err(format!("item `{item}` links to nothing")), Task::none()),
+            Some(None) => {
+                let reason = Translatable::new(ids::CHECKLIST_REFUSAL_NO_LINK).arg("id", item);
+                return (Err(reason), Task::none());
+            }
             Some(Some(link)) => link,
         };
         let Some(project) = self.document_state.project_by_id(project_id) else {
-            return (Err("the project was closed".into()), Task::none());
+            let reason = Translatable::new(ids::CHECKLIST_REFUSAL_PROJECT_CLOSED);
+            return (Err(reason), Task::none());
         };
         let destination = self.link_destination(project, &link);
         let mut answer = json!({

@@ -9,6 +9,7 @@ use std::path::Path;
 
 use iced::Task;
 use serde_json::{Value, json};
+use signex_i18n::{Translatable, ids};
 use signex_output::cross_ref_text;
 use signex_types::schematic::LabelType;
 
@@ -27,7 +28,7 @@ impl Signex {
     ) -> (CommandOutcome, Task<Message>) {
         let path = match self.cross_ref_sheet(args) {
             Ok(path) => path,
-            Err(reason) => return (CommandOutcome::disabled(reason), Task::none()),
+            Err(reason) => return (CommandOutcome::Disabled { reason }, Task::none()),
         };
         match self.document_state.document_project(&path).map(|p| p.id) {
             Some(project) => self.start_cross_ref_query(command, args, project, path),
@@ -39,22 +40,21 @@ impl Signex {
     }
 
     /// The open sheet `args` names.
-    fn cross_ref_sheet(&self, args: &CommandArgs) -> Result<std::path::PathBuf, String> {
-        let entry = self.document_operand(args)?;
+    fn cross_ref_sheet(&self, args: &CommandArgs) -> Result<std::path::PathBuf, Translatable> {
+        let entry = self.document_operand(args).map_err(|reason| {
+            Translatable::new(ids::PROJECT_CROSS_REFS_DOCUMENT).arg("reason", reason)
+        })?;
         match &entry.key {
             Some(DocumentKey::Schematic(path))
                 if self.document_state.engines.contains_key(path) =>
             {
                 Ok(path.clone())
             }
-            _ if entry.kind == DocumentKind::Schematic => Err(format!(
-                "{} is not open; open it first (`open_document`)",
-                entry.name
-            )),
-            _ => Err(
-                "`query_cross_references` reads a schematic sheet; this document is not one"
-                    .to_string(),
-            ),
+            _ if entry.kind == DocumentKind::Schematic => {
+                Err(Translatable::new(ids::PROJECT_CROSS_REFS_NOT_OPEN)
+                    .arg("name", entry.name.as_str()))
+            }
+            _ => Err(Translatable::new(ids::PROJECT_CROSS_REFS_NOT_A_SHEET)),
         }
     }
 

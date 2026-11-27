@@ -8,11 +8,12 @@ use std::path::Path;
 
 use iced::Task;
 use signex_types::output_job::{
-    DEFAULT_SAVE_WAIT_SECONDS, JobOutput, JobProfile, MAX_PNG_DPI, MAX_SAVE_WAIT_SECONDS,
-    MIN_PNG_DPI, OnErrors, OutputJob, OutputKind,
+    DEFAULT_SAVE_WAIT_SECONDS, GERBER_ALL_COPPER, GerberApertures, GerberFormat, GerberUnits,
+    GerberZeros, JobOutput, JobProfile, MAX_PNG_DPI, MAX_SAVE_WAIT_SECONDS, MIN_PNG_DPI, OnErrors,
+    OutputJob, OutputKind,
 };
 
-use super::{JobTabMsg, NamingMode, PackagingSwitch, TriggerEdit};
+use super::{GerberEdit, JobTabMsg, NamingMode, PackagingSwitch, TriggerEdit};
 use crate::app::{Message, Signex};
 
 /// A new output's name: the kind's catalog name, numbered when taken.
@@ -88,6 +89,7 @@ impl Signex {
             | M::OutputFileEdited { job, .. }
             | M::OutputDpiEdited { job, .. }
             | M::OdbFolderToggled { job, .. }
+            | M::GerberEdited { job, .. }
             | M::ProfileNamingConfirmed { job }
             | M::ProfileDuplicated { job }
             | M::ProfileDeleted { job }
@@ -206,6 +208,10 @@ fn apply(
         M::OdbFolderToggled { name, .. } => {
             let output = job.output_mut(&name).ok_or("no such output")?;
             output.odb_folder = Some(!output.odb_folder.unwrap_or(false));
+        }
+        M::GerberEdited { name, edit, .. } => {
+            let output = job.output_mut(&name).ok_or("no such output")?;
+            apply_gerber(output, edit);
         }
         M::ProfileNamingConfirmed { .. } => confirm_naming(job, shown, naming)?,
         M::ProfileDuplicated { .. } => {
@@ -328,4 +334,44 @@ fn edit_trigger(profile: &mut JobProfile, edit: TriggerEdit) -> Result<(), Strin
         }
     }
     Ok(())
+}
+
+/// Apply a Gerber settings edit to `output`. A value the writer takes by
+/// default is stored as left out, so a job file only names what was
+/// changed from the writer's own settings.
+fn apply_gerber(output: &mut JobOutput, edit: GerberEdit) {
+    match edit {
+        GerberEdit::UnitsPicked(units) => {
+            output.gerber_units = (units != GerberUnits::default()).then_some(units);
+        }
+        GerberEdit::FormatPicked(format) => {
+            output.gerber_format = (format != GerberFormat::default()).then_some(format);
+        }
+        GerberEdit::ZerosPicked(zeros) => {
+            output.gerber_zeros = (zeros != GerberZeros::default()).then_some(zeros);
+        }
+        GerberEdit::AperturesPicked(apertures) => {
+            output.gerber_apertures =
+                (apertures != GerberApertures::default()).then_some(apertures);
+        }
+        GerberEdit::LayerToggled(None) => {
+            // Every layer, or back to the list it is a tick away from.
+            output.gerber_layers = match output.gerber_layers {
+                None => Some(vec![GERBER_ALL_COPPER.to_string()]),
+                Some(_) => None,
+            };
+        }
+        GerberEdit::LayerToggled(Some(id)) => {
+            let mut layers = output.gerber_layers.clone().unwrap_or_default();
+            match layers.iter().position(|known| *known == id) {
+                Some(at) => {
+                    layers.remove(at);
+                }
+                None => layers.push(id),
+            }
+            // An empty list writes nothing: unticking the last layer is
+            // every layer again.
+            output.gerber_layers = (!layers.is_empty()).then_some(layers);
+        }
+    }
 }
