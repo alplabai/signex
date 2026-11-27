@@ -117,6 +117,11 @@ impl Signex {
         }
         let now = chrono::Utc::now();
         if let Some(editor) = docs.symbol_editors.get(path) {
+            // Opened repaired: copied as it is on disk, like a newer-minor
+            // sheet; only the person's Save writes the repair (#3129).
+            if editor.draft.is_read_only() {
+                return Ok(None);
+            }
             let mut file = editor.draft.file.clone();
             let changed = file.changed_since(&editor.draft.baseline);
             for symbol in &mut file.symbols {

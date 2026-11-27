@@ -229,7 +229,12 @@ pub enum LoadedDocument {
         board: Box<PcbBoard>,
         disk: crate::persist::DiskRead,
     },
-    Symbol(Box<signex_library::SymbolFile>),
+    Symbol {
+        file: Box<signex_library::SymbolFile>,
+        /// What the read removed from a file an older build wrote broken
+        /// (#3129); the editor reports it and opens read-only until saved.
+        repairs: Vec<signex_library::SymbolLoadRepair>,
+    },
     Footprint(Box<signex_library::FootprintFile>),
 }
 
@@ -354,14 +359,17 @@ fn read_symbol(path: &Path) -> Result<LoadedDocument, OpenFailure> {
     let bytes =
         std::fs::read(path).map_err(|e| card(format!("could not read {}: {e}", path.display())))?;
     // v0.18.4 — auto-detect TOML vs legacy JSON.
-    let file = signex_library::SymbolFile::from_bytes(&bytes)
+    let (file, repairs) = signex_library::SymbolFile::from_bytes_repairing(&bytes)
         .map_err(|e| card(format!("could not parse {}: {e}", path.display())))?;
     // Reported, not ignored: a container that decodes but holds nothing is a
     // different problem from a corrupt one (#532).
     if file.symbols.is_empty() {
         return Err(card(format!("{} contains no symbols", path.display())));
     }
-    Ok(LoadedDocument::Symbol(Box::new(file)))
+    Ok(LoadedDocument::Symbol {
+        file: Box::new(file),
+        repairs,
+    })
 }
 
 fn read_footprint(path: &Path) -> Result<LoadedDocument, OpenFailure> {

@@ -14,6 +14,24 @@ use crate::status_bar::Activity;
 /// and is drawn as an error; otherwise "Part 1 of 2 · 8 pins" and the
 /// selection. The bar names state only, no key hints (#2262).
 pub(crate) fn segment(editor: &SymbolDocument, i18n: &I18n) -> Activity {
+    if editor.gui.read_only_refused {
+        return Activity {
+            text: t!(i18n, ids::EDITORS_SYMBOL_READ_ONLY_REPAIRED).into_string(),
+            is_error: true,
+        };
+    }
+    if let Some(refusal) = &editor.gui.pin_text_refusal {
+        let pin = editor
+            .primitive()
+            .pins
+            .get(refusal.pin_index)
+            .map(|p| p.number.clone())
+            .unwrap_or_default();
+        return Activity {
+            text: super::updates::pin_text_refused(refusal, &pin, i18n).into_string(),
+            is_error: true,
+        };
+    }
     if let Some(message) = &editor.gui.status_message {
         return Activity {
             text: message.clone(),

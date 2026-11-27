@@ -80,17 +80,27 @@ pub(super) fn apply_symbol_transform(editor: &mut SymEditor, msg: SymbolEditorMs
         // Only a pin that exists records a step: a stale index must not
         // push an empty undo entry that evicts real history.
         SymbolEditorMsg::SetPinNumber { idx, number } if idx < editor.primitive().pins.len() => {
-            push_undo(editor);
-            editor.primitive_mut().pins[idx].number = number;
-            editor.mark_dirty();
+            set_pin_text(editor, |pins| pins[idx].number = number);
         }
         SymbolEditorMsg::SetPinName { idx, name } if idx < editor.primitive().pins.len() => {
-            push_undo(editor);
-            editor.primitive_mut().pins[idx].name = name;
-            editor.mark_dirty();
+            set_pin_text(editor, |pins| pins[idx].name = name);
         }
         _ => {}
     }
+}
+
+/// Write a pin's text as one undo step, unless it holds a character a save
+/// would refuse (#3129): then nothing changes and the editor says why.
+fn set_pin_text(editor: &mut SymEditor, write: impl FnOnce(&mut [signex_library::SymbolPin])) {
+    let mut after = editor.primitive().clone();
+    write(after.pins.as_mut_slice());
+    if let Some(refusal) = super::new_unstorable_pin_text(editor.primitive(), &after) {
+        super::refuse_pin_text(editor, refusal);
+        return;
+    }
+    push_undo(editor);
+    *editor.primitive_mut() = after;
+    editor.mark_dirty();
 }
 
 #[cfg(test)]

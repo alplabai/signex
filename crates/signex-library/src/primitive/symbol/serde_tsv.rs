@@ -125,7 +125,17 @@ fn pin_to_tsv_row(pin: &SymbolPin, with_body: bool) -> Result<String, SymbolFile
         .iter()
         .chain(with_body.then_some(&PIN_TSV_BODY_COLUMN));
     for (col, cell) in columns.zip(cells.iter()) {
-        if cell.contains('\t') || cell.contains('\n') || cell.contains("'''") {
+        // #3129: the table sits in a TOML literal string (see
+        // `crate::toml_literal`); a CR there saves and then never opens.
+        if let Some(character) = crate::toml_literal::first_unstorable_in_cell(cell) {
+            return Err(SymbolFileError::ControlCharInPinCell {
+                symbol: String::new(),
+                pin: pin.number.clone(),
+                column: col,
+                character,
+            });
+        }
+        if cell.contains("'''") {
             return Err(SymbolFileError::InvalidTsvCell {
                 column: col,
                 value: cell.clone(),
