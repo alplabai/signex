@@ -457,6 +457,16 @@ impl Signex {
                         Some(manage(ManageLayoutsMsg::ApplyRequested)),
                         tokens,
                     ))
+                    // Mockup row 166 (#2930): Undo next to Apply, greyed
+                    // until a change was made in the dialog.
+                    .push(dialog_button(
+                        t!(i18n, ids::WORKSPACE_LAYOUTS_UNDO),
+                        DialogButtonKind::Ghost,
+                        dialog
+                            .can_undo()
+                            .then(|| manage(ManageLayoutsMsg::UndoRequested)),
+                        tokens,
+                    ))
                     .boxed(),
             );
         pane.boxed()

@@ -299,6 +299,19 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         }
         // View ▸ Window ▸ Untile (#2249).
         "untile_documents" => Message::Window(WindowMsg::UntileRequested),
+        // View ▸ Window ▸ Tile Grid and the pane commands (mockup row 207).
+        "tile_windows_grid" => {
+            Message::Window(WindowMsg::TileRequested(crate::app::TileLayout::Grid))
+        }
+        "split_pane_right"
+        | "split_pane_down"
+        | "open_second_view"
+        | "move_tab_to_other_pane"
+        | "close_pane"
+        | "sync_pane_zoom"
+        | "equalize_panes" => Message::Window(WindowMsg::Pane(crate::app::PaneMsg::for_command(
+            command.as_str(),
+        )?)),
         // View ▸ Window ▸ Layouts (mockup row 166).
         "apply_layout_schematic"
         | "apply_layout_board"

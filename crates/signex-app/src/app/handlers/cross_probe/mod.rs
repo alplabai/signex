@@ -15,6 +15,9 @@ use crate::app::state::ErrorNotice;
 use crate::app::{CrossProbeMsg, Message, Signex};
 
 mod apply;
+mod panes;
+#[cfg(test)]
+mod panes_tests;
 mod probe;
 mod surfaces;
 
@@ -55,6 +58,8 @@ impl Signex {
                 self.mirror_selection_from(source, source_empty);
             }
         }
+        // Mockup row 207: and into the other panes of the document area.
+        self.outline_counterparts_in_panes();
         let task = self.run_pending_probe();
         let now = self.selection_stamps();
         self.interaction_state.cross_select.record(now);

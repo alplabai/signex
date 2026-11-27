@@ -20,6 +20,15 @@ pub(super) const WINDOW_LAYOUT: &[&str] = &[
     "tile_windows_horizontally",
     "tile_windows_vertically",
     "untile_documents",
+    // Mockup row 207: the document area's panes.
+    "split_pane_right",
+    "split_pane_down",
+    "open_second_view",
+    "tile_windows_grid",
+    "move_tab_to_other_pane",
+    "close_pane",
+    "sync_pane_zoom",
+    "equalize_panes",
 ];
 
 /// Is `command` one of [`WINDOW_LAYOUT`]?
@@ -115,10 +124,13 @@ mod tests {
                 "check_requirements",
                 "clear_all_net_colors",
                 "close_active_document",
+                // Mockup row 207: the pane commands, as the window layout.
+                "close_pane",
                 "color_net",
                 "delete_net_class",
                 "delete_selection",
                 "document_info",
+                "equalize_panes",
                 "filter_drc_results",
                 "find_items",
                 "find_similar_items",
@@ -131,6 +143,9 @@ mod tests {
                 "list_documents",
                 "lock_board_items",
                 "measure_board",
+                "move_tab_to_other_pane",
+                // Mockup row 207: the panes, as the window layout.
+                "open_second_view",
                 "panelize_board",
                 // #2410: pin and gate swap and design reuse, on the named board.
                 "place_board_reuse_block",
@@ -216,11 +231,15 @@ mod tests {
                 "show_layer_group",
                 "show_layer_set",
                 "show_used_layers_only",
+                "split_pane_down",
+                "split_pane_right",
                 "stitch_vias",
                 "swap_gates",
                 "swap_pins",
+                "sync_pane_zoom",
                 // #2249: the window layout, by the maintainer's rule that
                 // everything is AI-controllable.
+                "tile_windows_grid",
                 "tile_windows_horizontally",
                 "tile_windows_vertically",
                 // #2389: length tuning on the named board.

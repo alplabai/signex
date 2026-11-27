@@ -138,6 +138,13 @@ fn render_item(
         mc,
         shape,
     );
+    // Mockup row 207: a tile row previews its panes while hovered.
+    if let Some(preview) = &item.preview {
+        let card = super::tile_preview::card(preview, mc);
+        return Item::new(iced::advanced::Widget::_boxed(
+            signex_widgets::tooltip(row, card, iced::widget::tooltip::Position::Right).gap(8),
+        ));
+    }
     let ItemState::Placeholder { reason } = &item.state else {
         return Item::new(row);
     };

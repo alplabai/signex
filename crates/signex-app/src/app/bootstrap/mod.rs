@@ -37,6 +37,7 @@ pub(in crate::app) fn main_window_title(i18n: &signex_i18n::I18n, dirty_count: u
 mod boot_tests;
 #[cfg(test)]
 mod chooser_subscription_tests;
+mod drag_events;
 #[cfg(test)]
 mod held_escape_subscription_tests;
 mod new;

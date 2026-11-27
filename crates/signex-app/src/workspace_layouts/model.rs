@@ -90,6 +90,8 @@ pub enum DocumentSplit {
     SideBySide,
     /// Tile Horizontally.
     Stacked,
+    /// Tile Grid (mockup row 207).
+    Grid,
 }
 
 impl DocumentSplit {
@@ -97,6 +99,7 @@ impl DocumentSplit {
         match self {
             Self::SideBySide => "side_by_side",
             Self::Stacked => "stacked",
+            Self::Grid => "tile_grid",
         }
     }
 
@@ -104,6 +107,7 @@ impl DocumentSplit {
         match key {
             "side_by_side" => Some(Self::SideBySide),
             "stacked" => Some(Self::Stacked),
+            "tile_grid" => Some(Self::Grid),
             _ => None,
         }
     }

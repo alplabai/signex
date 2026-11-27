@@ -21,6 +21,9 @@ mod library_tab;
 mod modals;
 mod net_color;
 mod overlays;
+pub(crate) mod pane_chrome;
+#[cfg(test)]
+mod pane_chrome_tests;
 pub(crate) mod parameter_manager;
 mod pcb_active_bar;
 pub(in crate::app) mod pcb_strip;
@@ -45,8 +48,8 @@ pub(crate) const CHROME_SEARCH_LEFT_GAP: f32 = 16.0;
 pub(crate) const CHROME_SEARCH_RIGHT_GAP: f32 = 16.0;
 
 /// Pointer travel (px) before a tab press counts as a drag, for both the
-/// grab cursor and the drag ghost.
-const TAB_DRAG_THRESHOLD_PX: f32 = 6.0;
+/// grab cursor, the drag ghost and the pane drop targets.
+pub(in crate::app) const TAB_DRAG_THRESHOLD_PX: f32 = 6.0;
 
 impl Signex {
     pub fn view(&self, window_id: iced::window::Id) -> Element<'_, Message> {
@@ -172,6 +175,7 @@ impl Signex {
             cross_select: interaction.cross_select.enabled,
             pcb_sync: self.pcb_sync_label(Some(window_id)),
             layouts: self.layouts_menu(),
+            tile_previews: self.tile_previews(),
         };
         let undocked = ui.main_window_id != Some(window_id);
         let menu_row = || {
@@ -375,6 +379,15 @@ impl Signex {
             .is_some()
             .then(|| self.locked_window_layer());
         let mut overlays = self.collect_overlays(lock, window_id);
+        // Mockup row 207: the half a dropped tab would split into, under
+        // the ghost.
+        if is_main_window && let Some(target) = self.pane_drop_overlay() {
+            overlays.push(target);
+        }
+        // The pane menu of a pane's ⋯ button.
+        if is_main_window && let Some(menu) = self.pane_menu_overlay() {
+            overlays.push(menu);
+        }
         // Tab drag ghost: only renders once the cursor has travelled past
         // the same 6 px threshold the cursor gating uses
         // (`tab_bar::view`). Mirrors that gate here so press-without-move

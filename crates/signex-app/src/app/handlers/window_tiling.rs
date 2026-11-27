@@ -20,6 +20,8 @@ pub enum TileLayout {
     /// Tile Horizontally: one row per window or pane, top to bottom
     /// (Caner 2026-11-10).
     Stacked,
+    /// Tile Grid (mockup row 207): rows and columns, filled row by row.
+    Grid,
 }
 
 /// One window's tile: position relative to the monitor, and size, both in
@@ -37,32 +39,91 @@ pub fn tiles(count: usize, area: (f32, f32), layout: TileLayout) -> Vec<Tile> {
     if count == 0 {
         return Vec::new();
     }
-    let (width, height) = area;
     let along = match layout {
-        TileLayout::SideBySide => width,
-        TileLayout::Stacked => height,
+        TileLayout::SideBySide => area.0,
+        TileLayout::Stacked => area.1,
+        TileLayout::Grid => return grid_tiles(count, area, None),
     };
     let step = (along / count as f32).floor();
-    (0..count)
+    let extents: Vec<f32> = (0..count)
         .map(|index| {
-            let start = step * index as f32;
-            let extent = if index + 1 == count {
-                along - start
+            if index + 1 == count {
+                along - step * index as f32
             } else {
                 step
-            };
-            match layout {
-                TileLayout::SideBySide => Tile {
-                    position: (start, 0.0),
-                    size: (extent, height),
-                },
-                TileLayout::Stacked => Tile {
+            }
+        })
+        .collect();
+    linear_tiles(&extents, area, layout == TileLayout::Stacked)
+}
+
+/// Tiles of `extents` one after the other along the width of `area`, or
+/// along its height when `stacked`.
+#[must_use]
+pub fn linear_tiles(extents: &[f32], area: (f32, f32), stacked: bool) -> Vec<Tile> {
+    let mut start = 0.0;
+    extents
+        .iter()
+        .map(|&extent| {
+            let tile = if stacked {
+                Tile {
                     position: (0.0, start),
-                    size: (width, extent),
-                },
+                    size: (area.0, extent),
+                }
+            } else {
+                Tile {
+                    position: (start, 0.0),
+                    size: (extent, area.1),
+                }
+            };
+            start += extent;
+            tile
+        })
+        .collect()
+}
+
+/// `count` tiles in a grid over `area`: as many columns as the square root
+/// of `count` rounds up to, filled row by row; the last tile stretches to
+/// the right edge of a short last row. `split` is the share of the first
+/// column and of the first row when there are two; `None` makes them equal.
+#[must_use]
+pub fn grid_tiles(count: usize, area: (f32, f32), split: Option<(f32, f32)>) -> Vec<Tile> {
+    if count == 0 {
+        return Vec::new();
+    }
+    let columns = (count as f32).sqrt().ceil().max(1.0) as usize;
+    let rows = count.div_ceil(columns);
+    let xs = cuts(area.0, columns, split.map(|s| s.0));
+    let ys = cuts(area.1, rows, split.map(|s| s.1));
+    (0..count)
+        .map(|index| {
+            let (row, column) = (index / columns, index % columns);
+            let right = if index + 1 == count {
+                area.0
+            } else {
+                xs[column + 1]
+            };
+            Tile {
+                position: (xs[column], ys[row]),
+                size: (right - xs[column], ys[row + 1] - ys[row]),
             }
         })
         .collect()
+}
+
+/// The `parts + 1` cut positions along `extent`: equal whole-pixel steps,
+/// the last part taking the remainder. With two parts and a `first` share,
+/// the first part is that share of the extent.
+fn cuts(extent: f32, parts: usize, first: Option<f32>) -> Vec<f32> {
+    let step = (extent / parts as f32).floor();
+    let mut at: Vec<f32> = (0..parts).map(|index| step * index as f32).collect();
+    if parts == 2
+        && let Some(share) = first.filter(|s| s.is_finite() && *s > 0.0 && *s < 1.0)
+    {
+        at[1] = (extent * share).floor();
+    }
+    at.push(extent);
+    at
 }
 
 /// Where each window goes and on which monitor.
@@ -130,6 +191,7 @@ impl Signex {
             match layout {
                 TileLayout::SideBySide => "side by side",
                 TileLayout::Stacked => "one above the other",
+                TileLayout::Grid => "in a grid",
             }
         ));
         let monitor = Some(iced::window::MonitorIndex(plan.monitor_index));
@@ -181,5 +243,36 @@ mod tests {
         assert_eq!(placed[0].size, (1920.0, 540.0));
         assert_eq!(placed[1].position, (0.0, 540.0));
         assert!(tiles(0, (10.0, 10.0), TileLayout::Stacked).is_empty());
+    }
+
+    /// Mockup row 207, Tile Grid: four panes in two rows of two, three with
+    /// the last one across the bottom row, two side by side.
+    #[test]
+    fn a_grid_fills_rows_of_two_and_the_last_tile_stretches() {
+        let at = |tile: &Tile| (tile.position, tile.size);
+        let four = tiles(4, (1000.0, 600.0), TileLayout::Grid);
+        assert_eq!(
+            four.iter().map(at).collect::<Vec<_>>(),
+            [
+                ((0.0, 0.0), (500.0, 300.0)),
+                ((500.0, 0.0), (500.0, 300.0)),
+                ((0.0, 300.0), (500.0, 300.0)),
+                ((500.0, 300.0), (500.0, 300.0)),
+            ]
+        );
+        let three = tiles(3, (1000.0, 600.0), TileLayout::Grid);
+        assert_eq!(at(&three[2]), ((0.0, 300.0), (1000.0, 300.0)));
+        let two = tiles(2, (1001.0, 600.0), TileLayout::Grid);
+        assert_eq!(at(&two[1]), ((500.0, 0.0), (501.0, 600.0)));
+        assert!(tiles(0, (10.0, 10.0), TileLayout::Grid).is_empty());
+    }
+
+    /// The first column and row take their share of a dragged grid.
+    #[test]
+    fn a_grid_split_moves_the_first_column_and_row() {
+        let placed = grid_tiles(4, (1000.0, 600.0), Some((0.3, 0.75)));
+        assert_eq!(placed[0].size, (300.0, 450.0));
+        assert_eq!(placed[3].position, (300.0, 450.0));
+        assert_eq!(placed[3].size, (700.0, 150.0));
     }
 }

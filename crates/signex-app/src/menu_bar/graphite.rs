@@ -357,6 +357,7 @@ mod tests {
                 state: model::ItemState::Unavailable,
                 checked,
                 icon: None,
+                preview: None,
             })],
         };
         let plain = dropdown_width(&menu_of(None), "");

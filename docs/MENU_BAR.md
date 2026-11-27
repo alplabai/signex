@@ -124,8 +124,10 @@ PDF pages are Board Print / PDF's Assembly Drawing sets. Rules:
 `BOARD_OUTPUT.md`.
 
 **View ▸ Window** (the last entry of View, after the panel rows and a
-separator): Tile Horizontally, Tile Vertically, Untile (see
-[below](#window-tile)), a separator, the Layouts submenu (mockup row 166, see
+separator): Tile Horizontally, Tile Vertically, Tile Grid, Untile (see
+[below](#window-tile) and [Panes](#panes)), Split Right, Split Down, Open
+Second View (mockup row 207, see [below](#window-split)), a separator, the
+Layouts submenu (mockup row 166, see
 [below](#window-layouts)), and Close All Documents (see
 [below](#tools-library-editor)). Their built-in keys are unchanged.
 
@@ -895,6 +897,124 @@ read (the settled geometry reading, shortly after start-up). iced reports the
 monitor's full size, not its work area, so the tiles cover the whole monitor.
 Tile is greyed when it has neither to do. The Messages panel names how many
 documents or windows were arranged.
+
+## View ▸ Window ▸ Split {#window-split}
+
+Mockup row 207 (#1307). The main window's document area splits into panes
+that hold tabs, beside Tile's one pane per document.
+
+- **Dragging a tab onto the document area.** Past the tab strip's drag
+  threshold, a tab held over the outer quarter of the document area (left,
+  right, top or bottom) fills the half that would receive it with
+  `accent-soft` and a 2 px accent border, named "Split right · <tab>" (or
+  "Second view · <tab>" while Ctrl is held). Letting go there splits; the
+  middle draws nothing and keeps the tab where it is.
+- **What a drop does** (decided as drawn): the document moves into a new
+  pane on that edge, which takes the focus; every other tab stays in the
+  pane it was in. With Ctrl held (Cmd on macOS) it opens a second view
+  instead: the document stays where it was and shows in the new pane too.
+  Moving the only tab of the main window is refused (its pane would be
+  empty); a second view of it is not.
+- **Panes.** A tab no pane lists sits in the first pane, so a document
+  opened while split joins it. A pane that is not focused draws the tab it
+  showed last, and a press on it moves the focus there (a second view of the
+  active document only takes the focus). Clicking a tab in the strip moves
+  the focus to the pane holding it. Up to four panes, all in one direction:
+  a drop across them (top or bottom while side by side) is not offered.
+  Closing a pane's last tab removes the pane; one pane left ends the split.
+- **Menu rows and commands.** Split Right (`split_pane_right`) and Split Down
+  (`split_pane_down`) move the active document into a new pane on the right
+  or below; Open Second View (`open_second_view`) opens it on the right as
+  well. Split Right and Split Down share Tile's gate (greyed with fewer than
+  two documents and no undocked window); Open Second View needs a document.
+  A split that cannot be made (across the panes, past four, the only tab) is
+  said in Messages. Untile merges every pane back into one; Tile Vertically
+  or Tile Horizontally replaces the split with one pane per document. The
+  three commands are on the agent channel with Tile and Untile, answer with
+  the same layout JSON, and are refused with the split's reason.
+- **Kept per project** (decided as drawn). A drop or a pane command keeps
+  the split for the active tab's project, per user, in `prefs.json` under
+  `document_panes`, keyed by the project file:
+  `{"direction": "side_by_side", "panes": [{"tabs": [{"path": "power.snxsch", "page": "schematic"}], "shown": {…}}, …], "rest": 0, "focused": 1}`,
+  documents relative to the project folder. The split comes back, once a
+  session, when two of its panes have a document open again. Untile, or
+  Tile's one pane per document, forgets it; closing the documents does not.
+  An entry this build cannot read is left as it is, and a key it does not
+  know survives a rewrite of its entry. A loose file keeps nothing. The
+  write runs off the UI thread through the ordered preference writer; a
+  failure is said in Messages. Pane sizes after a splitter drag ride in the
+  entry as `"shares"`, whole thousandths per pane (a grid: its first
+  column and first row); equal panes write none.
+- **A tab let go over the canvas.** The canvas takes the pointer's moves and
+  the release while a tab is dragged over it. The drag subscription still
+  hears both (`app/bootstrap/drag_events.rs`): a move updates the drop
+  target, and a release over the document area ends the drag there,
+  splitting when it is over an edge. A release over the tab strip is the
+  strip's own (a reorder).
+- **Not built**: Merge All Panes as its own row and Ctrl+Alt+M (Untile does
+  the merge, DECISIONS 2026-11-26), and Tile Vertically's grouping by
+  document kind (Tile keeps one pane per document, DECISIONS 2026-11-16).
+
+## Panes {#panes}
+
+Mockup row 207 (#1307): how the panes look and what they do, whether made
+by Tile, Tile Grid or a split.
+
+- **Tile Grid** (`tile_windows_grid`, View ▸ Window after Tile Vertically,
+  no default key, Tile's gate). Up to four panes in a grid, two to a row;
+  with three, the third spans the bottom row. Up to four documents get one
+  pane each. With more, one document kind each where it can: the tabs are
+  grouped by kind (sheet, board, library, and so on) in the order the kinds
+  first appear, the largest group is halved while there are fewer than four
+  panes, and the last groups share a pane while there are more. The active
+  tab's pane has the focus, and documents opened later join it. A grid is a
+  split: it is kept for the project as `"direction": "tile_grid"`, a drop on
+  an edge is not offered, and Untile merges it. With undocked windows, Tile
+  Grid also arranges the main window and those windows in a grid on the
+  main window's monitor.
+- **Tab strip.** Each pane has its own strip on top, 26 px: the pane's tabs
+  in strip order and, at the right end, the ⋯ button of the pane menu. The
+  tab the pane draws carries a 2 px line on top, the accent on the focused
+  pane and grey on the others. A press on a tab focuses the pane and shows
+  that tab there. The window's own tab strip stays above the document area.
+- **Pane menu** (⋯): Split Right, Split Down, Move Tab to Other Pane,
+  Untile (Merge All Panes), Close Pane, Sync Zoom with Other Pane and Equal
+  Pane Sizes, greyed as their commands are. A row first focuses its pane,
+  then runs its command, as the palette does. A press outside closes it.
+  - Move Tab to Other Pane (`move_tab_to_other_pane`): the active tab moves
+    to the next pane (the first after the last), which takes the focus. A
+    pane left with no tab closes; refused when one pane would be left.
+  - Close Pane (`close_pane`): the focused pane closes and its tabs join the
+    next pane (the one before, for the last). No document closes. Down to
+    one pane the split ends and the project forgets it, as Untile does.
+  - Sync Zoom with Other Pane (`sync_pane_zoom`): every other pane that
+    shows a sheet or a board takes the focused pane's zoom, about its own
+    centre. Refused when the focused pane shows neither.
+  - Equal Pane Sizes (`equalize_panes`): the panes share the area equally.
+- **Splitters.** The line between two panes drags (a 6 px grip; a grid has
+  a column line and a row line); each pane keeps at least 80 px. A double
+  click makes the panes equal. The sizes are kept with the project's split.
+- **Each pane keeps its own view.** The focused pane draws on the main
+  canvases and every other pane on a canvas of its own. When the focus moves
+  to another pane, the main canvas takes that pane's pan and zoom, and the
+  pane left behind keeps the view it had. Two views of one sheet also keep
+  their own selection.
+- **Docks follow the focused pane.** Properties, Messages and the other
+  panels show the focused pane's document and, for two views of one sheet,
+  that view's selection.
+- **Cross probe across panes.** While Cross Select Mode is on, what the
+  focused pane has selected is outlined in every other pane on the other
+  side: a part on the sheet outlines its footprint on a board pane, a
+  footprint or a net on the board outlines its symbol or members on a sheet
+  pane. The outline is drawn again only when the selection, the panes or the
+  board change.
+- **Hover preview.** Hovering Tile Horizontally, Tile Vertically or Tile
+  Grid shows a card beside the row: "Tile Vertically · 4 open documents",
+  the panes in their arrangement with the names of the documents each would
+  receive, and what the arrangement does. The native macOS menu shows none.
+- **Commands.** All five are GUI only, in the palette and on the agent
+  channel; they answer with the layout JSON (see `docs/AGENT_SOCKET.md`) and
+  are refused with the pane's reason.
 
 ## View ▸ Window ▸ Layouts {#window-layouts}
 
