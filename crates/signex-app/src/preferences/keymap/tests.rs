@@ -525,13 +525,14 @@ fn a_long_command_name_ends_in_an_ellipsis_with_the_full_name_on_hover() {
         crate::layout_probe::draw_pixels(table::command_label(label.to_string(), &tokens), window)
     };
     let clipped = |label: &str| {
+        use iced::Widget as _;
         let plain: Element<'_, PrefMsg> = container(table::plain(
             label.to_string(),
             crate::styles::ti(tokens.text),
         ))
         .width(iced::Length::Fill)
         .clip(true)
-        .into();
+        .boxed();
         crate::layout_probe::draw_pixels(plain, window)
     };
     assert_eq!(

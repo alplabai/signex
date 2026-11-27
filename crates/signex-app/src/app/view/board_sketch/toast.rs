@@ -5,7 +5,7 @@
 
 use iced::widget::tooltip::Position;
 use iced::widget::{container, row};
-use iced::{Alignment, Background, Border, Color, Element, Padding, Theme, Widget as _};
+use iced::{Alignment, Background, Border, Color, Element, Length, Padding, Theme, Widget as _};
 use signex_i18n::{I18n, Localized, RenderTranslatable as _, ids, t};
 use signex_types::theme::{ThemeId, ThemeTokens};
 use signex_widgets::{button, text, tooltip};
@@ -56,7 +56,7 @@ pub(super) fn refusal_toast<'a>(
     line = line.push(close_button(ink, tokens, i18n));
     let shadow = floating_shadow(tokens);
     container(line)
-        .max_width(TS.body * TOAST_MAX_BODIES)
+        .width(Length::Fit.max(TS.body * TOAST_MAX_BODIES))
         .padding(Padding::from([SP.s, SP.m]))
         .style(move |_: &Theme| container::Style {
             background: Some(Background::Color(fill)),

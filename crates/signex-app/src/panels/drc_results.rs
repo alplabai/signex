@@ -407,7 +407,8 @@ fn tiles<'a>(ctx: &'a PanelContext, drc: &DrcPanel) -> Element<'a, PanelMsg> {
                 slot(),
                 slot(),
             ]
-            .spacing(gap),
+            .spacing(gap)
+            .boxed(),
         );
     }
     let ink4 = crate::styles::tokens::resolve(&ctx.tokens).ink4;

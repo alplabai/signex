@@ -253,6 +253,7 @@ mod tests {
     /// top-left corner (clear of its dashed edge) holding a pixel in the
     /// room's colour, which the 10 % fill is far from.
     fn name_rows(camera: &BoardCamera, room: &RoomMark, window: iced::Size) -> usize {
+        use iced::Widget as _;
         use iced::widget::canvas;
         let element: iced::Element<'_, ()> = canvas(Backdrop {
             camera: camera.clone(),
@@ -260,7 +261,7 @@ mod tests {
         })
         .width(iced::Length::Fill)
         .height(iced::Length::Fill)
-        .into();
+        .boxed();
         let pixels = crate::layout_probe::draw_pixels(element, window);
         let corner = camera.world_to_screen(Point::new(room.corners[0][0], room.corners[0][1]));
         let (w, h) = (window.width as usize, window.height as usize);

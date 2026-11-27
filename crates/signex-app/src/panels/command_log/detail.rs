@@ -75,7 +75,7 @@ fn stacked_pane<'a>(
     let col = heading(ctx, row)
         .push(gap(SP.m))
         .push(pinned(ctx, row))
-        .push(details(ctx, state, row));
+        .push(details(ctx, state, row).boxed());
     crate::panels::panel_scrollable(
         container(col)
             .padding([SP.l, SP.l + SP.xs])
@@ -93,7 +93,7 @@ fn pinned_pane<'a>(
 ) -> Element<'a, PanelMsg> {
     let tokens = &ctx.tokens;
     let scrolled = crate::panels::panel_scrollable(
-        container(heading(ctx, row).push(details(ctx, state, row)))
+        container(heading(ctx, row).push(details(ctx, state, row).boxed()))
             .padding([SP.l, SP.l + SP.xs])
             .width(Length::Fill)
             .boxed(),

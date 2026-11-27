@@ -270,7 +270,7 @@ pub(super) fn values_drawing<'a>(pcb: &PcbDefaults, i18n: &I18n) -> Element<'a, 
                 },
                 ..container::Style::default()
             });
-        layers.push(Translate::new(tag, (bounds.x, bounds.y)).into());
+        layers.push(Translate::new(tag.boxed(), (bounds.x, bounds.y)).boxed());
     }
     iced::widget::Stack::with_children(layers)
         .width(Length::Fixed(VIEW_W))
