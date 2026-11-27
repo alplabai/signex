@@ -14,6 +14,7 @@
 //! the command catalog, the Libraries page the library messages. Pages,
 //! filters, pins and the row menu send [`StartScreenMsg`] (#2305).
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use chrono::{DateTime, Utc};
@@ -36,7 +37,7 @@ mod projects;
 mod projects_page;
 
 pub use hint::{HintFacts, hint_view};
-pub use libraries_page::{LoadedLibrary, loaded_libraries};
+pub use libraries_page::{LoadedLibrary, library_folder, loaded_libraries};
 pub use projects::opened_label;
 pub use projects_page::{ProjectListing, project_listing};
 
@@ -130,6 +131,13 @@ pub struct StartScreenState {
     /// when the screen shows and on [`StartScreenMsg::ClockTicked`]; it is
     /// `None` while the screen is off, so `view` never reads the clock.
     pub now: Option<DateTime<Utc>>,
+    /// The version-control state of each library folder, read off the UI
+    /// thread when the Libraries page opens and after Enable Version
+    /// Control finishes (#2591). A folder not read yet has no entry.
+    pub library_vcs: BTreeMap<PathBuf, signex_library::library_vcs::LibraryVcsState>,
+    /// Bumped by every read of [`Self::library_vcs`]; an older read's
+    /// answer is dropped.
+    pub library_vcs_generation: u64,
 }
 
 impl StartScreenState {
@@ -250,6 +258,15 @@ pub enum StartScreenMsg {
     /// The minute tick fired while the screen shows; carries the time the
     /// last-opened column is read against.
     ClockTicked(DateTime<Utc>),
+    /// The off-thread read of the libraries' version control finished
+    /// (#2591): each library folder with its state, or why the read failed.
+    LibraryVcsRead {
+        generation: u64,
+        result: Result<Vec<(PathBuf, signex_library::library_vcs::LibraryVcsState)>, String>,
+    },
+    /// "off" was pressed in a library row's Version control cell: open
+    /// Enable Version Control on that library file.
+    LibraryVcsEnableClicked(PathBuf),
 }
 
 /// How often the last-opened column ("today 14:05", "yesterday") is
@@ -315,6 +332,8 @@ pub(crate) fn strip_centre_from_hero(hero_left: f32) -> f32 {
     hero_left - graphite::MAIN_PAD_X - nav_strip::STRIP_W / 2.0
 }
 
+#[cfg(test)]
+mod library_tests;
 #[cfg(test)]
 mod page_tests;
 #[cfg(test)]

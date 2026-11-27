@@ -76,9 +76,15 @@ Hover a row for **Pin** or **Unpin**; right-click it for the same actions.
 **Projects** lists every pinned and recent project. Type in **Filter by name
 or folder** to narrow the list, and use **All**, **Pinned** or **Missing** to
 pick which projects show. **Libraries** lists the libraries loaded for every
-project, with their scope and number of components; **Open** opens a library
-in the Library Browser (the Stock library opens read-only), **Add library…**
-adds a global library, and **Open Library Browser** opens the browser.
+project, with their scope, number of components and version control;
+**Open** opens a library in the Library Browser (the Stock library opens
+read-only), **Add library…** adds a global library, and **Open Library
+Browser** opens the browser.
+
+The **Version control** column says `git` for a library under git and `off`
+for one that is not; press **off** to turn version control on for it. A
+library whose repository has uncommitted changes, or that needs `git` or
+`git-lfs` and cannot find it on your `PATH`, says **needs attention** and why.
 
 When a project is open but no document is shown, the centre says so and
 offers **New sheet**, **New PCB** and **Project Options…**. A project with no

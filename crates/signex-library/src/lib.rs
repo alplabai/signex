@@ -33,6 +33,8 @@ pub mod identity;
 #[cfg(feature = "local-git")]
 pub mod import_snapshot;
 pub mod library_file;
+#[cfg(feature = "local-git")]
+pub mod library_vcs;
 pub mod lifecycle;
 pub mod manifest;
 pub mod manufacturer;

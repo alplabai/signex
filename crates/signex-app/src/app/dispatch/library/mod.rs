@@ -98,6 +98,7 @@ mod save_all_cascade_tests;
 mod settings;
 #[cfg(test)]
 mod settings_tests;
+mod start_libraries;
 #[cfg(test)]
 mod stale_row_tests;
 mod stock_copy;
