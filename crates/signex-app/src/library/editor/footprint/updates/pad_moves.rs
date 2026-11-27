@@ -53,7 +53,8 @@ pub(super) fn move_pads(
     dy: f64,
 ) -> bool {
     let indices = live_indices(editor, indices);
-    if indices.is_empty() {
+    // A zero offset moves nothing, so it records no step either.
+    if indices.is_empty() || (dx == 0.0 && dy == 0.0) {
         return false;
     }
     editor.push_history();

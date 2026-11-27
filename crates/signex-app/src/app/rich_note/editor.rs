@@ -370,7 +370,10 @@ impl Signex {
 
 /// The task that reports the typing pause of `generation`.
 fn pause(generation: u64) -> Task<Message> {
-    Task::perform(tokio::time::sleep(TYPING_PAUSE), move |()| {
-        Message::from(RichNoteMsg::EditorPaused { generation })
-    })
+    // The timer is made inside the future, so building the task outside a
+    // runtime (a headless run, a test) does not need one.
+    Task::perform(
+        async { tokio::time::sleep(TYPING_PAUSE).await },
+        move |()| Message::from(RichNoteMsg::EditorPaused { generation }),
+    )
 }

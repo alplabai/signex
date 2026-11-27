@@ -735,6 +735,7 @@ mod tests {
             ("placement.rs", include_str!("placement.rs")),
             ("wiring.rs", include_str!("wiring.rs")),
             ("drawing.rs", include_str!("drawing.rs")),
+            ("images.rs", include_str!("images.rs")),
             ("tool.rs", include_str!("tool.rs")),
             ("hierarchy.rs", include_str!("hierarchy.rs")),
             ("annotate.rs", include_str!("annotate.rs")),

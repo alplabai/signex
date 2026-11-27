@@ -99,9 +99,12 @@ impl NoteInput<'_> {
             HAlign::Center => "center",
             HAlign::Right => "right",
         };
+        // The text's bottom edge is its descender, so the last line's descenders
+        // stay inside the page the drawing is sized by.
         format!(
             "#set page(width: {width}, height: auto, margin: 0pt, fill: none)\n\
-             #set text(size: {size:.4}pt)\n#set align({align})\n{source}",
+             #set text(size: {size:.4}pt, bottom-edge: \"descender\")\n\
+             #set align({align})\n{source}",
             size = self.text_size_pt(),
             source = self.source,
         )
