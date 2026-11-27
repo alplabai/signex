@@ -208,7 +208,7 @@ fn drawn_by_hand(case: &Case) -> (Signex, PathBuf) {
     for msg in published {
         let _ = app.update(Message::Library(msg));
     }
-    assert_eq!(editor(&app, &path).tool, case.tool, "{}", case.row);
+    assert_eq!(editor(&app, &path).gui.tool, case.tool, "{}", case.row);
     for click in (case.clicks)() {
         send(&mut app, &path, click);
     }
@@ -253,7 +253,12 @@ fn a_shape_from_operands_is_one_undo_step_and_marks_the_symbol_unsaved() {
             matches!(outcome, CommandOutcome::Answered(_)),
             "{outcome:?}"
         );
-        assert_eq!(editor(&app, &path).history.undo_len(), 1, "{}", case.id);
+        assert_eq!(
+            editor(&app, &path).draft.history.undo_len(),
+            1,
+            "{}",
+            case.id
+        );
         assert!(app.document_state.is_document_dirty(&path), "{}", case.id);
         let (undone, _task) =
             app.dispatch_command_reporting(&id("undo"), CommandArgs::none(), None);
@@ -267,7 +272,11 @@ fn a_shape_from_operands_saves_and_reloads_as_drawn() {
     for case in cases() {
         let (mut app, path) = symbol_app();
         let _ = headless(&mut app, &path, case.id, &case.operands());
-        let text = editor(&app, &path).file.to_toml_string().expect("saves");
+        let text = editor(&app, &path)
+            .draft
+            .file
+            .to_toml_string()
+            .expect("saves");
         let back = SymbolFile::from_toml_str(&text).expect("reloads");
         let kinds: Vec<SymbolGraphicKind> = back.symbols[0]
             .graphics
@@ -285,6 +294,7 @@ fn the_shape_lands_on_the_part_the_editor_shows() {
         .symbol_editors
         .get_mut(&path)
         .expect("editor")
+        .draft
         .active_part = 2;
     let outcome = headless(
         &mut app,
@@ -393,7 +403,7 @@ fn a_shape_that_draws_nothing_is_refused_with_nothing_changed() {
             reason.render_en_us()
         );
         assert!(graphics(&app, &path).is_empty(), "{name}");
-        assert_eq!(editor(&app, &path).history.undo_len(), 0, "{name}");
+        assert_eq!(editor(&app, &path).draft.history.undo_len(), 0, "{name}");
         assert!(!app.document_state.is_document_dirty(&path), "{name}");
     }
 }

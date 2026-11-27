@@ -20,6 +20,7 @@ pub(crate) struct DesignInputs {
     pages: Vec<PathBuf>,
     root: PathBuf,
     fold: CaseFold,
+    project_dir: PathBuf,
 }
 
 impl DesignInputs {
@@ -34,11 +35,15 @@ impl DesignInputs {
             pages,
             root,
             fold: fold_of(Some(project)),
+            project_dir: project.dir().to_path_buf(),
         })
     }
 
-    /// The part values of the design. Empty when a sheet could not be read
-    /// or is missing: a part there would wrongly read as changed or gone.
+    /// The part values of the design, under the designator each placement
+    /// gives its part (`R1_A`, `R1_B` for a sheet placed twice), as the
+    /// notebook names them (#3019). Empty when a sheet could not be read or
+    /// is missing: a part there would wrongly read as changed or gone. A
+    /// design that cannot be stitched is read sheet by sheet.
     pub(crate) fn values(&self) -> DesignValues {
         let set = project_sheets::assemble_project_sheets_quiet_from(
             &self.open,
@@ -49,7 +54,28 @@ impl DesignInputs {
         if !set.unreadable.is_empty() || !set.absent.is_empty() {
             return DesignValues::new();
         }
-        values_of(set.sheets.values())
+        match crate::app::design_read::DesignGraph::read(&set, &self.project_dir) {
+            Ok(graph) => {
+                let placed = graph.placed();
+                let names: Vec<String> = placed
+                    .iter()
+                    .map(|(_, _, path)| path.display().to_string())
+                    .collect();
+                let sheets: Vec<signex_notebook::PlacedSheet<'_>> = placed
+                    .iter()
+                    .zip(&names)
+                    .map(
+                        |((placement, sheet, _), file)| signex_notebook::PlacedSheet {
+                            file,
+                            placement,
+                            sheet,
+                        },
+                    )
+                    .collect();
+                signex_notebook::placed_values(&sheets)
+            }
+            Err(_) => values_of(set.sheets.values()),
+        }
     }
 
     /// The designators, pins and nets of the design, read whole from the

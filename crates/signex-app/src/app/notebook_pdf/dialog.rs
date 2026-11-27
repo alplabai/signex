@@ -204,6 +204,7 @@ impl Signex {
             notebook: dialog.notebook.clone(),
             path: Some(path),
             overwrite: None,
+            confined: false,
             options,
             generation: Some(dialog.generation),
             waiting: None,

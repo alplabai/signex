@@ -148,7 +148,12 @@ fn run_headless(
     if let Err(error) = diagnostics::init_logging() {
         eprintln!("[signex-cli] logging was already set up: {error:#}");
     }
-    // A throwaway config root: the run never reads or writes the user's.
+    // The one carve-out (docs/CLI.md, #2495): `keymap_assign` and
+    // `keymap_clear` edit the user's own keyboard_shortcuts.toml. Its path is
+    // taken before the override, and only those two commands read it.
+    let user_shortcuts = signex_app::keymap::user_config_path();
+    // A throwaway config root: otherwise the run never reads or writes the
+    // user's.
     let config_root = tempfile::Builder::new()
         .prefix("signex-cli-")
         .tempdir()
@@ -158,6 +163,9 @@ fn run_headless(
     install_before_boot(FontSet::BundledOnly).map_err(|_| "fonts were already installed")?;
 
     let mut session = Session::start(project, policy, run_id.clone())?;
+    if let Some(path) = user_shortcuts {
+        session.edit_user_shortcuts_at(path);
+    }
     let report = drive(&mut session, options, input, out)?;
 
     let unsaved = session.finish()?;

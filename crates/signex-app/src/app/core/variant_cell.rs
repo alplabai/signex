@@ -25,4 +25,17 @@ pub struct VariantManagerUi {
     pub cell: Option<VariantCell>,
     /// The value being typed in the right pane's overrides.
     pub draft: Option<OverrideDraft>,
+    /// The parts on a repeated sheet whose matrix row is open, one sub-row
+    /// per channel's copy (#2662), by the part every copy shares.
+    pub open_channel_parts: std::collections::HashSet<signex_types::pcb::SymbolLink>,
+    /// Compare variants (#2949, mockup row 59 view d), while it is shown in
+    /// place of the cards and the matrix.
+    pub compare: Option<CompareSides>,
+}
+
+/// The two variants Compare variants shows side by side; `None` is Base.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct CompareSides {
+    pub from: Option<String>,
+    pub to: Option<String>,
 }

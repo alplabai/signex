@@ -31,7 +31,7 @@ fn app_in_sketch() -> (Signex, iced::window::Id) {
     app.ui_state.preferences_draft_theme = ThemeId::GraphiteLight;
     app.sync_panel_theme();
     app.ui_state.window_size = (WINDOW.width, WINDOW.height);
-    app.document_state.dock = crate::dock::graphite_first_run();
+    app.document_view.dock = crate::dock::graphite_first_run();
     app.ui_state.left_width = LEFT;
     app.ui_state.right_width = RIGHT;
     let path = PathBuf::from(PATH);
@@ -113,7 +113,7 @@ fn placed_on(app: &Signex, span: BarSpan, menu: FpActiveBarMenu) -> PlacedBar {
     let items = bar_items(
         editor,
         app.ui_state.effective_theme_id(),
-        &app.document_state.panel_ctx.tokens,
+        &app.document_view.panel_ctx.tokens,
         &app.ui_state.i18n,
     );
     place_bar(&items, menu, scrolling_slots(editor), span)
@@ -183,7 +183,7 @@ fn with_collapsed_docks_the_whole_bar_centres_between_the_rails() {
         crate::dock::PanelPosition::Left,
         crate::dock::PanelPosition::Right,
     ] {
-        app.document_state
+        app.document_view
             .dock
             .update(crate::dock::DockMessage::ToggleCollapse(side));
     }

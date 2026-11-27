@@ -28,20 +28,20 @@ impl Signex {
         };
         match msg {
             PlacedEditMsg::Typed { item, field, text } => {
-                self.document_state.panel_ctx.placed.draft = Some(PlacedDraft {
+                self.document_view.panel_ctx.placed.draft = Some(PlacedDraft {
                     item: *item,
                     field: field.clone(),
                     text: text.clone(),
                 });
             }
             PlacedEditMsg::Submitted { item, field } => {
-                let draft = (self.document_state.panel_ctx.placed.draft.clone())
+                let draft = (self.document_view.panel_ctx.placed.draft.clone())
                     .filter(|d| d.item == *item && d.field == *field);
                 let Some(draft) = draft else {
                     return true;
                 };
                 match self.commit_placed_field(*item, field, &draft.text) {
-                    Ok(()) => self.document_state.panel_ctx.placed.draft = None,
+                    Ok(()) => self.document_view.panel_ctx.placed.draft = None,
                     // The draft stays, so the user can fix the text.
                     Err(refusal) => say_refusal(&refusal),
                 }
@@ -53,14 +53,14 @@ impl Signex {
                 }
             }
             PlacedEditMsg::NoteActed { item, action } => {
-                let note = self.document_state.panel_ctx.placed.note.as_mut();
+                let note = self.document_view.panel_ctx.placed.note.as_mut();
                 if let Some(draft) = note.filter(|d| d.item == *item) {
                     draft.edited |= action.is_edit();
                     draft.content.perform(action.clone());
                 }
             }
             PlacedEditMsg::NoteSubmitted { item } => {
-                let note = self.document_state.panel_ctx.placed.note.as_mut();
+                let note = self.document_view.panel_ctx.placed.note.as_mut();
                 if let Some(draft) = note.filter(|d| d.item == *item && d.edited) {
                     // Marked applied first: the selection refresh the edit
                     // runs must keep this box, not owe it again.
@@ -76,7 +76,7 @@ impl Signex {
             }
             PlacedEditMsg::PortNameTyped { item, text } => {
                 if let Some(sheet) = self.document_state.active_path.clone() {
-                    self.document_state.panel_ctx.placed.port_name = Some(PortNameDraft {
+                    self.document_view.panel_ctx.placed.port_name = Some(PortNameDraft {
                         sheet,
                         item: *item,
                         text: text.clone(),
@@ -84,7 +84,7 @@ impl Signex {
                 }
             }
             PlacedEditMsg::PortNameSubmitted { item } => {
-                let placed = &mut self.document_state.panel_ctx.placed;
+                let placed = &mut self.document_view.panel_ctx.placed;
                 if placed.port_name.as_ref().is_some_and(|d| d.item == *item)
                     && let Some(draft) = placed.port_name.take()
                 {
@@ -147,7 +147,7 @@ impl Signex {
     /// undocked window's: a scope (a project, an export) adds them to the
     /// sheets it commits.
     pub(crate) fn typed_note_sheets(&self) -> Vec<std::path::PathBuf> {
-        let docs = &self.document_state;
+        let docs = &self.document_view;
         std::iter::once(&docs.panel_ctx.placed)
             .chain(docs.window_panel_ctx.values().map(|ctx| &ctx.placed))
             .flat_map(|placed| {
@@ -168,7 +168,7 @@ impl Signex {
         matches: &dyn Fn(&Path) -> bool,
         selected: bool,
     ) -> Vec<PortNameDraft> {
-        let docs = &mut self.document_state;
+        let docs = &mut self.document_view;
         std::iter::once(&mut docs.panel_ctx.placed)
             .chain(docs.window_panel_ctx.values_mut().map(|c| &mut c.placed))
             .flat_map(|placed| placed.take_typed_port_names(matches, selected))
@@ -221,7 +221,7 @@ impl Signex {
         matches: &dyn Fn(&Path) -> bool,
         selected: bool,
     ) -> Vec<NoteDraft> {
-        let docs = &mut self.document_state;
+        let docs = &mut self.document_view;
         let panels = std::iter::once(&mut docs.panel_ctx.placed).chain(
             docs.window_panel_ctx
                 .values_mut()

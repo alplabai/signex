@@ -7,7 +7,9 @@
 //! the view and side panel). The commands that name the project with
 //! `document` reach the tab the person sees from a CLI or an agent.
 
-use super::{CommandFlags, CommandGroup, CommandMetadata, Enablement, Operand, OperandKind};
+use super::{
+    CommandFlags, CommandGroup, CommandMetadata, DocumentKind, Enablement, Operand, OperandKind,
+};
 use signex_i18n_ids::command_ids;
 
 /// The project (or one of its documents) every reference command names.
@@ -161,14 +163,15 @@ pub(super) const NOTEBOOK: &[CommandMetadata] = &[
         ..CommandMetadata::DEFAULT
     },
     // View ▸ Notebook Badges (mockup row 197). The badges are on by default
-    // (Caner, 2026-11-25); B shows or hides them on every sheet.
+    // (Caner, 2026-11-25); B shows or hides them on every sheet. Greyed
+    // with no sheet in view, in the palette as in the menu (#3024).
     CommandMetadata {
         id: "toggle_notebook_badges",
         category: "view",
         label: command_ids::CMD_TOGGLE_NOTEBOOK_BADGES,
         menu_label: Some(command_ids::CMD_MENU_TOGGLE_NOTEBOOK_BADGES),
         group: CommandGroup::Schematic,
-        enable: Enablement::Always,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
         flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },

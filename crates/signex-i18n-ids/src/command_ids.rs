@@ -19,8 +19,11 @@ define_ids! {
         CMD_CENTER_ON_CURSOR = "cmd-center-on-cursor";
         CMD_CENTER_VIEW_AT_CURSOR = "cmd-center-view-at-cursor";
         CMD_CHECK_DRC = "cmd-check-drc";
+        CMD_QUERY_PART_HEIGHTS = "cmd-query-part-heights";
+        CMD_QUERY_LIBRARY = "cmd-query-library";
         CMD_CHECK_ERC = "cmd-check-erc";
         CMD_CHECK_REQUIREMENTS = "cmd-check-requirements";
+        CMD_QUERY_RAIL_BUDGET = "cmd-query-rail-budget";
         CMD_CLOSE_ACTIVE_DOCUMENT = "cmd-close-active-document";
         CMD_MENU_CLOSE_ACTIVE_DOCUMENT = "cmd-menu-close-active-document";
         CMD_CLOSE_ALL_DOCUMENTS = "cmd-close-all-documents";
@@ -97,6 +100,8 @@ define_ids! {
         CMD_OPEN_PREFERENCES = "cmd-open-preferences";
         CMD_MENU_OPEN_PREFERENCES = "cmd-menu-open-preferences";
         CMD_OPEN_SCHEMATIC_PREFERENCES = "cmd-open-schematic-preferences";
+        CMD_KEYMAP_ASSIGN = "cmd-keymap-assign";
+        CMD_KEYMAP_CLEAR = "cmd-keymap-clear";
         CMD_PASTE = "cmd-paste";
         CMD_PASTE_ARRAY = "cmd-paste-array";
         CMD_PASTE_SPECIAL = "cmd-paste-special";
@@ -107,6 +112,9 @@ define_ids! {
         CMD_PRINT = "cmd-print";
         CMD_MENU_PRINT = "cmd-menu-print";
         CMD_QUERY_PINS = "cmd-query-pins";
+        CMD_QUERY_POWER_TREE = "cmd-query-power-tree";
+        CMD_QUERY_NET_TIES = "cmd-query-net-ties";
+        CMD_BOM_LINES = "cmd-bom-lines";
         CMD_READ_DOCUMENT = "cmd-read-document";
         CMD_REDO = "cmd-redo";
         CMD_REFRESH_VIEW = "cmd-refresh-view";
@@ -145,6 +153,7 @@ define_ids! {
         CMD_MENU_TILE_WINDOWS_VERTICALLY = "cmd-menu-tile-windows-vertically";
         CMD_UNTILE_DOCUMENTS = "cmd-untile-documents";
         CMD_MENU_UNTILE_DOCUMENTS = "cmd-menu-untile-documents";
+        CMD_SET_DOCK_PANEL = "cmd-set-dock-panel";
         CMD_APPLY_LAYOUT_SCHEMATIC = "cmd-apply-layout-schematic";
         CMD_MENU_APPLY_LAYOUT_SCHEMATIC = "cmd-menu-apply-layout-schematic";
         CMD_APPLY_LAYOUT_BOARD = "cmd-apply-layout-board";
@@ -243,10 +252,14 @@ define_ids! {
         CMD_MENU_RUN_ERC = "cmd-menu-run-erc";
         CMD_OPEN_ERC_DIALOG = "cmd-open-erc-dialog";
         CMD_MENU_OPEN_ERC_DIALOG = "cmd-menu-open-erc-dialog";
+        CMD_TOGGLE_LIVE_ERC = "cmd-toggle-live-erc";
+        CMD_MENU_TOGGLE_LIVE_ERC = "cmd-menu-toggle-live-erc";
         CMD_REPAIR_PIN_JUNCTIONS = "cmd-repair-pin-junctions";
         CMD_MENU_REPAIR_PIN_JUNCTIONS = "cmd-menu-repair-pin-junctions";
         CMD_OPEN_PARAMETER_MANAGER = "cmd-open-parameter-manager";
         CMD_MENU_OPEN_PARAMETER_MANAGER = "cmd-menu-open-parameter-manager";
+        CMD_EXPORT_PARAMETERS = "cmd-export-parameters";
+        CMD_IMPORT_PARAMETERS = "cmd-import-parameters";
         CMD_OPEN_RULES = "cmd-open-rules";
         CMD_MENU_OPEN_RULES = "cmd-menu-open-rules";
         CMD_RULES_LIST = "cmd-rules-list";
@@ -271,14 +284,25 @@ define_ids! {
         CMD_MENU_REMOVE_BOARD_PANEL = "cmd-menu-remove-board-panel";
         CMD_SET_BOARD_PANEL = "cmd-set-board-panel";
         CMD_BOARD_PANEL = "cmd-board-panel";
+        CMD_LAYOUT_PLAN_GET = "cmd-layout-plan-get";
+        CMD_LAYOUT_PLAN_SET = "cmd-layout-plan-set";
+        CMD_LAYOUT_PLAN_STATUS = "cmd-layout-plan-status";
         CMD_PROJECT_SETTINGS = "cmd-project-settings";
         CMD_PROJECT_MOVE_SHEET = "cmd-project-move-sheet";
         CMD_PROJECT_ADD_VARIANT = "cmd-project-add-variant";
         CMD_PROJECT_RENAME_VARIANT = "cmd-project-rename-variant";
         CMD_PROJECT_REMOVE_VARIANT = "cmd-project-remove-variant";
         CMD_PROJECT_SET_ACTIVE_VARIANT = "cmd-project-set-active-variant";
+        CMD_PROJECT_SET_DEFAULT_VARIANT = "cmd-project-set-default-variant";
+        CMD_COMPARE_VARIANTS = "cmd-compare-variants";
+        CMD_VARIANT_BOM = "cmd-variant-bom";
+        CMD_PROJECT_SET_VARIANT_FIT = "cmd-project-set-variant-fit";
+        CMD_PROJECT_SET_VARIANT_ALTERNATE = "cmd-project-set-variant-alternate";
+        CMD_PROJECT_SET_VARIANT_OVERRIDE = "cmd-project-set-variant-override";
+        CMD_PROJECT_DUPLICATE_VARIANT = "cmd-project-duplicate-variant";
         CMD_PROJECT_MOVE_LIBRARY = "cmd-project-move-library";
         CMD_PROJECT_SET_ANNOTATE_UNDO = "cmd-project-set-annotate-undo";
+        CMD_PROJECT_SET_ANNOTATE_NUMBERING = "cmd-project-set-annotate-numbering";
         CMD_PROJECT_SET_VERSION_CONTROL = "cmd-project-set-version-control";
         CMD_PROJECT_ADD_REQUIREMENT = "cmd-project-add-requirement";
         CMD_PROJECT_SET_REQUIREMENT = "cmd-project-set-requirement";
@@ -288,6 +312,12 @@ define_ids! {
         CMD_PROJECT_ADD_FONT = "cmd-project-add-font";
         CMD_PROJECT_REMOVE_FONT = "cmd-project-remove-font";
         CMD_PROJECT_SET_FONT_LICENSE = "cmd-project-set-font-license";
+        CMD_PROJECT_SET_RAIL = "cmd-project-set-rail";
+        CMD_BOM_ADD_ALTERNATE = "cmd-bom-add-alternate";
+        CMD_BOM_REMOVE_ALTERNATE = "cmd-bom-remove-alternate";
+        CMD_BOM_SET_ALTERNATE_ORDER = "cmd-bom-set-alternate-order";
+        CMD_QUERY_BOM = "cmd-query-bom";
+        CMD_SEARCH_PARTS = "cmd-search-parts";
         CMD_NUMBER_SCHEMATIC_SHEETS = "cmd-number-schematic-sheets";
         CMD_MENU_NUMBER_SCHEMATIC_SHEETS = "cmd-menu-number-schematic-sheets";
         CMD_RESET_SCHEMATIC_DESIGNATORS = "cmd-reset-schematic-designators";
@@ -306,6 +336,9 @@ define_ids! {
         CMD_UPDATE_PCB_FROM_SCHEMATIC = "cmd-update-pcb-from-schematic";
         CMD_COMPARE_BOARD_WITH_SCHEMATIC = "cmd-compare-board-with-schematic";
         CMD_MENU_COMPARE_BOARD_WITH_SCHEMATIC = "cmd-menu-compare-board-with-schematic";
+        CMD_CHECK_BOARD_AGAINST_SCHEMATIC = "cmd-check-board-against-schematic";
+        CMD_APPLY_BOARD_SCHEMATIC_DIFFERENCES = "cmd-apply-board-schematic-differences";
+        CMD_BOARD_STATUS = "cmd-board-status";
         CMD_BACK_ANNOTATE_SCHEMATICS = "cmd-back-annotate-schematics";
         CMD_MENU_BACK_ANNOTATE_SCHEMATICS = "cmd-menu-back-annotate-schematics";
         CMD_OPEN_SELECTION_FILTER = "cmd-open-selection-filter";
@@ -432,6 +465,7 @@ define_ids! {
         CMD_SET_OBJECT_ROTATION = "cmd-set-object-rotation";
         CMD_SET_SHEET_SYMBOL_SIZE = "cmd-set-sheet-symbol-size";
         CMD_SET_SYMBOL_PARAMETER = "cmd-set-symbol-parameter";
+        CMD_SET_OBJECT_TEXT = "cmd-set-object-text";
         CMD_SET_SHEET_VARIABLE = "cmd-set-sheet-variable";
         CMD_SET_TEXT_NOTE_FORMAT = "cmd-set-text-note-format";
         CMD_SET_TEXT_NOTE_FRAME = "cmd-set-text-note-frame";
@@ -446,6 +480,7 @@ define_ids! {
         CMD_RELINK_IMAGE = "cmd-relink-image";
         CMD_SHOW_IMAGE_IN_FOLDER = "cmd-show-image-in-folder";
         CMD_LIST_IMAGE_ASSETS = "cmd-list-image-assets";
+        CMD_SET_NET_TIE = "cmd-set-net-tie";
         CMD_MENU_PLACE_COMPONENT = "cmd-menu-place-component";
         CMD_RUN_DRC = "cmd-run-drc";
         CMD_MENU_RUN_DRC = "cmd-menu-run-drc";
@@ -454,6 +489,8 @@ define_ids! {
         CMD_SHOW_DRC_VIOLATION = "cmd-show-drc-violation";
         CMD_WAIVE_DRC_VIOLATION = "cmd-waive-drc-violation";
         CMD_UNWAIVE_DRC_VIOLATION = "cmd-unwaive-drc-violation";
+        CMD_FIX_DRC_VIOLATION = "cmd-fix-drc-violation";
+        CMD_FIX_DRC = "cmd-fix-drc";
         CMD_FILTER_DRC_RESULTS = "cmd-filter-drc-results";
         CMD_OPEN_NET_CLASSES_PANEL = "cmd-open-net-classes-panel";
         CMD_MENU_OPEN_NET_CLASSES_PANEL = "cmd-menu-open-net-classes-panel";
@@ -629,6 +666,11 @@ define_ids! {
         CMD_ADD_BOARD_GRAPHIC = "cmd-add-board-graphic";
         CMD_SET_BOARD_GRAPHIC = "cmd-set-board-graphic";
         CMD_SET_FOOTPRINT_TEXT = "cmd-set-footprint-text";
+        CMD_SET_FOOTPRINT_POSITION = "cmd-set-footprint-position";
+        CMD_SET_FOOTPRINT_ROTATION = "cmd-set-footprint-rotation";
+        CMD_SET_FOOTPRINT_SIDE = "cmd-set-footprint-side";
+        CMD_ASSIGN_FOOTPRINT = "cmd-assign-footprint";
+        CMD_QUERY_FOOTPRINT_ASSIGNMENTS = "cmd-query-footprint-assignments";
         CMD_PLACE_BOARD_DIFF_PAIR = "cmd-place-board-diff-pair";
         CMD_MENU_PLACE_BOARD_DIFF_PAIR = "cmd-menu-place-board-diff-pair";
         CMD_PLACE_BOARD_QUICK_ROUTE = "cmd-place-board-quick-route";
@@ -660,6 +702,7 @@ define_ids! {
         CMD_MENU_BOARD_ASSEMBLY_DRAWING = "cmd-menu-board-assembly-drawing";
         CMD_EXPORT_BOARD_STEP = "cmd-export-board-step";
         CMD_MENU_EXPORT_BOARD_STEP = "cmd-menu-export-board-step";
+        CMD_EXPORT_BLOCK_DIAGRAM = "cmd-export-block-diagram";
         CMD_SELECT_BOARD_NET = "cmd-select-board-net";
         CMD_MENU_SELECT_BOARD_NET = "cmd-menu-select-board-net";
         CMD_HIGHLIGHT_BOARD_NET = "cmd-highlight-board-net";
@@ -671,6 +714,10 @@ define_ids! {
         CMD_MENU_SWAP_PINS = "cmd-menu-swap-pins";
         CMD_SWAP_GATES = "cmd-swap-gates";
         CMD_MENU_SWAP_GATES = "cmd-menu-swap-gates";
+        CMD_SWAP_SCHEMATIC_PINS = "cmd-swap-schematic-pins";
+        CMD_MENU_SWAP_SCHEMATIC_PINS = "cmd-menu-swap-schematic-pins";
+        CMD_SWAP_SCHEMATIC_GATES = "cmd-swap-schematic-gates";
+        CMD_MENU_SWAP_SCHEMATIC_GATES = "cmd-menu-swap-schematic-gates";
         CMD_SAVE_BOARD_REUSE_BLOCK = "cmd-save-board-reuse-block";
         CMD_MENU_SAVE_BOARD_REUSE_BLOCK = "cmd-menu-save-board-reuse-block";
         CMD_PLACE_BOARD_REUSE_BLOCK = "cmd-place-board-reuse-block";
@@ -679,6 +726,10 @@ define_ids! {
         CMD_MENU_PLACE_BOARD_ROOM = "cmd-menu-place-board-room";
         CMD_CREATE_ROOMS_FROM_SHEETS = "cmd-create-rooms-from-sheets";
         CMD_MENU_CREATE_ROOMS_FROM_SHEETS = "cmd-menu-create-rooms-from-sheets";
+        CMD_ARRANGE_IN_ROOM = "cmd-arrange-in-room";
+        CMD_MENU_ARRANGE_IN_ROOM = "cmd-menu-arrange-in-room";
+        CMD_AUTO_PLACE = "cmd-auto-place";
+        CMD_MENU_AUTO_PLACE = "cmd-menu-auto-place";
         CMD_FOOTPRINT_MODE_PADS = "cmd-footprint-mode-pads";
         CMD_FOOTPRINT_MODE_SKETCH = "cmd-footprint-mode-sketch";
         CMD_FOOTPRINT_MODE_VIEW_3D = "cmd-footprint-mode-view-3d";
@@ -723,10 +774,16 @@ define_ids! {
         CMD_MENU_COMPILE_PROJECT = "cmd-menu-compile-project";
         CMD_OPEN_COMPILED_DESIGN = "cmd-open-compiled-design";
         CMD_MENU_OPEN_COMPILED_DESIGN = "cmd-menu-open-compiled-design";
+        // Block diagram from the sheet hierarchy (#2968).
+        CMD_GENERATE_BLOCK_DIAGRAM = "cmd-generate-block-diagram";
+        CMD_MENU_GENERATE_BLOCK_DIAGRAM = "cmd-menu-generate-block-diagram";
+        CMD_REGENERATE_BLOCK_DIAGRAM = "cmd-regenerate-block-diagram";
+        CMD_MENU_REGENERATE_BLOCK_DIAGRAM = "cmd-menu-regenerate-block-diagram";
         // Signal harnesses (#1280) and differential pair classes (#1282).
         CMD_OPEN_HARNESS_DEFINITIONS = "cmd-open-harness-definitions";
         CMD_OPEN_DIFF_PAIR_CLASSES = "cmd-open-diff-pair-classes";
         CMD_MENU_OPEN_DIFF_PAIR_CLASSES = "cmd-menu-open-diff-pair-classes";
+        CMD_LIST_DIFF_PAIRS = "cmd-list-diff-pairs";
         // Named unions (mockup row 158).
         CMD_CREATE_UNION = "cmd-create-union";
         CMD_MENU_CREATE_UNION = "cmd-menu-create-union";
@@ -743,6 +800,28 @@ define_ids! {
         CMD_FLIP_BOARD_3D = "cmd-flip-board-3d";
         CMD_CYCLE_BOARD_3D_LIGHTING = "cmd-cycle-board-3d-lighting";
         CMD_COPY_BOARD_3D_SCREENSHOT = "cmd-copy-board-3d-screenshot";
+        // block-diagram
+        CMD_NEW_BLOCK_DIAGRAM = "cmd-new-block-diagram";
+        CMD_MENU_NEW_BLOCK_DIAGRAM = "cmd-menu-new-block-diagram";
+        CMD_BLOCK_ADD = "cmd-block-add";
+        CMD_BLOCK_SET = "cmd-block-set";
+        CMD_BLOCK_REMOVE = "cmd-block-remove";
+        CMD_BLOCK_PORT_ADD = "cmd-block-port-add";
+        CMD_BLOCK_PORT_REMOVE = "cmd-block-port-remove";
+        CMD_BLOCK_LINK = "cmd-block-link";
+        CMD_BLOCK_LINK_SET = "cmd-block-link-set";
+        CMD_BLOCK_UNLINK = "cmd-block-unlink";
+        CMD_BLOCK_GROUP = "cmd-block-group";
+        CMD_BLOCK_GROUP_SET = "cmd-block-group-set";
+        CMD_BLOCK_UNGROUP = "cmd-block-ungroup";
+        CMD_QUERY_BLOCK_DIAGRAM = "cmd-query-block-diagram";
+        // Snippets and templates (#1283).
+        CMD_SAVE_SNIPPET = "cmd-save-snippet";
+        CMD_MENU_SAVE_SNIPPET = "cmd-menu-save-snippet";
+        CMD_PLACE_SNIPPET = "cmd-place-snippet";
+        CMD_MENU_PLACE_SNIPPET = "cmd-menu-place-snippet";
+        CMD_LIST_SNIPPETS = "cmd-list-snippets";
+        CMD_LIST_TEMPLATES = "cmd-list-templates";
         // design-notebook
         CMD_OPEN_DESIGN_NOTEBOOK = "cmd-open-design-notebook";
         CMD_MENU_OPEN_DESIGN_NOTEBOOK = "cmd-menu-open-design-notebook";

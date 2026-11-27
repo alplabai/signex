@@ -20,6 +20,11 @@ mod appearance;
 mod component_classes;
 mod distributors;
 mod editing;
+mod extension_page;
+#[cfg(test)]
+pub(crate) use extension_page::{
+    row_texts as extension_row_texts, value_kind as extension_value_kind,
+};
 mod fast_grids;
 mod graphite_fields;
 #[cfg(test)]
@@ -103,6 +108,11 @@ pub enum PrefNav {
     /// by `prefs.json::component_classes`; defaults seed from
     /// `fonts::default_component_classes` on a fresh install.
     ComponentClasses,
+    /// The page of an installed extension that added preferences (#2495):
+    /// the extension's install index. It lists each preference with its
+    /// kind and its value; it holds no draft. Not in [`Self::ALL`]: the nav
+    /// lists these after the built-in pages, only when one is installed.
+    Extension(usize),
 }
 
 impl PrefNav {
@@ -138,6 +148,7 @@ impl PrefNav {
             PrefNav::RuleProfiles => "Rule Profiles",
             PrefNav::LibraryDistributors => "Distributor APIs",
             PrefNav::ComponentClasses => "Component Classes",
+            PrefNav::Extension(_) => "Extension",
         }
     }
 
@@ -155,6 +166,7 @@ impl PrefNav {
             PrefNav::RuleProfiles => "Validation",
             PrefNav::LibraryDistributors => "Library",
             PrefNav::ComponentClasses => "Library",
+            PrefNav::Extension(_) => "Extensions",
         }
     }
 }
@@ -206,6 +218,8 @@ pub enum PrefMsg {
     DraftEdgePanSpeed(crate::app::edge_pan::EdgePanSpeed),
     /// The "Fill symbol bodies" rows changed. Persisted on Save.
     SymbolBodyFill(BodyFillMsg),
+    /// Toggle "Cross out not-fitted parts" (#1294). Persisted on Save.
+    DraftCrossOutNotFitted(bool),
     /// A PCB Defaults row changed (#2868). Persisted on Save.
     PcbDefaults(PcbDefaultsMsg),
     /// Toggle "Two-finger scroll pans". Persisted on Save.
@@ -330,13 +344,15 @@ pub enum PrefMsg {
     /// `preferences_keymap_status`, where the serialization failure at
     /// the same call site already reported.
     KeymapExportFinished(Result<std::path::PathBuf, String>),
-    /// Open the chord recorder for a specific binding.
+    /// Open the chord recorder for a specific binding, or for a command
+    /// with no key yet (`unassigned`), whose OK adds a binding.
     KeymapRecorderOpen {
         slot: crate::keymap::BindingSlot,
         command: crate::keymap::AppCommandId,
         label: String,
         context: crate::keymap::ShortcutContext,
         trigger: String,
+        unassigned: bool,
     },
     /// Dismiss the recorder without applying.
     KeymapRecorderCancel,
@@ -350,7 +366,8 @@ pub enum PrefMsg {
     KeymapRecorderModifiersChanged(crate::keymap::Modifiers),
     /// A captured keystroke, routed from the keyboard subscription.
     KeymapRecorderKeyPressed(crate::keymap::KeyStroke),
-    /// Apply the recorded chord to the binding under edit.
+    /// Apply the recorded chord to the binding under edit. With nothing
+    /// recorded (after Clear), the binding's key is taken away.
     KeymapRecorderApply,
 }
 
@@ -385,6 +402,7 @@ pub struct PrefsView<'a> {
     /// The fill colour field's preset palette and custom picker are open.
     pub body_fill_palette_open: bool,
     pub body_fill_picker_open: bool,
+    pub draft_cross_out_not_fitted: bool,
     /// The PCB Defaults draft (#2868).
     pub draft_pcb_defaults: &'a crate::pcb_defaults_prefs::PcbDefaultsDraft,
     /// How much other copper dims while a board net is highlighted (#2514).
@@ -468,6 +486,10 @@ pub struct PrefsView<'a> {
     /// Graphite nav search text (filters the nav rows only).
     pub nav_search: &'a str,
     pub keymap_recorder: Option<&'a crate::app::KeymapRecorderState>,
+    /// The installed extensions, for their pages (#2495).
+    pub extensions: &'a crate::extension::ExtensionHost,
+    /// Their commands as the Keyboard shortcuts page names them.
+    pub extension_commands: &'a crate::keymap::ExtensionCommandNames,
 }
 
 // ─── Dialog entry points ──────────────────────────────────────
@@ -545,6 +567,7 @@ fn build_content<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
             theme_tint: signex_types::theme::canvas_colors(v.draft_theme).body_tint,
             palette_open: v.body_fill_palette_open,
             picker_open: v.body_fill_picker_open,
+            cross_out_not_fitted: v.draft_cross_out_not_fitted,
             tokens: panel_tokens,
             i18n,
         }),
@@ -567,6 +590,9 @@ fn build_content<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
         // `LibraryState.settings`.
         PrefNav::LibraryDistributors => content_library_distributors(v),
         PrefNav::ComponentClasses => content_component_classes(v),
+        PrefNav::Extension(index) => {
+            extension_page::content_extension(v.extensions, index, panel_tokens, i18n)
+        }
     };
 
     container(
@@ -625,14 +651,25 @@ fn build_prefs_file_banner<'a>(
                 .color(ink)
                 .boxed(),
         );
-        // $error is the loader's English reason (#2061).
+        // The path alone in mono (mockup row 143, #3040). A path wider than
+        // the banner breaks inside it rather than running past its edge.
         lines = lines.push(
-            text(t!(i18n, ids::PREFERENCES_FILE_WHERE, "path" => path, "error" => error))
+            text(signex_i18n::UserText::new(path))
                 .size(chrome_px(11.5 * 11.0 / 12.0))
                 .font(crate::fonts::iced_font_for_family(
                     crate::fonts::CHROME_MONO_FONT,
                 ))
                 .color(ink)
+                .width(Length::Fill)
+                .wrapping(iced::widget::text::Wrapping::WordOrGlyph)
+                .boxed(),
+        );
+        // $error is the loader's English reason (#2061), as plain text.
+        lines = lines.push(
+            text(t!(i18n, ids::PREFERENCES_FILE_REASON, "error" => error))
+                .size(TS.caption)
+                .color(ink)
+                .width(Length::Fill)
                 .boxed(),
         );
         // Scoped to what `prefs.json` actually backs: Keyboard Shortcuts

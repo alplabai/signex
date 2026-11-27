@@ -249,6 +249,12 @@ impl FailOn {
     }
 
     fn holds(self, summary: &GenerateSummary) -> bool {
+        // A check that was never run or read cannot show the design passes
+        // it: `checks` fails closed (#3021).
+        let unread = summary.checks.erc.is_none() || summary.checks.drc.is_none();
+        if self == FailOn::Checks && unread {
+            return true;
+        }
         let errors = [&summary.checks.erc, &summary.checks.drc]
             .into_iter()
             .flatten()

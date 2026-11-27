@@ -238,7 +238,12 @@ fn dry_run_answers_with_the_result_and_changes_nothing() {
     assert_eq!(answer["pins"].as_array().map(Vec::len), Some(2));
     assert_eq!(pins_of(&app, &path), opamp().pins);
     assert!(!app.document_state.is_document_dirty(&path));
-    assert!(!app.document_state.symbol_editors[&path].history.can_undo());
+    assert!(
+        !app.document_state.symbol_editors[&path]
+            .draft
+            .history
+            .can_undo()
+    );
 }
 
 #[test]
@@ -248,7 +253,12 @@ fn the_same_values_again_change_nothing_and_make_no_step() {
     let answer = answered(edit(&mut app, &path, &[r#"pins={"1": {"name": "OUTA"}}"#]));
     assert_eq!(answer["changed"], false);
     assert!(!app.document_state.is_document_dirty(&path));
-    assert!(!app.document_state.symbol_editors[&path].history.can_undo());
+    assert!(
+        !app.document_state.symbol_editors[&path]
+            .draft
+            .history
+            .can_undo()
+    );
 }
 
 #[test]
@@ -299,7 +309,7 @@ fn a_file_of_several_symbols_needs_the_symbol_named() {
         &[r#"pins={"1": null}"#, "symbol=LM358"],
     ));
     assert_eq!(answer["symbol"], "LM358");
-    let file = &app.document_state.symbol_editors[&path].file;
+    let file = &app.document_state.symbol_editors[&path].draft.file;
     assert_eq!(
         file.symbols[0].pins.len(),
         3,

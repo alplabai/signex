@@ -228,6 +228,19 @@ fn the_verdict_passes_warns_under_one_percent_from_a_limit_and_fails_outside() {
     assert!(Verdict::Pass < Verdict::Warn && Verdict::Warn < Verdict::Fail);
 }
 
+/// #3021: the Annotations panel's verdict uses the warn band the timeline
+/// and the PDF use, 1 % of the reference value, not of the limit.
+#[test]
+fn the_record_verdict_matches_the_reading_check() {
+    let source = "#measurement(id: \"MEAS-001\", target: net(\"VDD\"), value: 2.93, limit: (min: 2.9, max: 3.4))\n";
+    let (blocks, problems) = scan(source);
+    assert!(problems.is_empty(), "{problems:?}");
+    let (readings, _) = crate::measurement::readings(source);
+    let check = readings[0].check().expect("a check");
+    assert_eq!(check.verdict, crate::measurement::Verdict::Warn);
+    assert_eq!(blocks[0].record.verdict(), Some(Verdict::Warn));
+}
+
 #[test]
 fn the_power_stage_page_reads_as_drawn() {
     let found = blocks(&power_stage());

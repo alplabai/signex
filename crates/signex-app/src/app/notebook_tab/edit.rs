@@ -78,6 +78,57 @@ pub(super) fn move_to_line(text: &mut NotebookText, line: usize) {
     });
 }
 
+/// Make the editor's text `body` as one edit of the editor (the changed
+/// span selected and pasted over), so Undo takes it back and what was typed
+/// before stays in the history (#3019). Falls back to setting the text when
+/// the editor does not end up with `body`.
+pub(super) fn replace_in_editor(text: &mut NotebookText, body: &str) {
+    let old = text.body();
+    if old == body {
+        return;
+    }
+    let mut prefix = old
+        .bytes()
+        .zip(body.bytes())
+        .take_while(|(a, b)| a == b)
+        .count();
+    while !old.is_char_boundary(prefix) || !body.is_char_boundary(prefix) {
+        prefix -= 1;
+    }
+    let mut suffix = old[prefix..]
+        .bytes()
+        .rev()
+        .zip(body[prefix..].bytes().rev())
+        .take_while(|(a, b)| a == b)
+        .count();
+    while !old.is_char_boundary(old.len() - suffix) || !body.is_char_boundary(body.len() - suffix) {
+        suffix -= 1;
+    }
+    let (start, old_end) = (prefix, old.len() - suffix);
+    let new_mid = &body[prefix..body.len() - suffix];
+    let at = |offset: usize| {
+        let before = &old[..offset];
+        let line_start = before.rfind('\n').map_or(0, |i| i + 1);
+        Position {
+            line: before.matches('\n').count(),
+            index: offset - line_start,
+        }
+    };
+    text.content.move_to(Cursor {
+        position: at(old_end),
+        selection: (start != old_end).then(|| at(start)),
+    });
+    if new_mid.is_empty() {
+        text.content.perform(Action::Edit(Edit::Delete));
+    } else {
+        text.content
+            .perform(Action::Edit(Edit::Paste(Arc::new(new_mid.to_string()))));
+    }
+    if text.body() != body {
+        text.content = iced::widget::text_editor::Content::with_text(body);
+    }
+}
+
 impl Signex {
     /// The notebook file text of `id` as typed, header and body; `None`
     /// while it has no body.
@@ -106,7 +157,7 @@ impl Signex {
         doc.replace_file_text(text)
             .map_err(|why| crate::app::notebook_project::because(why.to_string()))?;
         if let (Some(editor), Some(body)) = (&mut tab.text, &doc.body) {
-            editor.content = iced::widget::text_editor::Content::with_text(body);
+            replace_in_editor(editor, body);
         }
         Ok(self.notebook_edited(id))
     }

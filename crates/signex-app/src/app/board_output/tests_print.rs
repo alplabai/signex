@@ -40,7 +40,7 @@ fn print_and_export_pdf_open_board_print_on_a_board() {
 
     run(&mut app, "print");
     assert_eq!(shown_options(&app), Some(BoardPrintOptions::default()));
-    assert!(app.document_state.preview.is_none(), "no sheet preview");
+    assert!(app.document_view.preview.is_none(), "no sheet preview");
 
     let _ = output(&mut app, BoardOutputMsg::Closed);
     let _ = app.update(Message::Menu(MenuMessage::ExportPdf));
@@ -133,7 +133,7 @@ fn export_is_refused_with_no_set_chosen() {
     let task = app.dispatch_board_output_message(BoardOutputMsg::PdfExportRequested);
     assert_eq!(task.units(), 0, "no save dialog");
     assert!(
-        app.document_state.error_notice.is_some(),
+        app.document_view.error_notice.is_some(),
         "the notice says why"
     );
 }

@@ -18,14 +18,13 @@ use crate::panels::compiled_design::{
 impl Signex {
     /// Put a fresh view of the multi-channel surfaces in the panel context.
     pub(crate) fn sync_compiled_design_view(&mut self) {
-        *self.document_state.panel_ctx.compiled_design = self.compiled_design_view();
+        *self.document_view.panel_ctx.compiled_design = self.compiled_design_view();
     }
 
     /// Point the sheet symbol's Repeat rows at the current selection. A
     /// selection change refreshes only this part of the view.
     pub(crate) fn sync_sheet_symbol_repeat_view(&mut self) {
-        self.document_state.panel_ctx.compiled_design.sheet_symbol =
-            self.sheet_symbol_repeat_view();
+        self.document_view.panel_ctx.compiled_design.sheet_symbol = self.sheet_symbol_repeat_view();
     }
 
     /// The view of the multi-channel surfaces for the active document.
@@ -62,7 +61,7 @@ impl Signex {
         };
         let design = self.compiled_design().unwrap_or(result.design.as_ref());
         view.status = CompiledStatus::Ready;
-        view.compiled_at = result.compiled_at.clone();
+        view.compiled_at = self.ui_state.i18n.time(result.compiled_at);
         view.stale_count = result.stale.len();
         view.totals = CompiledTotals {
             parts: design.part_count,
@@ -72,6 +71,13 @@ impl Signex {
         };
         let needle = ui.find.trim().to_lowercase();
         view.rows = tree_rows(result, &needle, &ui.folded, &ui.expanded, ui.selected);
+        if let Some(variant) = self.channel_view_variant() {
+            for row in &mut view.rows {
+                if self.channel_row_left_out(result, row.index, &variant) {
+                    row.not_fitted_in = Some(variant.clone());
+                }
+            }
+        }
         view.nets = design
             .nets
             .iter()
@@ -88,7 +94,7 @@ impl Signex {
 
     /// The Repeat, Channel naming and Entries rows of the one selected
     /// sheet symbol.
-    fn sheet_symbol_repeat_view(&self) -> Option<SheetSymbolRepeatView> {
+    pub(super) fn sheet_symbol_repeat_view(&self) -> Option<SheetSymbolRepeatView> {
         let [item] = self.interaction_state.active_canvas().selected.as_slice() else {
             return None;
         };
@@ -155,19 +161,29 @@ impl Signex {
             .compile_target()
             .and_then(|id| self.document_state.compiled_design.results.get(&id));
         let active = self.shown_channel(&path);
+        let variant = self.channel_view_variant();
         let tabs = channels
             .iter()
             .map(|channel| {
-                let row = result.and_then(|r| channel_row(r, &path, channel.index));
+                let row = result.and_then(|r| {
+                    let index = channel_row(r, &path, channel.index)?;
+                    Some((&r.design.sheets[index], r.miniatures.get(&index)))
+                });
                 ChannelTabView {
                     channel: channel.clone(),
-                    parts: row.map(|(parts, _)| parts),
-                    nets: row.map(|(_, nets)| nets),
+                    parts: row.map(|(sheet, _)| sheet.parts),
+                    nets: row.map(|(sheet, _)| sheet.nets),
+                    miniature: row.and_then(|(_, miniature)| miniature.cloned()),
                     designators: self
                         .designator_map(&path, channel)
                         .into_iter()
                         .map(|(_, _, named)| named)
                         .collect(),
+                    fits: result
+                        .map(|r| {
+                            self.channel_part_fits(r, &path, channel.index, variant.as_deref())
+                        })
+                        .unwrap_or_default(),
                 }
             })
             .collect();
@@ -181,6 +197,8 @@ impl Signex {
             tabs,
             active,
             designator_map,
+            variant,
+            is_fit_locked: self.channel_fit_is_locked(),
         })
     }
 
@@ -321,6 +339,7 @@ fn tree_rows(
             parts: sheet.parts,
             nets: sheet.nets,
             is_stale,
+            not_fitted_in: None,
             is_selected: selected == Some(index),
             has_children,
             is_expanded,
@@ -331,16 +350,13 @@ fn tree_rows(
     rows
 }
 
-/// `(parts, nets)` of the first channel row of the sheet at `path` with
-/// index `index`.
-fn channel_row(result: &CompiledResult, path: &Path, index: u32) -> Option<(usize, usize)> {
-    result
-        .design
-        .sheets
-        .iter()
-        .filter(|s| s.channel.as_ref().is_some_and(|c| c.index == index))
-        .find(|s| result.path_of(&s.key).is_some_and(|p| p == path))
-        .map(|s| (s.parts, s.nets))
+/// The row index of the first channel row of the sheet at `path` with
+/// channel index `index`.
+fn channel_row(result: &CompiledResult, path: &Path, index: u32) -> Option<usize> {
+    result.design.sheets.iter().position(|s| {
+        s.channel.as_ref().is_some_and(|c| c.index == index)
+            && result.path_of(&s.key).is_some_and(|p| p == path)
+    })
 }
 
 fn file_name(path: &Path) -> String {

@@ -78,7 +78,7 @@ impl CompareReport {
     }
 }
 
-fn object_text(object: &CompareObject) -> String {
+pub(super) fn object_text(object: &CompareObject) -> String {
     match object {
         CompareObject::Designator(s) | CompareObject::Net(s) => s.clone(),
         CompareObject::Pin { reference, pad } => format!("{reference} pin {pad}"),
@@ -94,7 +94,7 @@ fn side_text(side: &Option<CompareValue>, absent: &str) -> String {
     }
 }
 
-fn back_block_text(why: &BackBlock) -> &'static str {
+pub(super) fn back_block_text(why: &BackBlock) -> &'static str {
     match why {
         BackBlock::NeedsAnnotation => "the part is not annotated; run Annotate",
         BackBlock::DuplicateDesignator(_) => "the designator is used twice; run Annotate",
@@ -105,7 +105,7 @@ fn back_block_text(why: &BackBlock) -> &'static str {
     }
 }
 
-fn back_note_text(note: &BackNote) -> String {
+pub(super) fn back_note_text(note: &BackNote) -> String {
     match note {
         BackNote::UnreadableSheet(path) => format!(
             "a sheet could not be read ({})",

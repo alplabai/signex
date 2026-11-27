@@ -1,0 +1,198 @@
+format = "snxblk/1"
+diagram_id = "0193a6c0-0000-7000-8000-000000000000"
+
+[[groups]]
+id = "0193a6c0-0000-7000-8000-000000000001"
+name = "Power"
+color = "#d0453aff"
+
+[[blocks]]
+id = "0193a6c0-0000-7000-8000-000000000010"
+name = "Power In"
+function = "Input protection"
+note = "jack, fuse, diode"
+shape = "rectangle"
+x_nm = 10000000
+y_nm = 30000000
+width_nm = 40000000
+height_nm = 25000000
+group = "0193a6c0-0000-7000-8000-000000000001"
+rails = ["VIN_12V", "VBUS"]
+sheet = "0193a6c0-0000-7000-8000-0000000000a1"
+sheet_path = "power_in.snxsch"
+sheet_state = "linked"
+
+[[blocks.ports]]
+id = "0193a6c0-0000-7000-8000-000000000011"
+name = "VIN_12V"
+side = "right"
+offset_nm = 8000000
+direction = "output"
+
+[[blocks]]
+id = "0193a6c0-0000-7000-8000-000000000020"
+name = "DC/DC Buck"
+function = "Buck converter"
+note = "3 A buck, 570 kHz"
+shape = "rounded_rectangle"
+x_nm = 70000000
+y_nm = 30000000
+width_nm = 40000000
+height_nm = 25000000
+color = "#2f6fdbff"
+group = "0193a6c0-0000-7000-8000-000000000001"
+rails = ["VIN_12V", "VOUT_3V3"]
+specs = { "Fsw" = "570 kHz", "Iout" = "3.00 A", "Vout" = "3.30 V" }
+sheet = "0193a6c0-0000-7000-8000-0000000000a2"
+sheet_path = "dcdc.snxsch"
+sheet_state = "linked"
+
+[[blocks.ports]]
+id = "0193a6c0-0000-7000-8000-000000000021"
+name = "VIN_12V"
+side = "left"
+offset_nm = 8000000
+direction = "input"
+
+[[blocks.ports]]
+id = "0193a6c0-0000-7000-8000-000000000022"
+name = "VOUT_3V3"
+side = "right"
+offset_nm = 8000000
+direction = "output"
+
+[[blocks]]
+id = "0193a6c0-0000-7000-8000-000000000030"
+name = "MCU"
+shape = "rectangle"
+x_nm = 130000000
+y_nm = 30000000
+width_nm = 40000000
+height_nm = 25000000
+rails = ["VOUT_3V3"]
+sheet = "0193a6c0-0000-7000-8000-0000000000a3"
+sheet_path = "mcu.snxsch"
+sheet_state = "linked"
+
+[[blocks.ports]]
+id = "0193a6c0-0000-7000-8000-000000000031"
+name = "VOUT_3V3"
+side = "left"
+offset_nm = 8000000
+direction = "input"
+
+[[blocks.ports]]
+id = "0193a6c0-0000-7000-8000-000000000032"
+name = "I2C"
+side = "right"
+offset_nm = 12500000
+direction = "bidirectional"
+
+[[blocks]]
+id = "0193a6c0-0000-7000-8000-000000000040"
+name = "Connectors"
+function = "Sensor port and USB power"
+shape = "rectangle"
+x_nm = 190000000
+y_nm = 30000000
+width_nm = 40000000
+height_nm = 25000000
+sheet = "0193a6c0-0000-7000-8000-0000000000a4"
+sheet_path = "connectors.snxsch"
+sheet_state = "linked"
+
+[[blocks.ports]]
+id = "0193a6c0-0000-7000-8000-000000000041"
+name = "I2C"
+side = "left"
+offset_nm = 12500000
+direction = "bidirectional"
+
+[[blocks.ports]]
+id = "0193a6c0-0000-7000-8000-000000000042"
+name = "VBUS"
+side = "top"
+offset_nm = 20000000
+direction = "output"
+
+[[blocks.ports]]
+id = "0193a6c0-0000-7000-8000-000000000043"
+name = "USB_DP"
+side = "bottom"
+offset_nm = 10000000
+direction = "bidirectional"
+
+[[blocks]]
+id = "0193a6c0-0000-7000-8000-000000000050"
+name = "Debug probe"
+note = "Not fitted.\nPads only, no header."
+shape = "ellipse"
+x_nm = 130000000
+y_nm = 80000000
+width_nm = 30000000
+height_nm = 15000000
+
+[[blocks]]
+id = "0193a6c0-0000-7000-8000-000000000060"
+name = "Sensor board"
+shape = "hexagon"
+x_nm = 190000000
+y_nm = 80000000
+width_nm = 40000000
+height_nm = 25000000
+sheet = "0193a6c0-0000-7000-8000-0000000000a6"
+sheet_path = "sensor/sensor.snxsch"
+sheet_state = "unlinked"
+
+[[connections]]
+id = "0193a6c0-0000-7000-8000-000000000101"
+from_block = "0193a6c0-0000-7000-8000-000000000010"
+from_port = "0193a6c0-0000-7000-8000-000000000011"
+to_block = "0193a6c0-0000-7000-8000-000000000020"
+to_port = "0193a6c0-0000-7000-8000-000000000021"
+interface = "power"
+label = "VIN_12V 12.0 V"
+derived_from = "VIN_12V"
+
+[[connections]]
+id = "0193a6c0-0000-7000-8000-000000000102"
+from_block = "0193a6c0-0000-7000-8000-000000000020"
+from_port = "0193a6c0-0000-7000-8000-000000000022"
+to_block = "0193a6c0-0000-7000-8000-000000000030"
+to_port = "0193a6c0-0000-7000-8000-000000000031"
+interface = "power"
+label = "VOUT_3V3 3.30 V"
+derived_from = "VOUT_3V3"
+
+[[connections]]
+id = "0193a6c0-0000-7000-8000-000000000103"
+from_block = "0193a6c0-0000-7000-8000-000000000030"
+from_port = "0193a6c0-0000-7000-8000-000000000032"
+to_block = "0193a6c0-0000-7000-8000-000000000040"
+to_port = "0193a6c0-0000-7000-8000-000000000041"
+interface = "i2c"
+label = "SDA, SCL"
+derived_from = "I2C"
+
+[[connections]]
+id = "0193a6c0-0000-7000-8000-000000000104"
+from_block = "0193a6c0-0000-7000-8000-000000000040"
+from_port = "0193a6c0-0000-7000-8000-000000000042"
+to_block = "0193a6c0-0000-7000-8000-000000000010"
+interface = "power"
+label = "VBUS 5.0 V"
+derived_from = "VBUS"
+
+[[connections]]
+id = "0193a6c0-0000-7000-8000-000000000105"
+from_block = "0193a6c0-0000-7000-8000-000000000040"
+from_port = "0193a6c0-0000-7000-8000-000000000043"
+to_block = "0193a6c0-0000-7000-8000-000000000030"
+interface = "usb"
+label = "USB_DP"
+
+[[connections]]
+id = "0193a6c0-0000-7000-8000-000000000106"
+from_block = "0193a6c0-0000-7000-8000-000000000050"
+to_block = "0193a6c0-0000-7000-8000-000000000030"
+interface = "SWD"

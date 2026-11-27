@@ -163,6 +163,11 @@ pub(in crate::format) struct SymbolExtras {
     /// the decoder upgrades that on load.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub(in crate::format) body_ref: String,
+    /// A net tie (#1277). Written only when set, after every other known
+    /// key, so a sheet with no tie re-saves byte-identical and a build that
+    /// predates it keeps the key among the unknown keys of this table.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub(in crate::format) net_tie: bool,
     /// Keys this build does not recognise (`[extras.symbols.<uuid>]`).
     #[serde(flatten)]
     pub(in crate::format) unknown: UnknownFields,
@@ -198,6 +203,7 @@ impl Default for SymbolExtras {
             library_version: String::new(),
             library_stamp: None,
             body_ref: String::new(),
+            net_tie: false,
             unknown: UnknownFields::default(),
         }
     }
@@ -235,6 +241,7 @@ impl SymbolExtras {
             && self.library_version.is_empty()
             && self.library_stamp.is_none()
             && self.body_ref.is_empty()
+            && !self.net_tie
             && self.unknown.is_empty()
     }
 
@@ -277,6 +284,7 @@ impl SymbolExtras {
             library_version: s.library_version.clone(),
             library_stamp: None,
             body_ref: s.body_ref.clone(),
+            net_tie: s.net_tie,
             unknown: {
                 // A chosen body owns the key; a preserved unreadable value
                 // must not be written beside it.

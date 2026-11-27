@@ -15,7 +15,7 @@ fn new_editor(tool: SymbolTool) -> SymEditor {
         PathBuf::from("t.snxsym"),
         SymbolFile::from_symbol(Symbol::empty("T")),
     );
-    editor.tool = tool;
+    editor.gui.tool = tool;
     editor
 }
 
@@ -43,11 +43,15 @@ fn the_fourth_bezier_click_places_one_curve_as_one_undo_step() {
     let mut editor = new_editor(SymbolTool::PlaceBezier);
     click_bezier(&mut editor, &CLICKS[..3]);
     assert!(editor.primitive().graphics.is_empty());
-    assert_eq!(editor.history.undo_len(), 0, "clicks alone push no undo");
+    assert_eq!(
+        editor.draft.history.undo_len(),
+        0,
+        "clicks alone push no undo"
+    );
 
     click_bezier(&mut editor, &CLICKS[3..]);
-    assert_eq!(editor.history.undo_len(), 1);
-    assert!(editor.polygon_vertices.is_empty());
+    assert_eq!(editor.draft.history.undo_len(), 1);
+    assert!(editor.gui.polygon_vertices.is_empty());
     assert_eq!(
         editor.primitive().graphics[0].kind,
         SymbolGraphicKind::Bezier {
@@ -64,8 +68,8 @@ fn four_clicks_on_one_point_place_nothing() {
     let mut editor = new_editor(SymbolTool::PlaceBezier);
     click_bezier(&mut editor, &[(1.27, 1.27); 4]);
     assert!(editor.primitive().graphics.is_empty());
-    assert_eq!(editor.history.undo_len(), 0);
-    assert!(editor.polygon_vertices.is_empty());
+    assert_eq!(editor.draft.history.undo_len(), 0);
+    assert!(editor.gui.polygon_vertices.is_empty());
 }
 
 /// #2838: the commit the tools and the `symbol_draw_*` commands share places
@@ -82,7 +86,7 @@ fn the_shared_commit_refuses_a_kind_that_is_not_a_curve() {
         Err(shapes::ShapeRefusal::NotACurve)
     );
     assert!(editor.primitive().graphics.is_empty());
-    assert_eq!(editor.history.undo_len(), 0);
+    assert_eq!(editor.draft.history.undo_len(), 0);
     assert!(!editor.is_dirty());
 }
 
@@ -91,9 +95,9 @@ fn cancelling_a_bezier_drops_its_clicks() {
     let mut editor = new_editor(SymbolTool::PlaceBezier);
     click_bezier(&mut editor, &CLICKS[..3]);
     apply_symbol_primitive_edit(&mut editor, SymbolEditorMsg::PolygonCancel);
-    assert!(editor.polygon_vertices.is_empty());
+    assert!(editor.gui.polygon_vertices.is_empty());
     assert!(editor.primitive().graphics.is_empty());
-    assert_eq!(editor.history.undo_len(), 0);
+    assert_eq!(editor.draft.history.undo_len(), 0);
 }
 
 #[test]
@@ -101,10 +105,10 @@ fn leaving_the_bezier_tool_places_no_shape_from_a_partial_curve() {
     let mut editor = new_editor(SymbolTool::PlaceBezier);
     click_bezier(&mut editor, &CLICKS[..3]);
     apply_symbol_primitive_edit(&mut editor, SymbolEditorMsg::SetTool(SymbolToolMsg::Select));
-    assert_eq!(editor.tool, SymbolTool::Select);
-    assert!(editor.polygon_vertices.is_empty());
+    assert_eq!(editor.gui.tool, SymbolTool::Select);
+    assert!(editor.gui.polygon_vertices.is_empty());
     assert!(editor.primitive().graphics.is_empty());
-    assert_eq!(editor.history.undo_len(), 0);
+    assert_eq!(editor.draft.history.undo_len(), 0);
 }
 
 /// A part switch flushes the shared stash as a polygon for the Polygon
@@ -114,7 +118,7 @@ fn a_part_switch_does_not_turn_bezier_clicks_into_a_polygon() {
     let mut editor = new_editor(SymbolTool::PlaceBezier);
     click_bezier(&mut editor, &CLICKS[..3]);
     apply_symbol_primitive_edit(&mut editor, SymbolEditorMsg::NewPart);
-    assert!(editor.polygon_vertices.is_empty());
+    assert!(editor.gui.polygon_vertices.is_empty());
     assert!(editor.primitive().graphics.is_empty());
 }
 
@@ -145,7 +149,7 @@ fn each_bezier_point_has_a_grip_that_moves_only_it() {
 fn a_pie_placement_is_one_undo_step_and_keeps_the_short_sweep() {
     let mut editor = new_editor(SymbolTool::PlacePie);
     place_pie(&mut editor, 30.0, -60.0);
-    assert_eq!(editor.history.undo_len(), 1);
+    assert_eq!(editor.draft.history.undo_len(), 1);
     assert_eq!(
         editor.primitive().graphics[0].kind,
         SymbolGraphicKind::Pie {
@@ -179,7 +183,7 @@ fn an_unfilled_pie_is_picked_on_its_edge_and_a_filled_one_inside() {
     let mut editor = new_editor(SymbolTool::PlacePie);
     place_pie(&mut editor, 0.0, 90.0);
     let view = editor.view();
-    let filter = editor.selection_filter;
+    let filter = editor.gui.selection_filter;
     // Inside the wedge, clear of the edge band.
     let inside = (1.27 + 1.0, 1.27 + 1.0);
     assert_eq!(
@@ -228,7 +232,7 @@ fn place_round_rect(editor: &mut SymEditor, to: (f64, f64)) {
 fn an_elliptical_arc_placement_is_one_undo_step() {
     let mut editor = new_editor(SymbolTool::PlaceEllipticalArc);
     place_ellipse(&mut editor, 30.0, -60.0);
-    assert_eq!(editor.history.undo_len(), 1);
+    assert_eq!(editor.draft.history.undo_len(), 1);
     assert!(matches!(
         editor.primitive().graphics[0].kind,
         SymbolGraphicKind::EllipticalArc {
@@ -246,7 +250,7 @@ fn an_elliptical_arc_with_no_sweep_places_nothing() {
     let mut editor = new_editor(SymbolTool::PlaceEllipticalArc);
     place_ellipse(&mut editor, 45.0, 45.0);
     assert!(editor.primitive().graphics.is_empty());
-    assert_eq!(editor.history.undo_len(), 0);
+    assert_eq!(editor.draft.history.undo_len(), 0);
 }
 
 #[test]
@@ -300,7 +304,7 @@ fn an_elliptical_arc_radius_grip_keeps_its_angles() {
 fn a_round_rectangle_placement_is_one_undo_step_with_eight_grips() {
     let mut editor = new_editor(SymbolTool::PlaceRoundRectangle);
     place_round_rect(&mut editor, (7.62, 5.08));
-    assert_eq!(editor.history.undo_len(), 1);
+    assert_eq!(editor.draft.history.undo_len(), 1);
     assert_eq!(state::graphic_handles(editor.primitive(), 0).len(), 8);
     state::move_graphic_handle(
         editor.primitive_mut(),
@@ -326,7 +330,7 @@ fn two_clicks_on_one_point_place_no_round_rectangle() {
     let mut editor = new_editor(SymbolTool::PlaceRoundRectangle);
     place_round_rect(&mut editor, (0.0, 0.0));
     assert!(editor.primitive().graphics.is_empty());
-    assert_eq!(editor.history.undo_len(), 0);
+    assert_eq!(editor.draft.history.undo_len(), 0);
 }
 
 #[test]
@@ -334,7 +338,7 @@ fn placed_elliptical_arc_and_round_rectangle_survive_save_and_reload() {
     let mut editor = new_editor(SymbolTool::PlaceEllipticalArc);
     place_ellipse(&mut editor, 10.0, 200.0);
     place_round_rect(&mut editor, (7.62, 5.08));
-    let text = editor.file.to_toml_string().unwrap();
+    let text = editor.draft.file.to_toml_string().unwrap();
     assert!(text.contains("format = \"snxsym/v4\""), "{text}");
     let back = SymbolFile::from_toml_str(&text).unwrap();
     assert_eq!(back.symbols[0].graphics, editor.primitive().graphics);
@@ -363,7 +367,7 @@ fn a_grip_resize_lowers_the_stored_radius_in_one_undo_step() {
     let mut editor = new_editor(SymbolTool::PlaceRoundRectangle);
     large_round_rect(&mut editor);
     let before = editor.primitive().graphics[0].kind.clone();
-    let undo_before = editor.history.undo_len();
+    let undo_before = editor.draft.history.undo_len();
     for y in [6.0, 2.0] {
         apply_symbol_primitive_edit(
             &mut editor,
@@ -377,7 +381,7 @@ fn a_grip_resize_lowers_the_stored_radius_in_one_undo_step() {
     }
     apply_symbol_primitive_edit(&mut editor, SymbolEditorMsg::DragCommit);
     assert_eq!(stored_radius(&editor), 1.0);
-    assert_eq!(editor.history.undo_len(), undo_before + 1);
+    assert_eq!(editor.draft.history.undo_len(), undo_before + 1);
 
     apply_symbol_primitive_edit(&mut editor, SymbolEditorMsg::Undo);
     assert_eq!(editor.primitive().graphics[0].kind, before);
@@ -403,13 +407,13 @@ fn a_there_and_back_drag_keeps_the_radius_in_one_undo_step() {
     let mut editor = new_editor(SymbolTool::PlaceRoundRectangle);
     large_round_rect(&mut editor);
     let before = editor.primitive().graphics[0].kind.clone();
-    let undo_before = editor.history.undo_len();
+    let undo_before = editor.draft.history.undo_len();
     drag_top_edge(&mut editor, &[1.0]);
     assert_eq!(stored_radius(&editor), 0.5, "clamped while small");
     drag_top_edge(&mut editor, &[10.0]);
     apply_symbol_primitive_edit(&mut editor, SymbolEditorMsg::DragCommit);
     assert_eq!(stored_radius(&editor), 5.0);
-    assert_eq!(editor.history.undo_len(), undo_before + 1);
+    assert_eq!(editor.draft.history.undo_len(), undo_before + 1);
     apply_symbol_primitive_edit(&mut editor, SymbolEditorMsg::Undo);
     assert_eq!(editor.primitive().graphics[0].kind, before);
 }
@@ -472,7 +476,7 @@ fn placed_curves_survive_save_and_reload() {
     let mut editor = new_editor(SymbolTool::PlaceBezier);
     click_bezier(&mut editor, &CLICKS);
     place_pie(&mut editor, 300.0, 30.0);
-    let text = editor.file.to_toml_string().unwrap();
+    let text = editor.draft.file.to_toml_string().unwrap();
     assert!(text.contains("format = \"snxsym/v4\""), "{text}");
     let back = SymbolFile::from_toml_str(&text).unwrap();
     assert_eq!(back.symbols[0].graphics, editor.primitive().graphics);

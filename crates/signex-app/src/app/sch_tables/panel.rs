@@ -12,7 +12,7 @@ use crate::panels::{AnnotationPanelMsg, AnnotationPanelState};
 impl Signex {
     /// The selected Bezier, dimension, table or curve on the active sheet.
     fn selected_annotation(&self) -> Option<uuid::Uuid> {
-        let ctx = &self.document_state.panel_ctx;
+        let ctx = &self.document_view.panel_ctx;
         if ctx.selected_kind != Some(SelectedKind::Drawing) {
             return None;
         }
@@ -46,22 +46,22 @@ impl Signex {
                     }
                     None => None,
                 };
-                self.document_state.panel_ctx.annotation.draft = Some((id, field, text));
+                self.document_view.panel_ctx.annotation.draft = Some((id, field, text));
                 if let Some(edit) = edit {
                     self.apply_annotation_edit_to(id, &edit);
                 }
             }
             AnnotationPanelMsg::FieldSubmitted(field) => {
                 let ours = matches!(
-                    &self.document_state.panel_ctx.annotation.draft,
+                    &self.document_view.panel_ctx.annotation.draft,
                     Some((d, f, _)) if *d == id && *f == field
                 );
                 if ours {
-                    self.document_state.panel_ctx.annotation.draft = None;
+                    self.document_view.panel_ctx.annotation.draft = None;
                 }
             }
             AnnotationPanelMsg::Picked(edit) => {
-                self.document_state.panel_ctx.annotation.draft = None;
+                self.document_view.panel_ctx.annotation.draft = None;
                 self.apply_annotation_edit_to(id, &edit);
             }
             // Only the armed tool's form has this box.
@@ -82,7 +82,7 @@ impl Signex {
     /// drawing stays selected, the active sheet's parts, and whether the
     /// selected table's part is gone.
     pub(crate) fn annotation_panel_state(&self) -> AnnotationPanelState {
-        let ctx = &self.document_state.panel_ctx;
+        let ctx = &self.document_view.panel_ctx;
         let dimension_tool = self.dimension_tool_form();
         // The armed tool's form types under the nil id.
         let draft = ctx.annotation.draft.clone().filter(|(id, _, _)| {

@@ -4,7 +4,7 @@ use crate::patch::{DocumentPatch, PatchPair, SemanticPatch};
 
 use std::collections::{HashMap, HashSet};
 
-use signex_types::designator::{alphabetic_prefix, split_reference};
+use signex_types::designator::{NumberBlocks, alphabetic_prefix, split_reference};
 use signex_types::schematic::{
     AnnotateOrder, InstancePath, ProjectParts, Symbol, annotation_order,
 };
@@ -40,6 +40,9 @@ pub struct AnnotateScope<'a> {
     /// takes the first placement's designator and every non-root placement
     /// gets a `Symbol.instances` entry.
     pub placements: &'a [AnnotatePlacement],
+    /// The page blocks of a page numbering scheme (#1292), by the same unit
+    /// ordinals as `sheet`; `None` numbers continuously across the project.
+    pub blocks: Option<&'a NumberBlocks>,
 }
 
 /// One placement of a sheet file in a project-wide pass (#1835).
@@ -68,6 +71,7 @@ impl Engine {
             undo_group: None,
             reprefix: None,
             placements: &[],
+            blocks: None,
         };
         self.annotate_in_project(mode, next_by_prefix, scope, &mut HashMap::new())
     }
@@ -157,8 +161,11 @@ pub(super) fn number_symbols(
         sheet,
         locked,
         reprefix,
+        blocks,
         ..
     } = scope;
+    // This unit's own numbers under a page scheme, per prefix.
+    let mut in_block: HashMap<String, u32> = HashMap::new();
     let is_designator_target = |sym: &Symbol| -> bool {
         !sym.is_power && !sym.reference.starts_with('#') && !locked.contains(&sym.uuid)
     };
@@ -257,11 +264,22 @@ pub(super) fn number_symbols(
         if prefix.is_empty() {
             continue;
         }
-        let next = next_by_prefix.entry(prefix.clone()).or_insert(0);
-        let Some(issued) = next.checked_add(1) else {
-            return Err(EngineError::DesignatorOverflow { prefix });
+        let issued = match blocks {
+            Some(blocks) => blocks
+                .issue(sheet, &prefix, &mut in_block)
+                .map_err(|issue| EngineError::DesignatorBlock {
+                    prefix: prefix.clone(),
+                    reason: issue.to_string(),
+                })?,
+            None => {
+                let next = next_by_prefix.entry(prefix.clone()).or_insert(0);
+                let Some(issued) = next.checked_add(1) else {
+                    return Err(EngineError::DesignatorOverflow { prefix });
+                };
+                *next = issued;
+                issued
+            }
         };
-        *next = issued;
         symbol.reference = format!("{prefix}{issued}");
         if let Some(part) = part {
             assigned.insert(part, symbol.reference.clone());
@@ -474,6 +492,7 @@ mod tests {
                 undo_group: None,
                 reprefix: None,
                 placements: &[],
+                blocks: None,
             };
             engine
                 .annotate_in_project(mode, &mut seed, scope, &mut assigned)

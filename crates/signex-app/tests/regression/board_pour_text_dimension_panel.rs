@@ -121,7 +121,7 @@ fn click(f: &mut Fixture, at: Point) {
 
 fn facts(f: &Fixture) -> PcbPrimitiveFacts {
     f.app
-        .document_state
+        .document_view
         .panel_ctx
         .pcb_board
         .as_ref()

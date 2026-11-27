@@ -475,3 +475,56 @@ fn resetting_duplicates_drops_the_cached_rows() {
     );
     std::fs::remove_dir_all(&dir).ok();
 }
+
+fn number_by_page(app: &mut Signex) {
+    app.document_state.projects[0]
+        .data
+        .set_annotate_numbering(signex_types::designator::NumberingScheme::PageHundreds);
+}
+
+/// #1292: under page × 100 the preview promises each sheet a number from
+/// its page's block (the root is page 1, its child page 2), and the run
+/// assigns exactly those.
+#[test]
+fn a_page_scheme_previews_and_assigns_each_pages_block() {
+    let (mut app, dir) = fixture();
+    number_by_page(&mut app);
+    let promised_root = proposed_for(&app, "a_root");
+    let promised_child = proposed_for(&app, "z_child");
+    assert_eq!(promised_root.as_deref(), Some("R101"));
+    assert_eq!(promised_child.as_deref(), Some("R201"));
+
+    let task = app.handle_annotate(signex_engine::AnnotateMode::Incremental);
+    crate::app::path_ops::settle_task(&mut app, task);
+    let first = |path: PathBuf| {
+        app.document_state.engines[&path].document().symbols[0]
+            .reference
+            .clone()
+    };
+    assert_eq!(Some(first(dir.join("a_root.snxsch"))), promised_root);
+    assert_eq!(Some(first(dir.join("z_child.snxsch"))), promised_child);
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+/// The sheets table's Start column shows each page's first number, and
+/// picking the scheme reloads the preview (the fingerprint follows it).
+#[test]
+fn the_start_column_follows_the_page_scheme() {
+    let (mut app, dir) = fixture();
+    app.ui_state.annotate_dialog_open = true;
+    load_into_cache(&mut app);
+    let starts = |app: &Signex| -> Vec<Option<u32>> {
+        app.ui_state
+            .annotate_preview
+            .sheet_rows(&Default::default(), None)
+            .iter()
+            .map(|row| row.start)
+            .collect()
+    };
+    assert!(starts(&app).iter().all(Option::is_none), "continuous");
+    number_by_page(&mut app);
+    load_into_cache(&mut app);
+    assert_eq!(starts(&app), [Some(101), Some(201)]);
+    assert_eq!(app.ui_state.annotate_preview.numbering_problem, None);
+    std::fs::remove_dir_all(&dir).ok();
+}

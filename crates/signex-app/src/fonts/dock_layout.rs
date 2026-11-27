@@ -43,9 +43,13 @@ pub(crate) fn write_prefs_key(
 // The dock codec: the `dock` key of `prefs.json` and the workspace layouts
 // (mockup row 166) read and write regions through these, so the two forms cannot drift.
 
-/// One dock region as `prefs.json` stores it.
+/// One dock region as `prefs.json` stores it. A kept extension key goes
+/// back at its stored place among the region's entries.
 pub(crate) fn region_to_json(region: &crate::dock::RegionLayout) -> serde_json::Value {
-    let kinds: Vec<&str> = region.panels.iter().map(|k| panel_kind_key(*k)).collect();
+    let mut kinds: Vec<&str> = region.panels.iter().map(|k| panel_kind_key(*k)).collect();
+    for kept in &region.kept {
+        kinds.insert(kept.index.min(kinds.len()), &kept.key);
+    }
     let mut json = serde_json::json!({
         "panels": kinds,
         "collapsed": region.collapsed,
@@ -56,24 +60,33 @@ pub(crate) fn region_to_json(region: &crate::dock::RegionLayout) -> serde_json::
     json
 }
 
-/// A stored region. An unknown panel key drops that panel only; a missing
-/// or malformed field reads as its fresh-layout value (no panels, open, the
-/// default width). A width is kept only when it is a positive number, in
-/// whole px (Signex writes whole px).
+/// A stored region. An unknown built-in panel key drops that panel only; a
+/// key in an extension's namespace (`ext.<name>.<local>`) is kept, at its
+/// place, for the dock to show once its extension is installed or to write
+/// back unchanged (DECISIONS 2026-11-25, #2495). A missing or malformed
+/// field reads as its fresh-layout value (no panels, open, the default
+/// width). A width is kept only when it is a positive number, in whole px
+/// (Signex writes whole px).
 pub(crate) fn region_from_json(region: &serde_json::Value) -> crate::dock::RegionLayout {
-    let panels = region
-        .get("panels")
-        .and_then(|v| v.as_array())
-        .map(|arr| {
-            arr.iter()
-                .filter_map(|val| val.as_str().and_then(parse_panel_kind))
-                // Layer Stack is a document tab now, never docked. A stored
-                // SCH Filter panel reads as Filter, which covers it (mockup
-                // rows 40, 55); it is not shown twice.
-                .filter(|kind| *kind != crate::panels::PanelKind::LayerStack)
-                .collect()
-        })
-        .unwrap_or_default();
+    let mut panels = Vec::new();
+    let mut kept = Vec::new();
+    let stored = region.get("panels").and_then(|v| v.as_array());
+    for key in stored.into_iter().flatten().filter_map(|val| val.as_str()) {
+        match parse_panel_kind(key) {
+            // Layer Stack is a document tab now, never docked. A stored
+            // SCH Filter panel reads as Filter, which covers it (mockup
+            // rows 40, 55); it is not shown twice.
+            Some(crate::panels::PanelKind::LayerStack) => {}
+            Some(kind) => panels.push(kind),
+            None if crate::extension::is_extension_id(key) => {
+                kept.push(crate::dock::KeptPanelKey {
+                    index: panels.len() + kept.len(),
+                    key: key.to_owned(),
+                });
+            }
+            None => {}
+        }
+    }
     // A layout saved before #2395 has no width; the dock keeps the
     // fresh-layout width.
     let width = region
@@ -88,6 +101,7 @@ pub(crate) fn region_from_json(region: &serde_json::Value) -> crate::dock::Regio
             .and_then(|v| v.as_bool())
             .unwrap_or(false),
         width,
+        kept,
     }
 }
 
@@ -112,6 +126,7 @@ pub(crate) fn snapshot_from_json(
                 panels: Vec::new(),
                 collapsed: false,
                 width: None,
+                kept: Vec::new(),
             },
             region_from_json,
         )
@@ -138,6 +153,7 @@ pub(crate) fn dock_from_snapshot(
         for kind in &region.panels {
             dock.add_panel(pos, *kind);
         }
+        dock.set_kept_panel_keys(pos, region.kept.clone());
         // Collapsed flag: run ToggleRegion once via the dock API so
         // the mutation path stays authoritative.
         if region.collapsed {
@@ -210,6 +226,8 @@ pub(crate) fn panel_kind_key(k: crate::panels::PanelKind) -> &'static str {
         Unions => "unions",
         CompiledDesign => "compiled_design",
         Annotations => "annotations",
+        // Its registered `ext.<name>.<local>` key (#2495).
+        Extension(panel) => panel.key(),
     }
 }
 
@@ -263,7 +281,114 @@ mod tests {
             panels: panels.to_vec(),
             collapsed,
             width,
+            kept: Vec::new(),
         }
+    }
+
+    /// A stored layout whose right dock names two extension panels around
+    /// the built-in ones.
+    fn with_extension_keys() -> serde_json::Value {
+        serde_json::json!({
+            "dock": {
+                "left": { "panels": ["projects"], "collapsed": false, "width": 310 },
+                "right": {
+                    "panels": ["properties", "ext.sample.notes", "history", "ext.other.log"],
+                    "collapsed": false,
+                    "width": 420
+                },
+                "bottom": { "panels": ["messages"], "collapsed": true },
+            }
+        })
+    }
+
+    /// DECISIONS 2026-11-25 (#2495): a key in an extension's namespace that
+    /// no installed extension registered is kept and written back where it
+    /// stood, so a layout saved with an extension survives a run without it.
+    #[test]
+    fn an_unregistered_extension_panel_key_round_trips_unchanged() {
+        let stored = with_extension_keys();
+        let dock = read_dock_layout_from(Some(&stored)).expect("the layout loads");
+        assert_eq!(
+            dock.panel_kinds(PanelPosition::Right),
+            [PanelKind::Properties, PanelKind::History]
+        );
+
+        let dir = tempfile::tempdir().expect("temp dir");
+        let path = dir.path().join("prefs.json");
+        PrefsDockLayoutStore::at(path.clone())
+            .write(&DockLayoutSnapshot::capture(&dock))
+            .expect("save the dock layout");
+        let text = std::fs::read_to_string(path).expect("read prefs.json");
+        let saved: serde_json::Value = serde_json::from_str(&text).expect("prefs.json parses");
+        assert_eq!(saved["dock"], stored["dock"]);
+    }
+
+    /// A key outside the extension namespace is still dropped (the
+    /// no-legacy rule for retired built-in panels), and a malformed
+    /// extension key is not kept either.
+    #[test]
+    fn only_keys_in_the_extension_namespace_are_kept() {
+        let json = serde_json::json!({
+            "dock": { "right": {
+                "panels": ["properties", "signal", "ext.", "ext.Bad.x", "ext.sample", "ext.sample.x"],
+                "collapsed": false
+            } }
+        });
+        let dock = read_dock_layout_from(Some(&json)).expect("the layout loads");
+        let kept: Vec<&str> = dock
+            .kept_panel_keys(PanelPosition::Right)
+            .iter()
+            .map(|kept| kept.key.as_str())
+            .collect();
+        assert_eq!(kept, ["ext.sample.x"]);
+        assert_eq!(
+            dock.panel_kinds(PanelPosition::Right),
+            [PanelKind::Properties]
+        );
+    }
+
+    /// Once its extension is installed, a saved extension panel is docked
+    /// at its place and saves back under its key.
+    #[test]
+    fn a_registered_extension_panel_loads_at_its_place_and_saves_under_its_key() {
+        struct Blank;
+        impl crate::extension::ExtensionView for Blank {
+            fn view<'a>(
+                &'a self,
+                _cx: crate::extension::ViewContext<'a>,
+            ) -> iced::Element<'a, crate::extension::ExtensionMsg> {
+                iced::Widget::boxed(iced::widget::Space::new())
+            }
+        }
+        let owner = crate::extension::ExtensionId::new("sample").expect("valid name");
+        let mut panels = crate::extension::points::Panels::for_tests(owner);
+        let notes = panels
+            .add(
+                "ext.sample.notes",
+                signex_i18n::ids::PANELS_KIND_WIKI,
+                PanelPosition::Right,
+                Blank,
+            )
+            .expect("registered");
+
+        let stored = with_extension_keys();
+        let mut dock = read_dock_layout_from(Some(&stored)).expect("the layout loads");
+        dock.adopt_extension_panels(|key| panels.find(key));
+
+        assert_eq!(
+            dock.panel_kinds(PanelPosition::Right),
+            [
+                PanelKind::Properties,
+                PanelKind::Extension(notes),
+                PanelKind::History
+            ]
+        );
+        assert_eq!(
+            panel_kind_key(PanelKind::Extension(notes)),
+            "ext.sample.notes"
+        );
+        let saved = snapshot_to_json(&DockLayoutSnapshot::capture(&dock));
+        assert_eq!(saved, stored["dock"]);
     }
 
     /// Saves a layout through the real store and returns the saved

@@ -38,6 +38,8 @@ pub(crate) mod new_project;
 pub(crate) mod notebook_generate;
 // Mockup row 202: Export Design Notebook PDF.
 mod notebook_pdf;
+// #1295: Import Parameters, the preview of a CSV import.
+mod parameter_import;
 mod preview_frame;
 pub(crate) use preview_frame::preview_frame;
 mod project;

@@ -59,7 +59,7 @@ impl Signex {
             return container(Space::new()).boxed();
         };
 
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let i18n = self.ui_state.i18n.as_ref();
         let title = if st.unsaved_prompt {
             ids::DIALOG_REMOVE_UNSAVED_TITLE

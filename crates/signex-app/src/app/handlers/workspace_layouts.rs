@@ -92,7 +92,7 @@ impl Signex {
 
     fn capture_layout(&self, panels: bool, split: bool) -> Captured {
         Captured {
-            dock: panels.then(|| DockLayoutSnapshot::capture(&self.document_state.dock)),
+            dock: panels.then(|| DockLayoutSnapshot::capture(&self.document_view.dock)),
             split: split.then(|| self.current_document_split()).flatten(),
             saved_at: now_stamp(),
         }
@@ -166,7 +166,7 @@ impl Signex {
             .iter()
             .copied()
             .filter(|&kind| {
-                self.is_panel_open(kind) && self.document_state.dock.locate(kind).is_none()
+                self.is_panel_open(kind) && self.document_view.dock.locate(kind).is_none()
             })
             .collect();
         let mut wanted = snapshot.clone();
@@ -174,12 +174,14 @@ impl Signex {
             region.panels.retain(|kind| !detached.contains(kind));
         }
         let mut dock = crate::fonts::dock_from_snapshot(&wanted);
-        for floating in std::mem::take(&mut self.document_state.dock.floating) {
+        let extensions = &self.extensions;
+        dock.adopt_extension_panels(|key| extensions.panel(key));
+        for floating in std::mem::take(&mut self.document_view.dock.floating) {
             if dock.locate(floating.kind).is_none() {
                 dock.floating.push(floating);
             }
         }
-        self.document_state.dock = dock;
+        self.document_view.dock = dock;
     }
 
     /// Reset "<name>": drop the active built-in's override and apply it as

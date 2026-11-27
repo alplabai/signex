@@ -162,7 +162,7 @@ fn clicking_a_row_selects_its_section() {
         let _ = app.update(message);
     }
     assert_eq!(
-        app.document_state.project_tabs[&id].section,
+        app.document_view.project_tabs[&id].section,
         ProjectSection::SchematicDefaults
     );
 }
@@ -213,7 +213,7 @@ fn show_in_libraries_opens_the_libraries_section() {
         let _ = app.update(message);
     }
     assert_eq!(
-        app.document_state.project_tabs[&id].section,
+        app.document_view.project_tabs[&id].section,
         ProjectSection::Libraries
     );
 }

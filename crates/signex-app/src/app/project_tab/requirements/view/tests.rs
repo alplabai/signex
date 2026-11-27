@@ -16,7 +16,7 @@ use crate::app::{Message, ProjectMsg, ProjectSection, ProjectTabMsg, Signex};
 const WINDOW: iced::Size = iced::Size::new(1400.0, 1000.0);
 
 /// A project tab on the Requirements section over `list`.
-fn app(list: serde_json::Value) -> (Signex, ProjectId, tempfile::TempDir) {
+pub(super) fn app(list: serde_json::Value) -> (Signex, ProjectId, tempfile::TempDir) {
     let dir = tempfile::tempdir().expect("a folder");
     let mut app = app_workspace(&dir.path().to_string_lossy(), &["a.snxsch"]);
     let entries: Vec<RequirementEntry> = serde_json::from_value(list).expect("a list");
@@ -33,14 +33,14 @@ fn app(list: serde_json::Value) -> (Signex, ProjectId, tempfile::TempDir) {
 }
 
 /// Every text the tab lays out, without Fluent's isolation marks.
-fn texts(app: &Signex, id: ProjectId) -> Vec<String> {
+pub(super) fn texts(app: &Signex, id: ProjectId) -> Vec<String> {
     crate::layout_probe::lay_out_texts(app.view_project_tab(id), WINDOW)
         .into_iter()
         .map(|laid| laid.text.replace(['\u{2068}', '\u{2069}'], ""))
         .collect()
 }
 
-fn count(texts: &[String], label: &str) -> usize {
+pub(super) fn count(texts: &[String], label: &str) -> usize {
     texts.iter().filter(|text| text.as_str() == label).count()
 }
 
@@ -104,7 +104,7 @@ fn a_failed_card_reads_its_findings_as_one_sentence() {
         Vec::new(),
     );
     let tab = app
-        .document_state
+        .document_view
         .project_tabs
         .get_mut(&id)
         .expect("the tab");
@@ -112,6 +112,7 @@ fn a_failed_card_reads_its_findings_as_one_sentence() {
         report: Ok(report),
         finished_at: chrono::Utc::now(),
         board_mm: None,
+        checked: Vec::new(),
     }));
     let texts = texts(&app, id);
     // The report puts its findings in one order (`CheckReport::new`, by
@@ -134,14 +135,19 @@ fn a_failed_card_reads_its_findings_as_one_sentence() {
 }
 
 /// `findings` read as the card's sentence, without Fluent's isolation marks.
-fn sentence(findings: &[Finding]) -> Option<String> {
+pub(super) fn sentence(findings: &[Finding]) -> Option<String> {
     let findings: Vec<&Finding> = findings.iter().collect();
     super::findings::findings_sentence(&findings, signex_i18n::I18n::en_us_ref())
         .map(|words| words.replace(['\u{2068}', '\u{2069}'], ""))
 }
 
 /// A finding of a `parts_state` run over 5 parts for one BOM line.
-fn line(designator: &str, count: usize, library_row: Option<&str>, state: Option<&str>) -> Finding {
+pub(super) fn line(
+    designator: &str,
+    count: usize,
+    library_row: Option<&str>,
+    state: Option<&str>,
+) -> Finding {
     let mut finding = part(designator, state.unwrap_or(""));
     finding.evidence = json!({
         "kind": "parts_state",

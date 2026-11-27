@@ -62,6 +62,7 @@ fn push_project(app: &mut Signex, dir: &Path) {
             schematic_design: Default::default(),
             fab_outputs: None,
             router_tool_diameter: None,
+            bom_alternates: Vec::new(),
             requirements: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
@@ -105,7 +106,7 @@ fn symbol_reload_from_disk_clears_the_dirty_marker_so_quit_does_not_prompt() {
         PanelMsg::HistoryRestoreClicked { sha: sha.clone() },
     );
     assert_eq!(
-        app.document_state.history.pending_restore.as_deref(),
+        app.document_view.history.pending_restore.as_deref(),
         Some(sha.as_str()),
         "the first click arms the confirm"
     );

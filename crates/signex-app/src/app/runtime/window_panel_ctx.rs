@@ -128,17 +128,17 @@ impl Signex {
     /// window without a context yet would draw main's History rows; a click on
     /// one is refused (`history_lists_target`), never restored.
     pub(crate) fn panel_ctx_for(&self, window: iced::window::Id) -> &PanelContext {
-        self.document_state
+        self.document_view
             .window_panel_ctx
             .get(&window)
             .filter(|_| self.is_document_window(window))
-            .unwrap_or(&self.document_state.panel_ctx)
+            .unwrap_or(&self.document_view.panel_ctx)
     }
 
     /// A context for a window that has none yet: the main window's, as the
     /// starting point for `init_window_panel_ctx`.
     pub(crate) fn new_window_panel_ctx(&self, window: iced::window::Id) -> PanelContext {
-        let mut ctx = self.document_state.panel_ctx.clone();
+        let mut ctx = self.document_view.panel_ctx.clone();
         // Main's History rows belong to main's file; the window lists its own
         // once its first load lands (see `refresh_window_histories`).
         ctx.history = Default::default();
@@ -161,7 +161,7 @@ impl Signex {
     /// building.
     pub(super) fn dock_has_panels(&self) -> bool {
         use crate::dock::PanelPosition::{Bottom, Left, Right};
-        let dock = &self.document_state.dock;
+        let dock = &self.document_view.dock;
         [Left, Right, Bottom]
             .into_iter()
             .any(|p| dock.has_panels(p))
@@ -258,11 +258,11 @@ impl Signex {
         for window in windows {
             let key = self.window_ctx_key(window);
             let previous = self
-                .document_state
+                .document_view
                 .window_panel_ctx_keys
                 .get(&window)
                 .copied();
-            if previous == Some(key) && self.document_state.window_panel_ctx.contains_key(&window) {
+            if previous == Some(key) && self.document_view.window_panel_ctx.contains_key(&window) {
                 continue;
             }
             let revision_changed = previous.is_some_and(|p| p.0 != key.0);
@@ -276,18 +276,16 @@ impl Signex {
                 Task::none()
             }));
             let key = self.window_ctx_key(window);
-            self.document_state
-                .window_panel_ctx_keys
-                .insert(window, key);
+            self.document_view.window_panel_ctx_keys.insert(window, key);
         }
     }
 
     /// Drop the context of `window`, which has closed or been reattached.
     /// Its typed note boxes are owed to their sheets first (#2649).
     pub(crate) fn retire_window_panel_ctx(&mut self, window: iced::window::Id) {
-        self.document_state.window_panel_ctx_keys.remove(&window);
-        self.document_state.window_history.remove(&window);
-        if let Some(ctx) = self.document_state.window_panel_ctx.remove(&window) {
+        self.document_view.window_panel_ctx_keys.remove(&window);
+        self.document_view.window_history.remove(&window);
+        if let Some(ctx) = self.document_view.window_panel_ctx.remove(&window) {
             self.owe_note_drafts_of(ctx);
         }
     }
@@ -297,7 +295,7 @@ impl Signex {
     /// sheets (`settle_owed_note_drafts`).
     pub(crate) fn owe_note_drafts_of(&mut self, mut ctx: PanelContext) {
         let typed = ctx.placed.take_typed_notes(&|_| true);
-        let owed = &mut self.document_state.panel_ctx.placed.notes_owed;
+        let owed = &mut self.document_view.panel_ctx.placed.notes_owed;
         owed.extend(typed);
     }
 
@@ -333,14 +331,14 @@ impl Signex {
         }
         self.sync_paused_tool_forms();
         let shares: Vec<(iced::window::Id, bool)> = self
-            .document_state
+            .document_view
             .window_panel_ctx
             .keys()
             .map(|w| (*w, self.window_shares_main_navigator(*w)))
             .collect();
         let rename = self.filter_preset_rename();
         let editing = self.edited_custom_filter();
-        let document = &mut self.document_state;
+        let document = &mut self.document_view;
         for (window, shares_navigator) in shares {
             let Some(ctx) = document.window_panel_ctx.get_mut(&window) else {
                 continue;

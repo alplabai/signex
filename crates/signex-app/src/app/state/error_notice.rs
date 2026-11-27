@@ -8,7 +8,7 @@ use signex_i18n::{I18n, MessageId, Translatable, UserText, ids};
 /// One card serves every operation that has to stop and tell the user
 /// something failed. The heading is data rather than a literal in the
 /// view because the card was already shared by operations that are not
-/// exports — see [`super::DocumentState::error_notice`]. Both texts are kept
+/// exports — see [`super::DocumentViewState::error_notice`]. Both texts are kept
 /// as catalog messages and rendered at view time (#2058), so a language
 /// switch re-renders an open card.
 #[derive(Debug, Clone, PartialEq)]

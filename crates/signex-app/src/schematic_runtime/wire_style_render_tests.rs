@@ -29,6 +29,7 @@ fn class_widths(styles: &WireClassStyles) -> WireWidths<'_> {
         designator_standard: None,
         special_strings: None,
         rich_notes: None,
+        variant_values: None,
     }
 }
 
@@ -122,6 +123,8 @@ fn scene_cache_rebuilds_on_class_style_or_designator_change() {
                     defaults: Default::default(),
                     designator_standard: None,
                     rich_notes: None,
+                    not_fitted: None,
+                    variant_values: None,
                 },
             );
             cache.builds()
@@ -242,6 +245,7 @@ fn a_project_wire_width_widens_the_hit_area_and_the_box() {
         designator_standard: None,
         special_strings: None,
         rich_notes: None,
+        variant_values: None,
     };
     let none = Designators::new();
     let hit = |widths| hit_test::hit_test_styled(&sheet, &none, 30.0, 11.5, widths);

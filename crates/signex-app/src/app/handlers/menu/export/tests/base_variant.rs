@@ -59,7 +59,7 @@ fn export(app: &mut Signex, variant: Option<&str>) -> Vec<u8> {
         app,
         Message::PrintPreview(PrintPreviewMsg::SetUsePhysicalStructure(true)),
     );
-    let preview = app.document_state.preview.as_ref().expect("dialog open");
+    let preview = app.document_view.preview.as_ref().expect("dialog open");
     let request = Box::new(crate::app::state::PdfExportRequest {
         source: preview.source.clone(),
         options: preview.pdf_options.clone(),
@@ -84,7 +84,7 @@ fn base_picked_while_the_project_is_on_lite_prints_base() {
     let base = export(&mut on_lite, None);
     assert_eq!(
         on_lite
-            .document_state
+            .document_view
             .preview
             .as_ref()
             .and_then(|p| p.pdf_options.variant.as_deref()),
@@ -135,7 +135,7 @@ fn the_dialog_opens_on_the_projects_variant_named() {
         Message::PrintPreview(PrintPreviewMsg::Requested),
     );
     let chosen = |app: &Signex| {
-        app.document_state
+        app.document_view
             .preview
             .as_ref()
             .and_then(|p| p.pdf_options.variant.clone())
@@ -163,7 +163,7 @@ fn preview(app: &mut Signex, variant: Option<&str>) -> Vec<u8> {
         app,
         Message::PrintPreview(PrintPreviewMsg::SetVariant(variant.map(str::to_string))),
     );
-    let preview = app.document_state.preview.as_ref().expect("dialog open");
+    let preview = app.document_view.preview.as_ref().expect("dialog open");
     match preview.pages[preview.selected].handle() {
         Some(iced::widget::image::Handle::Rgba { pixels, .. }) => pixels.to_vec(),
         _ => panic!("the shown preview page is drawn"),

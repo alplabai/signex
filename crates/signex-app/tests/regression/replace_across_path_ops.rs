@@ -87,6 +87,7 @@ fn fixture() -> Fixture {
         schematic_design: Default::default(),
         fab_outputs: None,
         router_tool_diameter: None,
+        bom_alternates: Vec::new(),
         requirements: Default::default(),
         parameters: Default::default(),
         unknown: Default::default(),
@@ -257,7 +258,7 @@ fn assert_replace_refused(app: &mut Signex) {
     let since = signex_app::diagnostics::newest_entry_id();
     let task = app.update(Message::FindReplaceMsg(FindReplaceMsg::ReplaceAll));
     let notice = app
-        .document_state
+        .document_view
         .error_notice
         .clone()
         .expect("a Replace Refused card");

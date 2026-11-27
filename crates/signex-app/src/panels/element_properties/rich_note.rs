@@ -176,7 +176,7 @@ mod tests {
 
     fn ctx_with(layout: RichNoteLayout) -> PanelContext {
         let (app, _boot) = crate::app::Signex::new();
-        let mut ctx = app.document_state.panel_ctx.clone();
+        let mut ctx = app.document_view.panel_ctx.clone();
         ctx.placed.note_rich = Some(layout);
         ctx
     }

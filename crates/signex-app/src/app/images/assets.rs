@@ -370,7 +370,7 @@ impl Signex {
             .filter(|project| project.dir() == root)
             .map(|project| project.id.to_string())
             .collect();
-        let view = &mut self.document_state.panel_ctx.projects_view;
+        let view = &mut self.document_view.panel_ctx.projects_view;
         for id in ids {
             view.assets.insert(id, rows.clone());
         }

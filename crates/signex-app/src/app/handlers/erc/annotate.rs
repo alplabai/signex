@@ -140,7 +140,7 @@ impl Signex {
             .arg("label", label)
             .arg("sheets", skipped.join(", "));
         crate::diagnostics::log_warning(detail.render_en_us());
-        self.document_state.error_notice = Some(crate::app::state::ErrorNotice::annotate(detail));
+        self.document_view.error_notice = Some(crate::app::state::ErrorNotice::annotate(detail));
         true
     }
 
@@ -218,7 +218,7 @@ impl Signex {
         }
         let summary = skipped_summary(skipped);
         crate::diagnostics::log_warning(format!("{pass}: {summary}"));
-        self.document_state.error_notice = Some(crate::app::state::ErrorNotice::sheet_edit(
+        self.document_view.error_notice = Some(crate::app::state::ErrorNotice::sheet_edit(
             signex_i18n::Translatable::new(signex_i18n::ids::NOTICE_RUN_SKIPPED_READ_ONLY)
                 .arg("label", pass)
                 .arg("summary", summary),
@@ -243,7 +243,7 @@ impl Signex {
             .arg("label", what)
             .arg("path", path.display().to_string());
         crate::diagnostics::log_warning(detail.render_en_us());
-        self.document_state.error_notice = Some(crate::app::state::ErrorNotice::annotate(detail));
+        self.document_view.error_notice = Some(crate::app::state::ErrorNotice::annotate(detail));
         true
     }
 
@@ -263,7 +263,7 @@ impl Signex {
             .arg("label", what)
             .arg("reason", refusal.to_string());
         crate::diagnostics::log_warning(detail.render_en_us());
-        self.document_state.error_notice = Some(crate::app::state::ErrorNotice::annotate(detail));
+        self.document_view.error_notice = Some(crate::app::state::ErrorNotice::annotate(detail));
         true
     }
 

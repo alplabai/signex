@@ -22,7 +22,7 @@ impl Signex {
     ) -> Result<(ExportContext, PdfOptions), Translatable> {
         self.commit_drafts_in_scope_of(Some(source));
         let Some((mut ctx, issues)) =
-            super::build_page_scope_for_source(&self.document_state, source)
+            super::build_export_scope_for_source(&self.document_state, source)
         else {
             return Err(Translatable::new(ids::NOTICE_PDF_SOURCE_CLOSED)
                 .arg("path", source.display().to_string()));
@@ -37,6 +37,7 @@ impl Signex {
                 &ctx,
             ),
             schematic_defaults: self.document_state.schematic_defaults_for(source),
+            draw_not_fitted: self.ui_state.cross_out_not_fitted,
             ..PdfOptions::default()
         };
         super::log_stitch_issues(source, &ctx, &issues);

@@ -27,6 +27,7 @@ use crate::expression::{ExpressionTables, build_expression_tables, sheet_cell_va
 use crate::template::TemplateId;
 use crate::{ExportContext, Exporter, SubstitutionContext};
 
+pub mod block_diagram;
 pub mod board;
 mod bookmarks;
 mod colour;
@@ -114,23 +115,21 @@ pub struct PdfOptions {
     pub physical_sheet_number: bool,
     pub physical_document_number: bool,
     /// Render schematic chrome elements when set. False hides each
-    /// element from the exported PDF. Mirrors Altium's "Schematics
-    /// include" checklist verbatim.
+    /// element from the exported PDF: the "Schematics include" checklist.
     ///
     /// Live toggles (renderer honours the value):
     ///   `include_no_erc_markers` (No-ERC directives),
     ///   `include_no_connect_markers` (no-connect X marks),
-    ///   `include_notes`.
+    ///   `include_notes`,
+    ///   `include_parameter_sets` (Net Parameters directives, #2656),
+    ///   `include_blankets` (Net Blankets, #2656),
+    ///   `include_compile_masks` and `include_diff_pairs` (off by default).
     ///
-    /// Dormant toggles — Standard's schema has no equivalent concept,
-    /// so these are stored for Altium-import parity but produce no
-    /// observable difference today: `include_parameter_sets` (Altium
-    /// parameter-set objects), `include_probes` (Altium probe
-    /// markers), `include_blankets` (Altium blanket regions),
-    /// `include_collapsed_notes` (Altium collapsed-note placards).
-    /// Toggle them ahead of time so that round-tripping an Altium
-    /// project keeps the user's intent — when the corresponding
-    /// signex-types feature lands the gating is one-line.
+    /// Dormant toggles — the schematic model has no such object yet, so
+    /// these are stored but produce no observable difference today:
+    /// `include_probes` (probe markers), `include_collapsed_notes`
+    /// (collapsed-note placards). They keep the user's choice until the
+    /// object lands; the gating is then one line.
     pub include_no_erc_markers: bool,
     /// Draws the no-connect X marks. Separate from the No-ERC
     /// directive toggle above: they are different schematic objects.
@@ -138,6 +137,11 @@ pub struct PdfOptions {
     pub include_parameter_sets: bool,
     pub include_probes: bool,
     pub include_blankets: bool,
+    /// Compile Masks, as a dotted outline. Off by default.
+    pub include_compile_masks: bool,
+    /// Differential Pair directives, as two short strokes and their flag.
+    /// Off by default.
+    pub include_diff_pairs: bool,
     pub include_notes: bool,
     pub include_collapsed_notes: bool,
     /// Bookmark target zoom level for component / net jumps inside the
@@ -184,6 +188,10 @@ pub struct PdfOptions {
     /// The checked bytes of the placed images' files (#1116), read by the
     /// caller. An image whose file is not here prints as an empty box.
     pub images: crate::svg::ExportImages,
+    /// Draw a part that is not fitted in `variant` (or marked DNP) greyed
+    /// and crossed out, as the canvas does (#1294). The user's "Cross out
+    /// not-fitted parts" preference; on by default.
+    pub draw_not_fitted: bool,
 }
 
 /// How the part bookmarks are grouped.
@@ -288,6 +296,8 @@ impl Default for PdfOptions {
             include_parameter_sets: true,
             include_probes: true,
             include_blankets: true,
+            include_compile_masks: false,
+            include_diff_pairs: false,
             include_notes: true,
             include_collapsed_notes: false,
             bookmark_zoom: 0.5,
@@ -305,6 +315,7 @@ impl Default for PdfOptions {
             net_class_styles: std::collections::HashMap::new(),
             schematic_defaults: Default::default(),
             images: Default::default(),
+            draw_not_fitted: true,
         }
     }
 }
@@ -348,7 +359,9 @@ impl Exporter for PdfExporter {
 
         let sheet_indices =
             resolve_page_range(&opts.page_range, &ctx.sheets, ctx.current_sheet_index())?;
-        let expr_tables = build_expression_tables(&ctx.sheets, ctx.netlist.as_ref());
+        let expr_tables = build_expression_tables(&ctx.sheets, ctx.netlist.as_ref())
+            .with_placed_fits(ctx, opts.variant.as_deref(), opts.draw_not_fitted)
+            .with_drawn_values(ctx, opts.variant.as_deref());
         let (page_w_mm, page_h_mm) = opts.page_size.dimensions_mm(opts.orientation);
         let page_w_pt = (page_w_mm * MM_TO_PT) as f32;
         let page_h_pt = (page_h_mm * MM_TO_PT) as f32;

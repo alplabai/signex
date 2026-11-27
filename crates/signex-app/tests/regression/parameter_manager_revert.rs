@@ -18,6 +18,7 @@ fn tolerance(app: &Signex, id: uuid::Uuid) -> Option<String> {
 
 fn typed(app: &mut Signex, id: uuid::Uuid, text: &str) {
     let _ = app.update(Message::ParameterManager(ParameterManagerMsg::Edit {
+        sheet: "dirty-gateway.snxsch".into(),
         symbol_uuid: id,
         key: "Tolerance".into(),
         value: text.into(),

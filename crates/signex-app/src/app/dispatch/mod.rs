@@ -134,6 +134,8 @@ impl Signex {
             Message::PanZoomBench(msg) => self.dispatch_pan_zoom_bench_message(msg),
             Message::DiffPairClasses(msg) => self.dispatch_diff_pair_classes_message(msg),
             Message::GerberViewer(msg) => self.dispatch_gerber_viewer_message(msg),
+            Message::BlockDiagram(msg) => self.dispatch_block_diagram_message(msg),
+            Message::Extension(msg) => self.extensions.route(msg),
         }
     }
 
@@ -183,7 +185,7 @@ impl Signex {
                     || self.interaction_state.canvases.contains_key(&id);
                 let changed = self.ui_state.set_window_os_scale(id, scale);
                 if changed && self.ui_state.main_window_id == Some(id) {
-                    self.document_state.panel_ctx.device_px_per_logical_px =
+                    self.document_view.panel_ctx.device_px_per_logical_px =
                         self.ui_state.main_device_px_per_logical_px();
                 }
                 if changed && has_canvas {
@@ -278,10 +280,12 @@ impl Signex {
                                 self.ui_state.parameter_manager_open = false;
                                 *self.ui_state.parameter_table = Default::default();
                             }
+                            // A Cancel: nothing was applied.
+                            ModalId::ParameterImport => self.ui_state.parameter_import = None,
                             ModalId::RenameDialog => self.ui_state.rename_dialog = None,
                             ModalId::RemoveDialog => self.ui_state.remove_dialog = None,
                             ModalId::PrintPreview => self.dismiss_print_preview(),
-                            ModalId::BomPreview => self.document_state.bom_preview = None,
+                            ModalId::BomPreview => self.document_view.bom_preview = None,
                             ModalId::EnableVersionControl => {
                                 self.close_enable_version_control_dialog();
                             }
@@ -316,9 +320,9 @@ impl Signex {
                             }
                             // A window that went away without a close
                             // request is a Cancel, never a Discard.
-                            ModalId::ErrorNotice => self.document_state.error_notice = None,
+                            ModalId::ErrorNotice => self.document_view.error_notice = None,
                             ModalId::NetlistIncompletePrompt => {
-                                self.document_state.netlist_incomplete_prompt = None
+                                self.document_view.netlist_incomplete_prompt = None
                             }
                             ModalId::AutosaveRecovery => self.note_recovery_window_vanished(),
                             ModalId::ProjectCloseConfirm => {
@@ -397,7 +401,7 @@ impl Signex {
                         // this window, so the dock call is the whole
                         // job — no detached copy is left to focus.
                         WindowKind::DetachedPanel(kind) => {
-                            self.document_state.dock.show_panel(kind);
+                            self.document_view.dock.show_panel(kind);
                             layout_persist = self.persist_dock_layout_soon();
                         }
                         // The Component Preview lives as a tab in the
@@ -671,7 +675,7 @@ mod tests {
     /// not its home (left).
     fn detached_from_bottom(app: &mut Signex) -> iced::window::Id {
         let kind = PanelKind::Projects;
-        let dock = &mut app.document_state.dock;
+        let dock = &mut app.document_view.dock;
         dock.close_panel(kind);
         dock.add_panel(PanelPosition::Bottom, kind);
         let Some(PanelSite::Docked(pos, idx)) = dock.locate(kind) else {
@@ -692,13 +696,13 @@ mod tests {
         let Some(id) = detached else {
             panic!("Projects has a detached window");
         };
-        assert!(app.document_state.dock.locate(kind).is_none());
+        assert!(app.document_view.dock.locate(kind).is_none());
         id
     }
 
     fn home_region_holds_projects(app: &Signex) -> bool {
         matches!(
-            app.document_state.dock.locate(PanelKind::Projects),
+            app.document_view.dock.locate(PanelKind::Projects),
             Some(PanelSite::Docked(PanelPosition::Left, _))
         )
     }
@@ -716,7 +720,7 @@ mod tests {
 
         assert!(home_region_holds_projects(&app));
         assert!(
-            !app.document_state
+            !app.document_view
                 .dock
                 .panel_kinds(PanelPosition::Bottom)
                 .contains(&PanelKind::Projects)

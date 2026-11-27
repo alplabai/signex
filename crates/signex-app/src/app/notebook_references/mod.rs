@@ -48,6 +48,25 @@ pub struct NotebookRerun {
     pub(crate) serving: bool,
 }
 
+/// A reference command's own read of the project it named, and the command
+/// that waits for it: it travels with the command, not in the Annotations
+/// panel's state, so the panel reading the project in view meanwhile
+/// cannot take its place (#3022).
+#[derive(Debug, Clone)]
+pub struct ReferenceCommandRead {
+    pub(crate) rerun: NotebookRerun,
+    pub(crate) project: crate::app::ProjectId,
+    pub(crate) result: std::sync::Arc<Result<NotebookScan, String>>,
+}
+
+impl PartialEq for ReferenceCommandRead {
+    fn eq(&self, other: &Self) -> bool {
+        self.rerun == other.rerun
+            && self.project == other.project
+            && std::sync::Arc::ptr_eq(&self.result, &other.result)
+    }
+}
+
 /// What happened on a reference card, a badge card or Properties ▸ Design
 /// notes.
 #[derive(Debug, Clone, PartialEq)]
@@ -68,6 +87,8 @@ pub enum NotebookReferenceMsg {
     BlockOpened { file: String, line: u32 },
     /// View ▸ Notebook Badges (B) was pressed.
     BadgesToggled,
+    /// A reference command's read landed: the command runs again on it.
+    CommandRead(Box<ReferenceCommandRead>),
 }
 
 impl Signex {
@@ -99,6 +120,7 @@ impl Signex {
                 self.repaint_notebook_badges();
                 Task::none()
             }
+            NotebookReferenceMsg::CommandRead(read) => self.rerun_on_command_read(*read),
         }
     }
 
@@ -139,23 +161,29 @@ impl Signex {
         }
     }
 
-    /// Run every notebook command that waited for the read that just
-    /// landed, each answering from it.
-    pub(crate) fn rerun_waiting_notebook_commands(&mut self) -> Task<Message> {
-        let waiting = std::mem::take(&mut self.ui_state.annotations.reruns);
-        let mut tasks = Vec::with_capacity(waiting.len());
-        for rerun in waiting {
-            self.ui_state.annotations.answering = true;
-            tasks.push(self.rerun_after_read(
-                rerun.ticket,
-                &rerun.command,
-                &rerun.args,
-                &rerun.project,
-                rerun.origin,
-                rerun.serving,
-            ));
-            self.ui_state.annotations.answering = false;
-        }
-        Task::batch(tasks)
+    /// A reference command's read landed: run the command again, as the
+    /// caller that sent it, answering from that read. The read is held
+    /// only for the length of the run.
+    pub(crate) fn rerun_on_command_read(&mut self, read: ReferenceCommandRead) -> Task<Message> {
+        let ReferenceCommandRead {
+            rerun,
+            project,
+            result,
+        } = read;
+        let scan = match &*result {
+            Ok(scan) => Some(std::sync::Arc::new(scan.clone())),
+            Err(_) => None,
+        };
+        self.agent.notebook_read = Some((project, scan));
+        let task = self.rerun_after_read(
+            rerun.ticket,
+            &rerun.command,
+            &rerun.args,
+            &rerun.project,
+            rerun.origin,
+            rerun.serving,
+        );
+        self.agent.notebook_read = None;
+        task
     }
 }

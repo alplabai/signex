@@ -170,3 +170,11 @@ notebook-tab-cmd-snx-target = `path` names a Signex document ({ $value }): pick 
 notebook-tab-cmd-target-exists = { $value } exists: pass overwrite=true to replace it
 # A new notebook's first Save finds a file at its path (written meanwhile).
 notebook-tab-cmd-file-appeared = { $path } was written since this notebook was started: it is not replaced
+# Something else wrote the notebook file after it was read or saved.
+notebook-tab-cmd-changed-on-disk = { $path } changed on disk since it was read: it is not replaced; close the notebook tab without saving to read it again
+# A headless or agent run writes only inside the project, through no link.
+notebook-tab-cmd-write-outside = { $path } is outside the project or behind a link, so it is not written
+# An export or output folder inside a `.git` folder (#2470).
+notebook-tab-cmd-git-target = `path` is inside a .git folder ({ $value }): pick another place
+# Windows: a name ending in a dot or a space, or holding `:` (#2470).
+notebook-tab-cmd-reserved-name = `path` has a name Windows would change ({ $value }): no trailing dot or space, no `:`

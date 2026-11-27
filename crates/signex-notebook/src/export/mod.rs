@@ -219,8 +219,10 @@ fn export_with_cells(
     let pdf = notebook
         .pdf_pages(ident, Some((first_page, last_page)))
         .map_err(ExportError::Pdf)?;
+    // Counted on the pages exported, so `--pages` and the figures an
+    // `#attachment` or a `#measurement` makes are counted (#3021).
     let bookmarks = if options.bookmarks {
-        BookmarkCounts::of(sources)
+        notebook.bookmarks(first_page, last_page)
     } else {
         BookmarkCounts::default()
     };

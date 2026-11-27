@@ -94,10 +94,7 @@ fn a_failed_write_is_reported_and_leaves_the_document_dirty() {
 
     assert!(app.document_state.is_document_dirty(&path));
     assert!(logged("Save All: could not save"), "the failure is logged");
-    assert!(
-        app.document_state.error_notice.is_some(),
-        "the notice shows"
-    );
+    assert!(app.document_view.error_notice.is_some(), "the notice shows");
 }
 
 #[test]

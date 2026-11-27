@@ -87,3 +87,61 @@ fn delete_on_a_built_in_profile_changes_nothing() {
     );
     assert_eq!(app.ui_state.preferences_dirty, dirty_before);
 }
+
+/// #2495 (Caner, 2026-11-25): a command with no key gets one from the
+/// recorder, in a custom profile; on a built-in it is refused.
+#[test]
+fn a_command_without_a_key_gets_one_in_a_custom_profile_only() {
+    use signex_app::keymap::{ExtensionCommandNames, KeyStroke};
+    let mut app = opened();
+    let _ = app.update(inner(PrefMsg::KeymapCreateCustomProfile));
+    let row = app
+        .ui_state
+        .preferences_keymap_editor
+        .unassigned_rows_in_with(
+            &app.ui_state.i18n,
+            &ExtensionCommandNames::default(),
+            |_| true,
+        )
+        .into_iter()
+        .next()
+        .expect("some command has no key");
+    let command = row.command.clone().unwrap();
+    let open = PrefMsg::KeymapRecorderOpen {
+        slot: row.slot,
+        command: command.clone(),
+        label: row.label,
+        context: row.context,
+        trigger: row.trigger_config,
+        unassigned: true,
+    };
+    let stroke = KeyStroke::from_iced(
+        &iced::keyboard::Key::Character("q".into()),
+        iced::keyboard::Modifiers::CTRL | iced::keyboard::Modifiers::ALT,
+    )
+    .unwrap();
+
+    let _ = app.update(inner(open.clone()));
+    let _ = app.update(inner(PrefMsg::KeymapRecorderKeyPressed(stroke.clone())));
+    let _ = app.update(inner(PrefMsg::KeymapRecorderApply));
+
+    let bound = |app: &Signex| {
+        app.ui_state
+            .preferences_keymap_editor
+            .rows_in(&app.ui_state.i18n)
+            .iter()
+            .any(|row| row.command.as_ref() == Some(&command))
+    };
+    assert!(bound(&app), "the command has its key");
+
+    let _ = app.update(inner(PrefMsg::KeymapProfileSelected("classic".into())));
+    let before = app.ui_state.preferences_keymap_editor.clone();
+    let _ = app.update(inner(open));
+    let _ = app.update(inner(PrefMsg::KeymapRecorderKeyPressed(stroke)));
+    let _ = app.update(inner(PrefMsg::KeymapRecorderApply));
+    assert_eq!(
+        app.ui_state.preferences_keymap_editor.profile_set(),
+        before.profile_set(),
+        "a built-in profile is read-only"
+    );
+}

@@ -123,7 +123,7 @@ impl Signex {
     /// symbol context, built for the active tab; a pane showing another
     /// symbol's table stays blank until it is focused.
     pub(crate) fn view_pin_table_tab(&self, symbol: &Path) -> Element<'_, Message> {
-        let ctx = &self.document_state.panel_ctx;
+        let ctx = &self.document_view.panel_ctx;
         let Some(sym) = ctx.symbol_editor.as_ref().filter(|sym| sym.path == symbol) else {
             return container(Space::new())
                 .width(Length::Fill)

@@ -159,7 +159,7 @@ impl Signex {
 
     fn fonts_tab(&mut self, project_id: ProjectId) -> &mut FontsTabState {
         &mut self
-            .document_state
+            .document_view
             .project_tabs
             .entry(project_id)
             .or_default()
@@ -376,8 +376,8 @@ impl Signex {
             );
             return Ok(false);
         };
-        let tab = document.project_tabs.entry(project_id).or_default();
-        if !tab.general_history.apply_font(&mut project.data, command)? {
+        let history = document.general_history.entry(project_id).or_default();
+        if !history.apply_font(&mut project.data, command)? {
             return Ok(false);
         }
         document.sync_project_history_dirty(project_id, true);

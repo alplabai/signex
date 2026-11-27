@@ -105,7 +105,7 @@ fn pick(app: &mut Signex, id: ProjectId, path: &Path) {
 }
 
 fn problem(app: &Signex, id: ProjectId) -> Option<String> {
-    app.document_state.project_tabs[&id]
+    app.document_view.project_tabs[&id]
         .fonts
         .problem
         .as_ref()

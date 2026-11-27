@@ -167,7 +167,7 @@ fn reprefix(w: &mut World) {
 
 fn messages(w: &World) -> String {
     w.app
-        .document_state
+        .document_view
         .panel_ctx
         .diagnostics
         .iter()
@@ -741,7 +741,7 @@ fn an_unreadable_sheet_refuses_the_plan_and_names_it() {
     );
     assert!(messages(&w).contains("child.snxsch"), "{}", messages(&w));
     assert!(
-        w.app.document_state.error_notice.is_some(),
+        w.app.document_view.error_notice.is_some(),
         "a visible notice, not only a log line"
     );
 }
@@ -760,5 +760,5 @@ fn a_sheet_that_stops_reading_before_confirm_applies_nothing() {
     assert_eq!(engines[&root_path].document().symbols[0].reference, "D1");
     assert!(!engines.contains_key(&child_path), "no sheet was parked");
     assert!(messages(&w).contains("child.snxsch"), "{}", messages(&w));
-    assert!(w.app.document_state.error_notice.is_some());
+    assert!(w.app.document_view.error_notice.is_some());
 }

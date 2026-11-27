@@ -1043,6 +1043,7 @@ fn samples() -> Vec<(String, Command)> {
                 footprint: String::new(),
                 datasheet: String::new(),
                 fields: Vec::new(),
+                pin_map: None,
             },
         },
     );

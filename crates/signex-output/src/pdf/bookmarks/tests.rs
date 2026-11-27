@@ -70,6 +70,8 @@ fn default_opts() -> PdfOptions {
         include_parameter_sets: false,
         include_probes: false,
         include_blankets: false,
+        include_compile_masks: false,
+        include_diff_pairs: false,
         include_notes: false,
         include_collapsed_notes: false,
         bookmark_zoom: 0.5,
@@ -87,6 +89,7 @@ fn default_opts() -> PdfOptions {
         net_class_styles: Default::default(),
         schematic_defaults: Default::default(),
         images: Default::default(),
+        draw_not_fitted: true,
     }
 }
 

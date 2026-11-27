@@ -13,7 +13,7 @@ impl Signex {
         key: &signex_widgets::tree_view::TreeKey,
     ) -> Option<Vec<usize>> {
         if let Some(path) = signex_widgets::tree_view::resolve_path(
-            self.document_state.panel_ctx.project_tree.as_slice(),
+            self.document_view.panel_ctx.project_tree.as_slice(),
             key,
         ) {
             return Some(path);

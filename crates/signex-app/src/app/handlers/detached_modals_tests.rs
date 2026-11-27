@@ -102,7 +102,7 @@ fn open(app: &mut Signex, modal: ModalId) {
         ModalId::PassiveCalculator => ui.passive_calculator_open = true,
         ModalId::FirstRunTour => ui.first_run_tour_open = true,
         ModalId::ErrorNotice => {
-            app.document_state.error_notice = Some(crate::app::state::ErrorNotice::create(
+            app.document_view.error_notice = Some(crate::app::state::ErrorNotice::create(
                 crate::app::state::verbatim("it failed"),
             ))
         }
@@ -589,7 +589,7 @@ fn copy_to_library_ends_with_cancel_then_new_library_and_no_empty_band() {
     for &theme_id in ThemeId::BUILTINS {
         let (mut app, _main) = test_app();
         app.ui_state.theme_id = theme_id;
-        app.document_state.panel_ctx.tokens = app.tokens_for(theme_id);
+        app.document_view.panel_ctx.tokens = app.tokens_for(theme_id);
         open(&mut app, ModalId::LibraryStockCopy);
         let _ = app.sync_detached_modals();
         let id = window_of(&app, ModalId::LibraryStockCopy).expect("window");
@@ -823,7 +823,7 @@ fn every_dialog_window_is_filled_by_its_body_on_the_theme_surface() {
         for modal in testable() {
             let (mut app, _main) = test_app();
             app.ui_state.theme_id = theme_id;
-            app.document_state.panel_ctx.tokens = app.tokens_for(theme_id);
+            app.document_view.panel_ctx.tokens = app.tokens_for(theme_id);
             open(&mut app, modal);
             let _ = app.sync_detached_modals();
             let id = window_of(&app, modal).expect("window");
@@ -834,7 +834,7 @@ fn every_dialog_window_is_filled_by_its_body_on_the_theme_surface() {
                 (size.width, size.height),
                 "{modal:?} in {theme_id:?}: the body does not cover the window"
             );
-            let paper = crate::styles::ti(app.document_state.panel_ctx.tokens.paper);
+            let paper = crate::styles::ti(app.document_view.panel_ctx.tokens.paper);
             let theme = app.theme(id).expect("theme");
             assert!(crate::styles::is_dialog_window(&theme));
             assert_eq!(

@@ -6,7 +6,8 @@ use super::kinds::{Reader, band_of};
 use super::value::FieldValue;
 use crate::reference::Reference;
 
-/// How close to a limit, as a share of the limit, a value inside it warns.
+/// How close to a limit, as a share of the reference value, a value inside
+/// it warns.
 pub const VERDICT_WARN_MARGIN: f64 = 0.01;
 
 /// The verdict of a value against its limits; orders Pass, Warn, Fail, so
@@ -81,7 +82,10 @@ impl Limits {
     }
 }
 
-/// The verdict of `value` against `limits`. A limit of zero has no warning
+/// The verdict of `value` against `limits`: inside them but closer to one
+/// than [`VERDICT_WARN_MARGIN`] of the reference value (the middle of a
+/// band, else its one limit) warns, as the timeline and the PDF judge it
+/// (DECISIONS row 776, #3021). A reference value of zero has no warning
 /// band.
 pub fn verdict_of(value: f64, limits: Limits) -> Verdict {
     let below = limits.min.is_some_and(|min| value < min);
@@ -89,8 +93,20 @@ pub fn verdict_of(value: f64, limits: Limits) -> Verdict {
     if below || above {
         return Verdict::Fail;
     }
-    let near = |limit: f64| (value - limit).abs() < limit.abs() * VERDICT_WARN_MARGIN;
-    if limits.min.is_some_and(near) || limits.max.is_some_and(near) {
+    let reference = match (limits.min, limits.max) {
+        (Some(min), Some(max)) => (min + max) / 2.0,
+        (Some(limit), None) | (None, Some(limit)) => limit,
+        (None, None) => return Verdict::Pass,
+    };
+    let scale = reference.abs();
+    let margin = [
+        limits.min.map(|min| value - min),
+        limits.max.map(|max| max - value),
+    ]
+    .into_iter()
+    .flatten()
+    .fold(f64::INFINITY, f64::min);
+    if scale > 0.0 && margin < VERDICT_WARN_MARGIN * scale {
         Verdict::Warn
     } else {
         Verdict::Pass

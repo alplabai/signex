@@ -15,15 +15,15 @@ const CURVE_STROKE_MM: f64 = 0.15;
 /// the curve as a single undo step; four clicks on one point place nothing,
 /// as a degenerate polygon does.
 pub(super) fn bezier_click(editor: &mut SymEditor, x: f64, y: f64) {
-    editor.polygon_vertices.push((x, y));
-    let &[a, b, c, d] = editor.polygon_vertices.as_slice() else {
-        editor.canvas_cache.clear();
+    editor.gui.polygon_vertices.push((x, y));
+    let &[a, b, c, d] = editor.gui.polygon_vertices.as_slice() else {
+        editor.gui.canvas_cache.clear();
         return;
     };
-    editor.polygon_vertices.clear();
+    editor.gui.polygon_vertices.clear();
     let points = [a, b, c, d].map(|(x, y)| [x, y]);
     if place_shape(editor, SymbolGraphicKind::Bezier { points }).is_err() {
-        editor.canvas_cache.clear();
+        editor.gui.canvas_cache.clear();
     }
 }
 

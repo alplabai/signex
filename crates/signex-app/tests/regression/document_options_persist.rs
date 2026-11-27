@@ -207,9 +207,9 @@ fn sheet_color_and_page_origin_each_undo_in_one_step() {
     let gray = SchematicSheetColor::Preset(SheetColor::LightGray);
     panel(&mut app, PanelMsg::SetSheetColor(gray));
     panel(&mut app, PanelMsg::SetPageOrigin(PageOrigin::UpperLeft));
-    assert_eq!(app.document_state.panel_ctx.sheet_color, gray);
+    assert_eq!(app.document_view.panel_ctx.sheet_color, gray);
     assert_eq!(
-        app.document_state.panel_ctx.page_origin,
+        app.document_view.panel_ctx.page_origin,
         PageOrigin::UpperLeft
     );
     let _ = app.update(Message::Edit(EditMsg::Undo));
@@ -220,7 +220,7 @@ fn sheet_color_and_page_origin_each_undo_in_one_step() {
     let doc = app.document_state.engines[&path].document();
     assert!(doc.page.is_default());
     assert_eq!(
-        app.document_state.panel_ctx.sheet_color,
+        app.document_view.panel_ctx.sheet_color,
         SchematicSheetColor::Default
     );
 }

@@ -33,9 +33,11 @@ mod group;
 mod harness_snapshot;
 mod hierarchy;
 mod images;
+pub mod live;
 mod net_finding;
 mod overrides;
 pub mod pin_matrix;
+mod project_class_conflicts;
 mod project_names;
 pub mod project_rules;
 mod project_units;
@@ -51,6 +53,7 @@ pub use images::ErcImage;
 pub use net_finding::{NetFinding, NetFindingPin};
 pub use overrides::apply_overrides;
 pub use pin_matrix::{ErcConfig, PinAxis, PinMatrix};
+pub use project_class_conflicts::{ProjectClassFindings, project_net_class_conflicts_named};
 pub use project_names::{
     ProjectNetNames, project_net_multiple_names, project_net_multiple_names_named,
 };
@@ -162,6 +165,12 @@ pub enum RuleKind {
     /// Connectors or sheet entries of two harness types share one harness
     /// (#1280).
     HarnessTypeConflict,
+    /// Two directives (Net Parameters, Net Blanket) give one net different
+    /// net classes; the net takes the class of the higher-ranked one (#2656).
+    NetClassConflict,
+    /// One half of a differential pair (`USB_D_P`, or a net a pair
+    /// directive marks) whose partner net is not on the sheet (#2951).
+    DiffPairPartnerMissing,
     /// An image on the sheet names a file that is gone, refused or holds
     /// other content than the image placed (#1116).
     ImageFileMissing,
@@ -208,6 +217,8 @@ impl RuleKind {
             RuleKind::RepeatEntryNeedsBus => "Repeat entry needs a bus",
             RuleKind::HarnessEntryMismatch => "Harness entry mismatch",
             RuleKind::HarnessTypeConflict => "Harness type conflict",
+            RuleKind::NetClassConflict => "Net class conflict",
+            RuleKind::DiffPairPartnerMissing => "Differential pair partner missing",
             RuleKind::ImageFileMissing => "Image file missing",
         }
     }
@@ -232,7 +243,7 @@ impl RuleKind {
     }
 
     /// Every built-in rule, in the order the ERC dialog lists them.
-    pub const ALL: [RuleKind; 38] = [
+    pub const ALL: [RuleKind; 40] = [
         RuleKind::UnusedPin,
         RuleKind::DuplicateRefDesignator,
         RuleKind::HierPortDisconnected,
@@ -270,6 +281,8 @@ impl RuleKind {
         RuleKind::RepeatEntryNeedsBus,
         RuleKind::HarnessEntryMismatch,
         RuleKind::HarnessTypeConflict,
+        RuleKind::NetClassConflict,
+        RuleKind::DiffPairPartnerMissing,
         RuleKind::ImageFileMissing,
     ];
 
@@ -312,6 +325,8 @@ impl RuleKind {
             | RuleKind::SheetPinDirectionConflict
             | RuleKind::HarnessEntryMismatch
             | RuleKind::HarnessTypeConflict
+            | RuleKind::NetClassConflict
+            | RuleKind::DiffPairPartnerMissing
             | RuleKind::ImageFileMissing => Severity::Warning,
             RuleKind::NetMultipleNames => Severity::Info,
             RuleKind::MissingPowerFlag | RuleKind::SymbolOutsideSheet => Severity::Info,

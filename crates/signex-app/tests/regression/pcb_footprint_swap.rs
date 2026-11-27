@@ -169,7 +169,7 @@ fn r1(app: &Signex) -> Footprint {
 }
 
 fn facts(app: &Signex) -> PcbComponentFacts {
-    app.document_state
+    app.document_view
         .panel_ctx
         .pcb_board
         .as_ref()

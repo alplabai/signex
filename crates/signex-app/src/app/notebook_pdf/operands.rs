@@ -134,6 +134,7 @@ pub(crate) fn export_notebook_pdf(app: &mut Signex, args: &CommandArgs) -> Ran {
         project.data.name.clone(),
     );
     let design = app.notebook_design_inputs(id);
+    let confined = app.headless_answers().is_some() || app.agent.serving;
     let waiting = app.wait_for_command(&command, args);
     let ticket = waiting.ticket;
     let request = BuildRequest {
@@ -142,6 +143,7 @@ pub(crate) fn export_notebook_pdf(app: &mut Signex, args: &CommandArgs) -> Ran {
         notebook,
         path,
         overwrite: Some(overwrite(args)),
+        confined,
         options,
         generation: None,
         waiting: Some(waiting),

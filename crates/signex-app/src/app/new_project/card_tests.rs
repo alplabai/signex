@@ -11,7 +11,7 @@ use crate::menu_bar::MenuMessage;
 
 fn open() -> Signex {
     let (mut app, _t) = Signex::new();
-    app.ui_state.setup_profiles.clear();
+    app.document_state.setup_profiles.clear();
     let _ = app.update(Message::Menu(MenuMessage::NewProject));
     app
 }
@@ -105,7 +105,7 @@ fn an_edited_built_in_shows_edited_and_reset_restores_the_tier_values() {
     );
     send(&mut app, NewProjectMsg::ProfileEditSaved);
     assert_eq!(draft(&app).editing, None);
-    let users = &app.ui_state.setup_profiles;
+    let users = &app.document_state.setup_profiles;
     assert!(
         SetupProfile::Advanced.is_edited(users),
         "the override is kept"
@@ -134,7 +134,7 @@ fn an_edited_built_in_shows_edited_and_reset_restores_the_tier_values() {
         &mut app,
         NewProjectMsg::ProfileResetRequested(SetupProfile::Advanced),
     );
-    assert!(!SetupProfile::Advanced.is_edited(&app.ui_state.setup_profiles));
+    assert!(!SetupProfile::Advanced.is_edited(&app.document_state.setup_profiles));
     assert_eq!(draft(&app).profile_menu, None);
     assert_eq!(draft(&app).setup.pcb.clearance_mm, 0.1);
 }
@@ -151,7 +151,7 @@ fn a_failed_settings_write_takes_the_override_back() {
         NewProjectMsg::RuleEdited(PcbField::TrackWidth, "0.09".into()),
     );
     send(&mut app, NewProjectMsg::ProfileEditSaved);
-    assert!(SetupProfile::Hdi.is_edited(&app.ui_state.setup_profiles));
+    assert!(SetupProfile::Hdi.is_edited(&app.document_state.setup_profiles));
     app.setup_profiles_written(
         String::new(),
         ProfileUndo::Saved {
@@ -161,7 +161,7 @@ fn a_failed_settings_write_takes_the_override_back() {
         Err("disk full".into()),
     );
     assert!(
-        !SetupProfile::Hdi.is_edited(&app.ui_state.setup_profiles),
+        !SetupProfile::Hdi.is_edited(&app.document_state.setup_profiles),
         "the in-memory override is taken back"
     );
 
@@ -171,7 +171,7 @@ fn a_failed_settings_write_takes_the_override_back() {
         NewProjectMsg::ProfileEditRequested(ProfileTarget::BuiltIn(SetupProfile::Hdi)),
     );
     send(&mut app, NewProjectMsg::ProfileEditSaved);
-    let kept = app.ui_state.setup_profiles.clone();
+    let kept = app.document_state.setup_profiles.clone();
     send(
         &mut app,
         NewProjectMsg::ProfileResetRequested(SetupProfile::Hdi),
@@ -185,7 +185,7 @@ fn a_failed_settings_write_takes_the_override_back() {
         },
         Err("disk full".into()),
     );
-    assert_eq!(app.ui_state.setup_profiles, kept);
+    assert_eq!(app.document_state.setup_profiles, kept);
 }
 
 #[test]
@@ -197,7 +197,7 @@ fn rename_duplicate_and_enter_in_the_rename_field() {
         NewProjectMsg::SaveProfileNameEdited("Power".into()),
     );
     send(&mut app, NewProjectMsg::SaveProfileConfirmed);
-    let id = app.ui_state.setup_profiles[0].id.clone();
+    let id = app.document_state.setup_profiles[0].id.clone();
 
     send(
         &mut app,
@@ -206,7 +206,7 @@ fn rename_duplicate_and_enter_in_the_rename_field() {
             name: "Power copy".into(),
         },
     );
-    let copy = app.ui_state.setup_profiles[1].clone();
+    let copy = app.document_state.setup_profiles[1].clone();
     assert_eq!(copy.name, "Power copy");
     assert_ne!(copy.id, id);
     assert!(
@@ -234,7 +234,7 @@ fn rename_duplicate_and_enter_in_the_rename_field() {
     );
     send(&mut app, NewProjectMsg::SubmitRequested);
     assert_eq!(draft(&app).renaming, None);
-    let renamed = &app.ui_state.setup_profiles[1];
+    let renamed = &app.document_state.setup_profiles[1];
     assert_eq!(
         (renamed.id.as_str(), renamed.name.as_str()),
         (copy.id.as_str(), "Sensor")

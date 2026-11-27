@@ -68,7 +68,7 @@ fn set_family(app: &mut Signex, target: signex_engine::TextTarget, family: Optio
 /// notices other tests in this binary raised for their own documents are
 /// filtered out by file name.
 fn missing_notices(app: &Signex, document: &str) -> Vec<String> {
-    app.document_state
+    app.document_view
         .panel_ctx
         .diagnostics
         .iter()

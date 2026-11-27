@@ -37,6 +37,7 @@ use crate::schematic::SchematicSheet;
 
 mod board_dimension;
 mod board_free;
+mod board_layout_plan;
 mod board_options;
 mod board_panel;
 mod board_sketch;
@@ -78,6 +79,8 @@ mod board_dimension_tests;
 #[cfg(test)]
 mod board_free_tests;
 #[cfg(test)]
+mod board_layout_plan_tests;
+#[cfg(test)]
 mod board_options_tests;
 #[cfg(test)]
 mod board_pattern_token_tests;
@@ -109,6 +112,8 @@ mod integrity_tests;
 mod library_link_tests;
 #[cfg(test)]
 mod net_colors_tests;
+#[cfg(test)]
+mod net_tie_tests;
 #[cfg(test)]
 mod no_erc_tests;
 #[cfg(test)]
@@ -182,8 +187,8 @@ pub use pcb_rows::{
 pub use pcb_token::{
     SNXPCB_FORMAT_BOARD_SKETCH_TARGETS, SNXPCB_FORMAT_LAYER_COLORS, SNXPCB_FORMAT_ROOMS,
     SNXPCB_FORMAT_V1, SNXPCB_FORMAT_V1_8, SNXPCB_FORMAT_V1_9, SNXPCB_FORMAT_V1_10,
-    SNXPCB_FORMAT_V1_11, SNXPCB_VERSION, snxpcb_opens_read_only, snxpcb_read, snxpcb_refuse_save,
-    snxpcb_token,
+    SNXPCB_FORMAT_V1_11, SNXPCB_FORMAT_V1_12, SNXPCB_VERSION, snxpcb_opens_read_only, snxpcb_read,
+    snxpcb_refuse_save, snxpcb_token,
 };
 pub use sch_rows::{SchComponentRow, SchJunctionRow, SchLabelRow, SchWireRow};
 pub use sch_token::{
@@ -192,6 +197,7 @@ pub use sch_token::{
 };
 pub use text_size_repair::MAX_TEXT_SIZE_MM;
 pub use tsv::{parse_tsv_block, write_tsv_block};
+pub(crate) use units::nm_to_mm;
 pub use units::{NonFiniteField, mm_as_stored_nm};
 pub use unknown::{BoardUnknown, SheetUnknown, UnknownFields};
 pub use unknown_columns::{MAX_FOREIGN_COLUMN_NAME_BYTES, MAX_FOREIGN_COLUMNS, UnknownColumns};

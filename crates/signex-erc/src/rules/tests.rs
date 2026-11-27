@@ -145,6 +145,8 @@ fn ctx(
         key: None,
         harness: Default::default(),
         images: Vec::new(),
+        class_conflicts: Vec::new(),
+        lone_pairs: Vec::new(),
     }
 }
 

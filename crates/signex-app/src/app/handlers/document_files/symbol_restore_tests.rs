@@ -17,11 +17,11 @@ fn app_with_warning() -> (Signex, PathBuf, SymbolFile) {
     // No edit before the warning: it is raised at generation 0, the same
     // generation a freshly built restored document starts at.
     let editor = SymbolDocument::new(path.clone(), file.clone());
-    let symbol = editor.file.symbols[0].uuid;
+    let symbol = editor.draft.file.symbols[0].uuid;
     app.library.pending_symbol_delete = Some(PendingSymbolDelete {
         path: path.clone(),
         symbol,
-        history: editor.history_generation,
+        history: editor.draft.history_generation,
         serial: 1,
         rows: 1,
         sheets: 0,

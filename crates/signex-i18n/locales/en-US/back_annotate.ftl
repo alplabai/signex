@@ -91,3 +91,5 @@ back-annotate-duplicate-on-sheet = { $designator } already exists on { $sheet }
 back-annotate-duplicate-exists = { $designator } already exists on another part
 # The caption of an unticked rename when another unticked rename wants the same designator.
 back-annotate-duplicate-contested = Another rename also changes a part to { $designator }; tick one of them
+# A `back_annotate_schematics` run that changed nothing; $why is the reason in words.
+back-annotate-command-refused = Back Annotate did not run: { $why }

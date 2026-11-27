@@ -206,7 +206,7 @@ fn a_parts_position_is_typed_in_one_undo_step_per_box() {
     let mut app = app_with(dir.path(), sheet());
     let r1 = item(PART, SelectedKind::Symbol);
     select(&mut app, r1);
-    assert_eq!(app.document_state.panel_ctx.placed.item, Some(r1));
+    assert_eq!(app.document_view.panel_ctx.placed.item, Some(r1));
 
     type_in(&mut app, r1, PlacedField::X, "20");
     assert_eq!(part(&app).position, Point::new(20.0, 10.0));
@@ -216,7 +216,7 @@ fn a_parts_position_is_typed_in_one_undo_step_per_box() {
         "{:?}",
         part(&app).position
     );
-    assert_eq!(app.document_state.panel_ctx.placed.draft, None, "committed");
+    assert_eq!(app.document_view.panel_ctx.placed.draft, None, "committed");
 
     undo(&mut app);
     assert_eq!(
@@ -253,7 +253,7 @@ fn a_box_that_is_not_a_number_keeps_its_draft_and_changes_nothing() {
     select(&mut app, r1);
     type_in(&mut app, r1, PlacedField::X, "ten");
     assert_eq!(part(&app).position, Point::new(10.0, 10.0));
-    let draft = app.document_state.panel_ctx.placed.draft.clone();
+    let draft = app.document_view.panel_ctx.placed.draft.clone();
     assert_eq!(draft.map(|d| d.text).as_deref(), Some("ten"));
 }
 
@@ -346,7 +346,7 @@ fn every_placed_kind_takes_a_typed_position() {
         let it = item(n, kind);
         select(&mut app, it);
         assert_eq!(
-            app.document_state.panel_ctx.placed.item,
+            app.document_view.panel_ctx.placed.item,
             Some(it),
             "{kind:?}"
         );
@@ -378,7 +378,7 @@ fn a_locked_part_shows_the_reason_and_refuses_the_edit() {
     let mut app = app_with(dir.path(), locked);
     let r1 = item(PART, SelectedKind::Symbol);
     select(&mut app, r1);
-    let reason = app.document_state.panel_ctx.placed.locked.clone();
+    let reason = app.document_view.panel_ctx.placed.locked.clone();
     assert!(
         reason
             .as_deref()

@@ -43,7 +43,7 @@ fn image() -> SchImage {
 }
 
 fn shown(app: &Signex) -> Vec<String> {
-    let ctx = app.document_state.panel_ctx.clone();
+    let ctx = app.document_view.panel_ctx.clone();
     let view = super::view_selected_element_properties(
         &ctx,
         iced::Color::WHITE,
@@ -82,7 +82,7 @@ fn an_image_shows_its_file_size_and_appearance_rows() {
 #[test]
 fn a_missing_file_shows_the_banner_with_relink_and_remove() {
     let mut app = app_with(image());
-    app.document_state.panel_ctx.annotation.image.missing = true;
+    app.document_view.panel_ctx.annotation.image.missing = true;
     let texts = shown(&app);
     for wanted in [
         "File not found.",

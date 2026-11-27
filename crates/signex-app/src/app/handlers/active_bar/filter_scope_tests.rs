@@ -16,7 +16,7 @@ fn none_clears_a_partial_filter_set() {
     let mut app = app_with_filters(&[SelectionFilter::Wires, SelectionFilter::Texts]);
     let _ = app.update(Message::ActiveBar(ActiveBarMsg::NoFiltersPicked));
     assert!(app.interaction_state.selection_filters.is_empty());
-    assert!(app.document_state.panel_ctx.selection_filters.is_empty());
+    assert!(app.document_view.panel_ctx.selection_filters.is_empty());
 }
 
 #[test]
@@ -30,7 +30,7 @@ fn all_turns_every_category_on_and_is_idempotent() {
         );
     }
     assert_eq!(
-        app.document_state.panel_ctx.selection_filters,
+        app.document_view.panel_ctx.selection_filters,
         app.interaction_state.selection_filters
     );
 }

@@ -39,6 +39,11 @@ and the sheet bookmarks carry no tag (Caner, 2026-11-20). The helper hands
 the renderer `variant: None` for Base, after it has taken the project's
 active variant out of the title-block fields.
 
+A part that is not fitted in the printed variant (or marked DNP) prints
+greyed with a cross over its body while `draw_not_fitted` is on: the user's
+"Cross out not-fitted parts" preference, on by default (#1294). The rule is
+`docs/RENDERING_RULES.md`, "sch-not-fitted".
+
 ## Watermark
 
 `Watermark` holds the text (`Draft` prints "DRAFT", `Confidential` prints
@@ -103,12 +108,19 @@ With `layers: Some(PdfLayerVisibility)` the export writes optional content:
 
 | `PdfLayer` | Group name | What it holds |
 |---|---|---|
-| `WiresAndBuses` | Wires and buses | Wires, buses, bus entries, signal harnesses, junctions |
+| `WiresAndBuses` | Wires and buses | Wires, buses, bus entries, junctions |
+| `SignalHarnesses` | Signal harnesses | Harness wires, harness connectors with their entries and type names, and harness-typed sheet entries (#2690) |
 | `Parts` | Parts | Part bodies, pins and their designator and value text |
 | `NetLabelsAndPorts` | Net labels and ports | Net, global and hierarchical labels (ports) |
 | `PowerPorts` | Power ports | Power port symbols and power labels |
 | `TitleBlockAndBorder` | Title block and border | The sheet border, the template frame and the title block |
 | `Watermark` | Watermark | The watermark |
+
+The group names in the file are English whatever the UI language (output is
+locale-invariant, DECISIONS 2026-11-07); the Export PDF dialog names each
+layer row from the message catalog (`pdf-layer-*`). The Signal harnesses
+group is written like the other drawing groups, harness or not: on a page
+with no harness it holds no drawing.
 
 Not in any group, so always visible: the page's paper fill, free drawings
 (Bezier curves, dimensions and tables included), notes, no-connect and No-ERC

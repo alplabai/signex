@@ -205,11 +205,11 @@ pub(super) fn edit_symbol_pins(app: &mut Signex, args: &CommandArgs) -> Ran {
     let Some(editor) = app.document_state.symbol_editors.get(&path) else {
         return refused("the symbol file is not open");
     };
-    let idx = match symbol_index(&editor.file.symbols, text(args, "symbol")) {
+    let idx = match symbol_index(&editor.draft.file.symbols, text(args, "symbol")) {
         Ok(idx) => idx,
         Err(reason) => return refused(reason),
     };
-    let before = &editor.file.symbols[idx];
+    let before = &editor.draft.file.symbols[idx];
     let mut after = before.clone();
     let edited = match edit(&mut after, args) {
         Ok(edited) => edited,
@@ -233,16 +233,17 @@ fn commit(app: &mut Signex, path: &Path, idx: usize, symbol: Symbol, edited: &Ed
     };
     let shown = idx
         == editor
+            .draft
             .active_idx
-            .min(editor.file.symbols.len().saturating_sub(1));
+            .min(editor.draft.file.symbols.len().saturating_sub(1));
     let moves_pins = edited.pasted || !edited.removed.is_empty();
     editor.record_edit(None, |editor| {
-        editor.file.symbols[idx] = symbol;
+        editor.draft.file.symbols[idx] = symbol;
         if shown && moves_pins {
-            drop_pin_selection(&mut editor.selected);
+            drop_pin_selection(&mut editor.gui.selected);
         }
         editor.mark_dirty();
-        editor.canvas_cache.clear();
+        editor.gui.canvas_cache.clear();
         true
     });
     let pins = editor.primitive().pins.len();

@@ -3,7 +3,9 @@
 //! ones from memory, closed ones from disk), each child once per placement,
 //! the library's current part names, the active variant, and the parts whose
 //! board footprint the BOM leaves out (#2365). Unpriced: the requirement
-//! prices it at its own build quantity.
+//! prices it at its own build quantity. The per-part list also holds the
+//! parts not fitted, and is built again for each variant a Part lifecycle
+//! requirement names (#2686).
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -35,6 +37,10 @@ pub(crate) struct BomInputs {
     /// The library's current part names (`library::drift`).
     names: HashMap<String, String>,
     variant: Option<String>,
+    /// The variants the Part lifecycle requirements name (#2686), by
+    /// `signex_req::variant_key`: the BOM variant to build (`None`: Base),
+    /// or why the project has no such variant.
+    part_variants: Vec<(String, Result<Option<String>, String>)>,
     /// The project's saved channel naming.
     naming: SavedChannelNaming,
 }
@@ -44,15 +50,26 @@ pub(crate) struct BomInputs {
 pub(crate) struct Boms {
     pub(crate) grouped: BomTable,
     pub(crate) parts: BomTable,
+    /// One row per part for each variant a Part lifecycle requirement
+    /// names, by `signex_req::variant_key`.
+    pub(crate) variant_parts: HashMap<String, Result<BomTable, String>>,
     pub(crate) warnings: Vec<String>,
 }
 
-impl BomInputs {
-    /// The same inputs for `variant` (`None`: Base).
-    pub(crate) fn for_variant(self, variant: Option<String>) -> Self {
-        let variant = variant.filter(|v| !signex_types::project::is_base_variant(v));
-        Self { variant, ..self }
+/// The BOM variant `name` stands for in `data`: `None` for Base, the
+/// definition's own spelling for a variant, or why there is none.
+pub(super) fn bom_variant(
+    data: &signex_types::project::ProjectData,
+    name: &str,
+) -> Result<Option<String>, String> {
+    if signex_types::project::is_base_variant(name) {
+        return Ok(None);
     }
+    data.variant_definitions
+        .iter()
+        .find(|defined| defined.eq_ignore_ascii_case(name.trim()))
+        .map(|defined| Some(defined.clone()))
+        .ok_or_else(|| format!("the project has no variant `{}`", name.trim()))
 }
 
 impl Signex {
@@ -62,7 +79,15 @@ impl Signex {
             .active_variant
             .clone()
             .filter(|v| !signex_types::project::is_base_variant(v));
+        let part_variants = signex_req::part_variants(&project.data.requirements)
+            .into_iter()
+            .map(|name| {
+                let built = bom_variant(&project.data, &name);
+                (signex_req::variant_key(&name), built)
+            })
+            .collect();
         BomInputs {
+            part_variants,
             open: open_sheets_snapshot(&self.document_state),
             pages: project_pages(Some(project)),
             root: project_root_sheet_path(project),
@@ -72,6 +97,15 @@ impl Signex {
             variant,
             naming: SavedChannelNaming::of(&project.data),
         }
+    }
+}
+
+impl BomInputs {
+    /// The BOM of `variant` (`None`: the base design) instead of the
+    /// project's active one (`query_bom variant=`, #2938; a generated design
+    /// report's variant, #2945).
+    pub(crate) fn for_variant(self, variant: Option<String>) -> Self {
+        Self { variant, ..self }
     }
 }
 
@@ -161,14 +195,34 @@ pub(crate) fn project_boms(
         ..BomOptions::default()
     };
     let (grouped, _) = rollup_with_validation(&ctx, &options);
+    // Every part, the not-fitted ones listed with no fitted quantity, so a
+    // Part lifecycle requirement with Fitted parts only off can check them
+    // (#2686); with it on (the default) it keeps the fitted ones, as before.
     let ungrouped = BomOptions {
         grouping: BomGrouping::Ungrouped,
+        include_dnp: true,
+        include_not_fitted: true,
         ..options
     };
     let (parts, _) = rollup_with_validation(&ctx, &ungrouped);
+    let variant_parts = inputs
+        .part_variants
+        .into_iter()
+        .map(|(key, variant)| {
+            let table = variant.map(|active_variant| {
+                let options = BomOptions {
+                    active_variant,
+                    ..ungrouped.clone()
+                };
+                rollup_with_validation(&ctx, &options).0
+            });
+            (key, table)
+        })
+        .collect();
     Ok(Boms {
         grouped,
         parts,
+        variant_parts,
         warnings,
     })
 }

@@ -117,9 +117,67 @@ pub fn compile(sources: &NotebookSources, options: &CompileOptions) -> Compilati
     compile_with_inputs(sources, options, &[])
 }
 
+/// How long one compile may run. Typst caps a `while` loop but not a
+/// `for` loop, so a notebook can loop for hours; past this the compile is
+/// reported as stopped, so the preview and the command line go on (#3020).
+pub const COMPILE_TIME_LIMIT: std::time::Duration = std::time::Duration::from_secs(60);
+
+/// The stack a compile runs on: Typst recurses deeply on nested content.
+const COMPILE_STACK: usize = 64 * 1024 * 1024;
+
 /// [`compile`] with `inputs` as Typst's `sys.inputs`, `(key, text)` pairs;
 /// the PDF export passes its settings this way (`docs/NOTEBOOK_PDF.md`).
+/// Stopped after [`COMPILE_TIME_LIMIT`].
 pub fn compile_with_inputs(
+    sources: &NotebookSources,
+    options: &CompileOptions,
+    inputs: &[(String, String)],
+) -> Compilation {
+    compile_within(sources, options, inputs, COMPILE_TIME_LIMIT)
+}
+
+/// [`compile_with_inputs`] with its time limit. The compile runs on a
+/// thread of its own; one still running at `limit` is reported as an
+/// error and left behind, since Typst cannot be interrupted: the caller
+/// answers, the process can exit, and the thread ends with its loop.
+pub fn compile_within(
+    sources: &NotebookSources,
+    options: &CompileOptions,
+    inputs: &[(String, String)],
+    limit: std::time::Duration,
+) -> Compilation {
+    let (sent, received) = std::sync::mpsc::channel();
+    let (sources_c, options_c, inputs_c) = (sources.clone(), options.clone(), inputs.to_vec());
+    let spawned = std::thread::Builder::new()
+        .name("notebook-compile".into())
+        .stack_size(COMPILE_STACK)
+        .spawn(move || {
+            let _gone = sent.send(compile_now(&sources_c, &options_c, &inputs_c));
+        });
+    if spawned.is_err() {
+        return compile_now(sources, options, inputs);
+    }
+    match received.recv_timeout(limit) {
+        Ok(compilation) => compilation,
+        Err(_) => Compilation {
+            notebook: None,
+            diagnostics: vec![Diagnostic {
+                severity: DiagnosticSeverity::Error,
+                file: String::new(),
+                line: 0,
+                column: 0,
+                message: format!(
+                    "the notebook did not finish compiling within {} s and was stopped",
+                    limit.as_secs()
+                ),
+                hints: vec!["a loop that never ends, or one too long, is the usual cause".into()],
+            }],
+        },
+    }
+}
+
+/// The compile itself, on the calling thread.
+fn compile_now(
     sources: &NotebookSources,
     options: &CompileOptions,
     inputs: &[(String, String)],
@@ -159,6 +217,60 @@ impl CompiledNotebook {
     /// How many pages the notebook has.
     pub fn page_count(&self) -> usize {
         self.document.pages().len()
+    }
+
+    /// The bookmarks the PDF of pages `first..=last` (1-based) carries:
+    /// each bookmarked contents heading, and each captioned figure or table
+    /// (an `#attachment`, a bench `#measurement` or a plain `figure`), read
+    /// from the laid-out pages rather than the source (#3021).
+    pub fn bookmarks(&self, first: usize, last: usize) -> crate::export::BookmarkCounts {
+        use typst::foundations::{NativeElement, StyleChain};
+        use typst::introspection::Introspector;
+        use typst::model::{FigureElem, FigureKind, HeadingElem, TableElem};
+        let styles = StyleChain::default();
+        let introspector = self.document.introspector();
+        let on_pages = |content: &typst::foundations::Content| {
+            content
+                .location()
+                .and_then(|location| introspector.page(location))
+                .is_some_and(|page| (first..=last).contains(&page.get()))
+        };
+        let mut counts = crate::export::BookmarkCounts::default();
+        for content in introspector.query(&HeadingElem::ELEM.select()) {
+            let Some(heading) = content.to_packed::<HeadingElem>() else {
+                continue;
+            };
+            let outlined = heading.outlined.get(styles);
+            let bookmarked = heading.bookmarked.get(styles).unwrap_or(outlined);
+            // A figure's own bookmark heading stays out of the contents; it
+            // is counted with its figure below.
+            if !bookmarked || !outlined || !on_pages(&content) {
+                continue;
+            }
+            if heading.resolve_level(styles).get() <= 1 {
+                counts.sections += 1;
+            } else {
+                counts.subsections += 1;
+            }
+        }
+        for content in introspector.query(&FigureElem::ELEM.select()) {
+            let Some(figure) = content.to_packed::<FigureElem>() else {
+                continue;
+            };
+            if figure.caption.get_ref(styles).is_none() || !on_pages(&content) {
+                continue;
+            }
+            let table = matches!(
+                figure.kind.get_ref(styles),
+                Smart::Custom(FigureKind::Elem(kind)) if *kind == TableElem::ELEM
+            );
+            if table {
+                counts.tables += 1;
+            } else {
+                counts.figures += 1;
+            }
+        }
+        counts
     }
 
     /// The text the pages print, each run of text followed by a space and

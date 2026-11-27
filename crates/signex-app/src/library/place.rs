@@ -192,6 +192,7 @@ pub fn resolve_placement_of(
         internal_pn: row.internal_pn.to_string(),
         value,
         is_power,
+        net_tie: symbol.component_type == signex_library::ComponentType::NetTie,
         prefix: signex_types::designator::placement_prefix(&symbol.designator),
         class: row.class.as_str().to_owned(),
         prefix_override: row.designator_prefix_override().map(str::to_owned),

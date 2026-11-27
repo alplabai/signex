@@ -175,15 +175,16 @@ impl Signex {
         let job = self.notebook_generate_job(request.clone(), project);
         Ok(Task::perform(
             async move {
-                tokio::task::spawn_blocking(move || job::run(job))
-                    .await
-                    .map_err(|error| format!("the run did not finish: {error}"))
-                    .and_then(|outcome| outcome)
+                match tokio::task::spawn_blocking(move || job::run(job)).await {
+                    Ok((ran, outcome)) => (ran, outcome),
+                    Err(error) => (Vec::new(), Err(format!("the run did not finish: {error}"))),
+                }
             },
-            move |outcome| {
+            move |(ran, outcome)| {
                 let finished = GenerateFinished {
                     request: request.clone(),
                     waiting: waiting.clone(),
+                    ran,
                     outcome,
                 };
                 Message::from(NotebookGenerateMsg::Generated(Box::new(finished)))
@@ -197,18 +198,23 @@ impl Signex {
         let GenerateFinished {
             request,
             waiting,
+            ran,
             outcome,
         } = finished;
-        if let Ok(done) = &outcome {
-            let runs = &mut self.document_state.check_runs;
-            for (scope, report) in &done.ran {
-                let run = runs.record(&report.check, scope, report.keys());
-                let numbered = CheckReport {
-                    run,
-                    ..report.clone()
-                };
-                runs.keep_report(scope, numbered);
-            }
+        // The checks it ran are kept whether or not the report was written
+        // (#3021).
+        let runs = &mut self.document_state.check_runs;
+        let made = outcome
+            .as_ref()
+            .map(|done| done.ran.as_slice())
+            .unwrap_or(&[]);
+        for (scope, report) in ran.iter().chain(made) {
+            let run = runs.record(&report.check, scope, report.keys());
+            let numbered = CheckReport {
+                run,
+                ..report.clone()
+            };
+            runs.keep_report(scope, numbered);
         }
         match waiting {
             Some(waiting) => {

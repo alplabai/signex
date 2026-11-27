@@ -392,7 +392,7 @@ fn run() {
     );
     driver.settle(&mut app, task).expect("open settled");
     let notice = app
-        .document_state
+        .document_view
         .error_notice
         .take()
         .expect("the open was tried");
@@ -735,6 +735,7 @@ fn net_class_assign() {
         schematic_design: Default::default(),
         fab_outputs: None,
         router_tool_diameter: None,
+        bom_alternates: Vec::new(),
         requirements: Default::default(),
         parameters: Default::default(),
         unknown: Default::default(),

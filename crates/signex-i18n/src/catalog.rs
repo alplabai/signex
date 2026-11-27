@@ -6,7 +6,7 @@ pub(crate) const EN_US: &str = "en-US";
 /// that are hardcoded or that overflow.
 pub(crate) const EN_XA: &str = "en-XA";
 
-pub(crate) const EN_US_SOURCES: [&str; 64] = [
+pub(crate) const EN_US_SOURCES: [&str; 67] = [
     include_str!("../locales/en-US/back_annotate.ftl"),
     include_str!("../locales/en-US/compare_board.ftl"),
     include_str!("../locales/en-US/board_query.ftl"),
@@ -42,6 +42,7 @@ pub(crate) const EN_US_SOURCES: [&str; 64] = [
     include_str!("../locales/en-US/notice.ftl"),
     include_str!("../locales/en-US/file_dialog.ftl"),
     include_str!("../locales/en-US/fab_outputs.ftl"),
+    include_str!("../locales/en-US/block_diagram_export.ftl"),
     include_str!("../locales/en-US/board_output.ftl"),
     include_str!("../locales/en-US/rules.ftl"),
     include_str!("../locales/en-US/dialog_text.ftl"),
@@ -68,8 +69,10 @@ pub(crate) const EN_US_SOURCES: [&str; 64] = [
     include_str!("../locales/en-US/sketch_snap.ftl"),
     include_str!("../locales/en-US/sketch_bake.ftl"),
     include_str!("../locales/en-US/sketch_tools.ftl"),
+    include_str!("../locales/en-US/block_diagram.ftl"),
     include_str!("../locales/en-US/notebook_tab.ftl"),
     include_str!("../locales/en-US/notebook_measurements.ftl"),
+    include_str!("../locales/en-US/parameter_io.ftl"),
     include_str!("../locales/en-US/images.ftl"),
 ];
 

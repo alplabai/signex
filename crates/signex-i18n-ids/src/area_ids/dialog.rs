@@ -28,6 +28,9 @@ define_ids! {
     DIALOG_PARAMETER_MANAGER_COLUMN_REFERENCE = "dialog-parameter-manager-column-reference";
     DIALOG_PARAMETER_MANAGER_COLUMN_VALUE = "dialog-parameter-manager-column-value";
     DIALOG_PARAMETER_MANAGER_COLUMN_FOOTPRINT = "dialog-parameter-manager-column-footprint";
+    DIALOG_PARAMETER_MANAGER_COLUMN_SHEET = "dialog-parameter-manager-column-sheet";
+    DIALOG_PARAMETER_MANAGER_SCOPE_ACTIVE = "dialog-parameter-manager-scope-active";
+    DIALOG_PARAMETER_MANAGER_SCOPE_ALL = "dialog-parameter-manager-scope-all";
     DIALOG_PARAMETER_MANAGER_CLEAR_FILTER = "dialog-parameter-manager-clear-filter";
     DIALOG_PARAMETER_MANAGER_REVERT = "dialog-parameter-manager-revert";
     DIALOG_PARAMETER_MANAGER_DONE = "dialog-parameter-manager-done";
@@ -151,7 +154,9 @@ define_ids! {
     DIALOG_DPC_DUPLICATE_NAME = "dialog-dpc-duplicate-name";
     DIALOG_DPC_WIDTH_LABEL = "dialog-dpc-width-label";
     DIALOG_DPC_GAP_LABEL = "dialog-dpc-gap-label";
-    DIALOG_DPC_ZDIFF_LABEL = "dialog-dpc-zdiff-label";
+    DIALOG_DPC_ZDIFF_VALUE = "dialog-dpc-zdiff-value";
+    DIALOG_DPC_TOLERANCE_VALUE = "dialog-dpc-tolerance-value";
+    DIALOG_DPC_PREVIEW_HINT = "dialog-dpc-preview-hint";
     DIALOG_DPC_P_NET = "dialog-dpc-p-net";
     DIALOG_DPC_N_NET = "dialog-dpc-n-net";
     DIALOG_DPC_NO_PROJECT = "dialog-dpc-no-project";
@@ -193,6 +198,8 @@ define_ids! {
     SMART_PASTE_PASTE_COPIES = "dialog-smart-paste-paste-copies";
     SMART_PASTE_NOTHING_COPIED = "dialog-smart-paste-nothing-copied";
     SMART_PASTE_SHEET_CHANGED = "dialog-smart-paste-sheet-changed";
+    SMART_PASTE_CHOICES_INVALID = "dialog-smart-paste-choices-invalid";
+    SMART_PASTE_NOT_PLACED = "dialog-smart-paste-not-placed";
     DIALOG_GRID_NOTE = "dialog-grid-note";
     DIALOG_GRID_BOTH_AXES = "dialog-grid-both-axes";
     DIALOG_GRID_MULTIPLIER_OPTION = "dialog-grid-multiplier-option";
@@ -277,4 +284,5 @@ define_ids! {
     DIALOG_NB_GENERATE_NO_PROJECT = "dialog-nb-generate-no-project";
     DIALOG_NB_GENERATE_DONE = "dialog-nb-generate-done";
     DIALOG_NB_GENERATE_FAILED = "dialog-nb-generate-failed";
+    DIALOG_ANNOTATE_COMMAND_REFUSED = "dialog-annotate-command-refused";
 }

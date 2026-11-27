@@ -36,7 +36,7 @@ impl Signex {
         let Some(ref st) = self.ui_state.selection_filter_custom else {
             return container(Space::new()).boxed();
         };
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let i18n = self.ui_state.i18n.as_ref();
         let text_c = crate::styles::ti(tokens.text);
         let border_c = crate::styles::ti(tokens.border);

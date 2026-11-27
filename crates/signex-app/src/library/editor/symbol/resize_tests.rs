@@ -66,7 +66,7 @@ fn redraw(app: &mut Signex, path: &Path, bounds: Rectangle) -> bool {
         let editor = &app.document_state.symbol_editors[path];
         let canvas = symbol_canvas(
             editor,
-            &app.document_state.panel_ctx,
+            &app.document_view.panel_ctx,
             LibraryDisplaySettings::default(),
             1.0,
         );
@@ -88,12 +88,12 @@ fn redraw(app: &mut Signex, path: &Path, bounds: Rectangle) -> bool {
 }
 
 fn camera(app: &Signex, path: &Path) -> (Point, f32) {
-    let camera = &app.document_state.symbol_editors[path].camera;
+    let camera = &app.document_state.symbol_editors[path].gui.camera;
     (camera.offset, camera.scale)
 }
 
 fn centre_world(app: &Signex, path: &Path, bounds: Rectangle) -> Point {
-    let camera = &app.document_state.symbol_editors[path].camera;
+    let camera = &app.document_state.symbol_editors[path].gui.camera;
     camera.screen_to_world(Point::new(bounds.width / 2.0, bounds.height / 2.0), bounds)
 }
 
@@ -119,7 +119,7 @@ fn growing_the_canvas_refits_a_fitted_symbol() {
         "not the fit of the new size"
     );
     assert_eq!(
-        app.document_state.symbol_editors[&path].viewport,
+        app.document_state.symbol_editors[&path].gui.viewport,
         LARGE.size()
     );
 }

@@ -69,7 +69,7 @@ fn sketch(f: &mut Fixture, event: BoardSketchMsg) {
 /// The board context Properties shows for the sketch in view.
 fn board_props(f: &Fixture) -> BoardSketchProps {
     f.app
-        .document_state
+        .document_view
         .panel_ctx
         .footprint_editor
         .as_ref()
@@ -101,7 +101,7 @@ fn a_bake_as_pick_in_the_bake_panel_tags_the_profile_in_one_undo_step() {
     sketch(&mut f, BoardSketchMsg::BakePreviewToggled);
     assert!(board_props(&f).bake.is_some(), "the Bake panel is open");
 
-    let fp = f.app.document_state.panel_ctx.footprint_editor.clone();
+    let fp = f.app.document_view.panel_ctx.footprint_editor.clone();
     let rows = fp.expect("Properties").profile_roles.clone();
     assert_eq!(rows.len(), 2, "each closed profile is listed: {rows:#?}");
     let row = rows

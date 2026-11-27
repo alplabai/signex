@@ -633,6 +633,8 @@ mod tests {
                 defaults: Default::default(),
                 designator_standard: None,
                 rich_notes: None,
+                not_fitted: None,
+                variant_values: None,
             },
         )
     }

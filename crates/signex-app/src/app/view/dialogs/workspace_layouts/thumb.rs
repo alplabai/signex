@@ -86,6 +86,7 @@ pub(super) fn thumbnail<'a>(
         panels: Vec::new(),
         collapsed: false,
         width: None,
+        kept: Vec::new(),
     };
     let (left, right, bottom) = match dock {
         Some(d) => (&d.left, &d.right, &d.bottom),

@@ -17,6 +17,9 @@ pub struct KeymapRecorderState {
     pub strokes: Vec<crate::keymap::KeyStroke>,
     pub modifiers: crate::keymap::Modifiers,
     pub recording: bool,
+    /// The command has no key yet: OK adds a binding in `context` rather
+    /// than replacing the trigger at `slot`.
+    pub unassigned: bool,
 }
 
 impl KeymapRecorderState {
@@ -52,7 +55,16 @@ impl KeymapRecorderState {
             strokes,
             modifiers: crate::keymap::Modifiers::default(),
             recording: true,
+            unassigned: false,
         }
+    }
+
+    /// Whether the recorder is open on `row`. Rows of commands with no key
+    /// share the slot a new binding takes, so the command tells them apart.
+    pub fn is_on(&self, row: &crate::keymap::KeymapEditorRow) -> bool {
+        self.slot == row.slot
+            && self.unassigned == row.unassigned
+            && row.command.as_ref() == Some(&self.command)
     }
 
     /// The trigger before recording as this OS shows it in the language of

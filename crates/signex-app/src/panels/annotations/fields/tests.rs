@@ -104,7 +104,7 @@ fn a_measurement_lists_its_bench_and_the_issues_it_opens() {
 
 fn context() -> PanelContext {
     let (app, _boot) = crate::app::Signex::new();
-    app.document_state.panel_ctx.clone()
+    app.document_view.panel_ctx.clone()
 }
 
 /// The rows the panel builds from [`NOTEBOOK`], the row on `line` expanded.

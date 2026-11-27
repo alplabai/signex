@@ -32,7 +32,7 @@ impl Signex {
                 None if seeds => self.set_shape_anchor(Some((p, ShapePreviewKind::Line))),
                 None => {}
                 Some(start) => {
-                    let (width, _) = pre_placement_shape(&self.document_state);
+                    let (width, _) = pre_placement_shape(&self.document_state, &self.document_view);
                     self.place_line_at(start, p, width);
                     // Chained segments share the vertex just placed.
                     self.set_shape_anchor(Some((p, ShapePreviewKind::Line)));
@@ -42,7 +42,8 @@ impl Signex {
                 None if seeds => self.set_shape_anchor(Some((p, ShapePreviewKind::Rect))),
                 None => {}
                 Some(start) => {
-                    let (width, fill) = pre_placement_shape(&self.document_state);
+                    let (width, fill) =
+                        pre_placement_shape(&self.document_state, &self.document_view);
                     self.place_rect_at(start, p, width, fill);
                     self.set_shape_anchor(None);
                 }
@@ -53,7 +54,8 @@ impl Signex {
                 Some(center) => {
                     // A radius too small to see is not placed.
                     let radius = (p.x - center.x).hypot(p.y - center.y);
-                    let (width, fill) = pre_placement_shape(&self.document_state);
+                    let (width, fill) =
+                        pre_placement_shape(&self.document_state, &self.document_view);
                     self.place_circle_at(center, radius, width, fill);
                     self.set_shape_anchor(None);
                 }
@@ -62,7 +64,8 @@ impl Signex {
                 self.interaction_state.arc_points.push(p);
                 if self.interaction_state.arc_points.len() >= 3 {
                     let pts = std::mem::take(&mut self.interaction_state.arc_points);
-                    let (width, fill) = pre_placement_shape(&self.document_state);
+                    let (width, fill) =
+                        pre_placement_shape(&self.document_state, &self.document_view);
                     self.place_arc_at([pts[0], pts[1], pts[2]], width, fill);
                 }
                 self.sync_point_buffers_to_canvas();
@@ -101,7 +104,7 @@ impl Signex {
     /// buffer. The caller has checked there are at least two.
     pub(crate) fn commit_polyline(&mut self) {
         let points = std::mem::take(&mut self.interaction_state.polyline_points);
-        let (width, fill) = pre_placement_shape(&self.document_state);
+        let (width, fill) = pre_placement_shape(&self.document_state, &self.document_view);
         self.place_polyline_at(points, width, fill);
     }
 }

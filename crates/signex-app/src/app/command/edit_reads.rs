@@ -3,7 +3,8 @@
 //! headless or agent edit does no file IO inside `update` (epic #665). What
 //! its checks read from disk (the project's closed sheets for the name check,
 //! the designators and the hierarchy-loop check; a library row for
-//! `place_component`; the child file of `sync_sheet_pins`; whether a child
+//! `place_component`; a library footprint for `assign_footprint` and
+//! `change_footprint`, #2937; the child file of `sync_sheet_pins`; whether a child
 //! reference leaves the project through a link) is read by a `Task` off the
 //! UI thread, and the edit runs when the reads land, with its outcome reported
 //! then. An `apply_edits` list plans the union of its edits once; a closed
@@ -19,7 +20,9 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use iced::Task;
+use signex_library::PrimitiveRef;
 use signex_types::image_asset::{ImageReadError, PickedImage};
+use signex_types::pcb::Footprint;
 use signex_types::schematic::SchematicSheet;
 use uuid::Uuid;
 
@@ -35,6 +38,7 @@ use crate::app::state::scope::{CaseFold, path_key_with};
 use crate::app::{Message, Signex};
 use crate::keymap::AppCommandId;
 use crate::library::messages::ResolvedPlacement;
+use crate::library::place::resolve_library_footprint;
 
 type Ran = (CommandOutcome, Task<Message>);
 
@@ -59,6 +63,11 @@ pub struct EditReads {
     pub(crate) texts: HashMap<PathBuf, Result<String, String>>,
     /// Image files an edit places (`place_graphic`, #1116), read and checked.
     pub(crate) images: HashMap<PathBuf, Result<Arc<PickedImage>, ImageReadError>>,
+    /// Library footprints in their board form, by address (#2937).
+    pub(crate) footprints: HashMap<PrimitiveRef, Result<Footprint, String>>,
+    /// The sheets Create Rooms from Sheets makes rooms for, as its dialog
+    /// read them (#2987): the handler takes them rather than the dialog.
+    pub(crate) room_sheets: Option<Vec<signex_engine::pcb::rooms::SheetMembers>>,
     /// For a loose target, the files its sheet symbols refer to and what they
     /// place, as read.
     pub(crate) subtree: Option<ProjectSheetSet>,
@@ -106,6 +115,7 @@ struct ReadPlan {
     texts: Vec<PathBuf>,
     /// `(picked file, project root, names picks not saved yet took)`.
     images: Vec<(PathBuf, PathBuf, Vec<(String, String)>)>,
+    footprints: Vec<PrimitiveRef>,
 }
 
 impl ReadPlan {
@@ -117,6 +127,7 @@ impl ReadPlan {
             && self.links.is_empty()
             && self.texts.is_empty()
             && self.images.is_empty()
+            && self.footprints.is_empty()
     }
 
     /// Read everything. Blocking: run it off the UI thread.
@@ -172,6 +183,14 @@ impl ReadPlan {
                 (path, read.map(Arc::new))
             })
             .collect();
+        let footprints = self
+            .footprints
+            .into_iter()
+            .map(|address| {
+                let read = resolve_library_footprint(&address, &self.open_libraries);
+                (address, read)
+            })
+            .collect();
         EditReads {
             project,
             subtree,
@@ -180,6 +199,8 @@ impl ReadPlan {
             escapes,
             texts,
             images,
+            footprints,
+            room_sheets: None,
             failed: None,
         }
     }
@@ -317,6 +338,16 @@ impl Signex {
         }
     }
 
+    /// The library footprint at `address` an edit swaps in or assigns, as
+    /// read (#2937).
+    pub(super) fn prefetched_footprint(&self, address: &PrimitiveRef) -> Result<Footprint, String> {
+        let reads = self.document_state.agent_edits.reads.as_ref();
+        match reads.and_then(|r| r.footprints.get(address)) {
+            Some(read) => read.clone(),
+            None => Err(NOT_READ.to_string()),
+        }
+    }
+
     /// The text file at `path` an edit imports, as read.
     pub(super) fn prefetched_text(&self, path: &Path) -> Result<String, String> {
         let reads = self.document_state.agent_edits.reads.as_ref();
@@ -384,6 +415,11 @@ impl Signex {
             return None;
         }
         let target = match args.operand("document") {
+            // `change_footprint` (#2937) names a board: its footprint is read
+            // first, and no sheet of the project.
+            Some(_) if command.as_str() == "change_footprint" => {
+                self.editable_named_board(args).ok()?
+            }
             Some(_) => named_sheet(self, args, "the edit").ok()?,
             None => self.document_state.edit_path()?.to_path_buf(),
         };
@@ -401,7 +437,8 @@ impl Signex {
             self.plan_reads(id.as_str(), edit, &edits, sheet, &mut plan);
         }
         self.document_state.agent_edits.target = previous;
-        if wants_project || !plan.is_empty() {
+        let on_board = self.document_state.board_engine(&target).is_some();
+        if !on_board && (wants_project || !plan.is_empty()) {
             self.plan_project_read(&target, &mut plan);
         }
         (!plan.is_empty()).then_some((target, plan))
@@ -503,7 +540,9 @@ impl Signex {
         plan: &mut ReadPlan,
     ) {
         match id {
-            "place_component" => self.plan_part_read(args, plan),
+            // #1297, #2954: the row `change_component` swaps a part for, read
+            // as a placement reads it.
+            "place_component" | "change_component" => self.plan_part_read(args, plan),
             "place_sheet_symbol" => {
                 if let Ok((dir, path, _)) =
                     text(args, "file").and_then(|f| self.child_file_target(&f))
@@ -541,6 +580,21 @@ impl Signex {
                     let root = self.image_root(target);
                     let pending = self.pending_image_names(&root);
                     plan.images.push((path, root, pending));
+                }
+            }
+            // #1283: a snippet's file, placed as a design block is.
+            "place_snippet" => {
+                if let Ok((_, _, file)) = super::reuse_operands::snippet_file(self, args, target)
+                    && !self.document_state.engines.contains_key(&file)
+                {
+                    plan.children.push(file);
+                }
+            }
+            // #2937: the library footprint a swap or an assignment names.
+            "change_footprint" | "assign_footprint" => {
+                if let Ok(address) = self.footprint_operand(args) {
+                    plan.footprints.push(address);
+                    plan.open_libraries = self.open_library_roots();
                 }
             }
             _ => {}
@@ -607,7 +661,8 @@ impl Signex {
         placed
     }
 
-    /// The library row a `place_component` names, when it names one.
+    /// The library row a `place_component` or `change_component` names,
+    /// when it names one.
     fn plan_part_read(&self, args: &CommandArgs, plan: &mut ReadPlan) {
         let named = text(args, "library").ok().zip(text(args, "part").ok());
         let Some((library, part)) = named else { return };

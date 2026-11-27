@@ -34,7 +34,7 @@ fn sheet() -> Signex {
         String::new(),
         (0.0, 0.0),
     );
-    app.document_state.panel_ctx.pre_placement = Some(pre);
+    app.document_view.panel_ctx.pre_placement = Some(pre);
     app
 }
 

@@ -62,6 +62,8 @@ pub fn run_all_with_config(ctx: &ErcContext, config: &ErcConfig) -> Vec<Diagnost
     rules::harness_entry_mismatch(ctx, &config.harness_definitions, &mut out);
     rules::harness_type_conflict(ctx, &mut out);
     crate::images::image_file_missing(ctx, &config.missing_images, &mut out);
+    rules::net_class_conflict(ctx, &mut out);
+    rules::diff_pair_partner_missing(ctx, &mut out);
     drop_suppressed(ctx, &mut out);
     out
 }
@@ -92,12 +94,23 @@ fn directive_suppressed(ctx: &ErcContext, d: &Diagnostic) -> bool {
     ) {
         return false;
     }
-    ctx.directives.iter().any(|directive| {
-        directive.region_contains(d.location)
+    directives_suppress(&ctx.directives, d.location, d.rule_id.as_str())
+}
+
+/// Whether one of `directives` covering `at` silences `rule_id`: a Compile
+/// Mask silences every rule, a Blanket the rules it excludes. A point
+/// directive covers nothing.
+pub(crate) fn directives_suppress(
+    directives: &[signex_types::schematic::SchDirective],
+    at: signex_types::schematic::Point,
+    rule_id: &str,
+) -> bool {
+    directives.iter().any(|directive| {
+        directive.region_contains(at)
             && (matches!(
                 directive,
                 signex_types::schematic::SchDirective::CompileMask { .. }
-            ) || directive.excludes_rule(d.rule_id.as_str()))
+            ) || directive.excludes_rule(rule_id))
     })
 }
 

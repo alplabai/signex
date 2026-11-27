@@ -81,7 +81,7 @@ impl Signex {
         if !self.overlay_belongs_to(menu_ctx.window, window_id) {
             return Vec::new();
         }
-        let panel_ctx = &self.document_state.panel_ctx;
+        let panel_ctx = &self.document_view.panel_ctx;
         let entries = components_row_menu_entries(
             &self.ui_state.i18n,
             self.ui_state.effective_theme_id(),
@@ -90,7 +90,7 @@ impl Signex {
         let pointer = (menu_ctx.x, menu_ctx.y);
         let anchor = match menu_ctx.window {
             None => dock_menu_anchor(
-                self.document_state
+                self.document_view
                     .dock
                     .locate(crate::panels::PanelKind::Components),
                 self.document_area_in(None),
@@ -162,7 +162,7 @@ impl Signex {
         else {
             return Vec::new();
         };
-        let panel_ctx = &self.document_state.panel_ctx;
+        let panel_ctx = &self.document_view.panel_ctx;
         let tokens = &panel_ctx.tokens;
         let look = crate::panels::components_panel::thumbs::ThumbLook {
             colors: panel_ctx.canvas_colors,

@@ -221,7 +221,7 @@ fn a_symbol_tool_with_the_pointer_in_the_right_band_pans_the_symbol_right() {
     let (mut app, path) = symbol_app();
     let editor = &app.document_state.symbol_editors[&path];
     assert!(editor.edge_pan_armed(), "precondition: Add Pin is armed");
-    let before = editor.camera.offset;
+    let before = editor.gui.camera.offset;
     app.interaction_state
         .symbol_edge_pan
         .observe(Some(RIGHT_BAND), SIZE);
@@ -230,13 +230,17 @@ fn a_symbol_tool_with_the_pointer_in_the_right_band_pans_the_symbol_right() {
 
     let editor = &app.document_state.symbol_editors[&path];
     assert!(
-        editor.camera.offset.x < before.x,
+        editor.gui.camera.offset.x < before.x,
         "the symbol did not move left"
     );
     let under = editor
+        .gui
         .camera
         .screen_to_world(RIGHT_BAND, iced::Rectangle::default());
-    let (x, _) = editor.cursor_mm.expect("the readout follows the pointer");
+    let (x, _) = editor
+        .gui
+        .cursor_mm
+        .expect("the readout follows the pointer");
     assert!((x - f64::from(under.x)).abs() < 1e-3);
 }
 

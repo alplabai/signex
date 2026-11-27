@@ -209,6 +209,37 @@ fn a_pin_of_a_renamed_part_reads_as_renamed_with_its_pin() {
     assert!(matches!(missing, ReferenceState::MissingPin { .. }));
 }
 
+/// #3021: every placement of a reused sheet carries the same id, so a
+/// rename resolves within the reference's own channel, and a channel that
+/// is gone reads as deleted, never as renamed to another channel.
+#[test]
+fn a_rename_in_a_reused_sheet_stays_in_its_channel() {
+    const U: u128 = 40;
+    let renamed = DesignIndex::new(
+        vec![
+            part("R1_A", U, "10k", vec![]),
+            part("R2_B", U, "10k", vec![]),
+        ],
+        vec![],
+    );
+    let (state, _) = resolve_one(&component("R1_B"), Some(id(U)), &renamed);
+    assert_ne!(
+        state,
+        ReferenceState::Renamed {
+            now: component("R1_A")
+        }
+    );
+    assert_eq!(
+        state,
+        ReferenceState::Renamed {
+            now: component("R2_B")
+        }
+    );
+    let channel_gone = DesignIndex::new(vec![part("R1_A", U, "10k", vec![])], vec![]);
+    let (gone, _) = resolve_one(&component("R1_B"), Some(id(U)), &channel_gone);
+    assert_eq!(gone, ReferenceState::Deleted);
+}
+
 #[test]
 fn a_stored_id_no_part_carries_falls_back_to_the_name() {
     let (state, found) = resolve_one(&component("L1"), Some(id(999)), &design());

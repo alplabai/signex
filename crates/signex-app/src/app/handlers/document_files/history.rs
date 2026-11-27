@@ -19,8 +19,8 @@ impl Signex {
     /// `restore` gesture clicks through it (`crate::test_adapter`).
     pub(crate) fn click_restore_on_listed_history(&mut self, sha: &str) -> Task<Message> {
         let target = self.history_target_path();
-        self.document_state.history.active_path = target;
-        self.document_state.history.mode = crate::panels::history::HistoryRenderMode::Ready;
+        self.document_view.history.active_path = target;
+        self.document_view.history.mode = crate::panels::history::HistoryRenderMode::Ready;
         self.handle_history_restore_clicked(sha)
     }
 }
@@ -77,14 +77,14 @@ impl Signex {
         // unsaved edits would be gone for good: ask first (#110). The first
         // click arms the row's confirmation, the second one restores.
         if self.document_state.is_document_dirty(&full_path)
-            && self.document_state.history.pending_restore.as_deref() != Some(sha)
+            && self.document_view.history.pending_restore.as_deref() != Some(sha)
         {
-            self.document_state.history.pending_restore = Some(sha.to_owned());
-            self.document_state.panel_ctx.history = self.document_state.history.clone();
+            self.document_view.history.pending_restore = Some(sha.to_owned());
+            self.document_view.panel_ctx.history = self.document_view.history.clone();
             return Task::none();
         }
-        self.document_state.history.pending_restore = None;
-        self.document_state.panel_ctx.history = self.document_state.history.clone();
+        self.document_view.history.pending_restore = None;
+        self.document_view.panel_ctx.history = self.document_view.history.clone();
 
         // A restore writes the file; refuse while its project folder moves.
         if let Err(error) = self.refuse_while_project_moves(&full_path, "restore") {
@@ -413,7 +413,7 @@ impl Signex {
     /// so the click is not silently ignored (#110).
     fn report_restore_failure(&mut self, message: String) {
         crate::diagnostics::log_warning(format!("[git] restore: {message}"));
-        self.document_state.error_notice = Some(crate::app::state::ErrorNotice::restore(
+        self.document_view.error_notice = Some(crate::app::state::ErrorNotice::restore(
             crate::app::state::untranslated(message),
         ));
     }
@@ -528,8 +528,8 @@ impl Signex {
                     .document_state
                     .symbol_editors
                     .get(&path)
-                    .map(|old| old.history_generation + 1);
-                state.history_generation =
+                    .map(|old| old.draft.history_generation + 1);
+                state.draft.history_generation =
                     carried.unwrap_or_else(|| self.document_state.next_symbol_history_base());
                 self.warn_if_cascade_owed(&path);
                 self.document_state
@@ -789,6 +789,7 @@ fn restore_kind_of(kind: &crate::app::TabKind) -> Option<RestoreKind> {
         | crate::app::TabKind::LayerStack
         | crate::app::TabKind::PinTable
         | crate::app::TabKind::VariantManager(_)
+        | crate::app::TabKind::BlockDiagram(_)
         | crate::app::TabKind::Notebook(_) => None,
     }
 }

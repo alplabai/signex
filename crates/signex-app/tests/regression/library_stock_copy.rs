@@ -243,7 +243,7 @@ fn picking_a_library_copies_the_symbol_there_and_opens_the_copy() {
         Some(target.as_path())
     );
     assert_eq!(w.stock_bytes(), before, "the stock library is untouched");
-    assert!(w.app.document_state.error_notice.is_none());
+    assert!(w.app.document_view.error_notice.is_none());
 }
 
 #[test]
@@ -786,7 +786,7 @@ fn the_preview_open_editor_button_opens_a_writable_symbol() {
 
     assert_eq!(w.editor_paths(), vec![mine]);
     assert!(w.app.library.stock_copy.is_none());
-    assert!(w.app.document_state.error_notice.is_none());
+    assert!(w.app.document_view.error_notice.is_none());
 }
 
 /// Mockup row 134: one click copies. With two writable libraries listed, a click on

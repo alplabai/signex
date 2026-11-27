@@ -108,7 +108,7 @@ impl Signex {
     /// empty slot once the dialog has its own OS window, whose title bar
     /// carries the title and the net name.
     fn net_color_custom_header(&self) -> Element<'_, Message> {
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         if self.modal_detached(crate::app::state::ModalId::NetColorCustom) {
             return crate::app::view::dialogs::os_title_bar_slot();
         }
@@ -146,7 +146,7 @@ impl Signex {
     /// Custom net-colour picker card. Unpositioned: the in-window overlay
     /// places it at [`Self::net_color_custom_anchor`].
     pub(in crate::app::view) fn view_net_color_custom_picker(&self) -> Element<'_, Message> {
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let i18n = &self.ui_state.i18n;
         let custom = &self.ui_state.net_color_custom;
         let draft = custom.draft;
@@ -233,7 +233,7 @@ impl Signex {
     /// The large preview: New (the pick) beside Old (the net's colour now,
     /// hatched when it has none). From the Active Bar there is no Old.
     fn old_new_preview(&self, draft: Color) -> Element<'_, Message> {
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let i18n = &self.ui_state.i18n;
         let height = Length::Fixed(4.0 * TS.label * crate::styles::LINE_HEIGHT);
         let new_side = tagged(
@@ -258,7 +258,7 @@ impl Signex {
     /// One R / G / B field: the letter, the 0-255 value and its gradient.
     fn channel_row(&self, label: MessageId, value: f32, chan: Channel) -> Element<'_, Message> {
         let i18n = &self.ui_state.i18n;
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let v255 = (value.clamp(0.0, 1.0) * 255.0).round() as u8;
         let input = text_input(t!(i18n, ids::PLACEHOLDER_COLOR_CHANNEL), v255.to_string())
             .style(crate::panels::form_look::text_input_style)
@@ -282,7 +282,7 @@ impl Signex {
     pub(in crate::app::view) fn net_color_custom_anchor(&self) -> (f32, f32) {
         let (ww, _wh) = self.ui_state.window_size;
         let x = ((ww - NET_COLOR_CUSTOM_W) * 0.5).max(0.0);
-        let y = crate::app::view::canvas_region::chrome_top(&self.document_state.panel_ctx.tokens)
+        let y = crate::app::view::canvas_region::chrome_top(&self.document_view.panel_ctx.tokens)
             + 80.0;
         (x, y)
     }

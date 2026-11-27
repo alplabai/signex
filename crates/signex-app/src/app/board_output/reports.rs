@@ -233,12 +233,7 @@ impl Signex {
         report: &BoardReport,
         path: PathBuf,
     ) -> Task<Message> {
-        let log = format!(
-            "Wrote {} ({} report, {} rows)",
-            path.display(),
-            report.kind.id(),
-            report.rows.len()
-        );
+        let log = report_written_log(report, &path);
         self.write_export(path, report.to_csv(), "CSV", log, None, Vec::new())
     }
 
@@ -248,4 +243,14 @@ impl Signex {
             Translatable::new(ids::BOARD_OUTPUT_BOARD_GONE).arg("board", super::file_title(board));
         self.refuse_export(reason);
     }
+}
+
+/// The Messages line of `report` written as CSV to `path`.
+pub(super) fn report_written_log(report: &BoardReport, path: &Path) -> String {
+    format!(
+        "Wrote {} ({} report, {} rows)",
+        path.display(),
+        report.kind.id(),
+        report.rows.len()
+    )
 }

@@ -50,6 +50,7 @@ fn project_with_sheet(dir: &Path) -> (Signex, PathBuf) {
             schematic_design: Default::default(),
             fab_outputs: None,
             router_tool_diameter: None,
+            bom_alternates: Vec::new(),
             requirements: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
@@ -139,7 +140,7 @@ fn deleting_a_file_that_is_still_opening_is_refused() {
         "the dialog stays open"
     );
     assert!(
-        app.document_state.error_notice.is_some(),
+        app.document_view.error_notice.is_some(),
         "the refusal is shown"
     );
     assert_eq!(app.document_state.projects[0].data.sheets.len(), 1);
@@ -202,7 +203,7 @@ fn deleting_a_file_whose_restore_is_still_running_is_refused() {
     );
     assert!(logged("A History restore of "), "the refusal is logged");
     assert!(
-        app.document_state.error_notice.is_some(),
+        app.document_view.error_notice.is_some(),
         "the refusal is shown"
     );
 }

@@ -194,6 +194,57 @@ fn bookmarks_left_out_write_none_and_count_none() {
     assert_ne!(off.pdf, on.pdf, "no bookmark is written");
 }
 
+/// #3021: the bookmark count reads the laid-out pages: a captioned
+/// `#attachment` counts as a figure, and `--pages` counts only the pages
+/// exported.
+#[test]
+fn bookmarks_count_attachment_figures_and_only_the_pages_exported() {
+    let mut sources = report_notebook(
+        "= One\n#attachment(\"scope/a.csv\", caption: [Ripple])\n#pagebreak()\n= Two\nB\n",
+    );
+    // Where the app reads it from: `notebook/attachments/scope/a.csv`.
+    sources.insert("attachments/scope/a.csv", "t,v\n0,1\n1,2\n");
+    assert!(sources.missing_attachments().is_empty(), "the CSV loads");
+    let printed = crate::compile(&sources, &crate::CompileOptions::default())
+        .notebook
+        .expect("compiles")
+        .text();
+    assert!(printed.contains("Ripple"), "{printed}");
+    assert!(!printed.contains("Missing attachment"), "{printed}");
+    let all = export(&sources, &ExportOptions::default())
+        .summary
+        .bookmarks;
+    assert_eq!((all.sections, all.figures), (2, 1));
+    let second = ExportOptions {
+        pages: PageSelection::Range { first: 2, last: 2 },
+        ..ExportOptions::default()
+    };
+    let part = export(&sources, &second).summary.bookmarks;
+    assert_eq!((part.sections, part.figures), (1, 0));
+}
+
+/// #3020: a compile that never ends is stopped at its limit and reported,
+/// so the preview and the command line go on.
+#[test]
+fn a_looping_notebook_is_stopped_and_reported() {
+    let sources = NotebookSources::new(
+        "design.snxnbk",
+        "#for i in range(100000) { for j in range(100000) {} }\n",
+    );
+    let started = std::time::Instant::now();
+    let compilation = crate::compile::compile_within(
+        &sources,
+        &crate::CompileOptions::default(),
+        &[],
+        std::time::Duration::from_secs(1),
+    );
+    assert!(started.elapsed() < std::time::Duration::from_secs(10));
+    assert!(compilation.notebook.is_none());
+    assert!(compilation.has_errors());
+    let said = &compilation.diagnostics[0].message;
+    assert!(said.contains("did not finish compiling"), "{said}");
+}
+
 #[test]
 fn an_annotation_kind_left_out_prints_nothing() {
     let sources = report_notebook("#issue(id: \"ISS-001\", title: [Hot])[Too warm.]\n");

@@ -15,7 +15,7 @@ fn app_with(defaults: ProjectDefaults) -> (Signex, tempfile::TempDir) {
     let (mut app, _boot) = Signex::new();
     app.ui_state.first_run_tour_open = false;
     app.ui_state.main_window_id = Some(iced::window::Id::unique());
-    app.ui_state.setup_profiles.clear();
+    app.document_state.setup_profiles.clear();
     add_project(&mut app, tmp.path(), "demo", defaults);
     (app, tmp)
 }

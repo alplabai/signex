@@ -138,7 +138,7 @@ impl Signex {
             is_form_idle: state.is_placement_form_idle(),
             held: self.form_for_other_windows(),
         };
-        let document = &mut self.document_state;
+        let document = &mut self.document_view;
         sync_form(&mut document.panel_ctx, None, &sync);
         for (window, ctx) in &mut document.window_panel_ctx {
             sync_form(ctx, Some(*window), &sync);

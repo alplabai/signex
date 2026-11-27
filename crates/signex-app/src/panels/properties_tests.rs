@@ -233,7 +233,7 @@ fn every_new_message_reads_as_the_literal_it_replaced() {
 /// `rotation`.
 fn net_label_form(rotation: f64) -> PanelContext {
     let (app, _boot) = crate::app::Signex::new();
-    let mut ctx = app.document_state.panel_ctx.clone();
+    let mut ctx = app.document_view.panel_ctx.clone();
     ctx.has_schematic = true;
     let mut pp = PrePlacementData::new(
         "Net Label".to_owned(),
@@ -260,7 +260,7 @@ fn texts(ctx: &PanelContext) -> Vec<LaidOutText> {
 /// A panel context with one object of `kind` selected and `info` its rows.
 fn one_selected(kind: SelectedKindForTest, info: &[(&str, &str)]) -> PanelContext {
     let (app, _boot) = crate::app::Signex::new();
-    let mut ctx = app.document_state.panel_ctx.clone();
+    let mut ctx = app.document_view.panel_ctx.clone();
     ctx.has_schematic = true;
     ctx.selection_count = 1;
     ctx.selected_uuid = Some(uuid::Uuid::from_u128(7));
@@ -433,7 +433,7 @@ fn the_sheet_symbol_colour_rows_open_their_own_pickers() {
 /// Document Options with nothing selected.
 fn document_options() -> PanelContext {
     let (app, _boot) = crate::app::Signex::new();
-    let mut ctx = app.document_state.panel_ctx.clone();
+    let mut ctx = app.document_view.panel_ctx.clone();
     ctx.has_schematic = true;
     ctx.selection_count = 0;
     ctx.pre_placement = None;
@@ -1024,7 +1024,7 @@ fn the_properties_panel_draws_no_english_under_en_xa() {
 /// `name` when one is given: a page tab such as Rules is in front.
 fn page_tab_in_front(name: Option<&str>) -> PanelContext {
     let (mut app, _boot) = crate::app::Signex::new();
-    let mut ctx = app.document_state.panel_ctx.clone();
+    let mut ctx = app.document_view.panel_ctx.clone();
     ctx.has_schematic = false;
     ctx.has_pcb = false;
     ctx.pcb_board = None;
@@ -1049,6 +1049,7 @@ fn page_tab_in_front(name: Option<&str>) -> PanelContext {
             is_active: true,
             is_dirty: false,
             version_control: false,
+            block_diagrams: Vec::new(),
         })
         .into_iter()
         .collect();

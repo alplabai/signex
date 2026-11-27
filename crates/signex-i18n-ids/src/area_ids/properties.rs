@@ -318,6 +318,13 @@ define_ids! {
     PROPERTIES_CHANNEL_CAPTION = "properties-channel-caption";
     PROPERTIES_CHANNEL_DESIGNATOR_MAP = "properties-channel-designator-map";
     PROPERTIES_CHANNEL_LOGICAL = "properties-channel-logical";
+    PROPERTIES_CHANNEL_VARIANT = "properties-channel-variant";
+    PROPERTIES_CHANNEL_VARIANT_ACTIVE = "properties-channel-variant-active";
+    PROPERTIES_CHANNEL_VARIANT_THIS = "properties-channel-variant-this";
+    PROPERTIES_CHANNEL_VARIANT_BASE = "properties-channel-variant-base";
+    PROPERTIES_CHANNEL_VARIANT_NOT_COMPILED = "properties-channel-variant-not-compiled";
+    PROPERTIES_CHANNEL_VARIANT_ALL_FITTED = "properties-channel-variant-all-fitted";
+    PROPERTIES_CHANNEL_VARIANT_LEFT_OUT = "properties-channel-variant-left-out";
     PROPERTIES_ROTATION_STEP = "properties-rotation-step";
     PROPERTIES_START = "properties-start";
     PROPERTIES_AXIS_X = "properties-axis-x";

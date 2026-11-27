@@ -208,8 +208,8 @@ rule ok on via require drill >= 0.2mm then error
     assert_eq!(
         messages(&got),
         [
-            "unknown target 'glue' (clearance, track, via, hole, edge, silk, mask, paste or \
-             courtyard)",
+            "unknown target 'glue' (clearance, track, via, hole, edge, silk, mask, paste, \
+             courtyard or component)",
             "unknown field 'gap' for this target (width)",
             "unknown condition 'colour' (net, class, other_class or layer)",
             "'drill' takes only '>=' (a minimum)",
@@ -394,5 +394,58 @@ fn a_length_reads_every_unit_the_compiler_takes() {
     }
     for text in ["", "0.2", "wide", "0.2xx", "mm"] {
         assert_eq!(crate::length_nm(text), None, "{text}");
+    }
+}
+
+/// #2939: a component rule limits the height and the 3D clearance of the
+/// parts' bodies, board-wide or for one side.
+#[test]
+fn a_component_rule_sets_height_and_body_clearance_for_a_side() {
+    let got = one("rule tall on component when layer == BottomCopper \
+         require height <= 6mm and clearance >= 0.25mm then error");
+    assert!(got.diagnostics.is_empty(), "{:?}", got.diagnostics);
+    let rule = &got.rules[0];
+    assert_eq!(rule.nets, NetScope::Board);
+    assert_eq!(rule.layers, Some(1 << 31));
+    assert_eq!(
+        rule.limits,
+        [
+            Limit::MaxComponentHeight(6_000_000),
+            Limit::MinBodyClearance(250_000)
+        ]
+    );
+    let wide = one("rule tall on component require height <= 6mm then error");
+    assert!(wide.diagnostics.is_empty(), "{:?}", wide.diagnostics);
+    assert_eq!(wide.rules[0].layers, None);
+}
+
+#[test]
+fn a_component_rule_takes_no_net_condition() {
+    let got =
+        compile(r#"rule tall on component when net == "GND" require height <= 6mm then error"#);
+    assert!(
+        messages(&got)
+            .iter()
+            .any(|m| m.contains("takes only a 'layer' condition")),
+        "{:?}",
+        messages(&got)
+    );
+}
+
+/// #2986: a component rule's side is TopCopper or BottomCopper; `inner`,
+/// `outer` or an inner layer is refused rather than compiled into a rule
+/// that never matches.
+#[test]
+fn a_component_rule_on_an_inner_or_outer_layer_is_refused() {
+    for side in ["inner", "outer", "Inner1Copper"] {
+        let text =
+            format!("rule h on component when layer == {side} require height <= 1mm then error");
+        let got = compile(&text);
+        let found = messages(&got);
+        assert_eq!(found.len(), 1, "{side}: {found:?}");
+        assert!(
+            found[0].contains("takes only a 'layer' condition"),
+            "{side}: {found:?}"
+        );
     }
 }

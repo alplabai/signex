@@ -53,6 +53,19 @@ impl Signex {
                 self.graphics_read(&path, &target, epoch, graphics);
                 Task::none()
             }
+            // #1283: snippets and templates.
+            PlacementExtrasMsg::SnippetRequested => self.snippet_dialog(),
+            PlacementExtrasMsg::SnippetSaveRequested => self.save_selection_as_snippet(),
+            PlacementExtrasMsg::SnippetWritten {
+                saved,
+                result,
+                waiting,
+            } => self.snippet_written(saved, result, waiting),
+            PlacementExtrasMsg::ReuseListed {
+                waiting,
+                answer,
+                listing,
+            } => self.reuse_listed(waiting, answer, &listing),
         };
         Task::batch([task, self.finish_update()])
     }

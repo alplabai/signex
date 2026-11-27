@@ -65,7 +65,7 @@ fn a_panel_context_rebuild_keeps_the_drafted_palette() {
 
     app.refresh_panel_ctx();
 
-    let ctx = &app.document_state.panel_ctx;
+    let ctx = &app.document_view.panel_ctx;
     assert_eq!(ctx.tokens, signex_types::theme::theme_tokens(drafted));
     assert_eq!(ctx.theme_id, drafted);
     let window = iced::window::Id::unique();
@@ -160,7 +160,7 @@ fn drafting_a_theme_moves_the_icon_theme_without_a_refresh() {
 
     send(&mut app, PrefMsg::DraftTheme(drafted));
 
-    let ctx = &app.document_state.panel_ctx;
+    let ctx = &app.document_view.panel_ctx;
     assert_eq!(ctx.theme_id, drafted);
     assert_eq!(ctx.tokens, signex_types::theme::theme_tokens(drafted));
 }
@@ -178,7 +178,7 @@ fn discarding_after_a_refresh_restores_the_tokens_and_the_icon_theme() {
 
     send(&mut app, PrefMsg::DiscardAndClose);
 
-    let ctx = &app.document_state.panel_ctx;
+    let ctx = &app.document_view.panel_ctx;
     assert_eq!(ctx.theme_id, saved);
     assert_eq!(ctx.tokens, signex_types::theme::theme_tokens(saved));
 }
@@ -194,7 +194,7 @@ fn the_panel_canvas_colours_follow_the_previewed_theme() {
     send(&mut app, PrefMsg::DraftTheme(drafted));
 
     assert_eq!(
-        app.document_state.panel_ctx.canvas_colors,
+        app.document_view.panel_ctx.canvas_colors,
         signex_types::theme::canvas_colors(drafted)
     );
 }

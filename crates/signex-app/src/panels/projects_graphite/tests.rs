@@ -15,7 +15,7 @@ const WINDOW: iced::Size = iced::Size::new(360.0, 900.0);
 /// sheet and a missing library, as `build_project_tree` shapes it.
 fn context(language: &str) -> PanelContext {
     let (app, _boot) = crate::app::Signex::new();
-    let mut ctx = app.document_state.panel_ctx.clone();
+    let mut ctx = app.document_view.panel_ctx.clone();
     ctx.i18n = std::sync::Arc::new(I18n::new(&signex_i18n::LanguagePref::Locale(
         language.to_owned(),
     )));
@@ -305,6 +305,7 @@ fn add_project(app: &mut crate::app::Signex, name: &str) -> crate::app::ProjectI
             schematic_design: Default::default(),
             fab_outputs: None,
             router_tool_diameter: None,
+            bom_alternates: Vec::new(),
             requirements: Default::default(),
             unknown: Default::default(),
         },
@@ -324,7 +325,7 @@ fn each_card_options_button_asks_for_its_projects_options() {
     let first = add_project(&mut app, "A");
     let second = add_project(&mut app, "B");
     app.refresh_panel_ctx();
-    let ctx = app.document_state.panel_ctx.clone();
+    let ctx = app.document_view.panel_ctx.clone();
     // The button's centre at the card's right end, inside the header's 10 px
     // padding.
     let x = WINDOW.width - 10.0 - card::OPTIONS_BUTTON / 2.0;
@@ -352,7 +353,7 @@ fn the_project_options_button_is_as_large_as_the_cards_tile() {
     let (mut app, _boot) = crate::app::Signex::new();
     let id = add_project(&mut app, "A");
     app.refresh_panel_ctx();
-    let ctx = app.document_state.panel_ctx.clone();
+    let ctx = app.document_view.panel_ctx.clone();
     // The card's right end, inside the header's 10 px padding.
     let right = WINDOW.width - 10.0;
     let asks = |x: f32| {
@@ -395,7 +396,7 @@ fn one_projects_groups_sit_directly_under_its_card() {
     let (mut app, _boot) = crate::app::Signex::new();
     add_project(&mut app, "solo");
     app.refresh_panel_ctx();
-    let ctx = app.document_state.panel_ctx.clone();
+    let ctx = app.document_view.panel_ctx.clone();
     let shown = texts(&ctx);
     let names = shown.iter().filter(|t| t.as_str() == "solo").count();
     assert_eq!(names, 1, "the card alone names the project: {shown:#?}");
@@ -423,7 +424,7 @@ fn several_projects_keep_their_rows() {
     add_project(&mut app, "A");
     add_project(&mut app, "B");
     app.refresh_panel_ctx();
-    let ctx = app.document_state.panel_ctx.clone();
+    let ctx = app.document_view.panel_ctx.clone();
     let (rows, root) = under_card(ctx.project_tree.clone());
     assert_eq!(rows.len(), 2);
     assert_eq!(root, None);
@@ -448,7 +449,7 @@ fn a_right_click_on_the_card_opens_the_project_menu() {
     let (mut app, _boot) = crate::app::Signex::new();
     let id = add_project(&mut app, "A");
     app.refresh_panel_ctx();
-    let ctx = app.document_state.panel_ctx.clone();
+    let ctx = app.document_view.panel_ctx.clone();
     let sent = crate::layout_probe::messages_for_events(
         view(&ctx),
         WINDOW,
@@ -557,9 +558,9 @@ fn a_recent_row_opens_through_open_recent() {
         ProjectsMsg::RecentProjectPressed(listed),
     ))));
     assert!(app.ui_state.recent_projects.entries().is_empty());
-    assert!(app.document_state.error_notice.is_some(), "no notice");
+    assert!(app.document_view.error_notice.is_some(), "no notice");
     assert!(
-        app.document_state.panel_ctx.recent_projects.is_empty(),
+        app.document_view.panel_ctx.recent_projects.is_empty(),
         "the panel still lists the dropped project"
     );
 }

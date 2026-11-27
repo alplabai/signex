@@ -45,7 +45,7 @@ impl Signex {
         Some(
             crate::find_replace::view(
                 &ui.find_replace,
-                &self.document_state.panel_ctx.tokens,
+                &self.document_view.panel_ctx.tokens,
                 &ui.i18n,
             )
             .map(Message::FindReplaceMsg)
@@ -60,7 +60,7 @@ impl Signex {
         Some(
             crate::find_similar::view(
                 state,
-                &self.document_state.panel_ctx.tokens,
+                &self.document_view.panel_ctx.tokens,
                 &self.ui_state.i18n,
             )
             .map(|msg| {
@@ -78,7 +78,7 @@ impl Signex {
         Some(
             crate::paste_array::view(
                 state,
-                &self.document_state.panel_ctx.tokens,
+                &self.document_view.panel_ctx.tokens,
                 &self.ui_state.i18n,
             )
             .map(|msg| Message::Edit(crate::app::EditMsg::PasteArray(msg)))
@@ -92,7 +92,7 @@ impl Signex {
         Some(
             crate::app::images::dialog::view(
                 dialog,
-                &self.document_state.panel_ctx.tokens,
+                &self.document_view.panel_ctx.tokens,
                 &self.ui_state.i18n,
             )
             .map(|msg| Message::from(crate::app::ImagesMsg::Dialog(msg)))
@@ -114,7 +114,7 @@ impl Signex {
         let card = crate::app::unions::popover_view(
             popover,
             &self.ui_state.i18n,
-            &self.document_state.panel_ctx.tokens,
+            &self.document_view.panel_ctx.tokens,
         )
         .map(wrap)
         .boxed();
@@ -134,7 +134,7 @@ impl Signex {
         let card = crate::smart_paste::view(
             state,
             size,
-            &self.document_state.panel_ctx.tokens,
+            &self.document_view.panel_ctx.tokens,
             &self.ui_state.i18n,
         )
         .map(|msg| Message::Edit(crate::app::EditMsg::SmartPasteDialog(msg)))
@@ -154,8 +154,11 @@ impl Signex {
         let sections = match &ui.shortcut_sections {
             Some(cached) => cached.as_slice(),
             None => {
-                built =
-                    crate::keyboard_shortcuts_modal::build_sections(&ui.i18n, &ui.keymap_profiles);
+                built = crate::keyboard_shortcuts_modal::build_sections_with(
+                    &ui.i18n,
+                    &ui.keymap_profiles,
+                    &ui.extension_commands,
+                );
                 built.as_slice()
             }
         };
@@ -168,7 +171,7 @@ impl Signex {
             Message::Overlay(OverlayMsg::CloseKeyboardShortcuts),
             crate::keyboard_shortcuts_modal::view(
                 &ui.i18n,
-                &self.document_state.panel_ctx.tokens,
+                &self.document_view.panel_ctx.tokens,
                 sections,
                 &ui.shortcut_sheet,
                 &facts,
@@ -183,8 +186,11 @@ impl Signex {
         let sections = match &ui.shortcut_sections {
             Some(cached) => cached.as_slice(),
             None => {
-                built =
-                    crate::keyboard_shortcuts_modal::build_sections(&ui.i18n, &ui.keymap_profiles);
+                built = crate::keyboard_shortcuts_modal::build_sections_with(
+                    &ui.i18n,
+                    &ui.keymap_profiles,
+                    &ui.extension_commands,
+                );
                 built.as_slice()
             }
         };
@@ -195,7 +201,7 @@ impl Signex {
         );
         crate::keyboard_shortcuts_modal::window_view(
             &ui.i18n,
-            &self.document_state.panel_ctx.tokens,
+            &self.document_view.panel_ctx.tokens,
             sections,
             &ui.shortcut_sheet,
             &facts,
@@ -210,7 +216,7 @@ impl Signex {
         }
         Self::dismiss_and_centre(
             Message::Overlay(OverlayMsg::CloseAbout),
-            crate::about_modal::view(&ui.i18n, &self.document_state.panel_ctx.tokens),
+            crate::about_modal::view(&ui.i18n, &self.document_view.panel_ctx.tokens),
         )
     }
 
@@ -224,7 +230,7 @@ impl Signex {
         }
         Some(crate::passive_calculator_modal::view(
             &ui.i18n,
-            &self.document_state.panel_ctx.tokens,
+            &self.document_view.panel_ctx.tokens,
             &ui.passive_calculator,
         ))
     }
@@ -241,7 +247,7 @@ impl Signex {
             crate::first_run_tour::TourFacts::read(ui.wheel_mode, &ui.active_keymap, &ui.i18n);
         Some(crate::first_run_tour::view(
             &ui.i18n,
-            &self.document_state.panel_ctx.tokens,
+            &self.document_view.panel_ctx.tokens,
             &facts,
         ))
     }
@@ -507,7 +513,7 @@ impl Signex {
             .center_x(Length::Fill)
             .center_y(Length::Fill)
             .style(crate::app::view::dialogs::scrim_style(
-                &self.document_state.panel_ctx.tokens,
+                &self.document_view.panel_ctx.tokens,
             ))
             .boxed()
     }
@@ -522,7 +528,7 @@ impl Signex {
         owner: Option<&std::path::Path>,
     ) -> Option<Element<'_, Message>> {
         use crate::app::state::ModalId;
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let lib = &self.library;
         // In a dialog's own window the card fills the window.
         let windowed = owner.is_some() || self.modal_detached(modal);
@@ -533,12 +539,9 @@ impl Signex {
                 &self.ui_state.i18n,
                 windowed,
                 crate::library::browser::PreviewLook {
-                    canvas_colors: self.document_state.panel_ctx.canvas_colors,
+                    canvas_colors: self.document_view.panel_ctx.canvas_colors,
                     grid: self.sheet_grid(),
-                    device_px_per_logical_px: self
-                        .document_state
-                        .panel_ctx
-                        .device_px_per_logical_px,
+                    device_px_per_logical_px: self.document_view.panel_ctx.device_px_per_logical_px,
                 },
             )
             .map(Message::Library)
@@ -550,12 +553,9 @@ impl Signex {
                 &self.ui_state.i18n,
                 windowed,
                 crate::library::browser::PreviewLook {
-                    canvas_colors: self.document_state.panel_ctx.canvas_colors,
+                    canvas_colors: self.document_view.panel_ctx.canvas_colors,
                     grid: self.sheet_grid(),
-                    device_px_per_logical_px: self
-                        .document_state
-                        .panel_ctx
-                        .device_px_per_logical_px,
+                    device_px_per_logical_px: self.document_view.panel_ctx.device_px_per_logical_px,
                 },
             )
             .map(Message::Library)
@@ -769,7 +769,7 @@ impl Signex {
     pub(in crate::app::view) fn symbol_delete_confirm_overlay(
         &self,
     ) -> Option<Element<'_, Message>> {
-        let ctx = &self.document_state.panel_ctx;
+        let ctx = &self.document_view.panel_ctx;
         let warning = ctx.symbol_editor.as_ref()?.delete_warning.as_ref()?;
         let card = crate::library::symbol_delete::view(warning, &ctx.tokens, &self.ui_state.i18n)
             .map(|msg| Message::Dock(crate::dock::DockMessage::Panel(msg)))
@@ -793,7 +793,7 @@ impl Signex {
         }
         // The palette dims the app with the theme's modal scrim, like a dialog,
         // except over the title-bar field it is typed into.
-        let scrim = crate::app::view::dialogs::dialog_scrim(&self.document_state.panel_ctx.tokens);
+        let scrim = crate::app::view::dialogs::dialog_scrim(&self.document_view.panel_ctx.tokens);
         vec![
             self.command_palette_backdrop(scrim),
             self.view_command_palette_dropdown(),

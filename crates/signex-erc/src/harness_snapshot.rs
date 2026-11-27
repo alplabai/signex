@@ -50,11 +50,16 @@ impl ErcHarness {
     /// The leaves of the top-level bundle with the harness port `name`,
     /// nested entries expanded, when the sheet has such a port.
     pub fn port_leaves(&self, name: &str) -> Option<&[HarnessLeaf]> {
+        self.port_bundle(name).map(|b| b.leaves.as_slice())
+    }
+
+    /// The top-level bundle with the harness port `name`, when the sheet has
+    /// such a port.
+    pub fn port_bundle(&self, name: &str) -> Option<&HarnessBundle> {
         self.bundles
             .iter()
             .filter(|b| !b.nested)
             .find(|b| b.ports.iter().any(|p| p.name == name))
-            .map(|b| b.leaves.as_slice())
     }
 
     /// The connector `id`.

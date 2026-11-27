@@ -1,13 +1,16 @@
 //! Tests for PDF layers (optional content groups).
 use std::collections::BTreeSet;
 
-use signex_types::schematic::{Label, LabelType, Point, Symbol, Wire};
+use signex_types::schematic::{
+    HarnessConnector, HarnessEntry, HarnessWire, Junction, Label, LabelType, Point, Symbol, Wire,
+};
 
 use super::tests::sample_ctx;
 use super::*;
 use crate::ExportContext;
 
-/// One sheet with a wire, a part, a power port and a net label.
+/// One sheet with a wire and its junction, a signal harness (wire and a
+/// connector with one entry), a part, a power port and a net label.
 pub(super) fn layered_ctx() -> ExportContext {
     let mut ctx = sample_ctx(1);
     let sheet = &mut ctx.sheets[0].schematic;
@@ -16,6 +19,33 @@ pub(super) fn layered_ctx() -> ExportContext {
         start: Point::new(20.0, 20.0),
         end: Point::new(60.0, 20.0),
         ..Default::default()
+    });
+    sheet.junctions.push(Junction {
+        uuid: uuid::Uuid::from_u128(4),
+        position: Point::new(40.0, 20.0),
+        diameter: 0.0,
+        minted: false,
+        unknown: Default::default(),
+        unknown_columns: Default::default(),
+    });
+    sheet.harness.connectors.push(HarnessConnector {
+        uuid: uuid::Uuid::from_u128(5),
+        harness_type: "SPI_BUS".into(),
+        position: Point::new(20.0, 80.0),
+        width: 10.16,
+        entry_pitch: 2.54,
+        rotation: 0.0,
+        entries: vec![HarnessEntry {
+            uuid: uuid::Uuid::from_u128(6),
+            name: "SCK".into(),
+        }],
+        locked: false,
+    });
+    sheet.harness.wires.push(HarnessWire {
+        uuid: uuid::Uuid::from_u128(7),
+        start: Point::new(40.0, 82.0),
+        end: Point::new(60.0, 82.0),
+        locked: false,
     });
     sheet.symbols.push(Symbol {
         reference: "R1".to_string(),
@@ -117,6 +147,7 @@ fn layers_write_one_named_group_each_in_list_order() {
         names,
         [
             "Wires and buses",
+            "Signal harnesses",
             "Parts",
             "Net labels and ports",
             "Power ports",
@@ -154,9 +185,126 @@ fn layer_spans_merge_neighbours_of_one_group_and_skip_empty_runs() {
 #[test]
 fn group_names_match_the_layer_list() {
     let names: Vec<&str> = PdfLayer::ALL.iter().map(|l| l.group_name()).collect();
-    assert_eq!(names.len(), 6);
+    assert_eq!(names.len(), 7);
     assert_eq!(names[0], "Wires and buses");
-    assert_eq!(names[5], "Watermark");
+    assert_eq!(names[1], "Signal harnesses");
+    assert_eq!(names[6], "Watermark");
+}
+
+/// The layer each element of `ctx`'s first page is drawn in.
+fn element_layers(ctx: &ExportContext, opts: &PdfOptions) -> Vec<(SvgElement, Option<PdfLayer>)> {
+    let (page_w_mm, page_h_mm) = opts.page_size.dimensions_mm(opts.orientation);
+    let (svg, spans) = SvgRenderContext::from_sheet_layered(
+        &ctx.sheets[0],
+        opts,
+        page_w_mm,
+        page_h_mm,
+        MM_TO_PT,
+        None,
+    );
+    let mut current: Option<(PdfLayer, usize)> = None;
+    let mut out = Vec::with_capacity(svg.elements.len());
+    for (index, element) in svg.elements.into_iter().enumerate() {
+        if current.is_some_and(|(_, end)| end == index) {
+            current = None;
+        }
+        if let Some(started) = spans.starting_at(index) {
+            current = Some(started);
+        }
+        out.push((element, current.map(|(layer, _)| layer)));
+    }
+    out
+}
+
+/// Whether `element` is drawn in the harness colour or its soft tint.
+fn is_harness_drawing(element: &SvgElement, palette: &SchematicPalette) -> bool {
+    let harness = [palette.harness, palette.harness_soft];
+    match element {
+        SvgElement::Path { style, .. } => {
+            style.stroke_rgb.is_some_and(|c| harness.contains(&c))
+                || style.fill_rgb.is_some_and(|c| harness.contains(&c))
+        }
+        SvgElement::Text { fill_rgb, .. } => harness.contains(fill_rgb),
+    }
+}
+
+/// #2690: the harness wire, its connector, the entry tab and the names are
+/// in the Signal harnesses group; Wires and buses keeps the wire and the
+/// junction drawn after the harness, and holds no harness drawing.
+#[test]
+fn signal_harnesses_are_a_layer_of_their_own() {
+    let opts = layered(&[], false);
+    let drawn = element_layers(&layered_ctx(), &opts);
+    let palette = &opts.palette;
+    let harness: Vec<_> = drawn
+        .iter()
+        .filter(|(element, _)| is_harness_drawing(element, palette))
+        .collect();
+    // Wire, connector body, entry tab, entry name, type name.
+    assert_eq!(harness.len(), 5, "{harness:#?}");
+    assert!(
+        harness
+            .iter()
+            .all(|(_, layer)| *layer == Some(PdfLayer::SignalHarnesses)),
+        "{harness:#?}"
+    );
+    let wires: Vec<_> = drawn
+        .iter()
+        .filter(|(_, layer)| *layer == Some(PdfLayer::WiresAndBuses))
+        .collect();
+    assert_eq!(wires.len(), 2, "the wire and the junction: {wires:#?}");
+    assert!(
+        wires
+            .iter()
+            .all(|(element, _)| !is_harness_drawing(element, palette)),
+        "{wires:#?}"
+    );
+    let in_harness_group = drawn
+        .iter()
+        .filter(|(_, layer)| *layer == Some(PdfLayer::SignalHarnesses))
+        .count();
+    assert_eq!(in_harness_group, 5, "nothing else is in the harness group");
+}
+
+/// #2690, in the written file: the layered PDF of a sheet with a harness
+/// names the Signal harnesses group and wraps drawing in it.
+#[test]
+fn a_layered_pdf_of_a_harness_sheet_wraps_the_harness_in_its_group() {
+    let ctx = layered_ctx();
+    let opts = layered(&[PdfLayer::SignalHarnesses], false);
+    let text = export_text(&ctx, &opts);
+    let groups = ocg_objects(&text);
+    let off: Vec<&str> = refs_after(&text, "/OFF")
+        .iter()
+        .map(|r| name_of(&groups, r))
+        .collect();
+    assert_eq!(off, ["Signal harnesses"], "it can open hidden on its own");
+    let ops = page_ops(&ctx, &opts, 0);
+    let begin = optional_content::begin_operator(PdfLayer::SignalHarnesses);
+    assert_eq!(ops.matches(&begin).count(), 1, "one run: {ops}");
+    let at = ops.find(&begin).expect("harness group");
+    let run = &ops[at..at + ops[at..].find("EMC").expect("closed")];
+    assert!(
+        run.contains(" l\n"),
+        "the harness wire is in the run: {run}"
+    );
+    assert!(
+        run.contains("BT\n"),
+        "the entry and type names are in the run: {run}"
+    );
+}
+
+/// A sheet with no harness puts nothing in the harness group, and the wires
+/// stay one run.
+#[test]
+fn a_sheet_without_a_harness_draws_nothing_in_the_harness_group() {
+    let mut ctx = layered_ctx();
+    ctx.sheets[0].schematic.harness = Default::default();
+    let ops = page_ops(&ctx, &layered(&[], false), 0);
+    let harness = optional_content::begin_operator(PdfLayer::SignalHarnesses);
+    let wires = optional_content::begin_operator(PdfLayer::WiresAndBuses);
+    assert!(!ops.contains(&harness), "{ops}");
+    assert_eq!(ops.matches(&wires).count(), 1, "{ops}");
 }
 
 #[test]
@@ -189,7 +337,7 @@ fn the_watermark_group_always_prints() {
 fn no_watermark_writes_no_watermark_group() {
     let text = export_text(&layered_ctx(), &layered(&[], false));
     let names: Vec<String> = ocg_objects(&text).into_iter().map(|(_, n)| n).collect();
-    assert_eq!(names.len(), 5);
+    assert_eq!(names.len(), 6);
     assert!(!names.iter().any(|n| n == "Watermark"));
 }
 

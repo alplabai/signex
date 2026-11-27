@@ -4,8 +4,8 @@ use crate::app::Signex;
 
 impl Signex {
     pub(crate) fn sync_panel_ctx_from_visible_document(&mut self) {
-        self.document_state.panel_ctx.has_schematic = self.has_active_schematic();
-        self.document_state.panel_ctx.has_pcb = self.has_active_pcb();
+        self.document_view.panel_ctx.has_schematic = self.has_active_schematic();
+        self.document_view.panel_ctx.has_pcb = self.has_active_pcb();
 
         // Counts and paper label for whichever document is visible; the
         // per-row symbol lists come from the same builder `refresh_panel_ctx`
@@ -40,7 +40,7 @@ impl Signex {
         };
 
         {
-            let ctx = &mut self.document_state.panel_ctx;
+            let ctx = &mut self.document_view.panel_ctx;
             ctx.sym_count = counts.0;
             ctx.wire_count = counts.1;
             ctx.label_count = counts.2;
@@ -50,7 +50,7 @@ impl Signex {
         }
         self.fill_symbol_lists(None);
         // Written outside `fill_symbol_lists`; the next refresh must rebuild.
-        self.document_state.panel_ctx.symbol_lists_key = None;
+        self.document_view.panel_ctx.symbol_lists_key = None;
 
         // Drive the drawn sheet from the (re)loaded document's paper size —
         // without this the canvas keeps the previous tab's dimensions and the

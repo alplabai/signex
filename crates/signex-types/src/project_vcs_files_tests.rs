@@ -133,6 +133,15 @@ fn the_gitattributes_block_marks_project_fonts_binary_and_lfs() {
     assert!(gitattributes_block_body(true).contains("assets/fonts/** filter=lfs"));
 }
 
+/// #2796: a block diagram is a native text format, kept LF like the others.
+#[test]
+fn the_gitattributes_block_keeps_every_native_text_format_lf() {
+    let body = gitattributes_block_body(false);
+    for ext in ["snxsch", "snxpcb", "snxprj", "snxblk"] {
+        assert!(body.contains(&format!("*.{ext}\ttext eol=lf")), "{ext}");
+    }
+}
+
 #[test]
 fn ensure_project_gitignore_creates_exactly_the_block() {
     let dir = tempfile::tempdir().unwrap();

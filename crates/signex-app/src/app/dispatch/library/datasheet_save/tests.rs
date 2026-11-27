@@ -207,7 +207,7 @@ fn the_save_button_stores_on_a_worker_then_saves_the_row() {
     let hash = pick(&mut app, &address, PDF);
 
     let _task = app.handle_save_row(&address);
-    assert!(app.document_state.error_notice.is_none());
+    assert!(app.document_view.error_notice.is_none());
     assert!(
         app.document_state.document_saves.is_saving(&file),
         "the PDF write counts as in flight"
@@ -225,7 +225,7 @@ fn the_save_button_stores_on_a_worker_then_saves_the_row() {
     run_task(&mut app, task);
 
     assert!(!app.document_state.document_saves.is_saving(&file));
-    assert!(app.document_state.error_notice.is_none());
+    assert!(app.document_view.error_notice.is_none());
     assert!(!editor(&app, &address).dirty);
     let repo = git2::Repository::open(file.parent().unwrap()).unwrap();
     let tree = repo
@@ -255,7 +255,7 @@ fn a_failed_store_leaves_the_row_unsaved_and_reports_it() {
     run_task(&mut app, task);
 
     assert!(!app.document_state.document_saves.is_saving(&file));
-    assert!(app.document_state.error_notice.is_some());
+    assert!(app.document_view.error_notice.is_some());
     assert!(editor(&app, &address).dirty);
     assert_eq!(std::fs::read(&file).unwrap(), before, "row not written");
 }
@@ -278,7 +278,7 @@ fn a_pdf_picked_while_the_store_runs_is_not_saved_and_the_editor_stays_dirty() {
     );
     run_task(&mut app, task);
 
-    assert!(app.document_state.error_notice.is_none());
+    assert!(app.document_view.error_notice.is_none());
     assert!(editor(&app, &address).dirty, "the later pick is unsaved");
     assert!(!datasheet_asset_path(&file, &late).unwrap().exists());
     let stored = app
@@ -396,7 +396,7 @@ fn a_store_finishing_after_the_editor_was_reopened_saves_nothing() {
         !app.document_state.document_saves.is_saving(&file),
         "the in-flight mark is released"
     );
-    assert!(app.document_state.error_notice.is_none());
+    assert!(app.document_view.error_notice.is_none());
     let state = editor(&app, &address);
     assert!(state.dirty, "the reopened editor is still unsaved");
     assert_eq!(state.row.datasheet_label, "UNSAVED EDIT");
@@ -445,7 +445,7 @@ fn a_save_after_a_double_failure_commits_the_untracked_pinned_pdf() {
     let task = app.update(event(&address, EditorMsg::SaveDraft));
     run_task(&mut app, task);
 
-    assert!(app.document_state.error_notice.is_none());
+    assert!(app.document_view.error_notice.is_none());
     assert!(!editor(&app, &address).dirty);
     assert!(head_has(&file, &hash), "the pinned PDF is committed");
 }
@@ -514,7 +514,7 @@ fn a_failed_commit_still_saves_the_row_and_commit_now_commits_the_pdf() {
     std::fs::write(&head, b"not a ref").unwrap();
 
     save_row_to_completion(&mut app, &address);
-    assert!(app.document_state.error_notice.is_none());
+    assert!(app.document_view.error_notice.is_none());
     assert!(!editor(&app, &address).dirty, "the row is saved");
     app.library.sync_uncommitted();
     let rel = signex_library::datasheet_asset_rel_path(&hash).unwrap();
@@ -686,7 +686,7 @@ fn save_all_stores_the_staged_pdf_off_the_update_and_then_quits() {
     // A second Save All meanwhile is refused for that row, not doubled.
     let second = start_save_all(&mut app, &address);
     run_save_all(&mut app, second);
-    let notice = app.document_state.error_notice.take().expect("a card");
+    let notice = app.document_view.error_notice.take().expect("a card");
     assert!(
         notice.detail.render_en_us().contains("still being saved"),
         "{notice:?}"
@@ -702,7 +702,7 @@ fn save_all_stores_the_staged_pdf_off_the_update_and_then_quits() {
     assert!(!editor(&app, &address).dirty);
     assert!(head_has(&file, &hash));
     assert!(!app.document_state.document_saves.is_saving(&file));
-    assert!(app.document_state.error_notice.is_none());
+    assert!(app.document_view.error_notice.is_none());
 }
 
 #[test]
@@ -722,7 +722,7 @@ fn save_all_with_a_failing_store_reports_it_and_does_not_quit() {
         state.staged_datasheets.contains_key(&hash),
         "the PDF is still staged"
     );
-    let notice = app.document_state.error_notice.as_ref().expect("a card");
+    let notice = app.document_view.error_notice.as_ref().expect("a card");
     assert!(
         notice.detail.render_en_us().contains("stayed open"),
         "{notice:?}"
@@ -776,7 +776,7 @@ fn close_library_with_a_failing_store_keeps_the_library_and_the_draft() {
     );
     let state = editor(&app, &address);
     assert!(state.dirty && state.staged_datasheets.contains_key(&hash));
-    let notice = app.document_state.error_notice.as_ref().expect("a card");
+    let notice = app.document_view.error_notice.as_ref().expect("a card");
     assert!(
         notice.detail.render_en_us().contains("not closed"),
         "{notice:?}"
@@ -822,7 +822,7 @@ fn save_all_where_the_store_works_but_the_commit_fails_still_saves() {
 
     assert!(datasheet_asset_path(&file, &hash).unwrap().is_file());
     assert!(!editor(&app, &address).dirty, "the row is saved");
-    assert!(app.document_state.error_notice.is_none());
+    assert!(app.document_view.error_notice.is_none());
     assert!(app.library.batch_row_failures.is_empty());
     app.library.sync_uncommitted();
     assert!(app.library.uncommitted_in(&file).is_some());
@@ -853,7 +853,7 @@ fn a_batch_across_two_libraries_commits_one_and_lists_the_other() {
     assert!(head_has(&good_file, &good_hash));
     assert!(editor(&app, &bad).dirty);
     let notice = app
-        .document_state
+        .document_view
         .error_notice
         .as_ref()
         .expect("a card")
@@ -983,7 +983,7 @@ fn an_old_store_completion_does_not_act_on_a_newer_save() {
     // The old completion arrives first and is ignored.
     let task = app.finish_staged_asset_store(&address, old_generation, Ok(old_written));
     run_task(&mut app, task);
-    assert!(app.document_state.error_notice.is_none(), "no false error");
+    assert!(app.document_view.error_notice.is_none(), "no false error");
     assert!(
         editor(&app, &address).saving_row.is_some(),
         "the newer save is untouched"
@@ -993,7 +993,7 @@ fn an_old_store_completion_does_not_act_on_a_newer_save() {
     let written = store_assets(&file, &editor(&app, &address).staged_assets_in_use()).unwrap();
     let task = app.finish_staged_asset_store(&address, new_generation, Ok(written));
     run_task(&mut app, task);
-    assert!(app.document_state.error_notice.is_none());
+    assert!(app.document_view.error_notice.is_none());
     assert!(!editor(&app, &address).dirty);
     assert!(head_has(&file, &second));
 }
@@ -1102,7 +1102,7 @@ fn a_late_row_write_failure_is_listed_by_its_save_all() {
 
     let (row_write, after_settle) = settle_before_the_row_write(&mut app, task);
     settle(&mut app, after_settle);
-    assert!(app.document_state.error_notice.is_none(), "not settled yet");
+    assert!(app.document_view.error_notice.is_none(), "not settled yet");
 
     // Another writer moves the stored row on: the whole-row write is refused.
     let library_id = app.library.library_at(&file).unwrap().library_id;
@@ -1116,7 +1116,7 @@ fn a_late_row_write_failure_is_listed_by_its_save_all() {
         .unwrap();
     settle(&mut app, row_write);
 
-    let notice = app.document_state.error_notice.as_ref().expect("a card");
+    let notice = app.document_view.error_notice.as_ref().expect("a card");
     assert!(
         notice.detail.render_en_us().contains("stayed open"),
         "{notice:?}"

@@ -189,7 +189,7 @@ fn tab_stepping_and_print_in_a_detached_panel_act_on_the_main_window() {
     );
     press(&mut f, "print", Some(panel));
     assert_eq!(
-        f.app.document_state.preview.as_ref().unwrap().source,
+        f.app.document_view.preview.as_ref().unwrap().source,
         f.main_path
     );
     press(&mut f, "next_document_tab", Some(panel));
@@ -251,7 +251,7 @@ fn print_in_an_undocked_window_previews_that_document() {
     press(&mut f, "print", Some(window));
     let preview = f
         .app
-        .document_state
+        .document_view
         .preview
         .as_ref()
         .expect("preview opened");
@@ -304,7 +304,7 @@ fn export_pdf_in_an_undocked_window_previews_that_document() {
     settle_task(&mut f.app, task);
     let preview = f
         .app
-        .document_state
+        .document_view
         .preview
         .as_ref()
         .expect("preview opened");

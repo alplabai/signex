@@ -75,6 +75,8 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("sides", OperandKind::Text),
     // #2488: the STEP schema of a board export.
     ("schema", OperandKind::Text),
+    // #2470: the fabrication outputs of a board's panel, not the board alone.
+    ("whole_panel", OperandKind::Bool),
     ("field", OperandKind::Text),
     ("requirement", OperandKind::Text),
     ("on", OperandKind::Bool),
@@ -102,6 +104,8 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("set", OperandKind::Text),
     ("preset", OperandKind::Text),
     ("pins", OperandKind::Text),
+    // #2954: the user parameters Change Component clears.
+    ("drop", OperandKind::Text),
     ("units", OperandKind::Text),
     ("shape", OperandKind::Text),
     ("delta", OperandKind::Text),
@@ -115,26 +119,39 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("diff_pair_class", OperandKind::Text),
     ("via_hole", OperandKind::Text),
     ("current", OperandKind::Text),
-    // #2795: the Design Notebook tab's line (from 1), view, side panel and
-    // next problem.
-    ("line", OperandKind::Text),
+    // #1283: the template a new sheet or project starts from; #1988: a BOM
+    // template's text and the BOM grouping (`variant` is declared with the
+    // priced BOM below).
+    ("template", OperandKind::Text),
+    ("grouping", OperandKind::Text),
+    // #2665: the Smart Paste dialog's array count, numbering and net names
+    // (`nets` is declared with the routes below).
+    ("copies", OperandKind::Text),
+    ("designators", OperandKind::Text),
+    ("net_pattern", OperandKind::Text),
+    ("net_start", OperandKind::Text),
+    // #2795: the Design Notebook tab's view, side panel and next problem
+    // (its `line`, from 1, is the #2938 row below).
     ("view", OperandKind::Text),
     ("panel", OperandKind::Text),
+    // `set_dock_panel` (#2470): open, close, collapse or expand.
+    ("state", OperandKind::Text),
     ("next_problem", OperandKind::Bool),
     // Mockup rows 196 and 199: the fix of a stale notebook reference, the
     // name it is updated to and the pin (`U3.3`) it or a timeline names.
     ("fix", OperandKind::Text),
     ("to", OperandKind::Text),
+    // #2949: Compare variants' left-hand variant (its right-hand one is `to`).
+    ("from", OperandKind::Text),
     ("pin", OperandKind::Text),
-    // Mockup row 199: a notebook timeline's quantity.
-    ("quantity", OperandKind::Text),
     // #2945, mockup row 201: Generate design notebook's sections (a comma
-    // list or `all`), variant, page template, document number, revision,
-    // check source (`run`, `last`), the `--fail-on` conditions, and
-    // whether it writes the report and replaces one that is there.
+    // list or `all`), page template, document number, revision, check
+    // source (`run`, `last`), the `--fail-on` conditions, and whether it
+    // writes the report and replaces one that is there (its `template` is
+    // the #1283 row above). Its `variant`, and
+    // a notebook timeline's `quantity` (mockup row 199), are the #2938 rows
+    // below.
     ("sections", OperandKind::Text),
-    ("variant", OperandKind::Text),
-    ("template", OperandKind::Text),
     ("document_number", OperandKind::Text),
     ("revision", OperandKind::Text),
     ("checks", OperandKind::Text),
@@ -150,6 +167,11 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("contents", OperandKind::Bool),
     ("bookmarks", OperandKind::Bool),
     ("python_source", OperandKind::Bool),
+    // #2495: a key binding: the command id it runs, its key sequence and
+    // the shortcut context it applies in.
+    ("command", OperandKind::Text),
+    ("keys", OperandKind::Text),
+    ("context", OperandKind::Text),
     // #2552: a move's wire handling, given by the caller, not the settings.
     ("keep_wires", OperandKind::Bool),
     ("wiring", OperandKind::Text),
@@ -163,9 +185,9 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("corner_radius", OperandKind::Length),
     ("control_1", OperandKind::Point),
     ("control_2", OperandKind::Point),
-    // #2817: the Pin table's Paste rows text and its paste mode.
+    // #2817: the Pin table's Paste rows text (its paste `mode` is declared
+    // with #2470 below).
     ("paste", OperandKind::Text),
-    ("mode", OperandKind::Text),
     // #1114: a text note's format and a rich note's Frame, Size, source,
     // editor cursor and link.
     ("format", OperandKind::Text),
@@ -182,6 +204,78 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     // #2836: a dimension's decimals and arrow style.
     ("precision", OperandKind::Text),
     ("arrows", OperandKind::Text),
+    // #2796: a block diagram's blocks, ports, connections and groups.
+    ("function", OperandKind::Text),
+    ("note", OperandKind::Text),
+    ("rails", OperandKind::Text),
+    ("specs", OperandKind::Text),
+    ("clear", OperandKind::Text),
+    ("block", OperandKind::Text),
+    ("interface", OperandKind::Text),
+    ("label", OperandKind::Text),
+    // #2796: a block diagram PDF's page orientation, `landscape` or
+    // `portrait` (its `paper` is declared with mockup row 202 above).
+    ("orientation", OperandKind::Text),
+    // #2968, mockup row 210: what a regenerate does with a block whose sheet
+    // left the project, `apply` (unlink it) or `skip` (leave it, listed).
+    ("unlink", OperandKind::Text),
+    // #3038: a part's fit in a variant, and an alternate part's part number
+    // (its `footprint` is declared with #2937 below).
+    ("fitted", OperandKind::Bool),
+    ("mpn", OperandKind::Text),
+    // #2470: Re-Annotate Board's numbering order and bottom side.
+    ("order", OperandKind::Text),
+    ("bottom", OperandKind::Text),
+    // #2470: a board route's corners between its ends (`x,y;x,y`), how each
+    // leg bends, walk around or push, and the nets of a Multi-Route.
+    ("through", OperandKind::Text),
+    ("corner", OperandKind::Text),
+    ("mode", OperandKind::Text),
+    ("nets", OperandKind::Text),
+    // #2936: one board point `x,y` per id of `ids`, `;` separated.
+    ("points", OperandKind::Text),
+    // #2937: a library footprint, `<library>:<footprint>`, and what a swap
+    // does with an old pad no new pad takes over (`refuse` or `keep`).
+    ("footprint", OperandKind::Text),
+    ("unmatched", OperandKind::Text),
+    // #2457, #2941: rooms and Auto Place in Rooms.
+    ("margin", OperandKind::Length),
+    ("move_parts", OperandKind::Bool),
+    ("keep_parts_inside", OperandKind::Bool),
+    ("replace", OperandKind::Bool),
+    ("room", OperandKind::Text),
+    ("rooms", OperandKind::Text),
+    ("weights", OperandKind::Text),
+    ("thermal_gap", OperandKind::Length),
+    ("separation_gap", OperandKind::Length),
+    // #2942: a stage of the board's layout plan and its settings, each a
+    // comma list (`weights`, `rooms` and `nets` as above).
+    ("stage", OperandKind::Text),
+    ("keep", OperandKind::Text),
+    ("skip", OperandKind::Text),
+    ("pours", OperandKind::Text),
+    ("requirements", OperandKind::Text),
+    // #2938: a BOM line by its key, an alternate's place in the line's
+    // order, and the build a priced BOM is for.
+    ("line", OperandKind::Text),
+    ("position", OperandKind::Text),
+    ("quantity", OperandKind::Text),
+    ("currency", OperandKind::Text),
+    ("variant", OperandKind::Text),
+    // #1297: the part search's query, parameters and stock, and whether
+    // it asks for fresh supplier data.
+    ("query", OperandKind::Text),
+    ("package", OperandKind::Text),
+    ("tolerance", OperandKind::Text),
+    ("rating", OperandKind::Text),
+    ("min_stock", OperandKind::Text),
+    ("refresh", OperandKind::Bool),
+    // #2943: a rail's voltage and tolerance, as typed.
+    ("voltage", OperandKind::Text),
+    ("tolerance_percent", OperandKind::Text),
+    // #2462: the difference ids taken to the board and to the schematic.
+    ("to_board", OperandKind::Text),
+    ("to_schematic", OperandKind::Text),
 ];
 
 /// The commands whose `ids` is still text, not targets (#2326): a design

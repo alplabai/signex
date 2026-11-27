@@ -17,12 +17,24 @@ undoable):
 - the command palette and any key a profile binds to it (none by default);
 - the Projects tree's project row, Update PCB Document, for the clicked
   project;
-- headless and CLI: `update_pcb_from_schematic apply=true` executes the rows
-  ticked by default without a dialog and answers `Ran`; without `apply=true`
-  it is refused.
+- headless, CLI and the agent channel (#2470):
+  `update_pcb_from_schematic [document=<project, sheet or board>] apply=true`
+  executes the rows ticked by default without a dialog, and `dry_run=true`
+  lists them and changes nothing; both answer with the change list as JSON
+  ([CLI.md](CLI.md), "Update PCB from schematic"). Without either, or while
+  the dialog is open, it is refused; the dialog does not open over a run
+  that waits for its list.
 
-The project is the one that owns the document in view. When its board is not
-open, it is opened first and the list is read once it is.
+From the menus and the palette the project is the one that owns the
+document in view; from the Projects tree, the clicked one; from operands,
+the one `document` names, else the active project (the one opened last,
+not the tab in view; with one project open and none active, that one).
+When the active project has no board, or several projects are open and
+none is active, the run is refused and lists the boards to name; another
+project's board is never updated in its place (Caner, 2026-11-25). The
+agent channel always
+needs `document`: its gate acts only on a named document. When the board
+is not open, it is opened first and the list is read once it is.
 
 ## The dialog
 
@@ -117,8 +129,18 @@ Validate and Execute say why, the dialog stays open and nothing is applied.
 - Another library version of the same footprint is listed, unticked.
 - Remove and change rows of a locked footprint start unticked; pads whose net
   is locked are left alone.
+- A pad its symbol has no pin for keeps its net and is locked, with no row of
+  its own: Execute locks it along with the rows it applies (#3060), and
+  Messages says how many pads it locked. A board that matches its schematic
+  leaves such a pad unlocked. The command's answer lists these pads as
+  `pad_locks` ([CLI.md](CLI.md), "Update PCB from schematic").
 - A footprint with a 3D body or a STEP model converts; the board reaches the
   model through `library_ref`.
+- A net-tie part (#1277; Caner, 2026-11-25) is added, or replaced, as a
+  net-tie footprint: Net Tie (in BOM) when the part is in the BOM, else Net
+  Tie, unless its library footprint is a tie already. DRC then allows the
+  copper bridge between its pads. A footprint already on the board keeps its
+  type until a change row replaces it (`docs/NET_TIES.md`).
 
 ## New PCB
 
@@ -168,14 +190,16 @@ the same footprint are one row with two possible directions. A side that is
 blocked keeps its reason, shown as the tooltip of its greyed choice, and is
 never chosen. The notes of both lists are listed under the rows.
 
-A pad row that keeps its net and only gains its lock is not a difference, so
-the report leaves it out and its Apply does not set that lock; Update PCB
-still lists it. A pad row whose two sides read the same net name and that
-other rows need, or that needs other rows, is not drawn either (mockup row
-162): it is applied while a ticked row needs it, or while every row it needs
-is ticked. A blocked one stays drawn with its reason, so the row that needs
-it shows why it waits. A pad moving between two net numbers of one name with
-no row tied to it is a real move and stays listed.
+A pad that keeps its net and only gains its lock is not a difference, so
+the report leaves it out and its Apply does not set that lock. Update PCB
+does not list it either (#3060): Execute locks it along with the rows it
+applies, and a board that matches its schematic lists nothing. A pad row
+whose two sides read the same net name and that other rows need, or that
+needs other rows, is not drawn either (mockup row 162): it is applied while
+a ticked row needs it, or while every row it needs is ticked. A blocked one
+stays drawn with its reason, so the row that needs it shows why it waits. A
+pad moving between two net numbers of one name with no row tied to it is a
+real move and stays listed.
 
 ### Directions
 
@@ -216,9 +240,19 @@ On success the dialog closes and Messages says how many changes went each
 way. Export report… writes the report, directions included, as plain text
 through the file port.
 
+### From the command line
+
+`check_board_against_schematic` answers the same report as JSON, with an
+id for every row, and changes nothing; `apply_board_schematic_differences`
+takes rows by id to the board or to the schematic and runs this Apply (one
+board undo step, one schematic undo group). `board_status` counts the same
+differences. Operands, answers and limits: [CLI.md](CLI.md), "Board against
+schematic" and "Board status".
+
 ### Not yet
 
 Update schematic is not available for Missing on board, Extra on board and
 net rows: placing a board-only part on a sheet and carrying a board net to
-the schematic need their own design. Taking a footprint mismatch into the
+the schematic need their own design (#2691). The command line refuses
+those directions with the same reason. Taking a footprint mismatch into the
 schematic through Assign Footprints is #2653 (Caner, 2026-11-20).

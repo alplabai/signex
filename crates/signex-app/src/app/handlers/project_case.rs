@@ -81,7 +81,7 @@ mod tests {
     }
 
     fn navigator_fold(app: &Signex) -> Option<CaseFold> {
-        app.document_state
+        app.document_view
             .panel_ctx
             .navigator
             .hierarchy

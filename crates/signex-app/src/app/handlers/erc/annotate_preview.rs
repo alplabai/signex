@@ -12,9 +12,12 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use iced::Task;
+use signex_types::designator::{NumberBlocks, NumberingScheme};
 use signex_types::schematic::{InstancePath, SchematicSheet, Symbol};
 
-use super::annotate_placements::{WalkDocs, multi_placed_files, project_base_dir_of};
+use super::annotate_placements::{
+    WalkDocs, multi_placed_files, numbering_scheme, printed_pages, project_base_dir_of, unit_pages,
+};
 
 use crate::app::project_sheets::{self, OpenSheets};
 use crate::app::{AnnotateMsg, Message, Signex};
@@ -52,6 +55,12 @@ pub struct AnnotatePreviewCache {
     sheets: Arc<PreviewSheets>,
     /// Rows derived from `sheets` and the lock set - what the dialog renders.
     pub entries: Vec<AnnotatePreviewEntry>,
+    /// Per numbering unit, the first number its page block hands out under a
+    /// page numbering scheme (#1292); empty under the continuous scheme.
+    pub starts: Vec<Option<u32>>,
+    /// Why the project's page scheme cannot number the ticked sheets; the
+    /// rows then propose no new designator, as the run would refuse.
+    pub numbering_problem: Option<String>,
 }
 
 /// One sheet file of the preview walk.
@@ -69,6 +78,10 @@ struct PreviewSheet {
 struct PreviewSheets {
     sheets: Vec<PreviewSheet>,
     multi: std::collections::HashMap<PathBuf, Vec<InstancePath>>,
+    /// The project's numbering scheme when the sheets were read (#1292).
+    scheme: NumberingScheme,
+    /// Under a page scheme, the page of each numbering unit; else empty.
+    pages: Vec<Option<usize>>,
 }
 
 /// The sheets (with display titles) a load produced, plus anything that could
@@ -89,6 +102,10 @@ pub(crate) struct AnnotatePreviewInputs {
     active_path: Option<PathBuf>,
     active_doc: Option<SchematicSheet>,
     tab_titles: Vec<(PathBuf, String)>,
+    /// The active project's numbering scheme and name (#1292); the name picks
+    /// the manual page numbers that apply.
+    scheme: NumberingScheme,
+    project_name: String,
 }
 
 /// Power ports (`#PWR`, `#FLG`, `is_power`) aren't designators — they're net
@@ -135,6 +152,10 @@ fn load_preview_sheets(inputs: AnnotatePreviewInputs) -> AnnotatePreviewLoad {
     let ordered_paths = project_sheets::ordered_project_sheet_paths(&set, active_path);
     let base_dir = project_base_dir_of(inputs.project_dir.as_deref(), &set);
     let multi = multi_placed_files(&set, base_dir.as_deref());
+    // The page of each unit, for a page numbering scheme (#1292): read here,
+    // off the UI thread, with the sheets.
+    let printed = (inputs.scheme != NumberingScheme::Continuous)
+        .then(|| printed_pages(&set, base_dir.as_deref(), &inputs.project_name));
     let mut sheets = set.sheets;
     let mut out: Vec<PreviewSheet> = Vec::with_capacity(ordered_paths.len() + 1);
     for path in &ordered_paths {
@@ -167,8 +188,17 @@ fn load_preview_sheets(inputs: AnnotatePreviewInputs) -> AnnotatePreviewLoad {
             sheet: doc,
         });
     }
+    let pages = printed.map_or_else(Vec::new, |printed| {
+        let paths: Vec<PathBuf> = out.iter().map(|s| s.path.clone()).collect();
+        unit_pages(&printed, &paths, &multi)
+    });
     AnnotatePreviewLoad {
-        sheets: PreviewSheets { sheets: out, multi },
+        sheets: PreviewSheets {
+            sheets: out,
+            multi,
+            scheme: inputs.scheme,
+            pages,
+        },
         warnings,
     }
 }
@@ -215,13 +245,15 @@ fn unit_paths<'s>(
 /// file placed more than once lists its symbols once per placement, as the
 /// pass numbers them (#1919); rows where `current == proposed` are "no
 /// change". A sheet in `unticked` lists no rows and keeps its designators,
-/// as the pass leaves it alone (#75). Pure CPU over already-loaded sheets.
+/// as the pass leaves it alone (#75). Under a page numbering scheme (#1292)
+/// each unit proposes from its page block, as the pass numbers it. Pure CPU
+/// over already-loaded sheets.
 fn compute_entries(
     walked: &PreviewSheets,
     locked: &std::collections::HashSet<uuid::Uuid>,
     order: crate::app::state::AnnotateOrder,
     unticked: &std::collections::BTreeSet<PathBuf>,
-) -> Vec<AnnotatePreviewEntry> {
+) -> Proposed {
     let paths: Vec<PathBuf> = walked.sheets.iter().map(|s| s.path.clone()).collect();
     let symbols_of: std::collections::HashMap<&Path, &[Symbol]> = walked
         .sheets
@@ -246,13 +278,22 @@ fn compute_entries(
             .iter()
             .map(|s| (s.path.as_path(), s.sheet.symbols.as_slice())),
     );
-    let mut next = signex_types::designator::seed_counters(
-        walk.docs
-            .iter()
-            .flat_map(|doc| doc.iter())
+    let kept = || {
+        (walk.docs.iter().flat_map(|doc| doc.iter()))
             .filter(|sym| is_target(sym))
-            .map(|sym| sym.reference.as_str()),
-    );
+            .map(|sym| sym.reference.as_str())
+    };
+    let mut next = signex_types::designator::seed_counters(kept());
+    let (blocks, mut numbering_problem) =
+        match preview_blocks(walked, &unit_paths, unticked, kept()) {
+            Ok(blocks) => (blocks, None),
+            Err(why) => (None, Some(why)),
+        };
+    let starts: Vec<Option<u32>> = blocks.as_ref().map_or_else(Vec::new, |blocks| {
+        (0..walk.docs.len())
+            .map(|unit| blocks.start(unit))
+            .collect()
+    });
     // The same project-wide grouping the action builds, so the preview
     // promises one designator per multi-unit part, even one split across
     // sheets, and honours locks the way the pass does (#691).
@@ -265,6 +306,7 @@ fn compute_entries(
         if unticked.contains(sheet_path) {
             continue;
         }
+        let mut in_block = std::collections::HashMap::new();
         for i in signex_types::schematic::annotation_order(doc, parts.order()) {
             let sym = &doc[i];
             if sym.reference.is_empty() || !is_target(sym) {
@@ -274,17 +316,39 @@ fn compute_entries(
             let part = parts.part(unit, i);
             let pinned = locked.contains(&sym.uuid)
                 || part.is_some_and(|p| parts.locked_designator(p).is_some());
-            let proposed = if sym.reference.ends_with('?') && !prefix.is_empty() && !pinned {
+            let numbers = sym.reference.ends_with('?')
+                && !prefix.is_empty()
+                && !pinned
+                && numbering_problem.is_none();
+            let proposed = if numbers {
                 match part.and_then(|p| designator_of_part.get(&p)) {
                     Some(designator) => designator.clone(),
                     None => {
-                        let n = next.entry(prefix.clone()).or_insert(0);
-                        *n += 1;
-                        let designator = format!("{prefix}{n}");
-                        if let Some(part) = part {
-                            designator_of_part.insert(part, designator.clone());
+                        let issued = match &blocks {
+                            Some(blocks) => blocks.issue(unit, &prefix, &mut in_block),
+                            None => {
+                                let n = next.entry(prefix.clone()).or_insert(0);
+                                *n += 1;
+                                Ok(*n)
+                            }
+                        };
+                        match issued {
+                            Ok(n) => {
+                                let designator = format!("{prefix}{n}");
+                                if let Some(part) = part {
+                                    designator_of_part.insert(part, designator.clone());
+                                }
+                                designator
+                            }
+                            // The run refuses this sheet; nothing is promised.
+                            Err(issue) => {
+                                numbering_problem = Some(format!(
+                                    "{}: no {prefix} designator left ({issue})",
+                                    titles[unit]
+                                ));
+                                sym.reference.clone()
+                            }
                         }
-                        designator
                     }
                 }
             } else {
@@ -300,7 +364,44 @@ fn compute_entries(
             });
         }
     }
-    out
+    Proposed {
+        entries: out,
+        starts,
+        numbering_problem,
+    }
+}
+
+/// What [`compute_entries`] derives for the dialog.
+struct Proposed {
+    entries: Vec<AnnotatePreviewEntry>,
+    starts: Vec<Option<u32>>,
+    numbering_problem: Option<String>,
+}
+
+/// The page blocks the run would number with (#1292): an unticked unit gets
+/// none, and a ticked one without a page is the problem the run refuses on.
+fn preview_blocks<'a>(
+    walked: &PreviewSheets,
+    unit_paths: &[&Path],
+    unticked: &std::collections::BTreeSet<PathBuf>,
+    kept: impl IntoIterator<Item = &'a str>,
+) -> Result<Option<NumberBlocks>, String> {
+    if walked.scheme == NumberingScheme::Continuous {
+        return Ok(None);
+    }
+    let mut pages = walked.pages.clone();
+    pages.resize(unit_paths.len(), None);
+    for (page, path) in pages.iter_mut().zip(unit_paths) {
+        if unticked.contains(*path) {
+            *page = None;
+        } else if page.is_none() {
+            return Err(format!(
+                "{} has no page number for the page numbering scheme",
+                path.display()
+            ));
+        }
+    }
+    NumberBlocks::new(walked.scheme, &pages, kept).map_err(|problem| problem.to_string())
 }
 
 /// Content fingerprint of everything the preview depends on in memory: the
@@ -310,6 +411,8 @@ fn compute_entries(
 fn fingerprint(state: &crate::app::state::DocumentState) -> u64 {
     let mut h = std::collections::hash_map::DefaultHasher::new();
     state.active_path.hash(&mut h);
+    // A scheme picked, or undone, reloads the pages it numbers by (#1292).
+    numbering_scheme(state).hash(&mut h);
     // The declared pages decide which sheets the load covers.
     crate::app::project_sheets::declared_pages(state).hash(&mut h);
     for tab in &state.tabs {
@@ -359,12 +462,15 @@ impl Signex {
     /// CPU only; called when locks change or a load lands.
     pub(crate) fn recompute_annotate_entries(&mut self) {
         let cache = &mut self.ui_state.annotate_preview;
-        cache.entries = compute_entries(
+        let proposed = compute_entries(
             &cache.sheets,
             &self.ui_state.annotate_locked,
             self.ui_state.annotate_order,
             &self.ui_state.annotate_session.unticked,
         );
+        cache.entries = proposed.entries;
+        cache.starts = proposed.starts;
+        cache.numbering_problem = proposed.numbering_problem;
     }
 
     /// Forget the cached sheets so the next refresh reloads them (dialog
@@ -377,6 +483,8 @@ impl Signex {
         cache.fingerprint = None;
         cache.sheets = Arc::default();
         cache.entries.clear();
+        cache.starts.clear();
+        cache.numbering_problem = None;
     }
 
     /// The dialog is open and its rows are being reloaded - lock-all and Run
@@ -406,6 +514,11 @@ impl Signex {
                 .iter()
                 .map(|t| (t.path.clone(), t.title.clone()))
                 .collect(),
+            scheme: numbering_scheme(ds),
+            project_name: ds
+                .active_document_project()
+                .map(|project| project.data.name.clone())
+                .unwrap_or_default(),
         }
     }
 
@@ -475,6 +588,8 @@ impl Signex {
                 cache.load_failed = true;
                 cache.sheets = Arc::default();
                 cache.entries.clear();
+                cache.starts.clear();
+                cache.numbering_problem = None;
             }
         }
     }
@@ -489,6 +604,7 @@ impl Signex {
             self.ui_state.annotate_order,
             &self.ui_state.annotate_session.unticked,
         )
+        .entries
     }
 }
 

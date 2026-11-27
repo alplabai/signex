@@ -288,7 +288,7 @@ impl Signex {
             }
             Tool::Text => {
                 let note_text = self
-                    .document_state
+                    .document_view
                     .panel_ctx
                     .pre_placement
                     .as_ref()

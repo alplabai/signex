@@ -19,6 +19,8 @@ pub(super) struct SheetKey {
     designator_standard: Option<DesignatorStandard>,
     /// Value fields are boxed on their drawn text (#1986).
     special_strings: Option<super::SpecialStrings>,
+    /// And on the active variant's own value (#2948).
+    variant_values: Option<signex_output::DrawnValueMap>,
     designators: Designators,
     /// Rich notes are boxed as they draw (#1114): a landed compile re-boxes.
     rich_notes: Option<u64>,
@@ -37,6 +39,7 @@ impl SheetKey {
             defaults: widths.defaults,
             designator_standard: widths.designator_standard,
             special_strings: widths.special_strings.cloned(),
+            variant_values: widths.variant_values.cloned(),
             designators: designators.clone(),
             rich_notes: widths.rich_notes.map(|r| r.revision()),
         }
@@ -56,6 +59,7 @@ impl SheetKey {
             && self.defaults == widths.defaults
             && self.designator_standard == widths.designator_standard
             && self.special_strings.as_ref() == widths.special_strings
+            && self.variant_values.as_ref() == widths.variant_values
             && self.designators == *designators
             && self.rich_notes == widths.rich_notes.map(|r| r.revision())
     }

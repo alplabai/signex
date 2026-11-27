@@ -48,7 +48,7 @@ fn a_menu_command_adds_one_gui_row_with_its_id_and_no_operands() {
     assert_eq!(row.seq, 1);
     // The panel's copy follows.
     assert_eq!(
-        app.document_state.panel_ctx.command_log.log.rows().count(),
+        app.document_view.panel_ctx.command_log.log.rows().count(),
         1
     );
 }
@@ -174,7 +174,7 @@ fn clear_empties_the_log_and_pause_stops_recording() {
     let _ = app.update(menu_row("place_wire"));
     let _ = app.update(log_message(CommandLogMsg::Cleared));
     assert!(app.ui_state.command_log.log.is_empty());
-    assert!(app.document_state.panel_ctx.command_log.log.is_empty());
+    assert!(app.document_view.panel_ctx.command_log.log.is_empty());
 
     let _ = app.update(log_message(CommandLogMsg::PauseToggled));
     let _ = app.update(menu_row("place_wire"));
@@ -211,7 +211,7 @@ fn the_failed_switch_and_the_search_filter_the_list() {
         ResultFilter::Failed,
     )));
     let ids = |app: &Signex| -> Vec<String> {
-        app.document_state
+        app.document_view
             .panel_ctx
             .command_log
             .log
@@ -296,11 +296,11 @@ fn copy_as_cli_puts_the_cli_line_on_the_clipboard() {
 #[test]
 fn the_view_row_opens_the_panel_in_the_bottom_dock() {
     let mut app = fresh_app();
-    app.document_state.dock.close_panel(PanelKind::CommandLog);
+    app.document_view.dock.close_panel(PanelKind::CommandLog);
     // The layout save task is dropped: it would write the shared config.
     let _ = app.update(Message::Menu(MenuMessage::OpenCommandLogPanel));
     assert!(matches!(
-        app.document_state.dock.locate(PanelKind::CommandLog),
+        app.document_view.dock.locate(PanelKind::CommandLog),
         Some(signex_app::dock::PanelSite::Docked(
             PanelPosition::Bottom,
             _
@@ -327,7 +327,7 @@ fn the_panel_list_shows_command_log_under_verify() {
 fn the_panel_actions_sit_in_the_dock_title_bar() {
     use signex_app::panels::title_actions;
     let mut app = fresh_app();
-    let actions = title_actions(PanelKind::CommandLog, &app.document_state.panel_ctx);
+    let actions = title_actions(PanelKind::CommandLog, &app.document_view.panel_ctx);
     let presses: Vec<Option<CommandLogMsg>> = actions
         .into_iter()
         .map(|action| match action.on_press {
@@ -346,7 +346,7 @@ fn the_panel_actions_sit_in_the_dock_title_bar() {
     );
 
     let _ = app.update(log_message(CommandLogMsg::PauseToggled));
-    let ctx = &app.document_state.panel_ctx;
+    let ctx = &app.document_view.panel_ctx;
     let first = title_actions(PanelKind::CommandLog, ctx)
         .into_iter()
         .next()

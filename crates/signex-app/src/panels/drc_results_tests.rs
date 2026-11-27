@@ -30,7 +30,7 @@ fn row(index: usize, kind: ViolationKind, rule: &str, waiver: Option<&str>) -> D
 
 fn context(rows: Vec<DrcRow>, filter: DrcFilter) -> PanelContext {
     let (app, _boot) = crate::app::Signex::new();
-    let mut ctx = app.document_state.panel_ctx.clone();
+    let mut ctx = app.document_view.panel_ctx.clone();
     ctx.pcb_drc = Some(DrcPanel {
         ran: true,
         rows,

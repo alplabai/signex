@@ -40,7 +40,7 @@ impl Signex {
             Stage::Done(_) => sizes::NOTEBOOK_PDF_DONE,
             _ => sizes::NOTEBOOK_PDF,
         };
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let (header, body, footer) = parts(dialog, self.ui_state.i18n.as_ref(), tokens);
         let card = container(column![header, body, footer].width(Length::Fixed(
             super::widgets::modal_card_width(self.ui_state.window_size, size.0),

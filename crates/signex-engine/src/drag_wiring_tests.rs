@@ -161,6 +161,104 @@ fn a_blocked_l_falls_back_to_the_other_l() {
     }
 }
 
+/// The fixture moved by (`dx`, `dy`) with `blockers`: the move must keep the
+/// nets with no warning.
+fn drag_by(
+    blockers: &[Segment],
+    is_anchored: bool,
+    wiring: DragWiringMode,
+    (dx, dy): (f64, f64),
+) -> Engine {
+    let mut sheet = test_sheet();
+    let r1 = add_resistor(&mut sheet, "R1", Point::new(50.0, 50.0));
+    add_wire(&mut sheet, (45.0, 30.0), (45.0, 50.0));
+    for (a, b) in blockers {
+        add_wire(&mut sheet, *a, *b);
+    }
+    if is_anchored {
+        add_label(&mut sheet, "SIG", (45.0, 50.0));
+    }
+    let mut engine = Engine::new(sheet).expect("engine");
+    let before = net_shape(engine.document());
+    engine
+        .execute(Command::MoveSelection {
+            items: vec![symbol_item(r1)],
+            dx,
+            dy,
+            keep_wires: true,
+            wiring,
+        })
+        .expect("move");
+    assert!(engine.take_warnings().is_empty(), "{wiring:?}");
+    assert_eq!(net_shape(engine.document()), before, "{wiring:?}: nets");
+    engine
+}
+
+/// #2516: a free tip's wire leaves its fixed end (45, 30) on a 45° leg and
+/// turns onto the pin's column, or the other way round. Pin 1 lands on
+/// (55, 54).
+#[test]
+fn a_free_tip_bends_at_45_degrees_as_the_mode_says() {
+    assert_wires(
+        &drag_by(&[], false, DragWiringMode::Angle45Start, (10.0, 4.0)),
+        &[((45.0, 30.0), (55.0, 40.0)), ((55.0, 40.0), (55.0, 54.0))],
+    );
+    assert_wires(
+        &drag_by(&[], false, DragWiringMode::Angle45End, (10.0, 4.0)),
+        &[((45.0, 30.0), (45.0, 44.0)), ((45.0, 44.0), (55.0, 54.0))],
+    );
+}
+
+/// #2516: an anchored tip's new path leaves the old tip (45, 50) the same
+/// way; the wire and the label stay.
+#[test]
+fn an_anchored_tip_gets_a_45_degree_new_path() {
+    let kept = ((45.0, 30.0), (45.0, 50.0));
+    assert_wires(
+        &drag_by(&[], true, DragWiringMode::Angle45Start, (10.0, 4.0)),
+        &[
+            kept,
+            ((45.0, 50.0), (49.0, 54.0)),
+            ((49.0, 54.0), (55.0, 54.0)),
+        ],
+    );
+    assert_wires(
+        &drag_by(&[], true, DragWiringMode::Angle45End, (10.0, 4.0)),
+        &[
+            kept,
+            ((45.0, 50.0), (51.0, 50.0)),
+            ((51.0, 50.0), (55.0, 54.0)),
+        ],
+    );
+}
+
+/// #2516: a foreign wire ending on the 45° leg of the chosen route makes the
+/// tip take the 45° leg at the other end, for a free and an anchored tip.
+#[test]
+fn a_blocked_45_degree_route_falls_back_to_the_other_end() {
+    // (50, 35) is on (45, 30)-(55, 40), the free tip's first leg.
+    let blocker = ((50.0, 35.0), (60.0, 35.0));
+    assert_wires(
+        &drag_by(&[blocker], false, DragWiringMode::Angle45Start, (10.0, 4.0)),
+        &[
+            ((45.0, 30.0), (45.0, 44.0)),
+            ((45.0, 44.0), (55.0, 54.0)),
+            blocker,
+        ],
+    );
+    // (47, 52) is on (45, 50)-(49, 54), the anchored tip's first leg.
+    let blocker = ((47.0, 52.0), (47.0, 58.0));
+    assert_wires(
+        &drag_by(&[blocker], true, DragWiringMode::Angle45Start, (10.0, 4.0)),
+        &[
+            ((45.0, 30.0), (45.0, 50.0)),
+            ((45.0, 50.0), (51.0, 50.0)),
+            ((51.0, 50.0), (55.0, 54.0)),
+            blocker,
+        ],
+    );
+}
+
 /// Straight has no other route: foreign wire ends on the leg and on the new
 /// path an anchored tip would get leave the pin as a plain move, with the
 /// guard's warning.

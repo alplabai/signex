@@ -104,7 +104,7 @@ fn fixture_with(opts: Opts) -> Fixture {
     if !opts.pending {
         app.settle_navigator();
     }
-    assert_eq!(app.document_state.tab_placements.get(&child), None);
+    assert_eq!(app.document_view.tab_placements.get(&child), None);
     Fixture {
         app,
         window,
@@ -215,7 +215,7 @@ fn a_stale_assembly_is_dropped_and_the_current_one_redraws_the_window() {
         entry_for_a: true,
         ..Opts::default()
     });
-    let hierarchies = &mut f.app.document_state.window_hierarchies;
+    let hierarchies = &mut f.app.document_view.window_hierarchies;
     hierarchies.abandon_running();
     let (generation, request) = hierarchies.begin_all().remove(0);
     let root = request.root.clone();

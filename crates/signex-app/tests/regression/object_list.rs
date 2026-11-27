@@ -47,13 +47,13 @@ fn clicking_an_object_list_row_selects_that_object_on_the_canvas() {
     let (mut app, a, b) = open_project(tmp.path());
     settle(&mut app, crate::menu_support::menu_row(COMMAND));
     assert!(
-        app.document_state
+        app.document_view
             .dock
             .locate(PanelKind::ObjectList)
             .is_some()
     );
 
-    let view = &app.document_state.panel_ctx.object_list;
+    let view = &app.document_view.panel_ctx.object_list;
     assert_eq!(view.status, ObjectListStatus::Ready);
     assert_eq!(
         view.counts.total(),
@@ -75,7 +75,7 @@ fn clicking_an_object_list_row_selects_that_object_on_the_canvas() {
         app.interaction_state.active_canvas().selected,
         vec![label.item]
     );
-    let view = &app.document_state.panel_ctx.object_list;
+    let view = &app.document_view.panel_ctx.object_list;
     assert_eq!(view.selected_count, 1, "the row mirrors the selection");
 
     // A row of another sheet opens that sheet and selects there.

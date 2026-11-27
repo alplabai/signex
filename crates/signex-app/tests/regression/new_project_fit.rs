@@ -12,7 +12,7 @@ fn new_project_sheet_fits_the_canvas_once_its_size_is_known() {
         &mut app,
         Message::File(FileMsg::NewProject(Some(tmp.path().join("Fit.snxprj")))),
     );
-    assert!(app.document_state.error_notice.is_none());
+    assert!(app.document_view.error_notice.is_none());
 
     // The canvas is laid out at a size the sheet was never loaded against.
     let viewport = iced::Rectangle::new(iced::Point::ORIGIN, iced::Size::new(1600.0, 900.0));

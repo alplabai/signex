@@ -254,6 +254,11 @@ dialog-parameter-manager-add-column = Add column
 dialog-parameter-manager-column-reference = Reference
 dialog-parameter-manager-column-value = Value
 dialog-parameter-manager-column-footprint = Footprint
+# Shown with All sheets: the sheet file a part is placed on.
+dialog-parameter-manager-column-sheet = Sheet
+# The header switch: list the active sheet, or every open sheet of its project.
+dialog-parameter-manager-scope-active = Active sheet
+dialog-parameter-manager-scope-all = All sheets
 # The Parameter Manager footer and its no-match card.
 dialog-parameter-manager-clear-filter = Clear filter
 # Undoes every cell edit since the dialog opened; $count is how many.
@@ -432,7 +437,10 @@ dialog-dpc-duplicate-name = Two classes have the same name.
 # Callouts of the preview. $value is a length in mm, or —.
 dialog-dpc-width-label = Width { $value } mm
 dialog-dpc-gap-label = Gap { $value } mm
-dialog-dpc-zdiff-label = Zdiff { $ohm } Ω ± { $pct } %
+# The impedance and its tolerance, each a value of its own on the preview. $ohm and $pct are numbers, or —.
+dialog-dpc-zdiff-value = Zdiff { $ohm } Ω
+dialog-dpc-tolerance-value = ± { $pct } %
+dialog-dpc-preview-hint = Top layer, to scale across the pair. Click a value to type it; drag the N trace handle to change the gap.
 dialog-dpc-p-net = P net
 dialog-dpc-n-net = N net
 dialog-dpc-no-project = Differential Pair Classes: open a project first.
@@ -498,6 +506,10 @@ dialog-smart-paste-paste = Paste
 dialog-smart-paste-paste-copies = Paste { $count } copies
 dialog-smart-paste-nothing-copied = Smart Paste: nothing to paste yet; copy a selection first.
 dialog-smart-paste-sheet-changed = Smart Paste closed: the active sheet changed.
+# A Smart Paste run from its operands (#2665) whose choices do not read.
+dialog-smart-paste-choices-invalid = Smart Paste stopped: the offset, copies, pattern or Start n at cannot be pasted.
+# $error is why the engine refused the copies.
+dialog-smart-paste-not-placed = Smart Paste: the copies could not be placed ({ $error }); nothing was pasted.
 
 ## ERC dialog (#2413): where the rules come from, and the Profile menu
 # Pill under the title: the dialog edits the rules stored in the project.
@@ -526,6 +538,8 @@ dialog-netlist-omitted-refused = not read (refused)
 dialog-netlist-omitted-sheet-cycle = sheet cycle · re-entered from { $parent }
 # $kept is the whole path of the file this one cannot be told from; only it is in the netlist.
 dialog-netlist-omitted-key-collision = same path as { $kept } on this file system
+# An annotate run from operands that changed nothing; $why is the reason in words.
+dialog-annotate-command-refused = Annotate did not run: { $why }
 
 ## Generate design notebook (#2945, mockup row 201).
 

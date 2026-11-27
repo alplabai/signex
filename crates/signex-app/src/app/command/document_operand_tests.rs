@@ -413,6 +413,7 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
         "document_info",
         "read_document",
         "query_pins",
+        "query_net_ties",
         "apply_edits",
         "revert",
     ] {
@@ -462,6 +463,7 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
         "sync_sheet_entries",
         "set_object_position",
         "set_object_rotation",
+        "set_object_text",
         "set_sheet_symbol_size",
         "set_symbol_parameter",
         "set_sheet_variable",
@@ -471,6 +473,7 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
         "set_text_note_frame",
         "set_text_note_size",
         "apply_rich_note_edit",
+        "set_net_tie",
         "repair_pin_junctions",
         "place_design_block",
         "import_graphics",
@@ -479,6 +482,12 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
         "set_image",
         "relink_image",
         "show_image_in_folder",
+        // #2665: Smart Paste's array, on the sheet in view or the named one.
+        "smart_paste",
+        // #1283: a snippet saved from, or placed on, the sheet in view or the
+        // named one.
+        "save_snippet",
+        "place_snippet",
     ];
     for name in all_command_ids() {
         let meta = metadata_for_str(name).expect("row");
@@ -505,6 +514,9 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     "document_info",
                     "read_document",
                     "query_pins",
+                    "query_net_ties",
+                    // #1988: the BOM lines of the named sheet's project.
+                    "bom_lines",
                     "check_erc",
                     "check_drc",
                     "check_requirements",
@@ -532,6 +544,8 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     // The board queries (#2403).
                     "measure_board",
                     "query_board_nets",
+                    // #2939: each part's height on the named board.
+                    "query_part_heights",
                     "find_similar_items",
                     // #2408, #2409: the board Tools edits name their board.
                     "stitch_vias",
@@ -550,27 +564,52 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     "rules_preset_apply",
                     "add_board_graphic",
                     "set_board_graphic",
+                    // #2470: the area tools on the named board.
+                    "place_board_fill",
+                    "place_board_region",
+                    "place_board_polygon_pour",
+                    "place_board_keepout",
+                    "place_board_pour_cutout",
                     "set_footprint_text",
                     "panelize_board",
                     "remove_board_panel",
                     "set_board_panel",
                     "board_panel",
+                    // #2942: the layout plan of the board they name.
+                    "layout_plan_get",
+                    "layout_plan_set",
+                    "layout_plan_status",
                     // #2410: they act on the board they name.
                     "swap_pins",
                     "swap_gates",
+                    // #1261: they act on the sheet they name.
+                    "swap_schematic_pins",
+                    "swap_schematic_gates",
                     "save_board_reuse_block",
                     "place_board_reuse_block",
                     // Mockup row 198: the review records of the named
                     // project's notebook.
                     "list_annotations",
                     "project_settings",
+                    // #2952: the pairs of the named project.
+                    "list_diff_pairs",
                     "project_move_sheet",
                     "project_add_variant",
                     "project_rename_variant",
                     "project_remove_variant",
                     "project_set_active_variant",
+                    // #2949: the Variant Manager's top bar actions.
+                    "project_set_default_variant",
+                    "compare_variants",
+                    "variant_bom",
+                    // #3038: the Variant Manager's part edits and Duplicate.
+                    "project_set_variant_fit",
+                    "project_set_variant_alternate",
+                    "project_set_variant_override",
+                    "project_duplicate_variant",
                     "project_move_library",
                     "project_set_annotate_undo",
+                    "project_set_annotate_numbering",
                     "project_set_version_control",
                     "project_add_requirement",
                     "project_set_requirement",
@@ -581,6 +620,11 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     "project_add_font",
                     "project_remove_font",
                     "project_set_font_license",
+                    // #1313: the project's power tree.
+                    "query_power_tree",
+                    // #2943: the project's rails and their budget.
+                    "project_set_rail",
+                    "query_rail_budget",
                     // #2394: the board view's layer commands.
                     "hide_layer",
                     "highlight_layer",
@@ -603,6 +647,9 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     "filter_drc_results",
                     "waive_drc_violation",
                     "unwaive_drc_violation",
+                    // #2940: the DRC fixes.
+                    "fix_drc_violation",
+                    "fix_drc",
                     "add_net_class",
                     "rename_net_class",
                     "delete_net_class",
@@ -620,6 +667,24 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     "board_assembly_drawing",
                     // #2488: the board STEP model.
                     "export_board_step",
+                    // #2796: a block diagram as SVG or PDF.
+                    "export_block_diagram",
+                    // #2796: the block diagram edits and query.
+                    "block_add",
+                    "block_set",
+                    "block_remove",
+                    "block_port_add",
+                    "block_port_remove",
+                    "block_link",
+                    "block_link_set",
+                    "block_unlink",
+                    "block_group",
+                    "block_group_set",
+                    "block_ungroup",
+                    "query_block_diagram",
+                    // #2968: a block diagram from the project's hierarchy.
+                    "generate_block_diagram",
+                    "regenerate_block_diagram",
                     // Mockup rows 196 and 197: the named project's notebook.
                     "notebook_references",
                     "notebook_reference_card",
@@ -632,6 +697,8 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     "export_schematic_pdf",
                     // #2817: the pins of a named symbol file.
                     "edit_symbol_pins",
+                    // #2470: the fabrication outputs into a folder.
+                    "fabrication_outputs",
                     // #2410: DXF import onto a board.
                     "import_dxf",
                     "import_dxf_outline",
@@ -642,6 +709,13 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     // #2389: length tuning on the named board.
                     "tune_net_length",
                     "tune_diff_pair",
+                    // #2470: the routing tools and the via on the named board.
+                    "place_board_via",
+                    "place_board_track",
+                    "place_board_route",
+                    "place_board_diff_pair",
+                    "place_board_quick_route",
+                    "place_board_multi_route",
                     // #2326 slice 6.P2b: the drawing order and Delete by uuid.
                     "bring_drawings_forward",
                     "bring_drawings_to_front",
@@ -666,6 +740,41 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     "symbol_draw_bezier",
                     "symbol_draw_round_rectangle",
                     "symbol_draw_pie",
+                    // #2470: Update PCB for the named document's project
+                    // (left out: the active project).
+                    "update_pcb_from_schematic",
+                    // #2462, #2460: the board against the schematic, its
+                    // apply form and the board status counters.
+                    "check_board_against_schematic",
+                    "apply_board_schematic_differences",
+                    "board_status",
+                    // #2470: a new board and numbering on the named
+                    // project, sheet or board (optional where a run without
+                    // operands keeps working).
+                    "new_pcb_document",
+                    "annotate_schematic_quietly",
+                    "force_annotate_all_schematics",
+                    "reannotate_board",
+                    "back_annotate_schematics",
+                    // #2936, #2937: footprints placed, assigned or swapped.
+                    "set_footprint_position",
+                    "set_footprint_rotation",
+                    "set_footprint_side",
+                    "assign_footprint",
+                    "change_footprint",
+                    "query_footprint_assignments",
+                    // #2457, #2941: rooms on the named board.
+                    "place_board_room",
+                    "create_rooms_from_sheets",
+                    "arrange_in_room",
+                    "auto_place",
+                    // #2938, #1297: a BOM line's alternates, the priced BOM
+                    // and the part swap.
+                    "bom_add_alternate",
+                    "bom_remove_alternate",
+                    "bom_set_alternate_order",
+                    "query_bom",
+                    "change_component",
                 ]
                 .contains(&name),
                 "{name} declares a document operand"

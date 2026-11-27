@@ -187,7 +187,7 @@ impl Signex {
         tool.paused_with = None;
         tool.dimension.end_dimension();
         self.drop_dimension_form_draft();
-        let owner_ctx = owner.and_then(|id| self.document_state.window_panel_ctx.get_mut(&id));
+        let owner_ctx = owner.and_then(|id| self.document_view.window_panel_ctx.get_mut(&id));
         if let Some(ctx) = owner_ctx {
             ctx.annotation.draft.take_if(|(id, _, _)| id.is_nil());
         }
@@ -198,7 +198,7 @@ impl Signex {
     pub(crate) fn sync_annotation_draft(&mut self) {
         use crate::canvas::{AnnotationDraft, AnnotationDraftKind, HintInk};
         use signex_i18n::{ids, t};
-        self.document_state.panel_ctx.annotation.dimension_tool = self.dimension_tool_form();
+        self.document_view.panel_ctx.annotation.dimension_tool = self.dimension_tool_form();
         // Points paused in another window are not this canvas's to preview.
         if self.interaction_state.is_sheet_pause_elsewhere()
             || self.interaction_state.is_dimension_held_elsewhere()

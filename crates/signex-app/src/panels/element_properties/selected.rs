@@ -467,7 +467,7 @@ mod tests {
     ) -> Vec<String> {
         use super::view_selected_element_properties;
         let (app, _task) = crate::app::Signex::new();
-        let mut ctx = app.document_state.panel_ctx.clone();
+        let mut ctx = app.document_view.panel_ctx.clone();
         ctx.selected_kind = Some(kind);
         ctx.selected_uuid = Some(uuid::Uuid::now_v7());
         ctx.selection_info = info;
@@ -493,7 +493,7 @@ mod tests {
     fn label_pixels(row: &str) -> (Vec<u8>, (usize, usize)) {
         use super::view_selected_element_properties;
         let (app, _task) = crate::app::Signex::new();
-        let mut ctx = app.document_state.panel_ctx.clone();
+        let mut ctx = app.document_view.panel_ctx.clone();
         ctx.selected_kind = Some(signex_types::schematic::SelectedKind::Label);
         ctx.selected_uuid = Some(uuid::Uuid::nil());
         ctx.selection_info = vec![
@@ -652,7 +652,7 @@ mod tests {
     fn a_selected_bus_shows_the_style_section() {
         use signex_types::schematic::{SelectedKind, WireWidthPreset};
         let (app, _task) = crate::app::Signex::new();
-        let mut ctx = app.document_state.panel_ctx.clone();
+        let mut ctx = app.document_view.panel_ctx.clone();
         ctx.selected_kind = Some(SelectedKind::Bus);
         ctx.selected_uuid = Some(uuid::Uuid::now_v7());
         ctx.selected_wire_style = Some((WireWidthPreset::Large, None));

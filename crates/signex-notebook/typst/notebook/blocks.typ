@@ -43,16 +43,21 @@
 #let _muted = luma(40%)
 
 // The verdict of a value against (min: .., max: ..) limits, the rule of
-// signex_notebook::verdict_of: "fail" outside, "warn" inside but under
-// 1 % of a limit from it, else "pass".
+// signex_notebook::verdict_of: "fail" outside, "warn" inside but closer to
+// a limit than 1 % of the reference value (the band's middle, else its one
+// limit), else "pass".
 #let verdict(value, limits) = {
   let lo = limits.at("min", default: none)
   let hi = limits.at("max", default: none)
   if (lo != none and value < lo) or (hi != none and value > hi) {
     return "fail"
   }
-  let near(limit) = limit != none and calc.abs(value - limit) < calc.abs(limit) * 0.01
-  if near(lo) or near(hi) { "warn" } else { "pass" }
+  let ref = if lo != none and hi != none { (lo + hi) / 2 } else if lo != none { lo } else if hi != none { hi } else { return "pass" }
+  let margins = ()
+  if lo != none { margins.push(value - lo) }
+  if hi != none { margins.push(hi - value) }
+  let scale = calc.abs(ref)
+  if scale > 0 and calc.min(..margins) < scale * 0.01 { "warn" } else { "pass" }
 }
 
 // The limits of a (nominal, tolerance) pair: 2% of the nominal, or an

@@ -27,7 +27,7 @@ mod dimension;
 mod directives;
 mod drawings;
 pub(crate) use drawings::annotation_aabb;
-mod drawn_value;
+pub(crate) mod drawn_value;
 mod harness;
 pub mod hit_index;
 pub mod hit_test;
@@ -327,6 +327,10 @@ pub struct SceneOverrides<'a> {
     pub designator_standard: Option<signex_types::designator::DesignatorStandard>,
     /// The compiled rich text notes (#1114); `None` draws them as text.
     pub rich_notes: Option<&'a rich_note::RichNoteRenders>,
+    /// Symbols drawn greyed and crossed out, not fitted (#1294).
+    pub not_fitted: Option<&'a HashSet<uuid::Uuid>>,
+    /// The active variant's own values (#2948), by symbol uuid.
+    pub variant_values: Option<&'a signex_output::DrawnValueMap>,
 }
 
 pub fn render_schematic(
@@ -597,7 +601,10 @@ fn collect_item_bounds_with(
             // Boxed on the drawn text too (#1986): `20kΩ`, not `= 2 * R1.Value`.
             let special = widths.special_strings;
             let standard = widths.designator_standard;
-            let drawn = drawn_value::drawn_value(&snapshot.symbols, symbol, special, standard);
+            // And on the active variant's own value (#2948).
+            let variant = widths.variant_values;
+            let drawn =
+                drawn_value::drawn_value(&snapshot.symbols, symbol, special, standard, variant);
             out.push(ItemBound {
                 item: SelectedItem::new(symbol.uuid, SelectedKind::SymbolValField),
                 bbox: text_prop_aabb_with(
@@ -1126,6 +1133,8 @@ mod font_geometry_tests;
 #[cfg(test)]
 mod multiline_note_tests;
 #[cfg(test)]
+mod not_fitted_tests;
+#[cfg(test)]
 mod reference_sign_tests;
 #[cfg(test)]
 mod sample_layout_tests;
@@ -1137,5 +1146,7 @@ mod selection_bounds_tests;
 mod tests;
 #[cfg(test)]
 mod text_extents_tests;
+#[cfg(test)]
+mod variant_value_tests;
 #[cfg(test)]
 mod wire_style_render_tests;

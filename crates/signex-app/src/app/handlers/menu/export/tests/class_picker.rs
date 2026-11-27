@@ -66,7 +66,7 @@ fn the_picker_names_the_net_the_netlist_gives_a_child_sheets_local_label() {
     let (app, ..) = child_label_selected("/w/pick-net");
 
     let pick = app
-        .document_state
+        .document_view
         .panel_ctx
         .net_classes
         .label

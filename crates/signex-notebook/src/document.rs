@@ -59,6 +59,9 @@ pub struct NotebookDocument {
     pub saved_at: Option<SystemTime>,
     /// The file was read with `\r\n` line ends, and is written with them.
     pub crlf: bool,
+    /// The file's text as last read or written: a save finds the file still
+    /// so, or something else wrote it meanwhile.
+    pub disk_text: Option<String>,
 }
 
 /// `text` with `\n` line ends.
@@ -81,6 +84,7 @@ impl NotebookDocument {
             save_error: None,
             saved_at: None,
             crlf: false,
+            disk_text: None,
         }
     }
 
@@ -132,6 +136,7 @@ impl NotebookDocument {
     /// The file `text` was read: its body is the text to edit.
     pub fn open_text(&mut self, text: &str) -> Result<(), NotebookFileError> {
         self.crlf = text.contains("\r\n");
+        self.disk_text = Some(text.to_string());
         let text = lf(text);
         let file = NotebookFile::parse(&text)?;
         self.header_lines = header_line_count(&text);
@@ -189,6 +194,7 @@ impl NotebookDocument {
     pub fn mark_written(&mut self, written: &str, at: SystemTime) -> Result<(), NotebookFileError> {
         self.load = NotebookLoad::Open;
         self.saved_at = Some(at);
+        self.disk_text = Some(written.to_string());
         let written = lf(written);
         let file = NotebookFile::parse(&written)?;
         self.saved_body = Some(file.body.clone());

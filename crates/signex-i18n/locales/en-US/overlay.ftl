@@ -13,6 +13,13 @@ palette-key-esc = Esc
 palette-key-enter = Enter
 # Row that opens a panel. { $panel } is the panel's name.
 palette-open-panel = Open Panel: { $panel }
+# An installed extension's command in the palette and the keyboard
+# shortcuts: { $extension } is the extension's name, { $command } the
+# command's own label.
+extension-command-label = { $extension }: { $command }
+# A shortcut kept for an extension command no installed extension adds:
+# { $command } is the command id. The binding stays and does nothing.
+extension-command-unavailable = { $command } (unavailable: extension not installed)
 
 ## Command palette. The group headings are shown in capitals, so they are
 ## written in capitals here.

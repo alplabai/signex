@@ -541,9 +541,64 @@ impl SchematicCanvas<'_> {
                 },
             })
             .collect();
+        use crate::schematic_runtime::overlay::{BadgedSheetEntry, MismatchedEntry};
+        let mismatched: Vec<MismatchedEntry> = self
+            .erc_markers
+            .iter()
+            .zip(&erc_overlay)
+            .filter_map(|(marker, drawn)| {
+                MismatchedEntry::on(snapshot, marker.harness_entry?, drawn.severity)
+            })
+            .collect();
+        crate::schematic_runtime::overlay::draw_mismatched_entries(
+            frame,
+            &mismatched,
+            transform,
+            &self.prefs.canvas_colors,
+            &self.prefs.graphite,
+        );
+        let mut badges: Vec<BadgedSheetEntry> = Vec::new();
+        for (marker, drawn) in self.erc_markers.iter().zip(&erc_overlay) {
+            let Some(pin) = marker.sheet_entry else {
+                continue;
+            };
+            // One badge per entry, in the ink of its first finding.
+            if let Some(badge) = BadgedSheetEntry::on(snapshot, pin, drawn.severity)
+                && !badges.iter().any(|b| b.at == badge.at)
+            {
+                badges.push(badge);
+            }
+        }
+        crate::schematic_runtime::overlay::draw_sheet_entry_badges(
+            frame,
+            &badges,
+            transform,
+            &self.prefs.canvas_colors,
+            &self.prefs.graphite,
+        );
         crate::schematic_runtime::overlay::draw_erc_markers(
             frame,
             &erc_overlay,
+            transform,
+            &self.prefs.canvas_colors,
+            &self.prefs.graphite,
+        );
+        let captions: Vec<crate::schematic_runtime::overlay::ErcCaption<'_>> = self
+            .erc_markers
+            .iter()
+            .zip(&erc_overlay)
+            .filter(|(_, drawn)| !drawn.net_level)
+            .filter_map(|(marker, drawn)| {
+                let text = marker.caption.as_deref()?;
+                Some(crate::schematic_runtime::overlay::ErcCaption {
+                    marker: *drawn,
+                    text,
+                })
+            })
+            .collect();
+        crate::schematic_runtime::overlay::draw_erc_captions(
+            frame,
+            &captions,
             transform,
             &self.prefs.canvas_colors,
             &self.prefs.graphite,

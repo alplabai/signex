@@ -133,6 +133,20 @@
         </dict>
         <dict>
             <key>CFBundleTypeName</key>
+            <string>Signex Block Diagram</string>
+            <key>CFBundleTypeExtensions</key>
+            <array><string>snxblk</string></array>
+            <key>CFBundleTypeIconFile</key>
+            <string>snxblk.icns</string>
+            <key>CFBundleTypeRole</key>
+            <string>Editor</string>
+            <key>LSHandlerRank</key>
+            <string>Owner</string>
+            <key>LSItemContentTypes</key>
+            <array><string>com.alpcaner.signex.snxblk</string></array>
+        </dict>
+        <dict>
+            <key>CFBundleTypeName</key>
             <string>Signex Package</string>
             <key>CFBundleTypeExtensions</key>
             <array><string>snxpkg</string></array>
@@ -296,6 +310,21 @@
             <dict>
                 <key>public.filename-extension</key>
                 <array><string>snxsym</string></array>
+            </dict>
+        </dict>
+        <dict>
+            <key>UTTypeIdentifier</key>
+            <string>com.alpcaner.signex.snxblk</string>
+            <key>UTTypeDescription</key>
+            <string>Signex Block Diagram</string>
+            <key>UTTypeIconFile</key>
+            <string>snxblk.icns</string>
+            <key>UTTypeConformsTo</key>
+            <array><string>public.data</string><string>public.content</string></array>
+            <key>UTTypeTagSpecification</key>
+            <dict>
+                <key>public.filename-extension</key>
+                <array><string>snxblk</string></array>
             </dict>
         </dict>
         <dict>

@@ -4,6 +4,7 @@
 use iced::widget::{Column, Space, column, container, row, scrollable, svg};
 use iced::{Alignment, Background, Border, Element, Length, Theme, Widget as _};
 use signex_i18n::{UserText, ids, t};
+use signex_widgets::command_press::CommandPress;
 use signex_widgets::text;
 
 use super::{
@@ -121,6 +122,9 @@ fn sheet_row<'a>(
         name = name.font(mono);
     }
     let mut label = row![name].spacing(SP.s).align_y(Alignment::Center);
+    if let Some(variant) = &r.not_fitted_in {
+        label = label.push(not_fitted_tag(ctx, variant));
+    }
     if let Some(caption) = &r.caption {
         label = label.push(
             container(
@@ -215,6 +219,12 @@ fn sheet_row<'a>(
                 ..iced::widget::button::Style::default()
             }
         });
+    // Ctrl+click (Cmd on macOS) opens the source sheet on Editor (#2658).
+    let button: Element<'a, PanelMsg> = CommandPress::new(
+        button.boxed(),
+        msg(CompiledDesignMsg::RowSourceClicked(r.index)),
+    )
+    .boxed();
     let body: Element<'a, PanelMsg> = match tip {
         Some(tip) => signex_widgets::tooltip(
             button,
@@ -224,7 +234,7 @@ fn sheet_row<'a>(
             signex_widgets::tooltip::Position::Bottom,
         )
         .boxed(),
-        None => button.boxed(),
+        None => Element::from(button),
     };
     if !selected {
         return body;
@@ -319,6 +329,27 @@ fn bar<'a>(accent: iced::Color) -> Element<'a, PanelMsg> {
             ..container::Style::default()
         })
         .boxed()
+}
+
+/// The neutral grey "Not fitted (Lite)" pill of a channel the active
+/// variant leaves out (#2662, mockup row 154): grey, so it never reads as
+/// the amber out-of-date state.
+fn not_fitted_tag<'a>(ctx: &PanelContext, variant: &str) -> Element<'a, PanelMsg> {
+    container(
+        text(t!(
+            ctx.i18n,
+            ids::PANELS_COMPILED_DESIGN_NOT_FITTED,
+            "variant" => variant
+        ))
+        .size(TS.caption)
+        .wrapping(iced::widget::text::Wrapping::None),
+    )
+    .padding([0.0, SP.s])
+    .style(crate::styles::pill(
+        &ctx.tokens,
+        crate::styles::PillTone::Neutral,
+    ))
+    .boxed()
 }
 
 /// The amber dot of a sheet changed since the compile.

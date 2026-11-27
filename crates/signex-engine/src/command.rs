@@ -60,6 +60,8 @@ pub enum SymbolFlag {
     InBom,
     /// Carried to the board by a PCB update.
     OnBoard,
+    /// A net tie, joining two named nets on purpose (#1277).
+    NetTie,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

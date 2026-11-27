@@ -7,7 +7,8 @@ use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use signex_net::{CompiledDesign, SheetKey};
+use chrono::{DateTime, Utc};
+use signex_net::{CompiledDesign, SheetKey, SheetMiniature};
 
 use super::project_id::ProjectId;
 
@@ -17,8 +18,12 @@ pub struct CompiledResult {
     pub design: Arc<CompiledDesign>,
     /// The file each sheet key was read from.
     pub paths: HashMap<SheetKey, PathBuf>,
-    /// When the compile finished, to the minute (`12:41`).
-    pub compiled_at: String,
+    /// When the compile finished; the view model words it in the user's
+    /// locale (#2733).
+    pub compiled_at: DateTime<Utc>,
+    /// The card miniature of each channel row, by row index of `design`
+    /// (#2658).
+    pub miniatures: HashMap<usize, Arc<SheetMiniature>>,
     /// Sheets edited since the compile.
     pub stale: BTreeSet<PathBuf>,
     /// A sheet could not be read, or a sheet symbol places a missing file, so

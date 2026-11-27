@@ -70,7 +70,7 @@ fn a_drc_waiver_keeps_its_reason_and_author_through_save_and_reload() {
     send(&mut app, Message::File(FileMsg::Opened(Some(path.clone()))));
     send(&mut app, Message::Pcb(PcbMsg::DrcRequested));
     let key = app
-        .document_state
+        .document_view
         .panel_ctx
         .pcb_drc
         .as_ref()
@@ -116,7 +116,7 @@ fn a_drc_waiver_keeps_its_reason_and_author_through_save_and_reload() {
     );
     send(&mut again, Message::Pcb(PcbMsg::DrcRequested));
     let row = again
-        .document_state
+        .document_view
         .panel_ctx
         .pcb_drc
         .as_ref()

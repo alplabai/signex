@@ -141,7 +141,7 @@ fn copy_attributes_on_a_label_arms_the_label_tool_with_its_text() {
     );
 
     assert_eq!(app.interaction_state.current_tool, Tool::Label);
-    let form = app.document_state.panel_ctx.pre_placement.as_ref().unwrap();
+    let form = app.document_view.panel_ctx.pre_placement.as_ref().unwrap();
     assert_eq!(form.label_text, "D0");
     let ghost = app.interaction_state.active_canvas().ghost_label.as_ref();
     assert_eq!(

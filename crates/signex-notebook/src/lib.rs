@@ -124,7 +124,7 @@ pub use compile::{
 pub use date::IsoDate;
 pub use design::{DesignIndex, DesignNet, DesignPart, DesignPin, PinName, natural_order};
 pub use design_picker::{PICKER_LIMIT, PickerEntry, picker_entries};
-pub use design_read::{PlacedSheet, design_index};
+pub use design_read::{PlacedSheet, design_index, placed_values};
 pub use document::{NotebookDocument, NotebookLoad};
 pub use file::{HEADER_FENCE, NotebookFile, NotebookFileError};
 pub use filter::{DateWindow, Filter, newest_first};

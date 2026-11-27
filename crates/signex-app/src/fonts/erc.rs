@@ -3,8 +3,8 @@
 //! The machine's ERC rules are the `User Default` rule profile now (#1608), not
 //! `prefs.json` keys. The two readers below stay only for the one-time
 //! migration of an old `erc_severity` / `pin_matrix` into that profile; nothing
-//! writes those keys any more. `prefs.json` keeps one ERC setting: which
-//! profile new projects start from.
+//! writes those keys any more. `prefs.json` keeps two ERC settings: which
+//! profile new projects start from, and whether live ERC runs (#1288).
 
 use super::*;
 
@@ -133,9 +133,59 @@ pub fn write_erc_rules_in_profile_marker_at(path: &Path, folded: bool) -> Result
     })
 }
 
+/// The `prefs.json` key of live ERC (#1288).
+pub const LIVE_ERC_KEY: &str = "live_erc";
+
+/// Read whether live ERC runs. On when the key is missing or not a boolean
+/// (Caner 2026-11-25: on by default).
+pub fn read_live_erc_pref_from(json: Option<&serde_json::Value>) -> bool {
+    json.and_then(|json| json.get(LIVE_ERC_KEY)?.as_bool())
+        .unwrap_or(true)
+}
+
+pub fn write_live_erc_pref(enabled: bool) {
+    write_live_erc_pref_at(&prefs_path(), enabled)
+}
+
+pub fn write_live_erc_pref_at(path: &Path, enabled: bool) {
+    update_prefs_json(path, LIVE_ERC_KEY, |prefs| {
+        prefs.insert(LIVE_ERC_KEY.to_string(), serde_json::Value::Bool(enabled));
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn live_erc_is_on_unless_saved_off() {
+        assert!(read_live_erc_pref_from(None));
+        for (raw, on) in [
+            (r#"{}"#, true),
+            (r#"{"live_erc": "no"}"#, true),
+            (r#"{"live_erc": false}"#, false),
+            (r#"{"live_erc": true}"#, true),
+        ] {
+            let json: serde_json::Value = serde_json::from_str(raw).unwrap();
+            assert_eq!(read_live_erc_pref_from(Some(&json)), on, "{raw}");
+        }
+    }
+
+    #[test]
+    fn the_live_erc_choice_round_trips_and_keeps_other_settings() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("prefs.json");
+        std::fs::write(&path, r#"{"theme": "nord"}"#).unwrap();
+        let read = |path: &Path| {
+            let json: serde_json::Value =
+                serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+            (read_live_erc_pref_from(Some(&json)), json["theme"].clone())
+        };
+        write_live_erc_pref_at(&path, false);
+        assert_eq!(read(&path), (false, serde_json::json!("nord")));
+        write_live_erc_pref_at(&path, true);
+        assert_eq!(read(&path), (true, serde_json::json!("nord")));
+    }
 
     fn read_back(path: &Path) -> Option<String> {
         let json: serde_json::Value = serde_json::from_slice(&std::fs::read(path).ok()?).ok()?;

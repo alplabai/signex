@@ -14,7 +14,7 @@ use crate::status_bar::Activity;
 /// and is drawn as an error; otherwise "Part 1 of 2 · 8 pins" and the
 /// selection. The bar names state only, no key hints (#2262).
 pub(crate) fn segment(editor: &SymbolDocument, i18n: &I18n) -> Activity {
-    if let Some(message) = &editor.status_message {
+    if let Some(message) = &editor.gui.status_message {
         return Activity {
             text: message.clone(),
             is_error: true,
@@ -35,11 +35,11 @@ fn summary(editor: &SymbolDocument, i18n: &I18n) -> String {
     let part = t!(
         i18n,
         ids::EDITORS_SYMBOL_STATUS_PART_PINS,
-        "part" => u32::from(editor.active_part),
+        "part" => u32::from(editor.draft.active_part),
         "parts" => u32::from(sym_state::max_part_number(symbol)),
         "pins" => pins
     );
-    match &editor.selected {
+    match &editor.gui.selected {
         Some(selection) => format!("{part} · {}", selection_text(editor, selection, i18n)),
         None => part.into_string(),
     }
@@ -113,7 +113,7 @@ mod tests {
     #[test]
     fn a_selected_pin_is_named_by_number_and_name() {
         let mut editor = editor_with_pins(&[("1", "VIN", 1), ("8", "VOUT", 1)]);
-        editor.selected = Some(SymbolSelection::Pin(1));
+        editor.gui.selected = Some(SymbolSelection::Pin(1));
         let i18n = i18n();
         let shown = segment(&editor, &i18n).text;
         assert!(shown.contains("8") && shown.contains("VOUT"), "{shown}");
@@ -123,7 +123,7 @@ mod tests {
     #[test]
     fn an_editor_error_replaces_the_segment() {
         let mut editor = editor_with_pins(&[("1", "VIN", 1)]);
-        editor.status_message = Some("Arc sweep rejected".into());
+        editor.gui.status_message = Some("Arc sweep rejected".into());
         let shown = segment(&editor, &i18n());
         assert_eq!(shown.text, "Arc sweep rejected");
         assert!(shown.is_error, "the error is drawn as an error");

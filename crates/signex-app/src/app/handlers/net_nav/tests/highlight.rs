@@ -18,7 +18,7 @@ fn the_net_stays_bright_on_every_sheet_it_reaches_and_the_rest_dims() {
     let mut p = highlighted();
     assert_eq!(
         p.app
-            .document_state
+            .document_view
             .net_nav
             .highlight
             .as_ref()
@@ -96,7 +96,7 @@ fn previous_starts_from_the_last_member() {
 fn clearing_removes_the_highlight_from_the_model_and_every_canvas() {
     let mut p = highlighted();
     p.send(NetNavMsg::HighlightClearRequested);
-    assert!(p.app.document_state.net_nav.highlight.is_none());
+    assert!(p.app.document_view.net_nav.highlight.is_none());
     assert!(p.bright().is_none());
     p.focus(&p.mid.clone());
     assert!(p.bright().is_none(), "still clear on another tab");
@@ -116,14 +116,14 @@ fn a_cleared_highlight_after_an_edit_that_removes_the_net_says_so() {
     let mut p = highlighted();
     // The anchor and the name are gone from a rebuilt index.
     p.app
-        .document_state
+        .document_view
         .net_nav
         .highlight
         .as_mut()
         .expect("highlight")
         .name = "GONE".to_string();
     p.app
-        .document_state
+        .document_view
         .net_nav
         .highlight
         .as_mut()
@@ -134,6 +134,6 @@ fn a_cleared_highlight_after_an_edit_that_removes_the_net_says_so() {
         signex_types::schematic::InstancePath::root(),
     );
     p.send_settled(NetNavMsg::HighlightStepRequested { forward: true });
-    assert!(p.app.document_state.net_nav.highlight.is_none());
+    assert!(p.app.document_view.net_nav.highlight.is_none());
     assert!(p.bright().is_none());
 }

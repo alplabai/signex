@@ -8,6 +8,8 @@ mod board_size;
 mod board_size_tests;
 mod card;
 mod findings;
+#[cfg(test)]
+mod part_lifecycle_tests;
 mod summary;
 
 use iced::Element;
@@ -128,6 +130,11 @@ pub(in crate::app::project_tab) fn view<'a>(
             tab,
             report,
             measured: last.and_then(|run| run.board_mm),
+            checked: last
+                .filter(|run| run.report.is_ok())
+                .map(|run| run.checked.as_slice()),
+            variants: &project.data.variant_definitions,
+            active_variant: project.data.active_variant_name(),
             i18n,
             tokens,
         };
@@ -163,6 +170,21 @@ fn run_button<'a>(
         ButtonKind::PrimaryLarge,
         tokens,
     )
+}
+
+/// Whether the entry with `id` and stored value `raw` differs from the one
+/// a run `checked` (matched by id, as the run's verdicts are); an entry the
+/// run did not see counts as edited.
+pub(in crate::app::project_tab::requirements) fn edited_since_run(
+    checked: &[Value],
+    id: Option<&str>,
+    raw: &Value,
+) -> bool {
+    let id = id.map(str::trim);
+    checked
+        .iter()
+        .find(|seen| seen.get("id").and_then(Value::as_str).map(str::trim) == id)
+        .is_none_or(|seen| seen != raw)
 }
 
 /// The stored value of `field` as the box shows it.

@@ -12,7 +12,7 @@ const WINDOW: iced::Size = iced::Size::new(360.0, 6000.0);
 /// A schematic panel context with the Tab form of `kind` open.
 fn form(kind: PrePlacementKind, tool: &str) -> PanelContext {
     let (app, _boot) = crate::app::Signex::new();
-    let mut ctx = app.document_state.panel_ctx.clone();
+    let mut ctx = app.document_view.panel_ctx.clone();
     ctx.has_schematic = true;
     ctx.pre_placement = Some(PrePlacementData::new(
         tool.to_owned(),

@@ -117,38 +117,47 @@ impl Signex {
             });
             return;
         }
-        let commands = match state.plan.commands(engine.board()) {
-            Ok(commands) => commands,
-            Err(error) => {
-                self.ui_state.board_reannotate = Some(BoardReannotateState {
-                    problem: Some(ReannotateProblem::Refused(error.to_string())),
-                    ..state
-                });
-                return;
-            }
-        };
+        let ran =
+            self.run_reannotate_step(&state.board, &state.board_name, &state.plan, state.revision);
+        if let Err(why) = ran {
+            self.ui_state.board_reannotate = Some(BoardReannotateState {
+                problem: Some(ReannotateProblem::Refused(why)),
+                ..state
+            });
+        }
+    }
+
+    /// Run `plan`'s renames on `board` as one labelled step at `revision`:
+    /// the dialog's Execute and the operand form (#2470) share it.
+    pub(super) fn run_reannotate_step(
+        &mut self,
+        board: &std::path::Path,
+        board_name: &str,
+        plan: &signex_engine::pcb::designators::ReannotatePlan,
+        revision: u64,
+    ) -> Result<(), String> {
+        let engine = self
+            .document_state
+            .board_engine(board)
+            .ok_or_else(|| t!(self.ui_state.i18n, ids::PCB_REANNOTATE_BOARD_GONE).into_string())?;
+        let commands = plan
+            .commands(engine.board())
+            .map_err(|error| error.to_string())?;
         let label = t!(self.ui_state.i18n, ids::PCB_REANNOTATE_TITLE).into_string();
         let step = CheckedStep {
             label: &label,
-            expected_revision: state.revision,
+            expected_revision: revision,
         };
-        match self.execute_board_commands(&state.board, commands, Some(step)) {
-            Ok(_) => {
-                let line = t!(
-                    self.ui_state.i18n,
-                    ids::PCB_REANNOTATE_DONE,
-                    "count" => state.plan.renames.len(),
-                    "board" => state.board_name.as_str()
-                );
-                crate::diagnostics::log_info(line.into_string());
-                self.refresh_pcb_highlight();
-            }
-            Err(error) => {
-                self.ui_state.board_reannotate = Some(BoardReannotateState {
-                    problem: Some(ReannotateProblem::Refused(error.to_string())),
-                    ..state
-                });
-            }
-        }
+        self.execute_board_commands(board, commands, Some(step))
+            .map_err(|error| error.to_string())?;
+        let line = t!(
+            self.ui_state.i18n,
+            ids::PCB_REANNOTATE_DONE,
+            "count" => plan.renames.len(),
+            "board" => board_name
+        );
+        crate::diagnostics::log_info(line.into_string());
+        self.refresh_pcb_highlight();
+        Ok(())
     }
 }

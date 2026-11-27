@@ -199,7 +199,7 @@ fn move_pin(symbol: &mut signex_library::primitive::Symbol, number: &str) {
 }
 
 fn choices(app: &Signex) -> Vec<(String, bool)> {
-    app.document_state
+    app.document_view
         .panel_ctx
         .symbol_choices
         .iter()

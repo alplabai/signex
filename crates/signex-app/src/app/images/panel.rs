@@ -48,7 +48,7 @@ fn field_edit(field: ImagePanelField, text: &str) -> Result<ImageFieldEdit, Stri
 impl Signex {
     /// The image selected on the active sheet.
     pub(crate) fn selected_image_id(&self) -> Option<Uuid> {
-        let ctx = &self.document_state.panel_ctx;
+        let ctx = &self.document_view.panel_ctx;
         if ctx.selected_kind != Some(SelectedKind::Drawing) {
             return None;
         }
@@ -64,7 +64,7 @@ impl Signex {
     /// is missing (the canvas read or the last asset scan says so), its
     /// format and size; and the draft kept while it stays selected.
     pub(crate) fn image_panel_state(&self) -> ImagePanelState {
-        let ctx = &self.document_state.panel_ctx;
+        let ctx = &self.document_view.panel_ctx;
         let Some(SchDrawing::Image(image)) = &ctx.selected_drawing else {
             return ImagePanelState::default();
         };
@@ -113,10 +113,10 @@ impl Signex {
         };
         match msg {
             ImagePanelMsg::FieldTyped(field, text) => {
-                self.document_state.panel_ctx.annotation.image.draft = Some((id, field, text));
+                self.document_view.panel_ctx.annotation.image.draft = Some((id, field, text));
             }
             ImagePanelMsg::FieldSubmitted(field) => {
-                let draft = self.document_state.panel_ctx.annotation.image.draft.take();
+                let draft = self.document_view.panel_ctx.annotation.image.draft.take();
                 let Some((_, _, text)) = draft.filter(|(d, f, _)| *d == id && *f == field) else {
                     return Task::none();
                 };

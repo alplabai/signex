@@ -39,7 +39,7 @@ fn quit_save_all(app: &mut Signex) -> bool {
     assert!(app.ui_state.app_quit_confirm.is_some(), "quit must prompt");
     let task = app.handle_app_quit_confirm(ProjectCloseChoice::SaveAll);
     settle(app, task);
-    app.document_state.error_notice.is_none()
+    app.document_view.error_notice.is_none()
 }
 
 /// Run a Save All's writes to completion and feed the completions, ending
@@ -67,7 +67,7 @@ fn close_save_all(app: &mut Signex) -> bool {
 
 fn assert_refused(app: &Signex, still_dirty: &[&Path]) {
     assert!(
-        app.document_state.error_notice.is_some(),
+        app.document_view.error_notice.is_some(),
         "the failure must be reported"
     );
     for path in still_dirty {
@@ -218,6 +218,23 @@ fn closing_a_project_drops_its_rules_history() {
     assert!(!app.document_state.rules_history.contains_key(&id));
 }
 
+/// #2975 — closing a project drops its General history with its rules
+/// history, so no stale steps outlive the project.
+#[test]
+fn closing_a_project_drops_its_general_history() {
+    let dir = std::env::temp_dir().join(format!("signex-close-general-{}", uuid::Uuid::now_v7()));
+    let mut app = project_app(&dir);
+    let id = app.document_state.projects[0].id;
+    app.document_state.general_history.entry(id).or_default();
+
+    let _ = app.close_project_at_tree_path(&[0]);
+    let refs = app.resolve_sheet_refs_blocking();
+    let _ = app.handle_close_refs_resolved(id, refs);
+
+    assert!(app.document_state.projects.iter().all(|p| p.id != id));
+    assert!(!app.document_state.general_history.contains_key(&id));
+}
+
 /// #1825 — a sheet the user made read-only is never replaced by a save.
 mod read_only_sheet {
     use super::*;
@@ -257,7 +274,7 @@ mod read_only_sheet {
         assert_ne!(std::fs::read(&free).unwrap(), b"free");
         assert_refused(&app, &[&locked]);
         assert!(!app.document_state.is_document_dirty(&free));
-        let notice = format!("{:?}", app.document_state.error_notice);
+        let notice = format!("{:?}", app.document_view.error_notice);
         assert!(notice.contains("X.snxsch"), "names the file: {notice}");
         assert!(notice.contains("read-only"), "says why: {notice}");
     }

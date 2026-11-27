@@ -19,6 +19,9 @@ pub struct ResolvedPlacement {
     /// The symbol is a power port: the placed instance is `is_power` and
     /// `value` is its net name.
     pub is_power: bool,
+    /// The library symbol's component type is Net Tie: the placed part is a
+    /// net tie (#1277).
+    pub net_tie: bool,
     /// Reference prefix from the library symbol's designator (`U?` -> `U`):
     /// the legacy prefix, used when the owning project follows no designator
     /// standard or does not cover `class`.

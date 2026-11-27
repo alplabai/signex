@@ -377,7 +377,7 @@ fn closing_the_persons_active_document_is_refused_and_changes_nothing() {
 #[test]
 fn closing_a_sheet_the_person_is_typing_the_title_block_of_is_refused_and_the_draft_stays() {
     let mut app = app_at_work();
-    app.document_state.drafts.set_title_block(
+    app.document_view.drafts.set_title_block(
         &path("a.snxsch"),
         crate::panels::TitleBlockField::DocumentNumber,
         "TYPED",
@@ -388,7 +388,7 @@ fn closing_a_sheet_the_person_is_typing_the_title_block_of_is_refused_and_the_dr
         json!({"document": doc("a.snxsch")}),
     );
     refused_unlogged(&mut app, request, "the person is editing this sheet's");
-    assert_eq!(app.document_state.drafts.title_blocks().len(), 1);
+    assert_eq!(app.document_view.drafts.title_blocks().len(), 1);
     assert!(
         app.document_state
             .tabs
@@ -406,9 +406,7 @@ fn the_close_route_refuses_an_agent_close_of_a_sheet_with_a_title_block_draft() 
     let mut app = app_at_work();
     let a = path("a.snxsch");
     let field = crate::panels::TitleBlockField::DocumentNumber;
-    app.document_state
-        .drafts
-        .set_title_block(&a, field, "TYPED");
+    app.document_view.drafts.set_title_block(&a, field, "TYPED");
     let command = crate::keymap::AppCommandId::new("close_active_document").unwrap();
     let operand = format!("document={}", doc("a.snxsch"));
     let args =
@@ -424,7 +422,7 @@ fn the_close_route_refuses_an_agent_close_of_a_sheet_with_a_title_block_draft() 
     let reason = signex_i18n::RenderTranslatable::render_en_us(&reason);
     assert!(reason.contains("title-block draft"), "{reason}");
     assert_eq!(
-        app.document_state
+        app.document_view
             .drafts
             .title_block_text(&a, field)
             .as_deref(),
@@ -449,7 +447,7 @@ fn the_close_route_refuses_an_agent_close_of_a_sheet_with_a_paper_edge_draft() {
     let mut app = app_at_work();
     let a = path("a.snxsch");
     let edge = crate::panels::PaperEdge::Width;
-    app.document_state.drafts.set_paper_edge(&a, edge, "4");
+    app.document_view.drafts.set_paper_edge(&a, edge, "4");
     let command = crate::keymap::AppCommandId::new("close_active_document").unwrap();
     let operand = format!("document={}", doc("a.snxsch"));
     let args =
@@ -465,7 +463,7 @@ fn the_close_route_refuses_an_agent_close_of_a_sheet_with_a_paper_edge_draft() {
     let reason = signex_i18n::RenderTranslatable::render_en_us(&reason);
     assert!(reason.contains("page-settings draft"), "{reason}");
     assert_eq!(
-        app.document_state
+        app.document_view
             .drafts
             .paper_edge_text(&a, edge)
             .as_deref(),
@@ -479,7 +477,7 @@ fn the_close_route_refuses_an_agent_close_of_a_sheet_with_a_paper_edge_draft() {
 fn closing_a_sheet_the_person_is_typing_a_paper_edge_of_is_refused_and_the_draft_stays() {
     let mut app = app_at_work();
     let a = path("a.snxsch");
-    app.document_state
+    app.document_view
         .drafts
         .set_paper_edge(&a, crate::panels::PaperEdge::Width, "4");
     let request = line(
@@ -489,7 +487,7 @@ fn closing_a_sheet_the_person_is_typing_a_paper_edge_of_is_refused_and_the_draft
     );
     refused_unlogged(&mut app, request, "or page settings");
     assert_eq!(
-        app.document_state
+        app.document_view
             .drafts
             .paper_edge_text(&a, crate::panels::PaperEdge::Width)
             .as_deref(),

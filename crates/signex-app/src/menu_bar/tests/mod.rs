@@ -173,6 +173,8 @@ pub(super) fn menu_context_in(app: &Signex, window: Option<iced::window::Id>) ->
         notebook_badges: !app.ui_state.annotations.badges_hidden,
         pcb_sync: app.pcb_sync_label(window),
         layouts: app.layouts_menu(),
+        extension_rows: app.extensions().menu_rows(),
+        extension_panels: app.extensions().panels(),
     }
 }
 
@@ -347,8 +349,8 @@ pub(super) fn probe(app: &Signex) -> Probe {
         erc: app.ui_state.erc_dialog_open,
         parameter_manager: app.ui_state.parameter_manager_open,
         passive_calculator: app.ui_state.passive_calculator_open,
-        print_preview: app.document_state.preview.is_some(),
-        bom_preview: app.document_state.bom_preview.is_some(),
+        print_preview: app.document_view.preview.is_some(),
+        bom_preview: app.document_view.bom_preview.is_some(),
         quit_confirm: app.ui_state.app_quit_confirm.is_some(),
         projects: app.document_state.projects.len(),
         recent: app.ui_state.recent_projects.entries().len(),
@@ -367,7 +369,7 @@ pub(super) fn probe(app: &Signex) -> Probe {
             .canvases
             .values()
             .any(|c| c.pending_fit.get().is_some()),
-        error_notice: app.document_state.error_notice.is_some(),
+        error_notice: app.document_view.error_notice.is_some(),
         refs: app
             .document_state
             .active_engine()
@@ -494,6 +496,7 @@ pub(super) fn open_project(app: &mut Signex, file: &str) -> usize {
             schematic_design: Default::default(),
             fab_outputs: None,
             router_tool_diameter: None,
+            bom_alternates: Vec::new(),
             requirements: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),

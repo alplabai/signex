@@ -8,7 +8,7 @@ use crate::panels::{FilterEditor, KindCounts, SelectionFilterFacts};
 
 impl Signex {
     pub(super) fn selection_filter_facts(&self) -> SelectionFilterFacts {
-        let previous = &self.document_state.panel_ctx.selection_filter;
+        let previous = &self.document_view.panel_ctx.selection_filter;
         let facts = self
             .board_filter_facts(previous)
             .or_else(|| self.schematic_filter_facts(previous))

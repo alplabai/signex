@@ -268,7 +268,59 @@ The page (`preferences/keymap/`) reads top to bottom:
   current keys, a help line, a warning when a fixed app key would swallow
   the recorded keys, and Clear, Stop (Record once stopped), Cancel and OK.
   OK puts the new keys in the working copy; like every Preferences change
-  they are saved by the dialog's Apply or OK.
+  they are saved by the dialog's Apply or OK. Every keystroke while
+  recording is recorded, Esc included; only Cancel closes the recorder.
+  OK with nothing recorded (after Clear) takes the row's key away.
+- **Commands with no key** (#2495, Caner 2026-11-25): the table also lists
+  every command the active profile gives no key, built-in or from an
+  installed extension, as an Unbound row in the command's own context (the
+  one editor it acts in, else Global). A built-in command is listed when a
+  key can run it, the rule the command palette uses. In a custom profile
+  its Edit opens the same recorder, and OK adds a binding at the end of the
+  profile (`KeymapEditorModel::assign_active_trigger`), saved with the
+  profile in `keyboard_shortcuts.toml`; an extension command is saved under
+  its `ext.` id. On a built-in profile these rows have no Edit: Create
+  copies the profile first.
+
+### Key bindings from the CLI (#2495)
+
+Two catalog commands edit a custom profile without the window, for
+`signex-cli` (which needs `--save` or `--allow save` for them) or a script:
+
+- `keymap_assign command=<id> keys=<keys> profile=<id> [context=<context>]`
+  gives the command the key sequence `keys` (profile spelling, `Ctrl+Alt+Q`,
+  `P W`). `context` is a section name of the file (`global`, `schematic`,
+  `pcb`, `board_3d`, …); without it, the one editor the command acts in, else
+  `global`. The command is a catalog id or an installed extension's.
+- `keymap_clear command=<id> profile=<id> [keys=<keys>]` takes that key, or
+  every key, from the command; an extension id that is not installed is
+  accepted, so a kept binding can be cleared.
+
+Both edit the named profile with `KeymapEditorModel` (the active profile is
+not switched), write `keyboard_shortcuts.toml` through `atomic_write`, make
+the change the running keymap, and answer with JSON: `profile`, `command`,
+`keys`, `unchanged`, `file`, and `context` and `conflicts` (assign) or
+`removed` (clear). `conflicts` lists each clash the new key takes part in,
+as the page's State column marks it: its `keys`, `context`, the two
+`commands` and `reserved_by_os`. A key the command already has in that
+context is not added again and is answered `"unchanged": true`, and a clear
+that finds no key writes nothing. They are refused, with nothing written:
+
+- for a built-in profile, which stays read-only (Create copies it first);
+- while the file failed to load (#595);
+- while Preferences ▸ Keyboard shortcuts holds changes of its own or a
+  typed trigger, since Apply would then write the page's copy over the
+  command's edit ("save or discard the keyboard changes in Preferences
+  first").
+
+On a page with no changes of its own the command's edit shows at once, and
+an open recorder closes, since the rows it pointed at may have moved.
+
+In a headless `signex-cli` run, which otherwise works under a throwaway
+config root, these two commands read and write the user's own
+`keyboard_shortcuts.toml` (the one carve-out, `docs/CLI.md`), read fresh for
+each command. Import… and Export… of a profile file stay Preferences actions
+(`read_profile_file`, `write_profile_file`).
 
 The editor is backed by `KeymapEditorModel`, which exposes rows with:
 
@@ -310,11 +362,20 @@ symbol or a directive region has its first point placed (#1669).
 
 `cycle_wiring_mode` (Signex Standard profile: `Ctrl+Space`) steps how the wires that
 follow a moved part bend in a drag and in click-click move: Auto (the corner
-the rubber band picks), horizontal first, vertical first, and straight (no
-corner, any slope). Press it during the move and the ghost changes at once; the
+the rubber band picks), horizontal first, vertical first, straight (no
+corner, any slope), 45° first (a 45° leg from the wire's fixed end, then a
+straight leg to the pin) and 45° last (the 45° leg reaches the pin), then Auto
+again. Each mode bends as the wire tool's corner mode of the same shape does;
+when its route is blocked it takes the other L, or the 45° leg at the other
+end (#2516). Press it during the move and the ghost changes at once; the
 drop commits what the ghost shows. The mode holds for later moves, and the
 status bar names it while it is not Auto. Move By, align and distribute,
 position edits, rotate and mirror always use Auto (#1669).
+
+In every mode, a pin that sits on a junction of two or more wires leaves those
+wires where they are: a stub grows or shrinks from the junction to the moved
+pin, as for a pin on a wire that passes through. Only when no stub fits do the
+wires follow the pin (#2540).
 
 A key bound in the keymap runs some commands once, however long it is held:
 `cycle_wiring_mode`, the corner mode and posture keys, the grid steps

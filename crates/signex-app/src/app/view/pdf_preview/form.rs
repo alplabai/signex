@@ -296,7 +296,7 @@ fn toggle(
 }
 
 /// Schematics include: what the sheets print.
-pub(super) fn schematics_include() -> [Toggle; 7] {
+pub(super) fn schematics_include() -> [Toggle; 9] {
     use signex_i18n::ids;
     [
         toggle(
@@ -312,7 +312,7 @@ pub(super) fn schematics_include() -> [Toggle; 7] {
             false,
         ),
         toggle(
-            ids::PDF_PARAMETER_SETS,
+            ids::PDF_NET_PARAMETERS,
             |o| o.include_parameter_sets,
             PrintPreviewMsg::SetIncludeParameterSets,
             false,
@@ -324,9 +324,21 @@ pub(super) fn schematics_include() -> [Toggle; 7] {
             false,
         ),
         toggle(
-            ids::PDF_BLANKETS,
+            ids::PDF_NET_BLANKETS,
             |o| o.include_blankets,
             PrintPreviewMsg::SetIncludeBlankets,
+            false,
+        ),
+        toggle(
+            ids::PDF_COMPILE_MASKS,
+            |o| o.include_compile_masks,
+            PrintPreviewMsg::SetIncludeCompileMasks,
+            false,
+        ),
+        toggle(
+            ids::PDF_DIFF_PAIRS,
+            |o| o.include_diff_pairs,
+            PrintPreviewMsg::SetIncludeDiffPairs,
             false,
         ),
         toggle(
@@ -408,7 +420,7 @@ impl Signex {
         summary: Option<Label<'a>>,
         body: impl FnOnce() -> Element<'a, Message>,
     ) -> Element<'a, Message> {
-        let look = Look::of(&self.document_state.panel_ctx.tokens);
+        let look = Look::of(&self.document_view.panel_ctx.tokens);
         let is_open = preview.dialog.sections.is_open(section);
         let mut col: iced::widget::Column<Element<'a, Message>> = column![].width(Length::Fill);
         if section != PdfSection::Sheets {
@@ -444,7 +456,7 @@ impl Signex {
         is_open: bool,
     ) -> Element<'a, Message> {
         let i18n = self.ui_state.i18n.as_ref();
-        let look = Look::of(&self.document_state.panel_ctx.tokens);
+        let look = Look::of(&self.document_view.panel_ctx.tokens);
         let title = i18n.upper_for_display(&i18n.message_plain(title, &[]));
         let is_new = is_new(section);
         let mut line = row![

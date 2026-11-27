@@ -74,7 +74,7 @@ fn the_profile_menu_opens_save_as_profile_and_closes() {
         &mut app,
         Message::File(FileMsg::NewProject(Some(tmp.path().join("Demo.snxprj")))),
     );
-    assert!(app.document_state.error_notice.is_none());
+    assert!(app.document_view.error_notice.is_none());
     let _ = app.update(Message::Erc(ErcMsg::OpenDialog));
 
     // A new project stores the rules it was seeded with.

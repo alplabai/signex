@@ -85,7 +85,7 @@ fn headless_it_writes_every_page_and_answers_with_the_linked_rows() {
     assert_eq!(links[1]["page"], page_of(&contents));
     settle(&mut app, task);
     assert_eq!(links_in(&file), 2, "one link annotation per row");
-    assert!(app.document_state.preview.is_none(), "no preview opens");
+    assert!(app.document_view.preview.is_none(), "no preview opens");
 }
 
 #[test]
@@ -113,7 +113,7 @@ fn in_a_window_it_opens_print_preview_and_its_export_writes_the_links() {
     let (mut app, contents, _) = project(dir.path());
     let _ = app.update(Message::Menu(MenuMessage::command("export_schematic_pdf")));
     let preview = app
-        .document_state
+        .document_view
         .preview
         .as_ref()
         .expect("Print Preview opens");

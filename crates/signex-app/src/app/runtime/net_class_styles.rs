@@ -239,7 +239,7 @@ impl Signex {
                 snapshot_paths.extend(project.open_paths);
             }
             let stitch = self
-                .document_state
+                .document_view
                 .net_nav
                 .stitch_share
                 .claim(project.project, &project.key);
@@ -320,7 +320,7 @@ impl Signex {
                 .iter()
                 .find(|p| p.warnings.contains(warning))
                 .map(|p| p.project);
-            let reported = &mut self.document_state.net_nav.reported;
+            let reported = &mut self.document_view.net_nav.reported;
             if owner.is_none_or(|project| reported.claim(project, warning)) {
                 crate::diagnostics::log_warning(warning);
             }
@@ -332,7 +332,7 @@ impl Signex {
             .iter()
             .filter(|e| !e.key.classes.is_empty())
         {
-            self.document_state
+            self.document_view
                 .net_nav
                 .reported
                 .settle(entry.project, &entry.warnings);
@@ -384,6 +384,7 @@ impl Signex {
                 .special_strings
                 .as_ref(),
             rich_notes: Some(&self.ui_state.rich_notes.renders),
+            variant_values: Some(&self.interaction_state.active_canvas().variant_values),
         }
     }
 

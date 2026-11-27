@@ -357,6 +357,7 @@ pub(in crate::format) fn row_to_symbol(row: SchComponentRow, extras: SymbolExtra
         on_board: extras.on_board,
         exclude_from_sim: extras.exclude_from_sim,
         locked: extras.locked,
+        net_tie: extras.net_tie,
         fields,
         custom_properties: extras.custom_properties,
         pin_uuids: extras.pin_uuids.into_iter().collect(),

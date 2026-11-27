@@ -44,11 +44,11 @@ impl Signex {
     /// rather than live state. The two must agree term for term or Esc
     /// resolves against a stack that is not on screen.
     pub(crate) fn has_blocking_modal(&self) -> bool {
-        (self.document_state.error_notice.is_some()
+        (self.document_view.error_notice.is_some()
             && !self.modal_detached(crate::app::state::ModalId::ErrorNotice))
-            || (self.document_state.netlist_incomplete_prompt.is_some()
+            || (self.document_view.netlist_incomplete_prompt.is_some()
                 && !self.modal_detached(crate::app::state::ModalId::NetlistIncompletePrompt))
-            || (self.document_state.preview.is_some()
+            || (self.document_view.preview.is_some()
                 && !self.modal_detached(crate::app::state::ModalId::PrintPreview))
             || (self.ui_state.net_color_custom.show
                 && !self.modal_detached(crate::app::state::ModalId::NetColorCustom))
@@ -91,7 +91,7 @@ impl Signex {
     /// back to the in-window overlay if the OS window failed to open.
     pub(in crate::app::view) fn print_preview_overlay(&self) -> Option<Element<'_, Message>> {
         let preview_detached = self.modal_detached(crate::app::state::ModalId::PrintPreview);
-        if self.document_state.preview.is_some() && !preview_detached {
+        if self.document_view.preview.is_some() && !preview_detached {
             Some(self.view_print_preview())
         } else {
             None
@@ -101,7 +101,7 @@ impl Signex {
     /// BOM preview overlay — same detach-first pattern as Print Preview.
     pub(in crate::app::view) fn bom_preview_overlay(&self) -> Option<Element<'_, Message>> {
         let bom_detached = self.modal_detached(crate::app::state::ModalId::BomPreview);
-        if self.document_state.bom_preview.is_some() && !bom_detached {
+        if self.document_view.bom_preview.is_some() && !bom_detached {
             Some(self.view_bom_preview())
         } else {
             None
@@ -166,7 +166,7 @@ impl Signex {
         self.document_state
             .engine_for_window(window_id, &self.ui_state)?;
         let ui = &self.ui_state;
-        let document = &self.document_state;
+        let document = &self.document_view;
         let interaction = &self.interaction_state;
         let y_offset: f32 = canvas_region::chrome_top(&document.panel_ctx.tokens);
         let bar_has_selection = !interaction.canvas_for_window(window_id).selected.is_empty();
@@ -202,7 +202,7 @@ impl Signex {
         &self,
         window_id: iced::window::Id,
     ) -> Vec<Element<'_, Message>> {
-        let document = &self.document_state;
+        let document = &self.document_view;
         let interaction = &self.interaction_state;
         let Some((_, editor)) = self.footprint_editor_in_window(window_id) else {
             return Vec::new();
@@ -282,7 +282,7 @@ impl Signex {
         &self,
         window_id: iced::window::Id,
     ) -> Vec<Element<'_, Message>> {
-        let document = &self.document_state;
+        let document = &self.document_view;
         let Some((path, editor)) = self.footprint_editor_in_window(window_id) else {
             return Vec::new();
         };
@@ -323,7 +323,7 @@ impl Signex {
         &self,
         window_id: iced::window::Id,
     ) -> Vec<Element<'_, Message>> {
-        let document = &self.document_state;
+        let document = &self.document_view;
         let Some((path, editor)) = self.footprint_editor_in_window(window_id) else {
             return Vec::new();
         };
@@ -354,7 +354,7 @@ impl Signex {
         &self,
         window_id: iced::window::Id,
     ) -> Vec<Element<'_, Message>> {
-        let document = &self.document_state;
+        let document = &self.document_view;
         let Some((path, editor)) = self.footprint_editor_in_window(window_id) else {
             return Vec::new();
         };
@@ -384,7 +384,7 @@ impl Signex {
         &self,
         window_id: iced::window::Id,
     ) -> Vec<Element<'_, Message>> {
-        let document = &self.document_state;
+        let document = &self.document_view;
         let Some((_, editor)) = self.symbol_editor_in_window(window_id) else {
             return Vec::new();
         };
@@ -430,12 +430,12 @@ impl Signex {
         &self,
         window_id: iced::window::Id,
     ) -> Vec<Element<'_, Message>> {
-        let document = &self.document_state;
+        let document = &self.document_view;
         let Some((path, editor)) = self.symbol_editor_in_window(window_id) else {
             return Vec::new();
         };
         let tokens = &document.panel_ctx.tokens;
-        let Some(menu_state) = editor.context_menu.as_ref() else {
+        let Some(menu_state) = editor.gui.context_menu.as_ref() else {
             return Vec::new();
         };
         let Some(card) = crate::library::editor::symbol::context_menu::view_context_menu(
@@ -505,7 +505,7 @@ mod tests {
     #[test]
     fn a_detached_print_preview_stops_blocking_the_main_windows_overlay_stack() {
         let (mut app, _boot) = Signex::new();
-        app.document_state.preview = Some(blank_preview());
+        app.document_view.preview = Some(blank_preview());
         assert!(
             app.has_blocking_modal(),
             "an in-window print preview does own the whole stack"
@@ -551,7 +551,7 @@ mod tests {
         // own and would answer the Esc before the question below is even
         // asked.
         app.ui_state.first_run_tour_open = false;
-        app.document_state.preview = Some(blank_preview());
+        app.document_view.preview = Some(blank_preview());
         app.ui_state.windows.insert(
             iced::window::Id::unique(),
             WindowKind::DetachedModal(ModalId::PrintPreview),

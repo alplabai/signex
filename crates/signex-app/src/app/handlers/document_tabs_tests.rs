@@ -224,6 +224,7 @@ fn project_at(dir: &str, case_fold: CaseFold) -> LoadedProject {
             schematic_design: Default::default(),
             fab_outputs: None,
             router_tool_diameter: None,
+            bom_alternates: Vec::new(),
             requirements: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
@@ -254,7 +255,7 @@ fn app_with_project_tree(tab: &str, case_fold: CaseFold) -> Signex {
     )];
     tree[0].expanded = false;
     tree[0].children[0].expanded = false;
-    app.document_state.panel_ctx.project_tree = tree;
+    app.document_view.panel_ctx.project_tree = tree;
     push_tab(&mut app, Path::new(tab));
     app
 }
@@ -296,7 +297,7 @@ fn reveal_in_projects_opens_the_folders_above_the_row_and_selects_it() {
     let key = app
         .project_tree_key_of_file(&file)
         .expect("the project lists b");
-    let tree = app.document_state.panel_ctx.project_tree.as_slice();
+    let tree = app.document_view.panel_ctx.project_tree.as_slice();
     let row = resolve_path(tree, &key).expect("key resolves");
     assert_eq!(
         get_node(tree, &row).map(|n| n.label.as_str()),
@@ -304,7 +305,7 @@ fn reveal_in_projects_opens_the_folders_above_the_row_and_selects_it() {
     );
 
     let task = app.handle_tab_context_action(TabContextAction::RevealInProjects(0));
-    let tree = &app.document_state.panel_ctx.project_tree;
+    let tree = &app.document_view.panel_ctx.project_tree;
     assert!(tree[0].expanded && tree[0].children[0].expanded);
     assert_eq!(
         revealed_key(task),
@@ -318,7 +319,7 @@ fn reveal_in_projects_does_nothing_for_a_file_no_project_lists() {
     let mut app = app_with_project_tree("/w/elsewhere/b.snxsch", CaseFold::PRESERVE);
     let task = app.handle_tab_context_action(TabContextAction::RevealInProjects(0));
     assert!(crate::persist::run_task::outputs(task).is_empty());
-    assert!(!app.document_state.panel_ctx.project_tree[0].expanded);
+    assert!(!app.document_view.panel_ctx.project_tree[0].expanded);
 }
 
 /// The tab and the tree name one file under the project volume's case rule,

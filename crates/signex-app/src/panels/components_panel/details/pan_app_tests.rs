@@ -64,9 +64,9 @@ fn app_with_details(
     side: PanelPosition,
 ) -> (Signex, tempfile::TempDir, ComponentsPanelRowKey) {
     let (mut app, _boot) = Signex::new();
-    app.document_state.dock_layout_sync = crate::dock::DockLayoutSync::new(
+    app.document_view.dock_layout_sync = crate::dock::DockLayoutSync::new(
         std::sync::Arc::new(DiscardLayouts),
-        crate::dock::DockLayoutSnapshot::capture(&app.document_state.dock),
+        crate::dock::DockLayoutSnapshot::capture(&app.document_view.dock),
     );
     app.ui_state.first_run_tour_open = false;
     app.ui_state.window_size = (WINDOW.width, WINDOW.height);
@@ -101,7 +101,7 @@ fn app_with_details(
     app.library
         .open_library_read_only(stock.clone())
         .expect("mount the stock library");
-    let dock = &mut app.document_state.dock;
+    let dock = &mut app.document_view.dock;
     dock.close_panel(PanelKind::Components);
     dock.show_panel_at(side, PanelKind::Components);
     let (_, row) = app

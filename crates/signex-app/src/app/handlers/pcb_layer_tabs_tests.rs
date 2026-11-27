@@ -187,7 +187,7 @@ fn shift_s_toggles_single_layer_mode() {
         .traces
         .len();
     assert_eq!(traces, 1, "only the Top track is drawn");
-    assert!(app.document_state.panel_ctx.pcb_layers.single_layer);
+    assert!(app.document_view.panel_ctx.pcb_layers.single_layer);
     press(&mut app, main, "Shift+S");
     assert!(!app.pcb_layer_view(&path).single_layer());
 }
@@ -205,7 +205,7 @@ fn panel_send(app: &mut Signex, sent: Vec<PanelMsg>) {
 fn the_layers_panel_on_a_board_tab_lists_and_drives_the_board_layers() {
     let (mut app, path, main) = open();
     let panel = Size::new(300.0, 2400.0);
-    let ctx = app.document_state.panel_ctx.clone();
+    let ctx = app.document_view.panel_ctx.clone();
     let texts = lay_out_texts(view_panel(PanelKind::Layers, &ctx), panel);
     for label in [
         "SIGNAL AND PLANE LAYERS",
@@ -234,7 +234,7 @@ fn the_layers_panel_on_a_board_tab_lists_and_drives_the_board_layers() {
         snapshot.traces.iter().all(|t| t.p0[1] != 0.0),
         "the hidden Top track is not drawn"
     );
-    assert!(app.document_state.panel_ctx.pcb_layers.is_hidden(TOP));
+    assert!(app.document_view.panel_ctx.pcb_layers.is_hidden(TOP));
 }
 
 /// The centre of the last text `label` laid out in `window`'s view: an open

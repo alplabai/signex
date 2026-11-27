@@ -48,7 +48,7 @@ fn saving_a_newer_minor_schematic_is_refused_and_stays_dirty() {
     // The card carries the full cause: the operation as its sentence and
     // the error chain in its system block (mockup row 11). The Messages panel line is
     // trimmed to 160 bytes, so only its leading context is matched.
-    let notice = app.document_state.error_notice.as_ref().expect("card");
+    let notice = app.document_view.error_notice.as_ref().expect("card");
     assert_eq!(
         notice.detail.render_en_us(),
         "Failed to save active document"
@@ -90,6 +90,7 @@ fn bare_project() -> signex_types::project::ProjectData {
         schematic_design: Default::default(),
         fab_outputs: None,
         router_tool_diameter: None,
+        bom_alternates: Vec::new(),
         requirements: Default::default(),
         parameters: Default::default(),
         unknown: Default::default(),
@@ -154,7 +155,7 @@ fn saving_a_newer_minor_project_writes_nothing_and_creates_no_library() {
         "the library waits for the save"
     );
     let listed = file_names(tmp.path());
-    app.document_state.error_notice = None;
+    app.document_view.error_notice = None;
 
     crate::settle_support::settle(&mut app, Message::File(FileMsg::Save));
 
@@ -167,7 +168,7 @@ fn saving_a_newer_minor_project_writes_nothing_and_creates_no_library() {
         "the library is still waiting"
     );
     assert!(app.document_state.is_document_dirty(&prj));
-    let notice = app.document_state.error_notice.as_ref().expect("card");
+    let notice = app.document_view.error_notice.as_ref().expect("card");
     let system = notice.system.as_ref().map(|s| s.as_str()).unwrap_or("");
     assert!(
         system.contains("read-only") && system.contains("snxprj/1.2"),

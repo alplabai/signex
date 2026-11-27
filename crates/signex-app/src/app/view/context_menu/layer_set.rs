@@ -212,7 +212,7 @@ impl Signex {
         }
         let i18n = &self.ui_state.i18n;
         let prefs = &self.ui_state.layer_strip;
-        let panel_ctx = &self.document_state.panel_ctx;
+        let panel_ctx = &self.document_view.panel_ctx;
         let tokens = &panel_ctx.tokens;
         let entries = match &menu.card {
             LayerSetCard::Sets => {
@@ -245,7 +245,7 @@ impl Signex {
             view.layer_set().map(|set| &set.id),
             self.ui_state.effective_theme_id(),
         );
-        signex_widgets::active_bar_dropdown::rows(entries, &self.document_state.panel_ctx.tokens)
+        signex_widgets::active_bar_dropdown::rows(entries, &self.document_view.panel_ctx.tokens)
             .map(|message| match message {
                 Message::Pcb(PcbMsg::LayerSetMenu(event)) => through_layer_dropdown(event),
                 other => other,

@@ -256,3 +256,50 @@ fn the_attachments_answer_marks_stale_missing_and_drawn() {
     assert_eq!(json["attachments"][0]["changes"][0]["now"], "4.7 µH");
     assert_eq!(json["attachments"][0]["kind"], "image");
 }
+
+/// #3019: a sheet placed twice (channels A and B) names R1 as R1_A and
+/// R1_B; the stored value of R1_B is compared with R1_B and Mark still
+/// valid keeps it.
+#[test]
+fn a_reused_sheets_parts_keep_their_instance_designators() {
+    use signex_types::schematic::{InstancePath, SchematicSheet, Symbol, SymbolInstance};
+    let (a, b) = (
+        InstancePath::from_chain(vec![uuid::Uuid::from_u128(1)]),
+        InstancePath::from_chain(vec![uuid::Uuid::from_u128(2)]),
+    );
+    let entry = |path: &InstancePath, reference: &str| SymbolInstance {
+        project: "p".into(),
+        path: path.to_string(),
+        reference: reference.into(),
+        unit: 1,
+    };
+    let mut sheet = SchematicSheet::default();
+    sheet.symbols.push(Symbol {
+        reference: "R1".into(),
+        value: "10k".into(),
+        instances: vec![entry(&a, "R1_A"), entry(&b, "R1_B")],
+        ..Default::default()
+    });
+    let placed = [
+        crate::PlacedSheet {
+            file: "chan.snxsch",
+            placement: &a,
+            sheet: &sheet,
+        },
+        crate::PlacedSheet {
+            file: "chan.snxsch",
+            placement: &b,
+            sheet: &sheet,
+        },
+    ];
+    let values = crate::placed_values(&placed);
+    assert_eq!(values.get("R1_A"), Some("10k"));
+    assert_eq!(values.get("R1_B"), Some("10k"));
+    assert!(changes(&[pair("R1_B", "10k")], &values).is_empty());
+    let text = "#measurement(id: \"MEAS-001\", value: 1.0, taken-with: (\"R1_B\": \"10k\"))\n";
+    let marked = mark_still_valid(text, 1, &values).expect("marked");
+    assert!(
+        marked.contains("taken-with: (\"R1_B\": \"10k\")"),
+        "{marked}"
+    );
+}

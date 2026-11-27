@@ -333,7 +333,7 @@ mod tests {
     #[test]
     fn the_heading_carries_the_cycle_hint_only_while_editable() {
         let (app, _boot) = crate::app::Signex::new();
-        let tokens = app.document_state.panel_ctx.tokens;
+        let tokens = app.document_view.panel_ctx.tokens;
         let i18n = I18n::en_us();
         let inner = super::super::MATRIX_PANE_W - 2.0 * SP.l;
         let window = iced::Size::new(inner, 200.0);

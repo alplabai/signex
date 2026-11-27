@@ -21,6 +21,10 @@ pub const VALUE_PARAMETER: &str = "Value";
 /// The parameter name of a part's footprint in [`VariantPart::parameters`].
 pub const FOOTPRINT_PARAMETER: &str = "Footprint";
 
+/// The field an alternate part's part number is set in (#3038): the BOM's
+/// `MPN` field.
+pub const MPN_PARAMETER: &str = "MPN";
+
 /// One placed part as the settings find it: the designator the BOM lists it
 /// under and, when known, the placed part itself, which a re-annotation or a
 /// designator edit does not change.
@@ -43,7 +47,32 @@ impl<'a> From<&'a str> for PlacedPart<'a> {
     }
 }
 
-/// What one variant changes on one part.
+/// An owned [`PlacedPart`], for an edit that names several parts (every
+/// channel's copy of a repeated part, or every part of one channel).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PartRef {
+    pub designator: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub part: Option<SymbolLink>,
+}
+
+impl PartRef {
+    pub fn new(designator: impl Into<String>, part: Option<SymbolLink>) -> Self {
+        Self {
+            designator: designator.into(),
+            part,
+        }
+    }
+
+    pub fn placed(&self) -> PlacedPart<'_> {
+        PlacedPart::new(&self.designator, self.part.as_ref())
+    }
+}
+
+/// What one variant changes on one part. A channel's copy of a part in a
+/// repeated sheet is a part of its own: its [`Self::part`] is placed at the
+/// channel's placement, so an entry is per channel (`docs/MULTI_CHANNEL.md`,
+/// "Per-channel variant state").
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct VariantPart {
     pub variant: String,
@@ -169,6 +198,27 @@ impl ProjectData {
         self.edit_variant_part(variant, placed.into(), |part| part.fitted = fitted)
     }
 
+    /// [`Self::set_variant_part_fit`] for each of `parts`, as one edit: every
+    /// channel's copy of a repeated part, or every part of one channel. A
+    /// refusal (Base, an unknown variant, unreadable settings) comes before
+    /// any part changes.
+    pub fn set_variant_parts_fit(
+        &mut self,
+        variant: &str,
+        parts: &[PartRef],
+        fitted: Option<bool>,
+    ) -> Result<(), VariantProblem> {
+        self.check_settings_readable()?;
+        if is_base_variant(variant) {
+            return Err(VariantProblem::Reserved);
+        }
+        self.defined_variant(variant)?;
+        for part in parts {
+            self.set_variant_part_fit(variant, part.placed(), fitted)?;
+        }
+        Ok(())
+    }
+
     /// Give the part `placed` names the value `value` for `parameter` in
     /// `variant`, or its own value again (`None`). An empty parameter name
     /// changes nothing.
@@ -192,6 +242,54 @@ impl ProjectData {
                 part.parameters.remove(parameter);
             }
         })
+    }
+
+    /// [`Self::set_variant_part_parameter`] for each of `parameters` on one
+    /// part, as one edit: an alternate part's value, footprint and part
+    /// number together (#3038). A refusal comes before any value changes;
+    /// an empty parameter name is skipped.
+    pub fn set_variant_part_parameters<'p>(
+        &mut self,
+        variant: &str,
+        placed: impl Into<PlacedPart<'p>>,
+        parameters: &[(String, Option<String>)],
+    ) -> Result<(), VariantProblem> {
+        self.edit_variant_part(variant, placed.into(), |part| {
+            for (parameter, value) in parameters {
+                let parameter = parameter.trim();
+                if parameter.is_empty() {
+                    continue;
+                }
+                match value {
+                    Some(value) => {
+                        part.parameters.insert(parameter.to_string(), value.clone());
+                    }
+                    None => {
+                        part.parameters.remove(parameter);
+                    }
+                }
+            }
+        })
+    }
+
+    /// [`Self::set_variant_part_parameters`] for each of `parts` as one
+    /// edit: every channel's copy of a repeated part (mockup rows 208 and
+    /// 209). Refused for Base or an unknown variant before any part changes.
+    pub fn set_variant_parts_parameters(
+        &mut self,
+        variant: &str,
+        parts: &[PartRef],
+        parameters: &[(String, Option<String>)],
+    ) -> Result<(), VariantProblem> {
+        self.check_settings_readable()?;
+        if is_base_variant(variant) {
+            return Err(VariantProblem::Reserved);
+        }
+        self.defined_variant(variant)?;
+        for part in parts {
+            self.set_variant_part_parameters(variant, part.placed(), parameters)?;
+        }
+        Ok(())
     }
 
     /// Add `name` as a copy of `from`: what `from` changes on its parts,
@@ -306,7 +404,7 @@ impl ProjectData {
         let part = &mut parts[index];
         part.designator = designator.to_string();
         if let Some(link) = placed.link {
-            part.part = Some(link.clone());
+            part.part = Some(widened_link(part.part.as_ref(), link));
         }
         edit(part);
         if parts[index].is_empty() {
@@ -331,6 +429,20 @@ impl ProjectData {
             return Err(VariantProblem::SettingsUnreadable);
         }
         Ok(())
+    }
+}
+
+/// The link an edit leaves on an entry that had `own`: `link`, with the
+/// units `own` already names on the same sheet kept, so an edit that knows
+/// one unit of a part never narrows an entry the matrix linked to all of
+/// them. A link on another sheet is replaced.
+fn widened_link(own: Option<&SymbolLink>, link: &SymbolLink) -> SymbolLink {
+    match own {
+        Some(own) if own.sheet == link.sheet => SymbolLink::new(
+            link.sheet.clone(),
+            own.units.iter().chain(&link.units).copied(),
+        ),
+        _ => link.clone(),
     }
 }
 

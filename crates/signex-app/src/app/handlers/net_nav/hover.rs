@@ -25,7 +25,7 @@ impl Signex {
         });
         let enabled = self.net_hover_allowed();
         let screen = self.interaction_state.last_mouse_pos;
-        self.document_state.net_nav.hover.observe(
+        self.document_view.net_nav.hover.observe(
             target,
             screen,
             enabled,
@@ -46,7 +46,7 @@ impl Signex {
     pub(crate) fn hover_dwell_ticked(&mut self) -> Task<Message> {
         let now = std::time::Instant::now();
         let Some(candidate) = self
-            .document_state
+            .document_view
             .net_nav
             .hover
             .candidate
@@ -90,7 +90,7 @@ impl Signex {
             IndexLookup::Building(build) => {
                 let task = self.wait_for_net_index(project, PendingNetAction::HoverDwell, build);
                 // Parked for the index: the timer has nothing more to ask.
-                let nav = &mut self.document_state.net_nav;
+                let nav = &mut self.document_view.net_nav;
                 let parked = nav.pending.as_ref().is_some_and(|p| {
                     p.project == project && p.action == PendingNetAction::HoverDwell
                 });
@@ -108,7 +108,7 @@ impl Signex {
 
     /// The dwell is answered: show `card`, or nothing, and stop the timer.
     fn settle_hover(&mut self, card: Option<HoverCard>) {
-        let hover = &mut self.document_state.net_nav.hover;
+        let hover = &mut self.document_view.net_nav.hover;
         if let Some(candidate) = hover.candidate.as_mut() {
             candidate.settled = true;
         }

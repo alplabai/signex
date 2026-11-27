@@ -69,17 +69,17 @@ fn create_ref_task(
 
 impl Signex {
     pub(in crate::app) fn publish_history(&mut self) {
-        self.document_state.panel_ctx.history = self.document_state.history.clone();
+        self.document_view.panel_ctx.history = self.document_view.history.clone();
     }
 
     fn history_repo_root(&self) -> Option<PathBuf> {
-        let repo = self.document_state.history.repo.as_ref()?;
+        let repo = self.document_view.history.repo.as_ref()?;
         Some(repo.root.clone())
     }
 
     /// Recompute the rows the graph draws from the filters.
     fn refilter_history(&mut self) {
-        let history = &mut self.document_state.history;
+        let history = &mut self.document_view.history;
         let rows = history
             .repo
             .as_deref()
@@ -90,7 +90,7 @@ impl Signex {
 
     /// Start the graph load of `target` for the current generation.
     pub(super) fn load_history_repo_task(&self, target: PathBuf) -> Task<Message> {
-        let generation = self.document_state.history.generation;
+        let generation = self.document_view.history.generation;
         let window = self.interaction_state.acting_window;
         Task::perform(
             on_worker(move || load_repo_view(&target), Err),
@@ -107,7 +107,7 @@ impl Signex {
         let Some(root) = self.history_repo_root() else {
             return Task::none();
         };
-        let generation = self.document_state.history.generation;
+        let generation = self.document_view.history.generation;
         let window = self.interaction_state.acting_window;
         let reply_sha = sha.clone();
         let job = move || {
@@ -131,7 +131,7 @@ impl Signex {
     pub(crate) fn handle_history_panel(&mut self, msg: HistoryPanelMsg) -> Task<Message> {
         let task = match msg {
             HistoryPanelMsg::RefreshPressed => {
-                self.document_state.history.active_path = None;
+                self.document_view.history.active_path = None;
                 self.refresh_history_panel()
             }
             HistoryPanelMsg::Filter(msg) => {
@@ -146,7 +146,7 @@ impl Signex {
     }
 
     fn apply_history_filter(&mut self, msg: HistoryFilterMsg) {
-        let ui = &mut self.document_state.history.ui;
+        let ui = &mut self.document_view.history.ui;
         match msg {
             HistoryFilterMsg::ScopePicked(scope) => ui.filter.scope = scope,
             HistoryFilterMsg::ThisFileToggled => ui.filter.this_file_only ^= true,
@@ -162,7 +162,7 @@ impl Signex {
     }
 
     fn handle_history_commit(&mut self, msg: HistoryCommitMsg) -> Task<Message> {
-        let ui = &mut self.document_state.history.ui;
+        let ui = &mut self.document_view.history.ui;
         match msg {
             HistoryCommitMsg::Selected(sha) => return self.select_history_commit(sha),
             HistoryCommitMsg::CommitPressed => return self.handle_active_document_save_requested(),
@@ -199,7 +199,7 @@ impl Signex {
     }
 
     fn select_history_commit(&mut self, sha: String) -> Task<Message> {
-        let ui = &mut self.document_state.history.ui;
+        let ui = &mut self.document_view.history.ui;
         ui.more_open = false;
         ui.prompt = None;
         ui.files.clear();
@@ -216,7 +216,7 @@ impl Signex {
     /// A file row of the detail strip: Show differences… compares it, and
     /// open differences switch to it.
     fn pick_history_file(&mut self, path: String) -> Task<Message> {
-        let ui = &mut self.document_state.history.ui;
+        let ui = &mut self.document_view.history.ui;
         ui.picked_file = Some(path);
         if ui.diff.is_some() {
             return self.show_history_differences();
@@ -227,11 +227,11 @@ impl Signex {
     /// Show differences…: read the lines the selected commit changed in the
     /// file it compares. A commit never changes, so the open one is kept.
     fn show_history_differences(&mut self) -> Task<Message> {
-        let Some(repo) = self.document_state.history.repo.clone() else {
+        let Some(repo) = self.document_view.history.repo.clone() else {
             return Task::none();
         };
         let window = self.interaction_state.acting_window;
-        let ui = &mut self.document_state.history.ui;
+        let ui = &mut self.document_view.history.ui;
         let Some(sha) = ui.selected.clone() else {
             return Task::none();
         };
@@ -271,7 +271,7 @@ impl Signex {
 
     /// A finished differences read, kept only while it is still the open one.
     fn apply_history_diff(&mut self, sha: &str, path: &str, result: Result<Arc<FileDiff>, String>) {
-        let Some(open) = &mut self.document_state.history.ui.diff else {
+        let Some(open) = &mut self.document_view.history.ui.diff else {
             return;
         };
         if open.sha != sha || open.path != path {
@@ -284,7 +284,7 @@ impl Signex {
     }
 
     fn open_ref_prompt(&mut self, kind: RefPromptKind) {
-        let ui = &mut self.document_state.history.ui;
+        let ui = &mut self.document_view.history.ui;
         ui.more_open = false;
         ui.prompt = ui.selected.clone().map(|sha| RefPrompt {
             kind,
@@ -298,7 +298,7 @@ impl Signex {
         let Some(root) = self.history_repo_root() else {
             return Task::none();
         };
-        let ui = &mut self.document_state.history.ui;
+        let ui = &mut self.document_view.history.ui;
         let Some(prompt) = ui.prompt.clone() else {
             return Task::none();
         };
@@ -318,17 +318,17 @@ impl Signex {
         match msg {
             HistorySwitcherMsg::Toggled => {
                 self.clear_save_offer();
-                let ui = &mut self.document_state.history.ui;
+                let ui = &mut self.document_view.history.ui;
                 ui.switcher_open ^= true;
                 ui.switcher_query.clear();
                 self.sync_switch_block();
             }
             HistorySwitcherMsg::Dismissed => {
                 self.clear_save_offer();
-                self.document_state.history.ui.switcher_open = false;
+                self.document_view.history.ui.switcher_open = false;
             }
             HistorySwitcherMsg::QueryEdited(query) => {
-                self.document_state.history.ui.switcher_query = query;
+                self.document_view.history.ui.switcher_query = query;
             }
             HistorySwitcherMsg::Picked { name, is_remote } => {
                 let target = if is_remote {
@@ -347,10 +347,10 @@ impl Signex {
     /// New branch here…: create the find field's name at HEAD. HEAD and the
     /// working tree stay where they are.
     fn create_branch_from_query(&mut self) -> Task<Message> {
-        let Some(repo) = self.document_state.history.repo.clone() else {
+        let Some(repo) = self.document_view.history.repo.clone() else {
             return Task::none();
         };
-        let ui = &mut self.document_state.history.ui;
+        let ui = &mut self.document_view.history.ui;
         if !can_create_branch(&repo.branches, &ui.switcher_query) {
             return Task::none();
         }
@@ -373,10 +373,10 @@ impl Signex {
 
     /// Reload the History of the main window and of every undocked one.
     pub(in crate::app) fn reload_all_histories(&mut self) -> Task<Message> {
-        for history in self.document_state.window_history.values_mut() {
+        for history in self.document_view.window_history.values_mut() {
             history.active_path = None;
         }
-        self.document_state.history.active_path = None;
+        self.document_view.history.active_path = None;
         let main = self.refresh_history_panel();
         Task::batch([main, self.refresh_window_histories()])
     }
@@ -413,16 +413,16 @@ impl Signex {
         generation: u32,
         result: Result<Option<Arc<HistoryRepoView>>, String>,
     ) -> Task<Message> {
-        if generation != self.document_state.history.generation {
+        if generation != self.document_view.history.generation {
             return Task::none();
         }
         let commits_on_save = self
-            .document_state
+            .document_view
             .history
             .active_path
             .as_deref()
             .is_some_and(|path| self.git_project_for(path).is_some());
-        let history = &mut self.document_state.history;
+        let history = &mut self.document_view.history;
         history.repo_loading = false;
         history.ui.commits_on_save = commits_on_save;
         // A failed read is reported by the file-history load beside this one.
@@ -432,7 +432,7 @@ impl Signex {
         });
         self.refilter_history();
         self.sync_switch_block();
-        let history = &mut self.document_state.history;
+        let history = &mut self.document_view.history;
         let kept = history.ui.selected.clone().filter(|sha| {
             history
                 .repo
@@ -454,7 +454,7 @@ impl Signex {
         sha: &str,
         result: Result<Vec<signex_widgets::history_graph::ChangedFile>, String>,
     ) {
-        let history = &mut self.document_state.history;
+        let history = &mut self.document_view.history;
         if generation != history.generation || history.ui.selected.as_deref() != Some(sha) {
             return;
         }
@@ -467,7 +467,7 @@ impl Signex {
     fn finish_ref_created(&mut self, result: Result<(), String>) -> Task<Message> {
         if let Err(error) = result {
             crate::diagnostics::log_warning(format!("[git] {error}"));
-            self.document_state.error_notice = Some(ErrorNotice::new(
+            self.document_view.error_notice = Some(ErrorNotice::new(
                 ids::PANELS_HISTORY_REF_FAILED,
                 verbatim(error),
             ));
@@ -485,7 +485,7 @@ mod tests {
 
     fn app_with_repo(root: &Path) -> Signex {
         let (mut app, _boot) = Signex::new();
-        app.document_state.history.repo = Some(Arc::new(HistoryRepoView {
+        app.document_view.history.repo = Some(Arc::new(HistoryRepoView {
             root: root.to_path_buf(),
             ..HistoryRepoView::default()
         }));
@@ -509,7 +509,7 @@ mod tests {
             "nothing started"
         );
         assert_eq!(
-            app.document_state.history.ui.switch_block,
+            app.document_view.history.ui.switch_block,
             Some(SwitchBlock::UnsavedEdits("power.snxsch".into()))
         );
     }
@@ -555,7 +555,7 @@ mod tests {
         drop(task);
 
         assert!(app.document_state.branch_switch.is_none());
-        assert!(app.document_state.error_notice.is_some());
+        assert!(app.document_view.error_notice.is_some());
     }
 
     #[test]
@@ -584,13 +584,13 @@ mod tests {
     fn a_stale_graph_load_is_dropped() {
         let root = PathBuf::from("/work/board");
         let mut app = app_with_repo(&root);
-        app.document_state.history.generation = 7;
-        let old = app.document_state.history.repo.clone();
+        app.document_view.history.generation = 7;
+        let old = app.document_view.history.repo.clone();
 
         let task = app.apply_history_view(6, Ok(None));
         drop(task);
 
-        assert_eq!(app.document_state.history.repo, old);
+        assert_eq!(app.document_view.history.repo, old);
     }
 
     /// The mockup's commit selected with its three files in, the panel
@@ -598,12 +598,12 @@ mod tests {
     fn app_with_selected_commit() -> Signex {
         use signex_widgets::history_graph::{ChangedFile, FileStatus};
         let (mut app, _boot) = Signex::new();
-        app.document_state.history.repo = Some(Arc::new(HistoryRepoView {
+        app.document_view.history.repo = Some(Arc::new(HistoryRepoView {
             root: PathBuf::from("/work/board"),
             tracked: "power.snxsch".into(),
             ..HistoryRepoView::default()
         }));
-        let ui = &mut app.document_state.history.ui;
+        let ui = &mut app.document_view.history.ui;
         ui.selected = Some("9e01f4d".into());
         let file = |status, path: &str| ChangedFile {
             status,
@@ -624,7 +624,7 @@ mod tests {
     }
 
     fn open_diff(app: &Signex) -> Option<HistoryDiff> {
-        app.document_state.panel_ctx.history.ui.diff.clone()
+        app.document_view.panel_ctx.history.ui.diff.clone()
     }
 
     fn diff_of(path: &str) -> FileDiff {
@@ -704,7 +704,7 @@ mod tests {
 
         commit_press(&mut app, HistoryCommitMsg::ShowDifferencesPressed);
         commit_press(&mut app, HistoryCommitMsg::Selected("0b3f9e1".into()));
-        let ui = &app.document_state.panel_ctx.history.ui;
+        let ui = &app.document_view.panel_ctx.history.ui;
         assert_eq!((ui.diff.clone(), ui.picked_file.clone()), (None, None));
     }
 
@@ -712,7 +712,7 @@ mod tests {
     #[test]
     fn show_differences_waits_for_the_commit_files() {
         let mut app = app_with_selected_commit();
-        app.document_state.history.ui.files.clear();
+        app.document_view.history.ui.files.clear();
         commit_press(&mut app, HistoryCommitMsg::ShowDifferencesPressed);
         assert_eq!(open_diff(&app), None);
     }
@@ -724,7 +724,7 @@ mod tests {
         let task =
             app.handle_history_panel(HistoryPanelMsg::Filter(HistoryFilterMsg::ThisFileToggled));
         drop(task);
-        let ui = &app.document_state.panel_ctx.history.ui;
+        let ui = &app.document_view.panel_ctx.history.ui;
         assert_eq!(
             ui.filter,
             HistoryFilter {

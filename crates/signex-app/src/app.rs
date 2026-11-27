@@ -14,6 +14,12 @@ mod actions;
 pub(crate) mod agent;
 pub(crate) mod assign_footprints;
 pub(crate) mod back_annotate;
+// Mockup row 171: the block diagram document tab.
+pub mod block_diagram;
+pub use block_diagram::{BlockDiagramMsg, BlockDiagrams};
+pub(crate) mod block_diagram_export;
+pub(crate) mod block_diagram_sync;
+pub use block_diagram_sync::BlockDiagramSyncMsg;
 pub(crate) mod board_output;
 pub(crate) mod board_panel;
 pub(crate) mod board_reannotate;
@@ -53,6 +59,7 @@ pub(crate) mod hierarchy_fixture;
 pub(crate) mod images;
 pub use images::ImagesMsg;
 mod layer_stack_tab;
+pub(crate) mod layout_plan;
 mod library_delete;
 mod load_gateway;
 mod mutation_gateway;
@@ -70,6 +77,7 @@ pub mod notebook_references;
 pub mod notebook_tab;
 pub use notebook_tab::NotebookMsg;
 pub(crate) mod page_tab;
+pub(crate) mod parameter_io;
 pub mod parent_reference_disk;
 mod parked_sheets;
 pub mod path_op_jobs;
@@ -77,6 +85,8 @@ pub mod path_ops;
 pub(crate) mod pin_junction_repair;
 mod pin_table_tab;
 mod polygon_manager_tab;
+// #1313: the power tree run behind `query_power_tree`.
+mod power_tree;
 pub mod project_entry_disk;
 pub(crate) mod project_git;
 pub(crate) mod project_save_as;
@@ -91,6 +101,7 @@ mod rules_tab;
 pub(crate) mod sch_tables;
 pub(crate) mod sheet_numbering;
 pub(crate) mod sheet_repairs;
+pub(crate) mod sheet_swap;
 pub(crate) mod sheet_sync;
 pub(crate) mod sheet_write;
 pub mod unions;
@@ -100,6 +111,7 @@ pub use project_tab::{ProjectGeneralFacts, ProjectSection, ProjectTabMsg, Projec
 pub use rules_tab::{RulesTabMsg, RulesTabState};
 pub use sch_tables::TablesMsg;
 pub(crate) mod design_read;
+pub(crate) mod design_reuse;
 pub(crate) mod designator_scan;
 #[cfg(test)]
 mod designator_scan_tests;
@@ -134,12 +146,18 @@ pub(crate) use state::ModalId;
 #[cfg(test)]
 mod draft_save_point_tests;
 pub(crate) mod stitched_netlist;
+mod symbol_draft;
 mod symbol_history;
+#[cfg(test)]
+mod symbol_split_tests;
 mod undo_depth;
 mod undo_groups;
 pub(crate) mod unread_sheets;
 pub(crate) mod update_pcb;
 pub use undo_groups::{UndoGroupKind, UndoGroupSheets};
+// Mockup rows 208 and 209: a part changed in one variant from the canvas.
+pub(crate) mod variant_part_edit;
+pub use variant_part_edit::VariantPartEditMsg;
 pub(crate) mod view;
 
 pub use assign_footprints::{
@@ -147,6 +165,7 @@ pub use assign_footprints::{
     FootprintPart, PartAccess, TickedBar,
 };
 pub use back_annotate::{BackAnnotateMsg, BackAnnotateState};
+pub use block_diagram_export::BlockDiagramExportMsg;
 pub use board_output::{
     BoardOutputDialog, BoardOutputMsg, BoardOutputState, BoardPrintFlag, BoardPrintState,
     BoardReportsState,
@@ -179,7 +198,8 @@ pub(crate) use document::{Document, DocumentKey};
 pub use document_setup::{DocumentSetupMsg, DocumentSetupState, SetupKind, SheetChoice};
 pub use documents::{
     ComponentEditorTab, FootprintDocument, FootprintHistorySnapshot, GraphicFillPicker,
-    LocalColorPicker, LocalColorSlot, SymbolDocument, SymbolViewRequest, TabInfo, TabKind, Tool,
+    LocalColorPicker, LocalColorSlot, SymbolDocument, SymbolEditorView, SymbolViewRequest, TabInfo,
+    TabKind, Tool,
 };
 pub use fab_outputs::{BoardNote, FabOutput, FabOutputsMsg, FabOutputsState, FabProblem};
 // The Annotations panel's view model, for the panel's own layout tests.
@@ -191,6 +211,7 @@ pub use handlers::window_geometry_events::GeometryReadout;
 pub use handlers::window_tiling::{Tile, TileLayout, TilePlan, tiles};
 pub use new_project::{NewProjectMsg, NewProjectState, ProfileUndo};
 pub use sheet_numbering::{NumberingProblem, SheetNumberingMsg, SheetNumberingState};
+pub use sheet_swap::SheetSwapMsg;
 pub use sheet_sync::{SheetSyncMsg, SheetSyncProblem, SheetSyncState};
 pub use signex_history::History;
 pub(crate) use signex_history::SavePoint;
@@ -202,9 +223,10 @@ pub use state::net_class_styles::{ResolveFailed, ResolvedStyles};
 pub use state::pcb_edit::{BoardEditError, CheckedStep};
 pub use state::project_case::CaseProbeOutcome;
 pub use state::{
-    CaseFold, DocumentState, InteractionState, KeymapRecorderState, LoadedProject, PageSetupInputs,
-    PreviewState, ProjectId, Signex, UiState,
+    CaseFold, DocumentState, DocumentViewState, InteractionState, KeymapRecorderState,
+    LoadedProject, PageSetupInputs, PreviewState, ProjectId, Signex, UiState,
 };
+pub use symbol_draft::SymbolDraft;
 pub use symbol_history::SymbolHistorySnapshot;
 pub use update_pcb::{RowAction, RowFilter, TableGroup, UpdatePcbMsg, UpdatePcbState};
 
@@ -248,6 +270,9 @@ impl Signex {
         // The Annotations panel reads the notebook when shown or when the
         // project in view changes (mockup row 165).
         tasks.push(self.sync_annotations_panel());
+        // The Parameter Manager's closed-sheet copies follow the tabs and
+        // the active project.
+        tasks.push(self.sync_closed_parameter_sheets());
         tasks.push(self.sync_compare_board());
         // Rich text notes show their cached compile; a missing one compiles
         // in a task (#1114, mockup row 203).
@@ -255,6 +280,9 @@ impl Signex {
         // A board that opened takes its kept view; a changed view is saved
         // soon (#2480).
         tasks.push(self.sync_pcb_layer_views());
+        // A sheet edit starts live ERC's wait (#1288); its timer is a
+        // subscription, so this update returns no task for it.
+        self.sync_live_erc();
         // A Properties draft of a board no window shows any more goes (#1312).
         self.prune_pcb_footprint_draft();
         self.prune_pcb_component_draft();

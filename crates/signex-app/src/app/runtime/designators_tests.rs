@@ -31,7 +31,7 @@ fn select_symbol(app: &mut Signex) {
 }
 
 fn panel_designator(app: &Signex) -> String {
-    app.document_state
+    app.document_view
         .panel_ctx
         .selection_info
         .iter()
@@ -161,7 +161,7 @@ fn a_child_opened_without_a_placement_shows_what_its_page_prints() {
     app.open_or_focus_sheet_path(child.clone());
     app.refresh_panel_ctx();
     app.settle_navigator();
-    assert_eq!(app.document_state.tab_placements.get(&child), None);
+    assert_eq!(app.document_view.tab_placements.get(&child), None);
     assert_eq!(shown(&app).as_deref(), Some("R7"));
     assert_eq!(current_page(&app, &child).0, "R7");
 }
@@ -269,7 +269,7 @@ fn a_designator_edit_on_a_loose_page_that_another_loose_page_places_writes_the_r
     app.refresh_panel_ctx();
     app.settle_navigator();
     let placements = app
-        .document_state
+        .document_view
         .panel_ctx
         .navigator
         .hierarchy
@@ -322,7 +322,7 @@ fn an_incomplete_walk_never_edits_the_reference() {
     descend_by_canvas(&mut app, PLACEMENT_A);
     assert_eq!(shown(&app).as_deref(), Some("R7"));
     assert!(
-        !app.document_state
+        !app.document_view
             .panel_ctx
             .navigator
             .hierarchy
@@ -349,7 +349,7 @@ fn a_child_opened_directly_shows_its_smallest_placement() {
     app.open_or_focus_sheet_path(child.clone());
     app.refresh_panel_ctx();
     app.settle_navigator();
-    assert_eq!(app.document_state.tab_placements.get(&child), None);
+    assert_eq!(app.document_view.tab_placements.get(&child), None);
     assert_eq!(shown(&app), None, "A's R1, not B's R101");
     assert_eq!(
         app.shown_placement(&child),
@@ -414,7 +414,7 @@ fn unchanged_inputs_skip_the_recompute_and_a_placement_or_edit_change_redoes_it(
     assert_eq!(shown(&app).as_deref(), Some("SENTINEL"), "no rebuild");
 
     // A different shown placement invalidates it.
-    app.document_state.tab_placements.record(
+    app.document_view.tab_placements.record(
         &child,
         Some(InstancePath::from_chain(vec![Uuid::from_u128(PLACEMENT_A)])),
     );
@@ -422,7 +422,7 @@ fn unchanged_inputs_skip_the_recompute_and_a_placement_or_edit_change_redoes_it(
     assert_eq!(shown(&app), None, "placement A draws the base designator");
 
     // A real edit moves the engine revision and invalidates it.
-    app.document_state.tab_placements.record(
+    app.document_view.tab_placements.record(
         &child,
         Some(InstancePath::from_chain(vec![Uuid::from_u128(PLACEMENT_B)])),
     );
@@ -501,7 +501,7 @@ fn a_commit_after_the_placement_changed_underneath_is_refused_and_logged() {
 
     // A route that moves the placement without closing the editor.
     let a = InstancePath::from_chain(vec![Uuid::from_u128(PLACEMENT_A)]);
-    app.document_state.tab_placements.record(&child, Some(a));
+    app.document_view.tab_placements.record(&child, Some(a));
     app.refresh_canvas_designators();
     let _ = app.update(crate::app::Message::TextEdit(
         crate::app::TextEditMsg::Submit,
@@ -527,7 +527,7 @@ fn a_designator_edit_on_a_projects_panel_child_while_rebuilding_writes_the_defau
     app.open_or_focus_sheet_path(child.clone());
     app.refresh_panel_ctx();
     app.settle_navigator();
-    assert_eq!(app.document_state.tab_placements.get(&child), None);
+    assert_eq!(app.document_view.tab_placements.get(&child), None);
 
     // A page is added to the project: the hierarchy on screen is now stale.
     app.document_state.projects[0]

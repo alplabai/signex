@@ -33,7 +33,8 @@ pub(crate) fn page_name(kind: &TabKind) -> Option<MessageId> {
         | TabKind::ComponentEditor(_)
         | TabKind::SymbolEditor(_)
         | TabKind::FootprintEditor(_)
-        | TabKind::LibraryBrowser(_) => None,
+        | TabKind::LibraryBrowser(_)
+        | TabKind::BlockDiagram(_) => None,
         // Titled by its package, not a project (`app/gerber_viewer/tab`).
         TabKind::GerberViewer => None,
     }

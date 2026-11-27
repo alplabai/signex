@@ -55,7 +55,14 @@ impl Signex {
                 .and_then(|id| document.project_by_id(id))
                 .and_then(crate::app::project_sheets::project_root_sheet_path)
         })?;
-        let project = document.document_project(&source)?;
+        self.sheet_numbering_target(source)
+    }
+
+    /// What the dialog numbers when it starts from the sheet at `source`:
+    /// that sheet, its project's name and folder. `None` once no open
+    /// project holds the sheet.
+    fn sheet_numbering_target(&self, source: PathBuf) -> Option<(PathBuf, String, PathBuf)> {
+        let project = self.document_state.document_project(&source)?;
         let (name, dir) = (project.data.name.clone(), project.dir().to_path_buf());
         Some((source, name, dir))
     }
@@ -92,6 +99,7 @@ impl Signex {
             self.document_state.documents_epoch,
             self.child_sheet_signature(),
             project_name.clone(),
+            source.clone(),
         ));
         Task::perform(
             crate::app::path_op_jobs::run_blocking(move || {
@@ -125,11 +133,9 @@ impl Signex {
             return Task::none();
         }
         if state.epoch != epoch || state.child_sheets != signature {
+            let source = state.source.clone();
             self.ui_state.sheet_numbering = None;
-            return match self.sheet_numbering_project() {
-                Some(target) => self.start_sheet_numbering_read(target),
-                None => Task::none(),
-            };
+            return self.restart_sheet_numbering_read(source);
         }
         match result {
             Ok(read) => {
@@ -150,5 +156,22 @@ impl Signex {
             }
         }
         Task::none()
+    }
+
+    /// A stale read starts again on the project of the sheet it started
+    /// from, whichever window or tab is active by then (#2629). A sheet no
+    /// open project holds any more closes the dialog with a Messages line.
+    fn restart_sheet_numbering_read(&mut self, source: PathBuf) -> Task<Message> {
+        match self.sheet_numbering_target(source.clone()) {
+            Some(target) => self.start_sheet_numbering_read(target),
+            None => {
+                crate::diagnostics::log_warning(format!(
+                    "Number Schematic Sheets: {} is no longer in an open project, so the \
+                     dialog closed.",
+                    source.display()
+                ));
+                Task::none()
+            }
+        }
     }
 }

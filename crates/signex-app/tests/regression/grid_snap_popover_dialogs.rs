@@ -87,9 +87,9 @@ fn an_error_card_closes_the_grid_and_snap_popover_for_good() {
         preview_source: None,
     };
     let _ = app.update(Message::Export(ExportMsg::FileWritten(Box::new(failed))));
-    assert!(app.document_state.error_notice.is_some(), "the card is up");
+    assert!(app.document_view.error_notice.is_some(), "the card is up");
     assert!(app.ui_state.grid_snap_popover.is_none());
     let _ = app.update(Message::Overlay(OverlayMsg::DismissErrorNotice));
-    assert!(app.document_state.error_notice.is_none());
+    assert!(app.document_view.error_notice.is_none());
     assert!(app.ui_state.grid_snap_popover.is_none());
 }

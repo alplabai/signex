@@ -123,7 +123,7 @@ fn a_picked_file_from_outside_joins_the_list_as_new() {
 fn the_card_shows_the_title_the_thumbnails_and_the_facts() {
     let dir = tempfile::tempdir().unwrap();
     let app = open_dialog(dir.path());
-    let tokens = &app.document_state.panel_ctx.tokens;
+    let tokens = &app.document_view.panel_ctx.tokens;
     let view = super::view(dialog(&app), tokens, &app.ui_state.i18n);
     let texts: Vec<String> =
         crate::layout_probe::lay_out_texts(view, iced::Size::new(1400.0, 900.0))

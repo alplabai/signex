@@ -202,7 +202,7 @@ fn without_operands_the_command_is_refused_and_changes_nothing_else() {
         app.document_state.active_tab,
     );
     let front = app
-        .document_state
+        .document_view
         .dock
         .is_frontmost(crate::panels::PanelKind::Properties);
 
@@ -221,7 +221,7 @@ fn without_operands_the_command_is_refused_and_changes_nothing_else() {
     assert_eq!(app.document_state.active_path, path);
     assert_eq!(app.document_state.active_tab, tab);
     assert_eq!(
-        app.document_state
+        app.document_view
             .dock
             .is_frontmost(crate::panels::PanelKind::Properties),
         front,

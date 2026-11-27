@@ -400,6 +400,20 @@ fn fail_on_checks_holds_on_an_erc_or_drc_error() {
     assert_eq!(summary.failed_on, ["checks"]);
 }
 
+/// #3021: `--fail-on checks` fails when ERC or DRC was never run or read,
+/// rather than reading the missing check as zero errors.
+#[test]
+fn fail_on_checks_fails_when_a_check_was_not_read() {
+    let mut facts = facts();
+    facts.erc = Fact::not_read("no ERC run is kept for the project");
+    facts.drc = Fact::not_read("no DRC run is kept for the project");
+    let mut summary = crate::generate::generate(&facts, &GenerateOptions::default()).summary;
+    assert!(summary.checks.erc.is_none() && summary.checks.drc.is_none());
+    assert!(summary.apply_fail_on(&[FailOn::Checks]));
+    assert_eq!(summary.status, GenerateStatus::Fail);
+    assert_eq!(summary.exit_code(), 1);
+}
+
 #[test]
 fn a_fail_on_condition_reads_the_counts_of_an_answer() {
     assert!(FailOn::Requirements.holds_on(1, 0));

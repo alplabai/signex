@@ -154,6 +154,15 @@ impl CommandArgs {
     }
 }
 
+/// The text operand `name` as given; `None` when it is left out or not text.
+/// The one reader the operand handlers share.
+pub(crate) fn operand_str<'a>(args: &'a CommandArgs, name: &str) -> Option<&'a str> {
+    match args.operand(name) {
+        Some(OperandValue::Text(text)) => Some(text.as_str()),
+        _ => None,
+    }
+}
+
 /// The first required operand of `command` that a headless run with none
 /// cannot do without. Without it the no-operand form only arms a tool or opens
 /// a picker, and would be reported as run. A `path` is a dialog answer a

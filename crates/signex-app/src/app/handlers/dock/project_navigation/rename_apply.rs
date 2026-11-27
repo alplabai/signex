@@ -86,7 +86,7 @@ impl Signex {
             self.set_rename_error(&shown);
         } else {
             // The Rename dialog shows the same text (#2059).
-            self.document_state.error_notice = Some(crate::app::state::ErrorNotice::rename_failed(
+            self.document_view.error_notice = Some(crate::app::state::ErrorNotice::rename_failed(
                 crate::app::state::untranslated(shown),
             ));
         }
@@ -177,7 +177,7 @@ impl Signex {
         }
         let outcome = self.apply_reference_rewrites(plan, parents, parent_disk);
         if !outcome.is_clean() {
-            self.document_state.error_notice = Some(crate::app::state::ErrorNotice::rename(
+            self.document_view.error_notice = Some(crate::app::state::ErrorNotice::rename(
                 super::sheet_references::rename_incomplete_detail(
                     &outcome.failed,
                     &outcome.unchecked,
@@ -240,8 +240,8 @@ impl Signex {
         new_path: &std::path::Path,
     ) {
         crate::app::state::rekey_page_setup(
-            &mut self.document_state.page_setup_memory,
-            self.document_state.preview.as_mut(),
+            &mut self.document_view.page_setup_memory,
+            self.document_view.preview.as_mut(),
             old_path,
             new_path,
         );

@@ -14,7 +14,6 @@ use signex_types::project::DrcRuleSet;
 use super::RulesText;
 use crate::app::command::{CommandArgs, OperandValue};
 use crate::app::document::{DocumentKey, UndoTarget};
-use crate::app::document_ids::DocumentKind;
 use crate::app::state::ProjectId;
 use crate::app::state::rules_history::RuleState;
 use crate::app::{Message, Signex, TabKind};
@@ -252,7 +251,7 @@ impl Signex {
 
     /// Whether `id`'s text view holds typed text not applied yet.
     pub(crate) fn rules_text_unapplied(&self, id: ProjectId) -> bool {
-        self.document_state
+        self.document_view
             .project_tabs
             .get(&id)
             .and_then(|tab| tab.rules.text.as_ref())
@@ -323,17 +322,8 @@ impl Signex {
             return Err("needs the operand `document`: the project or one of its documents".into());
         };
         self.reconcile_document_ids();
-        let entry = self.resolve_document_target(target)?;
-        let path = match entry.kind {
-            DocumentKind::Project => entry.path.clone(),
-            _ => entry.project.as_ref().map(|project| project.path.clone()),
-        };
-        let path = path.ok_or_else(|| format!("{} is not part of an open project", entry.name))?;
-        self.document_state
-            .projects
-            .iter()
-            .find(|project| project.path == path)
+        self.project_named(target)
             .map(|project| project.id)
-            .ok_or_else(|| format!("{} is not open", path.display()))
+            .map_err(|why| why.english())
     }
 }

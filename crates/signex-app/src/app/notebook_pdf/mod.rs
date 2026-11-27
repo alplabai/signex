@@ -232,6 +232,9 @@ pub struct BuildRequest {
     /// A command's `overwrite`: an existing file is replaced only with it.
     /// `None` for the dialog, where the person picked the file.
     pub overwrite: Option<bool>,
+    /// A headless or agent run: it reads and writes only inside the
+    /// project, through no link (#2172, #3020).
+    pub confined: bool,
     pub options: ExportOptions,
     /// The dialog opening it was started from; `None` for the command.
     pub generation: Option<u64>,

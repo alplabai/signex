@@ -13,6 +13,7 @@
 //! is the catalog surface of the sections (#1689-#1693).
 
 mod agent_journals;
+mod bom_alternates;
 mod commands;
 mod erc_annotation;
 mod fonts;
@@ -22,6 +23,7 @@ mod look;
 mod open;
 mod parameters;
 mod preview_ui;
+mod rails;
 mod requirements;
 mod row_drag;
 mod schematic_defaults;
@@ -36,6 +38,8 @@ mod view;
 
 #[cfg(test)]
 mod agent_journals_tests;
+#[cfg(test)]
+mod bom_alternates_tests;
 #[cfg(test)]
 mod commands_tests;
 #[cfg(test)]
@@ -53,10 +57,11 @@ mod setup_tests;
 #[cfg(test)]
 mod undo_routing_tests;
 
+pub(crate) use bom_alternates::{bom_add_alternate, bom_remove_alternate, bom_set_alternate_order};
 pub(crate) use commands::{
     project_add_variant, project_move_library, project_move_sheet, project_remove_variant,
-    project_rename_variant, project_set_active_variant, project_set_annotate_undo,
-    project_set_version_control,
+    project_rename_variant, project_set_active_variant, project_set_annotate_numbering,
+    project_set_annotate_undo, project_set_default_variant, project_set_version_control,
 };
 pub use fonts::ProjectFontsMsg;
 pub(crate) use fonts::{project_add_font, project_remove_font, project_set_font_license};
@@ -65,6 +70,7 @@ pub use parameters::ParameterGroup;
 #[cfg(test)]
 pub(crate) use preview_ui::PreviewPopup;
 pub use preview_ui::{ProjectPreviewMsg, ProjectPreviewUi};
+pub(crate) use rails::project_set_rail;
 pub use requirements::{RequirementsMsg, RequirementsTabState};
 pub(crate) use requirements::{
     project_add_requirement, project_enable_requirement, project_remove_requirement,
@@ -73,6 +79,10 @@ pub(crate) use requirements::{
 pub use row_drag::RowDragMsg;
 pub(crate) use sheets::sheet_thumbnail;
 pub use variants::VariantManagerMsg;
+pub(crate) use variants::{
+    alternate_parameters, project_duplicate_variant, project_set_variant_alternate,
+    project_set_variant_fit, project_set_variant_override, variant_parameters_command,
+};
 
 pub use crate::app::core::row_drag::RowDrag;
 use crate::app::state::ProjectId;
@@ -153,8 +163,6 @@ pub struct VariantRenameDraft {
 #[derive(Debug, Clone, Default)]
 pub struct ProjectTabState {
     pub section: ProjectSection,
-    /// Undo/redo of the General section's fields (engine-owned).
-    pub general_history: signex_engine::ProjectGeneralHistory,
     /// The name typed for a new custom parameter, not yet added.
     pub new_parameter_name: String,
     /// Schematic default fields as typed, until the next undo, redo or

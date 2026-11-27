@@ -2,14 +2,26 @@
 //! Rooms ▸ Create Rooms from Sheets. Every edit is one board command run as
 //! one labelled undo step; the model, the commands and the planner are in
 //! `signex_types::pcb::room` and `signex_engine::pcb::rooms`, the rule in
-//! `signex_drc::rooms`. See `docs/PCB_ROOMS.md`.
+//! `signex_drc::rooms`. See `docs/PCB_ROOMS.md`. Every rooms command also
+//! runs from its operands (`operands`, `auto_place`, #2935), and Arrange in
+//! Room and Auto Place in Rooms reach those handlers from the GUI (`tool`).
 
+mod answer;
+mod auto_place;
+mod operands;
 mod state;
+mod tool;
 mod update;
 
 #[cfg(test)]
+mod operand_tests;
+#[cfg(test)]
 mod tests;
 
+pub(crate) use auto_place::auto_place_by_operands;
+pub(crate) use operands::{
+    RoomsRequest, arrange_in_room_by_operands, create_rooms_by_operands, place_room_by_operands,
+};
 pub(crate) use state::{CreateRoomsDialog, RoomRow, RoomsUi};
 
 use pcb_geom::ItemRef;
@@ -116,6 +128,30 @@ pub enum CreateRoomsMsg {
     Cancelled,
     /// Create: the ticked rooms as one undo step.
     Confirmed,
+    /// The sheets a `create_rooms_from_sheets` run with operands waited for
+    /// came back: every room is made on `board` and the command answered.
+    SheetsReadFor {
+        waiting: Box<crate::app::agent::WaitingCommand>,
+        board: std::path::PathBuf,
+        request: Box<RoomsRequest>,
+        result: Result<Vec<signex_engine::pcb::rooms::SheetMembers>, String>,
+    },
+}
+
+/// Arrange in Room and Auto Place in Rooms ran on the board in view.
+/// Namespaced under `PcbMsg::RoomTool`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RoomToolMsg {
+    /// Arrange in Room, on the room Properties shows.
+    ArrangeRequested,
+    /// Auto Place in Rooms, on every room with the default weights.
+    AutoPlaceRequested,
+}
+
+impl From<RoomToolMsg> for Message {
+    fn from(msg: RoomToolMsg) -> Self {
+        Message::Pcb(crate::app::PcbMsg::RoomTool(msg))
+    }
 }
 
 impl From<RoomMsg> for Message {

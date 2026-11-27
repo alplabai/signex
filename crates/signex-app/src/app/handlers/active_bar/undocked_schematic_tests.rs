@@ -485,6 +485,7 @@ fn change_component_confirmed_for_an_undocked_windows_sheet_changes_that_sheet()
         internal_pn: "NEW-1".to_string(),
         value: "NEWVALUE".to_string(),
         is_power: false,
+        net_tie: false,
         prefix: "R".to_string(),
         class: "generic".to_string(),
         prefix_override: None,
@@ -507,6 +508,7 @@ fn change_component_confirmed_for_an_undocked_windows_sheet_changes_that_sheet()
         footprint: String::new(),
         datasheet: String::new(),
         fields: Vec::new(),
+        pin_map: None,
     };
     let preview = signex_engine::change_component_preview(&doc, symbol.uuid, &replacement);
     f.app.library.picker = Some(crate::library::PickerState {
@@ -517,6 +519,9 @@ fn change_component_confirmed_for_an_undocked_windows_sheet_changes_that_sheet()
             rows: Vec::new(),
             dropped: Vec::new(),
             scope: ChangeScope::ThisPart,
+            pin_map: None,
+            pins: Vec::new(),
+            pin_choices: Vec::new(),
         })),
         ..Default::default()
     });

@@ -117,6 +117,9 @@ pub struct WireWidths<'a> {
     pub special_strings: Option<&'a crate::canvas::SpecialStrings>,
     /// The compiled rich text notes: a rich note is boxed as it draws (#1114).
     pub rich_notes: Option<&'a super::rich_note::RichNoteRenders>,
+    /// The active variant's own values (#2948): a value field is boxed on
+    /// the value the variant gives its part.
+    pub variant_values: Option<&'a signex_output::DrawnValueMap>,
 }
 
 impl WireWidths<'_> {
