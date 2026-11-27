@@ -46,7 +46,7 @@ live content), so the first step onto such a sheet is followed by one rebuild.
 
 ## Highlight
 
-`NetHighlight` lives in `DocumentState::net_nav`. It names the net by the
+`NetHighlight` lives in `DocumentViewState::net_nav`. It names the net by the
 element it was started from and the net's name, so a rebuilt index finds the
 same net after an edit. Every schematic canvas gets the part for the sheet it
 shows (`CanvasSlot::set_net_highlight`); the renderer's focus dimming keeps

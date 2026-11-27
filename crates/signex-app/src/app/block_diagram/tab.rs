@@ -105,6 +105,7 @@ impl Signex {
             || diagrams.editors.get(&path).is_some_and(|e| e.is_dirty());
         if !keep {
             diagrams.editors.remove(&path);
+            self.document_view.block_diagrams.remove(&path);
             // A later open starts its own disk baseline.
             self.document_state
                 .document_saves

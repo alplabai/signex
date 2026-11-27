@@ -17,7 +17,7 @@ fn symbol_lists_are_reused_until_the_engine_revision_moves() {
         signex_types::schematic::SchematicSheet::default(),
     );
     app.refresh_panel_ctx();
-    let key = app.document_state.panel_ctx.symbol_lists_key;
+    let key = app.document_view.panel_ctx.symbol_lists_key;
     assert!(key.is_some(), "schematic engine must key the lists");
 
     let sentinel = (
@@ -26,14 +26,14 @@ fn symbol_lists_are_reused_until_the_engine_revision_moves() {
         String::new(),
         String::new(),
     );
-    app.document_state.panel_ctx.placed_symbols = vec![sentinel.clone()];
+    app.document_view.panel_ctx.placed_symbols = vec![sentinel.clone()];
     app.refresh_panel_ctx();
-    assert_eq!(app.document_state.panel_ctx.placed_symbols, vec![sentinel]);
+    assert_eq!(app.document_view.panel_ctx.placed_symbols, vec![sentinel]);
 
-    app.document_state.panel_ctx.symbol_lists_key = Some((0, 0));
+    app.document_view.panel_ctx.symbol_lists_key = Some((0, 0));
     app.refresh_panel_ctx();
-    assert!(app.document_state.panel_ctx.placed_symbols.is_empty());
-    assert_eq!(app.document_state.panel_ctx.symbol_lists_key, key);
+    assert!(app.document_view.panel_ctx.placed_symbols.is_empty());
+    assert_eq!(app.document_view.panel_ctx.symbol_lists_key, key);
 }
 
 /// #2262: a component editor tab, active in a fresh layout, folds the
@@ -45,9 +45,9 @@ fn an_active_component_tab_folds_the_fresh_left_dock() {
     use crate::library::state::EditorAddress;
 
     let (mut app, _task) = Signex::new();
-    app.document_state.dock = crate::dock::graphite_first_run();
+    app.document_view.dock = crate::dock::graphite_first_run();
     app.refresh_panel_ctx();
-    assert!(!app.document_state.dock.is_collapsed(PanelPosition::Left));
+    assert!(!app.document_view.dock.is_collapsed(PanelPosition::Left));
 
     let row = crate::library::component_preview::test_row();
     let library_path = PathBuf::from("/tmp/dock-seed/Lib.snxlib");
@@ -68,7 +68,7 @@ fn an_active_component_tab_folds_the_fresh_left_dock() {
     });
     app.document_state.active_tab = app.document_state.tabs.len() - 1;
     app.refresh_panel_ctx();
-    assert!(app.document_state.dock.is_collapsed(PanelPosition::Left));
+    assert!(app.document_view.dock.is_collapsed(PanelPosition::Left));
 }
 
 /// #1383: the project tree is rebuilt only when what it shows changes,
@@ -113,16 +113,16 @@ fn project_tree_is_reused_until_the_projects_change() {
         case_decided: false,
     });
     app.refresh_panel_ctx();
-    let builds = app.document_state.panel_ctx.project_tree_builds;
-    assert!(builds > 0 && !app.document_state.panel_ctx.project_tree.is_empty());
+    let builds = app.document_view.panel_ctx.project_tree_builds;
+    assert!(builds > 0 && !app.document_view.panel_ctx.project_tree.is_empty());
 
     app.refresh_panel_ctx();
     app.refresh_panel_ctx();
-    assert_eq!(app.document_state.panel_ctx.project_tree_builds, builds);
+    assert_eq!(app.document_view.panel_ctx.project_tree_builds, builds);
 
     app.document_state.projects[0].data.pcb_file = Some("b.snxpcb".into());
     app.refresh_panel_ctx();
-    assert_eq!(app.document_state.panel_ctx.project_tree_builds, builds + 1);
+    assert_eq!(app.document_view.panel_ctx.project_tree_builds, builds + 1);
 }
 
 /// #1098: the probe request must name `<dir>/.git` for the project dir

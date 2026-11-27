@@ -83,7 +83,7 @@ fn editing_a_class_changes_the_project_and_marks_it_dirty() {
     assert_eq!(class.style.line, Some(NetLineStyle::Dashed));
     assert!(app.document_state.is_document_dirty(&path));
 
-    let shown = &app.document_state.panel_ctx.net_classes;
+    let shown = &app.document_view.panel_ctx.net_classes;
     assert!(shown.available);
     assert_eq!(shown.classes, classes(&app));
     assert!(shown.can_undo);
@@ -97,7 +97,7 @@ fn undo_and_redo_walk_the_table_back_and_forth() {
 
     send(&mut app, NetClassMsg::Undo);
     assert_eq!(classes(&app)[0].name, "Class 1");
-    assert!(app.document_state.panel_ctx.net_classes.can_redo);
+    assert!(app.document_view.panel_ctx.net_classes.can_redo);
     send(&mut app, NetClassMsg::Redo);
     assert_eq!(classes(&app)[0].name, "Power");
     send(&mut app, NetClassMsg::Undo);
@@ -113,7 +113,7 @@ fn a_refused_edit_leaves_the_project_clean() {
     commit(&mut app, NetClassField::Color, "not-a-colour");
     assert!(classes(&app)[0].style.is_default());
     assert!(!app.document_state.is_document_dirty(&path));
-    assert!(app.document_state.panel_ctx.net_classes.notice.is_some());
+    assert!(app.document_view.panel_ctx.net_classes.notice.is_some());
 }
 
 fn second_project(app: &mut Signex) {
@@ -171,7 +171,7 @@ fn switching_project_resyncs_the_selection_and_drafts() {
     assert_eq!(b.name, "Sig");
     assert_eq!(b.style.wire_width_mm, None);
 
-    let shown = &app.document_state.panel_ctx.net_classes;
+    let shown = &app.document_view.panel_ctx.net_classes;
     assert_eq!(shown.classes[0].name, "Sig");
     assert_eq!(shown.draft.name, "Sig");
     assert_eq!(shown.draft.width, "");

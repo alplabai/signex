@@ -737,8 +737,8 @@ fn tree_root_rows(
             )
         })
         .collect();
-    app.document_state.panel_ctx.project_tree = tree;
-    app.document_state.panel_ctx.has_schematic = has_schematic;
+    app.document_view.panel_ctx.project_tree = tree;
+    app.document_view.panel_ctx.has_schematic = has_schematic;
     let ctx = crate::app::ProjectTreeContextMenuState {
         x: 0.0,
         y: 0.0,
@@ -1007,10 +1007,10 @@ fn preferences_row_opens_preferences() {
 fn properties_row_shows_the_properties_panel() {
     let mut app = one_symbol();
     let properties = crate::panels::PanelKind::Properties;
-    app.document_state.dock.close_panel(properties);
-    assert!(!app.document_state.dock.is_frontmost(properties));
+    app.document_view.dock.close_panel(properties);
+    assert!(!app.document_view.dock.is_frontmost(properties));
     let _ = press(&mut app, "edit_selected_object_properties");
-    assert!(app.document_state.dock.is_frontmost(properties));
+    assert!(app.document_view.dock.is_frontmost(properties));
     assert_menu_closed(&app, "properties");
 }
 

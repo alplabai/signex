@@ -25,14 +25,14 @@ fn bare_board() -> signex_types::pcb::PcbBoard {
 #[test]
 fn view_options_draws_draft_as_its_own_column_between_object_and_transparency() {
     let (mut app, _boot) = Signex::new();
-    let ctx = &mut app.document_state.panel_ctx;
+    let ctx = &mut app.document_view.panel_ctx;
     let view = signex_renderer::pcb::PcbLayerView::default();
     ctx.pcb_layers = PcbLayersPanel::new(&bare_board(), &view, app.ui_state.i18n.clone());
     ctx.pcb_layers_ui = LayersPanelUi {
         tab: LayersTab::ViewOptions,
         ..LayersPanelUi::default()
     };
-    let ctx = app.document_state.panel_ctx.clone();
+    let ctx = app.document_view.panel_ctx.clone();
     let texts = lay_out_texts(
         crate::panels::view_panel(PanelKind::Layers, &ctx),
         Size::new(320.0, 2600.0),

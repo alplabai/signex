@@ -14,7 +14,7 @@ impl Signex {
     /// for [`Self::start_footprint_card_reads`]. `None` when the selection
     /// is not one placed part or the part holds no footprint.
     pub(crate) fn resolve_footprint_card(&mut self) -> Option<FootprintCardView> {
-        let ctx = &self.document_state.panel_ctx;
+        let ctx = &self.document_view.panel_ctx;
         if ctx.selected_kind != Some(signex_types::schematic::SelectedKind::Symbol) {
             return None;
         }
@@ -68,14 +68,14 @@ impl Signex {
                 .as_ref()
                 .is_some_and(|card| card.version != version)
         };
-        if is_stale(&self.document_state.panel_ctx) {
-            self.document_state.panel_ctx.footprint_card = self.resolve_footprint_card();
+        if is_stale(&self.document_view.panel_ctx) {
+            self.document_view.panel_ctx.footprint_card = self.resolve_footprint_card();
         }
         // An undocked window keeps its own card; re-resolve it against its
         // own selection. Inside a window's swap the main slot is that window.
         if self.interaction_state.acting_window.is_none() {
             let stale: Vec<iced::window::Id> = self
-                .document_state
+                .document_view
                 .window_panel_ctx
                 .iter()
                 .filter(|(window, ctx)| is_stale(ctx) && self.is_document_window(**window))
@@ -83,7 +83,7 @@ impl Signex {
                 .collect();
             for window in stale {
                 drop(self.run_in_window(window, true, |app| {
-                    app.document_state.panel_ctx.footprint_card = app.resolve_footprint_card();
+                    app.document_view.panel_ctx.footprint_card = app.resolve_footprint_card();
                     Task::none()
                 }));
             }
@@ -147,8 +147,8 @@ impl Signex {
         let Some(status) = self.library.properties_footprints.finish(key, result) else {
             return;
         };
-        let contexts = std::iter::once(&mut self.document_state.panel_ctx)
-            .chain(self.document_state.window_panel_ctx.values_mut());
+        let contexts = std::iter::once(&mut self.document_view.panel_ctx)
+            .chain(self.document_view.window_panel_ctx.values_mut());
         for ctx in contexts {
             if let Some(card) = ctx.footprint_card.as_mut()
                 && card.key == Some(key)

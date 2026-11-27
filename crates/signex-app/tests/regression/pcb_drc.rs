@@ -113,12 +113,7 @@ fn the_check_lists_the_close_pair_and_clicking_it_selects_both_tracks() {
     assert_eq!(v.kind, ViolationKind::Clearance);
     assert_eq!((v.measured_nm, v.required_nm), (150_000, 200_000));
 
-    let panel = app
-        .document_state
-        .panel_ctx
-        .pcb_drc
-        .as_ref()
-        .expect("panel");
+    let panel = app.document_view.panel_ctx.pcb_drc.as_ref().expect("panel");
     assert!(panel.ran && !panel.running && !panel.stale);
     assert_eq!((panel.clearance, panel.short, panel.unconnected), (1, 0, 0));
     assert_eq!(panel.rows.len(), 1);
@@ -172,7 +167,7 @@ fn the_tools_menu_row_runs_the_check_and_is_greyed_without_a_board() {
     let (mut none, _boot) = Signex::new();
     none.ui_state.first_run_tour_open = false;
     run_row(&mut none);
-    assert!(none.document_state.panel_ctx.pcb_drc.is_none());
+    assert!(none.document_view.panel_ctx.pcb_drc.is_none());
 }
 
 #[test]
@@ -189,7 +184,7 @@ fn run_drc_with_no_board_open_runs_nothing() {
     let (mut app, _boot) = Signex::new();
     app.ui_state.first_run_tour_open = false;
     run_drc(&mut app);
-    assert!(app.document_state.panel_ctx.pcb_drc.is_none());
+    assert!(app.document_view.panel_ctx.pcb_drc.is_none());
 }
 
 /// #2307 step 2a: a run carries the resolved severity of each rule, taken
@@ -231,12 +226,7 @@ fn a_run_carries_the_severities_of_the_machine_profile_and_finds_the_same() {
 fn the_default_clearance_is_said_and_a_set_rule_is_not() {
     let (mut app, _tmp, _path) = open_board();
     run_drc(&mut app);
-    let panel = app
-        .document_state
-        .panel_ctx
-        .pcb_drc
-        .as_ref()
-        .expect("panel");
+    let panel = app.document_view.panel_ctx.pcb_drc.as_ref().expect("panel");
     assert_eq!(panel.default_clearance_mm.as_deref(), Some("0.2"));
 
     let mut set = board();
@@ -252,12 +242,7 @@ fn the_default_clearance_is_said_and_a_set_rule_is_not() {
     });
     let (mut app, _tmp, _path) = open(set);
     run_drc(&mut app);
-    let panel = app
-        .document_state
-        .panel_ctx
-        .pcb_drc
-        .as_ref()
-        .expect("panel");
+    let panel = app.document_view.panel_ctx.pcb_drc.as_ref().expect("panel");
     assert!(panel.ran);
     assert_eq!(panel.default_clearance_mm, None);
 }
@@ -279,12 +264,7 @@ fn the_idle_panel_states_the_boards_own_clearance() {
         via_min_drill: 0.0,
     });
     let (app, _tmp, _path) = open(set);
-    let panel = app
-        .document_state
-        .panel_ctx
-        .pcb_drc
-        .as_ref()
-        .expect("panel");
+    let panel = app.document_view.panel_ctx.pcb_drc.as_ref().expect("panel");
     assert!(!panel.ran);
     assert_eq!(panel.checked_clearance_mm.as_deref(), Some("0.25"));
     assert_eq!(panel.default_clearance_mm, None);
@@ -341,7 +321,7 @@ fn without_rule_text_the_report_and_its_messages_are_unchanged() {
         assert_eq!(done.report.violations.len(), 1);
         assert_eq!(done.report.violations[0].rule, None);
         assert_eq!(done.report.rules.user_rules().count(), 0);
-        let panel = app.document_state.panel_ctx.pcb_drc.as_ref().unwrap();
+        let panel = app.document_view.panel_ctx.pcb_drc.as_ref().unwrap();
         assert!(
             !panel.written_clearance && panel.rules_not_applied == 0 && !panel.rule_text_unparsed,
             "{dsl:?}"
@@ -396,7 +376,7 @@ fn rule_text_without_a_clearance_rule_keeps_the_clearance_wording() {
         ),
         "{lines:?}"
     );
-    let panel = app.document_state.panel_ctx.pcb_drc.as_ref().unwrap();
+    let panel = app.document_view.panel_ctx.pcb_drc.as_ref().unwrap();
     assert!(!panel.written_clearance);
 }
 
@@ -452,7 +432,7 @@ fn rule_text_in_the_profile_is_applied_by_the_run() {
         ),
         "{lines:?}"
     );
-    let panel = app.document_state.panel_ctx.pcb_drc.as_ref().unwrap();
+    let panel = app.document_view.panel_ctx.pcb_drc.as_ref().unwrap();
     assert_eq!(panel.rows.len(), 3);
     assert!(!panel.rows[0].over_maximum);
     assert!(panel.written_clearance);
@@ -485,7 +465,7 @@ fn rule_text_with_a_syntax_error_is_said_beside_the_results() {
     );
     let done = app.interaction_state.pcb_drc.done_for(&path).unwrap();
     assert_eq!(done.report.violations.len(), 1);
-    let panel = app.document_state.panel_ctx.pcb_drc.as_ref().unwrap();
+    let panel = app.document_view.panel_ctx.pcb_drc.as_ref().unwrap();
     assert!(panel.rule_text_unparsed && !panel.written_clearance);
 }
 
@@ -522,7 +502,7 @@ fn a_rule_that_does_not_compile_is_reported_and_skipped() {
         lines.contains(&"DRC rules: 1 written rule(s) not applied".to_string()),
         "{lines:?}"
     );
-    let panel = app.document_state.panel_ctx.pcb_drc.as_ref().unwrap();
+    let panel = app.document_view.panel_ctx.pcb_drc.as_ref().unwrap();
     assert_eq!(panel.rules_not_applied, 1);
 }
 
@@ -569,7 +549,7 @@ fn keepouts_are_counted_and_an_unchecked_keepout_is_said() {
     );
     assert!(!done.report.is_clean());
 
-    let panel = app.document_state.panel_ctx.pcb_drc.as_ref().unwrap();
+    let panel = app.document_view.panel_ctx.pcb_drc.as_ref().unwrap();
     assert_eq!(
         (panel.clearance, panel.keepout, panel.skipped_keepouts),
         (1, 1, 1)
@@ -603,7 +583,7 @@ fn a_keepout_only_board_counts_its_keepout() {
     });
     let (mut app, _tmp, _path) = open(b);
     run_drc(&mut app);
-    let panel = app.document_state.panel_ctx.pcb_drc.as_ref().unwrap();
+    let panel = app.document_view.panel_ctx.pcb_drc.as_ref().unwrap();
     assert_eq!(
         (
             panel.clearance,

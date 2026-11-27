@@ -19,8 +19,9 @@ use signex_i18n::{I18n, Localized, MessageId, ids, t};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::doc_tab_shell::{DocTabShell, DocTabShellStyle, Footer};
 
+use super::OpenDiagram;
 use super::canvas::{CanvasLook, diagram_canvas};
-use super::state::{BlockDiagramEditor, DiagramView};
+use super::state::DiagramView;
 use super::{BlockDiagramMsg, TabEvent};
 use crate::app::{Message, Signex};
 use crate::styles::tokens::resolve;
@@ -65,14 +66,14 @@ impl Signex {
         path: &std::path::Path,
     ) -> Vec<(uuid::Uuid, String, iced::Color)> {
         let look = Look {
-            tokens: &self.document_state.panel_ctx.tokens,
+            tokens: &self.document_view.panel_ctx.tokens,
             i18n: &self.ui_state.i18n,
         };
-        let Some(editor) = self.document_state.block_diagrams.editors.get(path) else {
+        let Some(editor) = self.open_diagram(path) else {
             return Vec::new();
         };
-        let canvas = canvas_look(look, editor.show_ground);
-        editor.review.as_ref().map_or_else(Vec::new, |open| {
+        let canvas = canvas_look(look, editor.tab.show_ground);
+        editor.tab.review.as_ref().map_or_else(Vec::new, |open| {
             super::canvas_review::tags(open, &review::preview_tags(look), &canvas)
         })
     }
@@ -86,16 +87,16 @@ impl Signex {
         worded: bool,
     ) -> Element<'_, TabEvent> {
         let look = Look {
-            tokens: &self.document_state.panel_ctx.tokens,
+            tokens: &self.document_view.panel_ctx.tokens,
             i18n: &self.ui_state.i18n,
         };
-        let editor = &self.document_state.block_diagrams.editors[path];
+        let editor = self.open_diagram(path).expect("the diagram is open");
         let words = if worded {
             review::preview_tags(look)
         } else {
             Default::default()
         };
-        diagram_canvas(editor, canvas_look(look, editor.show_ground), words)
+        diagram_canvas(editor, canvas_look(look, editor.tab.show_ground), words)
     }
 
     /// The Variant field of the diagram at `path`: the variant picked, else
@@ -107,8 +108,9 @@ impl Signex {
         if let Some(project) = project {
             names.extend(project.data.variant_definitions.iter().cloned());
         }
-        let picked = (self.document_state.block_diagrams.editors.get(path))
-            .and_then(|editor| editor.power.variant.clone());
+        let picked = self
+            .open_diagram_view(path)
+            .and_then(|tab| tab.power.variant.clone());
         let active = project.and_then(|p| p.data.active_variant.clone());
         let shown = picked
             .or(active)
@@ -120,10 +122,10 @@ impl Signex {
     /// The tab of the diagram at `path`.
     pub(crate) fn view_block_diagram_tab(&self, path: PathBuf) -> Element<'_, Message> {
         let look = Look {
-            tokens: &self.document_state.panel_ctx.tokens,
+            tokens: &self.document_view.panel_ctx.tokens,
             i18n: &self.ui_state.i18n,
         };
-        let Some(editor) = self.document_state.block_diagrams.editors.get(&path) else {
+        let Some(editor) = self.open_diagram(&path) else {
             return container(signex_widgets::text(look.t(ids::BLOCK_DIAGRAM_NOT_OPEN)))
                 .padding(SP.l)
                 .boxed();
@@ -163,17 +165,17 @@ pub(super) fn canvas_look(look: Look<'_>, show_ground: bool) -> CanvasLook {
 /// The whole tab.
 fn tab<'a>(
     look: Look<'a>,
-    editor: &'a BlockDiagramEditor,
+    editor: OpenDiagram<'a>,
     variant: VariantField,
 ) -> Element<'a, TabEvent> {
-    let (main, side) = match editor.view {
+    let (main, side) = match editor.tab.view {
         DiagramView::Blocks => (
             diagram_canvas(
                 editor,
-                canvas_look(look, editor.show_ground),
+                canvas_look(look, editor.tab.show_ground),
                 review::preview_tags(look),
             ),
-            match &editor.review {
+            match &editor.tab.review {
                 Some(open) => review::view(look, open),
                 None => properties::view(look, editor),
             },
@@ -184,7 +186,7 @@ fn tab<'a>(
         ),
     };
     // The export popover sits over the canvas's top right (mockup row 171).
-    let main = match &editor.export {
+    let main = match &editor.tab.export {
         Some(draft) => stack![
             main,
             container(export::view(look, editor, draft))
@@ -216,19 +218,19 @@ fn tab<'a>(
 }
 
 /// "4 blocks · 4 connections", and how the canvas is used.
-fn footer<'a>(look: Look<'a>, editor: &BlockDiagramEditor) -> Footer<'a> {
-    if editor.view == DiagramView::PowerTree {
+fn footer<'a>(look: Look<'a>, editor: OpenDiagram<'_>) -> Footer<'a> {
+    if editor.tab.view == DiagramView::PowerTree {
         let note = look.t(ids::BLOCK_DIAGRAM_POWER_FOOTER_NOTE);
         return Footer::new(power_tree::status(look, editor)).note(note);
     }
-    let diagram = &editor.diagram;
+    let diagram = &editor.doc.diagram;
     let status = t!(
         look.i18n,
         ids::BLOCK_DIAGRAM_FOOTER,
         "blocks" => diagram.blocks.len(),
         "connections" => diagram.connections.len()
     );
-    let note = if editor.is_read_only() {
+    let note = if editor.doc.is_read_only() {
         look.t(ids::BLOCK_DIAGRAM_FOOTER_READ_ONLY)
     } else {
         look.t(ids::BLOCK_DIAGRAM_FOOTER_NOTE)

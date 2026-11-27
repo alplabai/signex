@@ -23,7 +23,7 @@ impl Signex {
     }
 
     pub(crate) fn view_polygon_manager_tab(&self) -> Element<'_, Message> {
-        crate::panels::polygons::view(&self.document_state.panel_ctx)
+        crate::panels::polygons::view(&self.document_view.panel_ctx)
             .map(|msg| Message::Dock(DockMessage::Panel(msg)))
             .boxed()
     }

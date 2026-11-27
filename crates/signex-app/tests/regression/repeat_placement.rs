@@ -15,7 +15,7 @@ fn select(app: &mut Signex, tool: Tool) {
 /// What the Tab form leaves behind: the label tool with its text typed.
 fn arm_label(app: &mut Signex, text: &str) {
     select(app, Tool::Label);
-    app.document_state.panel_ctx.pre_placement = Some(PrePlacementData {
+    app.document_view.panel_ctx.pre_placement = Some(PrePlacementData {
         tool_name: "Net Label".to_owned(),
         kind: PrePlacementKind::NetLabel,
         label_text: text.to_owned(),
@@ -86,7 +86,7 @@ fn repeat_last_item_arms_the_label_again_with_the_next_value() {
     click_n(&mut app, 1);
     // Esc: the tool and its typed text are gone.
     select(&mut app, Tool::Select);
-    assert!(app.document_state.panel_ctx.pre_placement.is_none());
+    assert!(app.document_view.panel_ctx.pre_placement.is_none());
 
     let _ = app.update(Message::Edit(EditMsg::RepeatLastItem));
     assert_eq!(app.interaction_state.current_tool, Tool::Label);
@@ -113,7 +113,7 @@ fn repeat_last_item_with_nothing_placed_says_so_and_changes_nothing() {
 fn repeat_last_item_repeats_a_text_note_with_the_next_value() {
     let mut app = app_with_empty_sheet();
     select(&mut app, Tool::Text);
-    app.document_state.panel_ctx.pre_placement = Some(PrePlacementData {
+    app.document_view.panel_ctx.pre_placement = Some(PrePlacementData {
         tool_name: "Text".to_owned(),
         kind: PrePlacementKind::TextNote,
         label_text: "Note 1".to_owned(),
@@ -150,7 +150,7 @@ fn repeat_last_item_repeats_a_text_note_with_the_next_value() {
 fn repeat_last_item_restores_the_look_the_form_gave_the_label() {
     let mut app = app_with_empty_sheet();
     arm_label(&mut app, "D0");
-    if let Some(pre) = app.document_state.panel_ctx.pre_placement.as_mut() {
+    if let Some(pre) = app.document_view.panel_ctx.pre_placement.as_mut() {
         pre.rotation = 90.0;
         pre.font_size_pt = 14;
         pre.justify_h = signex_types::schematic::HAlign::Right;

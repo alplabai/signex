@@ -165,17 +165,17 @@ impl Signex {
 
     /// Keep the History switcher's open notice true as saves start and finish.
     pub(in crate::app) fn sync_switch_block(&mut self) {
-        if !self.document_state.history.ui.switcher_open {
+        if !self.document_view.history.ui.switcher_open {
             return;
         }
         let block = self
-            .document_state
+            .document_view
             .history
             .repo
             .as_ref()
             .map(|repo| repo.root.clone())
             .and_then(|root| self.branch_switch_block(&root));
-        let ui = &mut self.document_state.history.ui;
+        let ui = &mut self.document_view.history.ui;
         if !matches!(block, Some(SwitchBlock::UnsavedEdits(_))) {
             ui.save_offered = false;
         }
@@ -261,7 +261,7 @@ impl Signex {
                 self.ui_state.project_git.repo_mut(id).block = Some(block);
             }
             SwitchSurface::History => {
-                self.document_state.history.ui.switch_block = Some(block);
+                self.document_view.history.ui.switch_block = Some(block);
             }
         }
     }
@@ -272,7 +272,7 @@ impl Signex {
         let git = &mut self.ui_state.project_git;
         git.save_offer = None;
         git.pick += 1;
-        self.document_state.history.ui.save_offered = false;
+        self.document_view.history.ui.save_offered = false;
     }
 
     /// A branch was picked on either surface: it replaces a switch still
@@ -338,7 +338,7 @@ impl Signex {
             return;
         }
         if request.surface == SwitchSurface::History {
-            self.document_state.history.ui.save_offered = true;
+            self.document_view.history.ui.save_offered = true;
             self.publish_history();
         }
         self.ui_state.project_git.save_offer = Some(request);
@@ -396,7 +396,7 @@ impl Signex {
         let mut held = self.branch_switch_held_paths(&root);
         held.retain(|path| !project_files.contains(path));
         self.document_state.branch_switch = Some(root.clone());
-        self.document_state.history.ui.switch_block = None;
+        self.document_view.history.ui.switch_block = None;
         match surface {
             SwitchSurface::ProjectTab(id) => {
                 let repo = self.ui_state.project_git.repo_mut(id);
@@ -404,7 +404,7 @@ impl Signex {
                 let (BranchTarget::Local(name) | BranchTarget::Remote(name)) = &target;
                 repo.switching = Some(name.clone());
             }
-            SwitchSurface::History => self.document_state.history.ui.switcher_open = false,
+            SwitchSurface::History => self.document_view.history.ui.switcher_open = false,
         }
         let job = SwitchJob {
             root,
@@ -460,7 +460,7 @@ impl Signex {
                 }
             }
             SwitchSurface::History => {
-                self.document_state.error_notice = Some(ErrorNotice::new(
+                self.document_view.error_notice = Some(ErrorNotice::new(
                     ids::PANELS_HISTORY_SWITCH_FAILED,
                     refusal_detail(&refusal),
                 ));

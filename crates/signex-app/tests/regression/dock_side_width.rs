@@ -23,11 +23,11 @@ fn app_in_window(w: f32, h: f32) -> Signex {
         (PanelPosition::Left, PanelKind::Projects),
         (PanelPosition::Right, PanelKind::Properties),
     ] {
-        if !app.document_state.dock.has_panels(pos) {
-            app.document_state.dock.add_panel(pos, kind);
+        if !app.document_view.dock.has_panels(pos) {
+            app.document_view.dock.add_panel(pos, kind);
         }
         assert!(
-            !app.document_state.dock.is_collapsed(pos),
+            !app.document_view.dock.is_collapsed(pos),
             "{pos:?} collapsed"
         );
     }
@@ -113,10 +113,10 @@ fn expanding_the_other_dock_pulls_the_wide_dock_back_in() {
     let mut app = app_in_window(2560.0, 1440.0);
     let left = app.ui_state.left_width;
     toggle_collapse(&mut app, PanelPosition::Left);
-    assert!(app.document_state.dock.is_collapsed(PanelPosition::Left));
+    assert!(app.document_view.dock.is_collapsed(PanelPosition::Left));
     drag_right_dock(&mut app, 2000.0, -5000.0);
     toggle_collapse(&mut app, PanelPosition::Left);
-    assert!(!app.document_state.dock.is_collapsed(PanelPosition::Left));
+    assert!(!app.document_view.dock.is_collapsed(PanelPosition::Left));
     assert_eq!(app.ui_state.left_width, left, "the left dock was shrunk");
     assert_canvas_at_minimum(&app, 2560.0);
 }
@@ -166,7 +166,7 @@ fn a_window_shrunk_and_restored_returns_the_chosen_width(side: PanelPosition) {
     let mut app = app_in_window(1400.0, 900.0);
     drag_dock_to(&mut app, side, 420.0);
     assert_eq!(shown_width(&app, side), 420.0);
-    assert_eq!(app.document_state.dock.preferred_width(side), 420.0);
+    assert_eq!(app.document_view.dock.preferred_width(side), 420.0);
 
     resize_main(&mut app, 300.0, 900.0);
     assert!(
@@ -174,7 +174,7 @@ fn a_window_shrunk_and_restored_returns_the_chosen_width(side: PanelPosition) {
         "the small window narrows it"
     );
     assert_eq!(
-        app.document_state.dock.preferred_width(side),
+        app.document_view.dock.preferred_width(side),
         420.0,
         "a resize never changes the chosen width"
     );
@@ -233,9 +233,7 @@ fn a_dock_drag_updates_the_chosen_width() {
     drag_dock_to(&mut app, PanelPosition::Right, 420.0);
     drag_dock_to(&mut app, PanelPosition::Right, 360.0);
     assert_eq!(
-        app.document_state
-            .dock
-            .preferred_width(PanelPosition::Right),
+        app.document_view.dock.preferred_width(PanelPosition::Right),
         360.0
     );
     resize_main(&mut app, 300.0, 900.0);
@@ -249,7 +247,7 @@ fn the_saved_layout_holds_the_chosen_widths() {
     let mut app = app_in_window(1400.0, 900.0);
     drag_dock_to(&mut app, PanelPosition::Right, 420.0);
     resize_main(&mut app, 300.0, 900.0);
-    let saved = signex_app::dock::DockLayoutSnapshot::capture(&app.document_state.dock);
+    let saved = signex_app::dock::DockLayoutSnapshot::capture(&app.document_view.dock);
     assert_eq!(saved.right.width, Some(420));
     assert_eq!(saved.bottom.width, None);
 }

@@ -29,11 +29,11 @@ pub(crate) type PowerTreeRun = Box<dyn FnOnce() -> Result<PowerTreeRead, String>
 impl Signex {
     /// The view switch: show `view`, reading the power tree for it.
     pub(super) fn pick_diagram_view(&mut self, path: &Path, view: DiagramView) -> Task<Message> {
-        let Some(editor) = self.document_state.block_diagrams.editors.get_mut(path) else {
+        let Some(tab) = self.open_diagram_view_mut(path) else {
             return Task::none();
         };
-        editor.view = view;
-        editor.export = None;
+        tab.view = view;
+        tab.export = None;
         if view == DiagramView::PowerTree {
             return self.read_power_tree(path);
         }
@@ -42,11 +42,11 @@ impl Signex {
 
     /// The Variant field: read the tree again for `variant`.
     pub(super) fn pick_power_variant(&mut self, path: &Path, variant: String) -> Task<Message> {
-        let Some(editor) = self.document_state.block_diagrams.editors.get_mut(path) else {
+        let Some(tab) = self.open_diagram_view_mut(path) else {
             return Task::none();
         };
-        editor.power.variant = Some(variant);
-        if editor.view != DiagramView::PowerTree {
+        tab.power.variant = Some(variant);
+        if tab.view != DiagramView::PowerTree {
             return Task::none();
         }
         self.read_power_tree(path)
@@ -57,20 +57,17 @@ impl Signex {
     /// [`Self::power_tree_landed`]).
     fn read_power_tree(&mut self, path: &Path) -> Task<Message> {
         let variant = self
-            .document_state
-            .block_diagrams
-            .editors
-            .get(path)
-            .and_then(|editor| editor.power.variant.clone());
+            .open_diagram_view(path)
+            .and_then(|tab| tab.power.variant.clone());
         let run = self.power_tree_reader(path, variant.as_deref());
-        let Some(editor) = self.document_state.block_diagrams.editors.get_mut(path) else {
+        let Some(tab) = self.open_diagram_view_mut(path) else {
             return Task::none();
         };
         let Some(run) = run else {
-            editor.power.read = Some(Err(no_project(path)));
+            tab.power.read = Some(Err(no_project(path)));
             return Task::none();
         };
-        editor.power.loading = true;
+        tab.power.loading = true;
         let landed_path = path.to_path_buf();
         Task::perform(
             crate::app::path_op_jobs::run_blocking(run),
@@ -100,8 +97,8 @@ impl Signex {
     /// The variant the view wants now, resolved; `None` is Base.
     fn wanted_variant(&self, path: &Path) -> Option<String> {
         let project = super::project_holding(&self.document_state, path)?;
-        let editor = self.document_state.block_diagrams.editors.get(path)?;
-        crate::app::power_tree::power_tree_variant(project, editor.power.variant.as_deref())
+        let tab = self.open_diagram_view(path)?;
+        crate::app::power_tree::power_tree_variant(project, tab.power.variant.as_deref())
             .ok()
             .flatten()
     }
@@ -111,13 +108,13 @@ impl Signex {
     pub(super) fn power_tree_landed(&mut self, landed: PowerTreeLanded) -> Task<Message> {
         let PowerTreeLanded { path, result } = landed;
         let wanted = self.wanted_variant(&path);
-        let Some(editor) = self.document_state.block_diagrams.editors.get_mut(&path) else {
+        let Some(tab) = self.open_diagram_view_mut(&path) else {
             return Task::none();
         };
         if result.as_ref().is_ok_and(|read| read.variant != wanted) {
             return Task::none();
         }
-        let power = &mut editor.power;
+        let power = &mut tab.power;
         power.loading = false;
         let kept = match (&result, &power.rail) {
             (Ok(read), Some(rail)) => read.tree.rail(rail).is_some(),
@@ -136,8 +133,8 @@ impl Signex {
 
     /// A rail picked in the view.
     pub(super) fn pick_power_rail(&mut self, path: &Path, rail: String) {
-        if let Some(editor) = self.document_state.block_diagrams.editors.get_mut(path) {
-            editor.power.rail = Some(rail);
+        if let Some(tab) = self.open_diagram_view_mut(path) {
+            tab.power.rail = Some(rail);
         }
     }
 
@@ -145,11 +142,8 @@ impl Signex {
     /// sheet occurrence with the part's first unit selected.
     pub(super) fn open_power_part(&mut self, path: &Path, part: usize) -> Task<Message> {
         let target = self
-            .document_state
-            .block_diagrams
-            .editors
-            .get(path)
-            .and_then(|editor| editor.power.read.as_ref()?.as_ref().ok())
+            .open_diagram_view(path)
+            .and_then(|tab| tab.power.read.as_ref()?.as_ref().ok())
             .and_then(|read| {
                 let part = read.topology.parts.get(part)?;
                 let sheet = read.sheet_paths.get(&part.sheet)?.clone();

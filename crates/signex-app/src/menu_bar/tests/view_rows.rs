@@ -126,7 +126,7 @@ fn panel_rows_show_their_panel_and_check_it() {
         ("Unions", PanelKind::Unions),
     ] {
         let mut app = one_symbol_selected();
-        app.document_state.dock.close_panel(kind);
+        app.document_view.dock.close_panel(kind);
         assert!(!app.is_panel_open(kind), "{label} starts closed");
         let _ = click(&mut app, &format!("View/{label}"));
         assert!(app.is_panel_open(kind), "{label} did not open");

@@ -245,7 +245,7 @@ impl Signex {
             text,
         });
         self.close_general_run(project_id);
-        if is_accepted && let Some(tab) = self.document_state.project_tabs.get_mut(&project_id) {
+        if is_accepted && let Some(tab) = self.document_view.project_tabs.get_mut(&project_id) {
             tab.default_drafts.remove(&field);
         }
         is_accepted
@@ -280,7 +280,7 @@ impl Signex {
         let Some(field) = SchematicDefaultField::ALL.get(index).copied() else {
             return;
         };
-        if let Some(tab) = self.document_state.project_tabs.get_mut(&project_id)
+        if let Some(tab) = self.document_view.project_tabs.get_mut(&project_id)
             && tab.default_drafts.get(&field).map(String::as_str) == Some(text)
         {
             tab.default_drafts.remove(&field);

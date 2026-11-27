@@ -124,7 +124,7 @@ impl Signex {
                 ));
                 let detail =
                     Translatable::new(ids::BLOCK_DIAGRAM_OPEN_FAILED).arg("file", file_name(&path));
-                self.document_state.error_notice =
+                self.document_view.error_notice =
                     Some(ErrorNotice::open(detail).with_system(reason));
             }
         }
@@ -245,7 +245,7 @@ impl Signex {
         if let FileFailure::Failed(text) = &failure {
             notice = notice.with_system(text.clone());
         }
-        self.document_state.error_notice = Some(notice);
+        self.document_view.error_notice = Some(notice);
     }
 }
 

@@ -114,7 +114,7 @@ fn a_saved_preset_applies_after_the_chips_change_and_outlives_a_restart() {
         PcbBoardMsg::FilterPresetRenamed(0, "Routing".into()),
     ));
     let summary = app
-        .document_state
+        .document_view
         .panel_ctx
         .pcb_board
         .as_ref()
@@ -173,7 +173,7 @@ fn kinds(app: &Signex, idx: usize) -> Vec<PickKind> {
 
 /// The preset the board panel shows as selected for editing.
 fn shown_editing(app: &Signex) -> Option<usize> {
-    let summary = app.document_state.panel_ctx.pcb_board.as_ref();
+    let summary = app.document_view.panel_ctx.pcb_board.as_ref();
     summary.expect("board panel").preset_editing
 }
 

@@ -229,7 +229,7 @@ fn picking_a_card_selects_it_and_removes_nothing() {
         .expect("the dialog stays open");
     assert_eq!(open.choice, Some(DELETE));
     assert!(file.exists(), "nothing is deleted");
-    assert!(app.document_state.error_notice.is_none());
+    assert!(app.document_view.error_notice.is_none());
     assert!(!crate::app::state::project_fs::message_touches_disk(
         &Message::Remove(RemoveMsg::ChoicePicked(DELETE))
     ));

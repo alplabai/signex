@@ -67,7 +67,7 @@ fn the_add_menu_opens_and_closes_when_an_item_is_picked() {
         LibraryMessage::ComponentsPanelAddLibrary(ComponentsMountSource::Project),
     );
     assert!(!app.library.components_panel.add_menu_open);
-    assert!(app.document_state.error_notice.is_some());
+    assert!(app.document_view.error_notice.is_some());
 
     send(&mut app, LibraryMessage::ComponentsPanelAddMenuToggled);
     send(&mut app, LibraryMessage::ComponentsPanelAddMenuToggled);

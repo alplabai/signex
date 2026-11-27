@@ -426,7 +426,7 @@ impl Signex {
             .arg("count", failed.len())
             .arg("listing", listing);
         crate::diagnostics::log_warning(message.render_en_us());
-        self.document_state.error_notice = Some(crate::app::state::ErrorNotice::save(message));
+        self.document_view.error_notice = Some(crate::app::state::ErrorNotice::save(message));
         // The app stays open: a system quit request still waiting is declined.
         if matches!(next, SaveAllNext::Quit) {
             return Self::decline_quit();

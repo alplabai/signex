@@ -46,17 +46,18 @@ impl Signex {
             return Err(about(ids::PROJECT_BLOCK_DIAGRAM_RESYNC_CHANGED));
         }
         let review = review_of(&merged);
-        let had_review = editor.review.is_some();
+        let tab = crate::app::block_diagram::view_of(&mut self.document_view.block_diagrams, &path);
+        let had_review = tab.review.is_some();
         if merged.diagram != editor.diagram {
-            editor.camera.hold(&editor.diagram);
+            tab.camera.hold(&editor.diagram);
             let before = std::mem::replace(&mut editor.diagram, merged.diagram);
             editor.record(before, depth);
-            editor.prune_selection();
+            tab.prune(&editor.diagram);
         }
         // The review opens only for an unlink; one already open shows
         // "Nothing to change" when the run found none.
         if !review.unlink.is_empty() || had_review {
-            editor.review = Some(review);
+            tab.review = Some(review);
         }
         self.document_state.sync_block_diagram_dirty(&path);
         Ok(())

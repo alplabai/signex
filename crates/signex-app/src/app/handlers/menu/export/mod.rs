@@ -644,7 +644,7 @@ impl Signex {
         if !matches!(range, signex_output::PageRange::Current) {
             return;
         }
-        let Some(placement) = self.document_state.tab_placements.get(source) else {
+        let Some(placement) = self.document_view.tab_placements.get(source) else {
             return;
         };
         if issues.live.contains(source, placement) {
@@ -655,7 +655,7 @@ impl Signex {
              exists; printing the first placement instead",
             source.display()
         ));
-        self.document_state.tab_placements.forget(source);
+        self.document_view.tab_placements.forget(source);
     }
 }
 

@@ -39,10 +39,10 @@ impl Signex {
             self.apply_review(path);
             return Task::none();
         }
-        let Some(editor) = self.document_state.block_diagrams.editors.get_mut(path) else {
+        let Some(tab) = self.open_diagram_view_mut(path) else {
             return Task::none();
         };
-        let Some(review) = editor.review.as_mut() else {
+        let Some(review) = tab.review.as_mut() else {
             return Task::none();
         };
         match event {
@@ -55,7 +55,7 @@ impl Signex {
                 review.unlink.iter_mut().for_each(|row| row.checked = on);
             }
             ReviewEvent::RowHovered(block) => review.hovered = block,
-            ReviewEvent::Closed | ReviewEvent::ApplyPressed => editor.review = None,
+            ReviewEvent::Closed | ReviewEvent::ApplyPressed => tab.review = None,
         }
         Task::none()
     }
@@ -66,7 +66,8 @@ impl Signex {
         let Some(editor) = self.document_state.block_diagrams.editors.get_mut(path) else {
             return;
         };
-        let Some(review) = editor.review.take() else {
+        let tab = super::view_of(&mut self.document_view.block_diagrams, path);
+        let Some(review) = tab.review.take() else {
             return;
         };
         if editor.is_read_only() {
@@ -75,10 +76,10 @@ impl Signex {
         let checked = review.checked();
         let applied = unlink_blocks(&editor.diagram, &checked);
         if applied.diagram != editor.diagram {
-            editor.camera.hold(&editor.diagram);
+            tab.camera.hold(&editor.diagram);
             let before = std::mem::replace(&mut editor.diagram, applied.diagram);
             editor.record(before, depth);
-            editor.prune_selection();
+            tab.prune(&editor.diagram);
         }
         self.document_state.sync_block_diagram_dirty(path);
         if checked.is_empty() {

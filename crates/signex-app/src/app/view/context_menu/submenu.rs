@@ -588,7 +588,7 @@ impl Signex {
         window_id: iced::window::Id,
     ) -> Element<'_, Message> {
         let tid = self.ui_state.effective_theme_id();
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let i18n = &self.ui_state.i18n;
         let hint = |id: &str| self.keymap_shortcut_label(id);
         let entries = match kind {
@@ -649,7 +649,7 @@ impl Signex {
                 None => Vec::new(),
             },
         };
-        super::placement::menu_card(entries, tokens, &self.document_state.panel_ctx.ui_font_name)
+        super::placement::menu_card(entries, tokens, &self.document_view.panel_ctx.ui_font_name)
             .element
     }
 
@@ -676,7 +676,7 @@ impl Signex {
             }
             _ => board_place_entries(i18n, &context, &hint),
         };
-        let panel_ctx = &self.document_state.panel_ctx;
+        let panel_ctx = &self.document_view.panel_ctx;
         super::placement::menu_card(entries, &panel_ctx.tokens, &panel_ctx.ui_font_name).element
     }
 }
@@ -1089,7 +1089,7 @@ mod tests {
                 .all(|tab| tab.kind.as_project().is_none()),
             "no Project tab opens on the way"
         );
-        let state = &app.document_state.project_tabs[&id];
+        let state = &app.document_view.project_tabs[&id];
         assert_eq!(state.variant_selected.as_deref(), Some("Variant 1"));
         assert!(
             state.variant_rename.is_some(),
@@ -1109,6 +1109,6 @@ mod tests {
         app.document_state.projects.clear();
         let _ = app.update(press);
         assert_eq!(app.document_state.tabs.len(), tabs, "no tab opens");
-        assert!(!app.document_state.project_tabs.contains_key(&id));
+        assert!(!app.document_view.project_tabs.contains_key(&id));
     }
 }

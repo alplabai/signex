@@ -264,10 +264,10 @@ fn filled(color: Option<Color>) -> impl Fn(&Theme) -> container::Style + 'static
 impl Signex {
     /// The data grid: the sticky header over the scrolling lines.
     pub(super) fn bom_table(&self) -> Element<'_, Message> {
-        let Some(ref preview) = self.document_state.bom_preview else {
+        let Some(ref preview) = self.document_view.bom_preview else {
             return container(Space::new()).boxed();
         };
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         // A resized column keeps its width; the rest take their default.
         let widths: Vec<f32> = preview
             .options

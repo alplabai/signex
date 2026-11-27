@@ -80,10 +80,11 @@ fn the_view_switch_reads_and_draws_the_projects_power_tree() {
         &path,
         TabEvent::ViewPicked(DiagramView::PowerTree),
     );
-    let editor = &app.document_state.block_diagrams.editors[&path];
-    assert_eq!(editor.view, DiagramView::PowerTree);
-    assert!(!editor.power.loading, "the run landed");
+    let editor = app.open_diagram(&path).expect("open");
+    assert_eq!(editor.tab.view, DiagramView::PowerTree);
+    assert!(!editor.tab.power.loading, "the run landed");
     let read = editor
+        .tab
         .power
         .read
         .as_ref()
@@ -91,7 +92,10 @@ fn the_view_switch_reads_and_draws_the_projects_power_tree() {
         .as_ref()
         .expect("ok");
     assert!(read.tree.rail("+3V3").is_some());
-    assert_eq!(editor.diagram, before, "showing the tree changes nothing");
+    assert_eq!(
+        editor.doc.diagram, before,
+        "showing the tree changes nothing"
+    );
 
     let shown = texts(&app, &path);
     for expected in [
@@ -107,8 +111,8 @@ fn the_view_switch_reads_and_draws_the_projects_power_tree() {
     let picked = clicked(&app, &path, "VIN_12V");
     assert_eq!(picked, [TabEvent::RailPicked("VIN_12V".into())]);
     send(&mut app, &path, picked[0].clone());
-    let editor = &app.document_state.block_diagrams.editors[&path];
-    assert_eq!(editor.power.rail.as_deref(), Some("VIN_12V"));
+    let editor = app.open_diagram(&path).expect("open");
+    assert_eq!(editor.tab.power.rail.as_deref(), Some("VIN_12V"));
 
     send(&mut app, &path, TabEvent::ViewPicked(DiagramView::Blocks));
     assert!(texts(&app, &path).iter().any(|t| t == "Add Block"));
@@ -126,9 +130,14 @@ fn resync_on_the_toolbar_sends_the_tabs_regenerate() {
     assert!(translator::ran("regenerate_block_diagram"));
     // The sheets are blocks now, merged into the open diagram as one undo
     // step; nothing is written until Save.
-    let editor = &app.document_state.block_diagrams.editors[&path];
-    assert_eq!(editor.diagram.blocks.len(), 2, "{:?}", editor.diagram);
-    assert_eq!(editor.undo.len(), 1);
+    let editor = app.open_diagram(&path).expect("open");
+    assert_eq!(
+        editor.doc.diagram.blocks.len(),
+        2,
+        "{:?}",
+        editor.doc.diagram
+    );
+    assert_eq!(editor.doc.undo.len(), 1);
     assert!(!path.exists(), "nothing written");
 }
 
@@ -171,10 +180,7 @@ fn the_export_popover_runs_export_block_diagram_with_its_settings() {
         &path,
         TabEvent::Export(ExportEvent::MonochromePicked(true)),
     );
-    let draft = app.document_state.block_diagrams.editors[&path]
-        .export
-        .clone()
-        .expect("open");
+    let draft = app.diagram_view(&path).export.clone().expect("open");
     assert_eq!(draft.file, "outputs/ProjectA_blocks.svg");
     assert!(draft.monochrome);
 
@@ -192,9 +198,7 @@ fn the_export_popover_runs_export_block_diagram_with_its_settings() {
     let svg = std::fs::read_to_string(&written).expect("the SVG");
     assert!(svg.contains("Block 1"), "{svg}");
     assert!(
-        app.document_state.block_diagrams.editors[&path]
-            .export
-            .is_none(),
+        app.diagram_view(&path).export.is_none(),
         "the popover closed"
     );
 }
@@ -227,7 +231,7 @@ fn a_save_is_not_written_over_a_file_changed_on_disk() {
     send(&mut app, &path, TabEvent::SavePressed);
     assert_eq!(std::fs::read_to_string(&path).expect("kept"), theirs);
     assert!(app.document_state.is_document_dirty(&path), "edits kept");
-    assert!(app.document_state.error_notice.is_some());
+    assert!(app.document_view.error_notice.is_some());
     assert!(!app.document_state.document_saves.is_saving(&path));
     assert!(app.document_state.document_saves.failure(&path).is_some());
 }
@@ -259,7 +263,7 @@ fn the_projects_tree_lists_a_held_diagram_with_its_own_icon_and_opens_it() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, path) = with_diagram(&dir);
     app.refresh_panel_ctx();
-    let tree = crate::panels::build_project_tree(&app.document_state.panel_ctx);
+    let tree = crate::panels::build_project_tree(&app.document_view.panel_ctx);
     let row = find(&tree, "ProjectA.snxblk").expect("a row");
     assert_eq!(row.icon, TreeIcon::SnxBlockDiagram);
     assert!(row.is_open && row.is_dirty && row.is_active);

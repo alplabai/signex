@@ -15,11 +15,11 @@ impl Signex {
         };
         match msg {
             MultiEditMsg::DraftChanged(field, text) => {
-                self.document_state.panel_ctx.multi_draft = Some((field.clone(), text.clone()));
+                self.document_view.panel_ctx.multi_draft = Some((field.clone(), text.clone()));
             }
             MultiEditMsg::DraftSubmitted(field) => {
                 let Some((_, typed)) = self
-                    .document_state
+                    .document_view
                     .panel_ctx
                     .multi_draft
                     .clone()
@@ -36,7 +36,7 @@ impl Signex {
             }
             MultiEditMsg::Picked(edit) => self.apply_multi_edit(edit),
             MultiEditMsg::FootprintPicked(binding) => {
-                self.document_state.panel_ctx.multi_draft = None;
+                self.document_view.panel_ctx.multi_draft = None;
                 self.apply_common_footprint(binding);
             }
         }
@@ -74,13 +74,13 @@ impl Signex {
         use crate::panels::{NoErcRuleEdit, PanelMsg, SelectionFormMsg};
         // An emptied Line Width box sets the default width back (mockup row 46).
         if let PanelMsg::CommitChildSheetStrokeWidth(_) = panel_msg {
-            let buf = &mut self.document_state.panel_ctx.child_sheet_stroke_width_buf;
+            let buf = &mut self.document_view.panel_ctx.child_sheet_stroke_width_buf;
             if buf.as_deref().is_some_and(|text| text.trim().is_empty()) {
                 *buf = Some("0".to_string());
             }
             return None;
         }
-        let form = &mut self.document_state.panel_ctx.selection_form;
+        let form = &mut self.document_view.panel_ctx.selection_form;
         if let PanelMsg::EditNoErcRules(id, NoErcRuleEdit::AllRules) = panel_msg {
             if form.picking_rules_of == Some(*id) {
                 form.picking_rules_of = None;

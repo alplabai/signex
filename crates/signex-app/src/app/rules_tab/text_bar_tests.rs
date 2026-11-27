@@ -40,11 +40,11 @@ fn shown(app: &Signex, id: ProjectId) -> Vec<String> {
 }
 
 fn refused(app: &Signex, id: ProjectId) -> Option<String> {
-    app.document_state.project_tabs[&id].rules.refused.clone()
+    app.document_view.project_tabs[&id].rules.refused.clone()
 }
 
 fn typed_text_kept(app: &Signex, id: ProjectId) -> bool {
-    app.document_state.project_tabs[&id]
+    app.document_view.project_tabs[&id]
         .rules
         .text
         .as_ref()
@@ -180,10 +180,10 @@ fn a_preset_waits_while_the_text_view_holds_typed_text() {
     assert_eq!(dsl(&app), stored, "the stored rules wait");
     assert_eq!(refused(&app, id).as_deref(), Some(TEXT_UNAPPLIED));
     assert!(typed_text_kept(&app, id));
-    assert!(app.document_state.project_tabs[&id].rules.preview.is_some());
+    assert!(app.document_view.project_tabs[&id].rules.preview.is_some());
 
     send(&mut app, RulesTabMsg::TextDiscarded { project_id: id });
     send(&mut app, RulesTabMsg::PresetApplied { project_id: id });
     assert!(dsl(&app).contains("rule fab_via"), "{}", dsl(&app));
-    assert!(app.document_state.project_tabs[&id].rules.preview.is_none());
+    assert!(app.document_view.project_tabs[&id].rules.preview.is_none());
 }

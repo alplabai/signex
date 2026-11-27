@@ -57,7 +57,7 @@ fn toast_said(i18n: &signex_i18n::I18n, cleared: &NetColorsCleared) -> signex_i1
 impl Signex {
     /// The palette body; see the module doc.
     pub(in crate::app::view) fn view_net_color_palette_body(&self) -> Element<'_, Message> {
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let i18n = &self.ui_state.i18n;
         let state = &self.ui_state.net_color_palette;
 
@@ -167,7 +167,7 @@ impl Signex {
     /// and Undo with its shortcut while the clear is still the sheet's
     /// newest edit.
     fn clear_toast(&self, toast: &NetColorToast) -> Element<'_, Message> {
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let i18n = &self.ui_state.i18n;
         let check_c = ti(tokens.success);
         // A monochrome glyph: the style below tints it.
@@ -228,7 +228,7 @@ impl Signex {
 
     /// The chooser card of an open row: the ten colours, Custom… and Clear.
     fn chooser(&self, net_row: &PaletteRow) -> Element<'_, Message> {
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let i18n = &self.ui_state.i18n;
         let net = &net_row.net;
         let mut swatches = row![].spacing(SP.s).align_y(Alignment::Center);
@@ -405,7 +405,7 @@ mod tests {
     /// not the plain text ink a Ghost button draws. The pixel closest to the
     /// accent must be near it and nearer to it than to the plain ink.
     fn assert_accent_ink(pixels: &[u8], window: iced::Size, bounds: iced::Rectangle, app: &Signex) {
-        let tokens = &app.document_state.panel_ctx.tokens;
+        let tokens = &app.document_view.panel_ctx.tokens;
         let (accent, plain) = (resolve(tokens).accent_text, ti(tokens.text));
         assert_ink(pixels, window, bounds, accent, plain);
     }
@@ -737,7 +737,7 @@ mod tests {
         use signex_types::theme::{ThemeId, theme_tokens};
         for id in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
             let mut app = app_with_nets(&["A"]);
-            app.document_state.panel_ctx.tokens = theme_tokens(id);
+            app.document_view.panel_ctx.tokens = theme_tokens(id);
             let window = iced::Size::new(PALETTE_WIDTH, 400.0);
             let draw = |app: &Signex| {
                 let texts = lay_out_texts(app.view_net_color_palette_body(), window);
@@ -747,7 +747,7 @@ mod tests {
                 (label, pixels)
             };
             let (muted, accent) = {
-                let tokens = &app.document_state.panel_ctx.tokens;
+                let tokens = &app.document_view.panel_ctx.tokens;
                 (ti(tokens.text_secondary), resolve(tokens).accent_text)
             };
             let (label, pixels) = draw(&app);

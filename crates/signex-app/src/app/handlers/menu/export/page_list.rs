@@ -137,7 +137,7 @@ mod tests {
 
     /// The pages of a Specific range; `None` for any other.
     fn specific(app: &Signex) -> Option<Vec<usize>> {
-        let preview = app.document_state.preview.as_ref().expect("preview");
+        let preview = app.document_view.preview.as_ref().expect("preview");
         match &preview.pdf_options.page_range {
             PageRange::Specific(pages) => Some(pages.clone()),
             _ => None,
@@ -158,12 +158,12 @@ mod tests {
         let mut app = app_on_specific();
         let _ = app.handle_print_preview_set_specific_page_input("1".to_string());
         let _ = app.handle_print_preview_set_specific_page_input("1-".to_string());
-        let preview = app.document_state.preview.as_ref().expect("preview");
+        let preview = app.document_view.preview.as_ref().expect("preview");
         assert_eq!(preview.specific_page_input, "1-");
         assert_eq!(specific(&app), Some(vec![1]));
 
-        assert!(app.document_state.error_notice.is_none());
+        assert!(app.document_view.error_notice.is_none());
         let _ = app.handle_print_preview_export();
-        assert!(app.document_state.error_notice.is_some(), "refused");
+        assert!(app.document_view.error_notice.is_some(), "refused");
     }
 }

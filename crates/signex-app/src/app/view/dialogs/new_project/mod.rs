@@ -71,7 +71,7 @@ impl Signex {
         let Some(state) = self.ui_state.new_project.as_ref() else {
             return container(Space::new()).boxed();
         };
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let i18n = self.ui_state.i18n.as_ref();
         let creating = state.creating.is_some();
         let cancel = (!creating).then(|| np(NewProjectMsg::CancelRequested));
@@ -100,7 +100,7 @@ impl Signex {
             .padding([SP.xl + SP.s, SP.xl + SP.m]),
         )
         .width(Length::Fill);
-        let canvas_colors = &self.document_state.panel_ctx.canvas_colors;
+        let canvas_colors = &self.document_view.panel_ctx.canvas_colors;
         let columns: Element<'_, Message> = row![
             left,
             preview::pane(

@@ -69,7 +69,7 @@ impl Signex {
         &'a self,
         state: &'a DocumentSetupState,
     ) -> Element<'a, Message> {
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let i18n = self.ui_state.i18n.as_ref();
         let users = &self.document_state.setup_profiles;
         let draft = &state.draft;
@@ -132,7 +132,7 @@ impl Signex {
                 .boxed(),
                 board_rules::expanded_layer(
                     draft,
-                    &self.document_state.panel_ctx.canvas_colors,
+                    &self.document_view.panel_ctx.canvas_colors,
                     i18n,
                     tokens,
                 )

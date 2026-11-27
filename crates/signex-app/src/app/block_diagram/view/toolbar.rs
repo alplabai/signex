@@ -13,10 +13,8 @@ use signex_widgets::dropdown_style::GraphiteDropdown as _;
 use signex_widgets::{CheckboxLabel as _, button, checkbox, segmented, text};
 
 use super::{Look, SP, TS, VariantField};
-use crate::app::block_diagram::state::{
-    BlockDiagramEditor, DiagramItem, DiagramTool, DiagramView, ExportKind,
-};
-use crate::app::block_diagram::{ExportEvent, TabEvent};
+use crate::app::block_diagram::state::{DiagramItem, DiagramTool, DiagramView, ExportKind};
+use crate::app::block_diagram::{ExportEvent, OpenDiagram, TabEvent};
 use crate::choice::{Choice, chosen};
 use crate::panels::graphite::hint_tooltip;
 use crate::styles::ti;
@@ -24,13 +22,13 @@ use crate::styles::tokens::resolve;
 
 pub(super) fn view<'a>(
     look: Look<'a>,
-    editor: &'a BlockDiagramEditor,
+    editor: OpenDiagram<'a>,
     variant: VariantField,
 ) -> Toolbar<'a, TabEvent> {
-    let editable = !editor.is_read_only();
-    let one_block = matches!(editor.single_selection(), Some(DiagramItem::Block(_)));
-    let some_block = !editor.selected_blocks().is_empty();
-    let some = !editor.selection.is_empty();
+    let editable = !editor.doc.is_read_only();
+    let one_block = matches!(editor.tab.single_selection(), Some(DiagramItem::Block(_)));
+    let some_block = !editor.tab.selected_blocks().is_empty();
+    let some = !editor.tab.selection.is_empty();
     let edit = |label, event: TabEvent, ready: bool, tip, why_not| {
         let on_press = (editable && ready).then_some(event);
         let hint = if !editable {
@@ -54,10 +52,10 @@ pub(super) fn view<'a>(
         ))
         .separator()
         .push(variant_field(look, variant));
-    if editor.view == DiagramView::PowerTree {
+    if editor.tab.view == DiagramView::PowerTree {
         return head;
     }
-    let show_ground = checkbox(editor.show_ground)
+    let show_ground = checkbox(editor.tab.show_ground)
         .style(crate::panels::form_look::checkbox_style)
         .size(TS.body)
         .labelled(look.t(ids::BLOCK_DIAGRAM_SHOW_GND))
@@ -101,21 +99,21 @@ pub(super) fn view<'a>(
         .push(edit(
             ids::BLOCK_DIAGRAM_UNDO,
             TabEvent::UndoPressed,
-            !editor.undo.is_empty(),
+            !editor.doc.undo.is_empty(),
             ids::BLOCK_DIAGRAM_UNDO_TIP,
             ids::BLOCK_DIAGRAM_NOTHING_TO_UNDO,
         ))
         .push(edit(
             ids::BLOCK_DIAGRAM_REDO,
             TabEvent::RedoPressed,
-            !editor.redo.is_empty(),
+            !editor.doc.redo.is_empty(),
             ids::BLOCK_DIAGRAM_REDO_TIP,
             ids::BLOCK_DIAGRAM_NOTHING_TO_REDO,
         ))
         .push(edit(
             ids::BLOCK_DIAGRAM_SAVE,
             TabEvent::SavePressed,
-            editor.is_dirty(),
+            editor.doc.is_dirty(),
             ids::BLOCK_DIAGRAM_SAVE_TIP,
             ids::BLOCK_DIAGRAM_NOTHING_TO_SAVE,
         ))
@@ -131,6 +129,7 @@ pub(super) fn view<'a>(
             look,
             ids::BLOCK_DIAGRAM_EXPORT_SVG,
             editor
+                .tab
                 .export
                 .as_ref()
                 .is_some_and(|d| d.kind == ExportKind::Svg),
@@ -141,6 +140,7 @@ pub(super) fn view<'a>(
             look,
             ids::BLOCK_DIAGRAM_EXPORT_PDF,
             editor
+                .tab
                 .export
                 .as_ref()
                 .is_some_and(|d| d.kind == ExportKind::Pdf),
@@ -154,7 +154,7 @@ pub(super) fn view<'a>(
                 .color(ti(look.tokens.warning))
                 .boxed(),
         );
-    } else if editor.connect_from.is_some() {
+    } else if editor.tab.connect_from.is_some() {
         bar = bar.push_end(
             text(look.t(ids::BLOCK_DIAGRAM_CONNECT_PICK_END))
                 .size(TS.dense)
@@ -194,7 +194,7 @@ fn variant_field<'a>(look: Look<'a>, field: VariantField) -> Element<'a, TabEven
 }
 
 /// The view switch: Block diagram | Power tree.
-fn views<'a>(look: Look<'a>, editor: &BlockDiagramEditor) -> Element<'a, TabEvent> {
+fn views<'a>(look: Look<'a>, editor: OpenDiagram<'_>) -> Element<'a, TabEvent> {
     let cells: Vec<(DiagramView, signex_widgets::Label<'a>)> = vec![
         (
             DiagramView::Blocks,
@@ -207,14 +207,14 @@ fn views<'a>(look: Look<'a>, editor: &BlockDiagramEditor) -> Element<'a, TabEven
     ];
     segmented(
         cells,
-        editor.view,
+        editor.tab.view,
         resolve(look.tokens).segmented(TS.dense),
         TabEvent::ViewPicked,
     )
 }
 
 /// Select | Connect.
-fn tools<'a>(look: Look<'a>, editor: &BlockDiagramEditor) -> Element<'a, TabEvent> {
+fn tools<'a>(look: Look<'a>, editor: OpenDiagram<'_>) -> Element<'a, TabEvent> {
     let cells: Vec<(DiagramTool, signex_widgets::Label<'a>)> = vec![
         (
             DiagramTool::Select,
@@ -227,7 +227,7 @@ fn tools<'a>(look: Look<'a>, editor: &BlockDiagramEditor) -> Element<'a, TabEven
     ];
     segmented(
         cells,
-        editor.tool,
+        editor.tab.tool,
         resolve(look.tokens).segmented(TS.dense),
         TabEvent::ToolPicked,
     )

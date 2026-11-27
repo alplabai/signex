@@ -40,7 +40,7 @@ impl Signex {
                 // A page tab: "<project> — Variants" (docs/PROJECT_TAB.md,
                 // "Page tabs").
                 let title = self.page_tab_title(&kind).unwrap_or_default();
-                self.document_state.project_tabs.entry(id).or_default();
+                self.document_view.project_tabs.entry(id).or_default();
                 self.document_state.tabs.push(TabInfo {
                     title,
                     path,
@@ -73,7 +73,7 @@ impl Signex {
     /// The Variant Manager tab of `project_id`. A tab whose project is gone
     /// renders a short note instead.
     pub(crate) fn view_variant_manager_tab(&self, project_id: ProjectId) -> Element<'_, Message> {
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let Some(project) = self.document_state.project_by_id(project_id) else {
             return container(
                 text(t!(self.ui_state.i18n, ids::RULES_NO_PROJECT))
@@ -84,7 +84,7 @@ impl Signex {
             .style(crate::styles::panel_region(tokens))
             .boxed();
         };
-        let tab = self.document_state.project_tabs.get(&project_id);
+        let tab = self.document_view.project_tabs.get(&project_id);
         let body = super::shell(
             project,
             tab,

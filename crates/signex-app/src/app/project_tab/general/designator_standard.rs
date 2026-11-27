@@ -141,7 +141,7 @@ mod tests {
     fn the_hint_lays_out_under_the_picker_in_the_value_column() {
         let (app, _boot) = crate::app::Signex::new();
         let i18n = &app.ui_state.i18n;
-        let tokens = &app.document_state.panel_ctx.tokens;
+        let tokens = &app.document_view.panel_ctx.tokens;
         let project = project();
         let window = iced::Size::new(900.0, 400.0);
         let texts: Vec<crate::layout_probe::LaidOutText> =

@@ -10,7 +10,7 @@ impl Signex {
     /// leaves the History panel as it was.
     pub(super) fn show_tree_row_history(&mut self, path: &[usize]) -> Task<Message> {
         use signex_widgets::tree_view::get_node;
-        let tree = self.document_state.panel_ctx.project_tree.as_slice();
+        let tree = self.document_view.panel_ctx.project_tree.as_slice();
         let Some(label) = get_node(tree, path)
             .filter(|node| tree_row_opens(node))
             .map(|node| node.label.clone())
@@ -60,7 +60,7 @@ impl Signex {
     /// This file only set (not toggled) and the History panel shown.
     fn show_history_filtered(&mut self) -> Task<Message> {
         use crate::panels::history::{HistoryFilterMsg, HistoryPanelMsg};
-        let filtered = if self.document_state.history.ui.filter.this_file_only {
+        let filtered = if self.document_view.history.ui.filter.this_file_only {
             Task::none()
         } else {
             self.handle_history_panel(HistoryPanelMsg::Filter(HistoryFilterMsg::ThisFileToggled))

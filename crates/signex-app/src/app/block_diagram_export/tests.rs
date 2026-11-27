@@ -69,7 +69,7 @@ fn the_save_dialogs_answer_writes_the_svg_the_extension_names() {
     );
     let svg = std::fs::read_to_string(&path).expect("written");
     assert!(svg.starts_with("<?xml") && svg.contains(">DC/DC Buck</text>"));
-    assert!(app.document_state.error_notice.is_none());
+    assert!(app.document_view.error_notice.is_none());
 }
 
 #[test]
@@ -99,7 +99,7 @@ fn a_file_that_is_neither_svg_nor_pdf_or_the_diagram_itself_is_refused() {
         },
     );
     assert!(!path.exists());
-    let notice = app.document_state.error_notice.take().expect("a notice");
+    let notice = app.document_view.error_notice.take().expect("a notice");
     assert!(notice.detail.render_en_us().contains("blocks.png"));
 
     // The diagram's own name is not .svg or .pdf, so it is never written.
@@ -110,7 +110,7 @@ fn a_file_that_is_neither_svg_nor_pdf_or_the_diagram_itself_is_refused() {
             path: diagram.clone(),
         },
     );
-    assert!(app.document_state.error_notice.is_some());
+    assert!(app.document_view.error_notice.is_some());
     assert_eq!(std::fs::read(&diagram).unwrap(), before, "never written");
 }
 
@@ -131,7 +131,7 @@ fn the_command_writes_the_file_and_answers_once_it_is_written() {
     let written = std::fs::read(&path).expect("written before the answer");
     assert_eq!(answer["bytes"], written.len());
     assert!(
-        app.document_state.error_notice.is_none(),
+        app.document_view.error_notice.is_none(),
         "no dialog, no card"
     );
 

@@ -106,7 +106,7 @@ impl Signex {
                 self.read_user_library_when_shown()
             }
         };
-        self.document_state.panel_ctx.layer_stack = self.layer_stack_facts();
+        self.document_view.panel_ctx.layer_stack = self.layer_stack_facts();
         task
     }
 

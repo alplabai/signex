@@ -151,7 +151,7 @@ fn a_range_that_names_no_page_refuses_the_export() {
     let mut app = opened(&dir);
     send(&mut app, NotebookPdfMsg::RangeEdited("7-3".into()));
     send(&mut app, NotebookPdfMsg::ExportRequested);
-    assert!(app.document_state.error_notice.is_some(), "it says why");
+    assert!(app.document_view.error_notice.is_some(), "it says why");
     assert!(matches!(stage(&app), Stage::Ready(_)), "nothing started");
     assert!(!default_pdf(&dir).exists());
 }
@@ -175,13 +175,13 @@ fn a_stale_reference_refuses_the_export_only_under_fail() {
     mark_r7_stale(&mut app);
     send(&mut app, NotebookPdfMsg::StaleRulePicked(StaleRule::Fail));
     send(&mut app, NotebookPdfMsg::ExportRequested);
-    let notice = app.document_state.error_notice.as_ref().expect("refused");
+    let notice = app.document_view.error_notice.as_ref().expect("refused");
     assert!(
         signex_i18n::RenderTranslatable::render_en_us(&notice.detail).contains("R7"),
         "the notice names the stale reference"
     );
     assert!(!default_pdf(&dir).exists());
-    app.document_state.error_notice = None;
+    app.document_view.error_notice = None;
     send(&mut app, NotebookPdfMsg::StaleRulePicked(StaleRule::Warn));
     send(&mut app, NotebookPdfMsg::ExportRequested);
     assert!(default_pdf(&dir).exists(), "Warn exports anyway");

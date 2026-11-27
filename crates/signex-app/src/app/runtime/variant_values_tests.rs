@@ -183,7 +183,7 @@ fn the_object_list_shows_the_value_the_canvas_draws() {
     });
     app.document_state.active_tab = app.document_state.tabs.len() - 1;
     app.document_state.active_path = Some(path);
-    app.document_state.dock.add_panel(
+    app.document_view.dock.add_panel(
         crate::dock::PanelPosition::Right,
         crate::panels::PanelKind::ObjectList,
     );

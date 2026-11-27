@@ -97,7 +97,7 @@ pub(super) fn rail_entries(preview: &PreviewState) -> Vec<RailEntry<'_>> {
 impl Signex {
     /// The page list column.
     pub(super) fn view_pdf_rail<'a>(&'a self, preview: &'a PreviewState) -> Element<'a, Message> {
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let look = Look::of(tokens);
         let mut list = column![]
             .spacing(RAIL_PAD)

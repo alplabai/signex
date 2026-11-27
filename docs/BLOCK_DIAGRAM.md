@@ -67,6 +67,12 @@ tab behaves.
   diagram, the dirty mark set exactly when the diagram differs from its
   file. Undo back to the saved state reads clean.
 - The view holds still while the diagram changes; Fit fits it again.
+- The diagram and its undo and redo steps are document state
+  (`DocumentState::block_diagrams`); what the tab shows of it (selection,
+  tool, camera, the Blocks or Power tree pane, the Properties text being
+  typed, the export popover and the Re-sync review) is view state
+  (`DocumentViewState::block_diagrams`, ADR-0006 slice 4a), dropped with the
+  diagram when its tab closes.
 
 ## Drawing
 

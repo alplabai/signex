@@ -12,10 +12,8 @@ use signex_widgets::{CheckboxLabel as _, checkbox, segmented, text, text_input};
 
 use super::{Look, SP, TS};
 use crate::app::block_diagram::export::KINDS;
-use crate::app::block_diagram::state::{
-    BlockDiagramEditor, ExportDraft, ExportKind, ExportPage, ExportPaper,
-};
-use crate::app::block_diagram::{ExportEvent, TabEvent};
+use crate::app::block_diagram::state::{ExportDraft, ExportKind, ExportPage, ExportPaper};
+use crate::app::block_diagram::{ExportEvent, OpenDiagram, TabEvent};
 use crate::choice::{Choice, chosen};
 use crate::styles::tokens::resolve;
 use crate::styles::{DialogButtonKind, dialog_button, ti};
@@ -117,7 +115,7 @@ fn paper_field<'a>(look: Look<'a>, draft: &ExportDraft) -> Element<'a, TabEvent>
 /// The popover card for `draft`.
 pub(super) fn view<'a>(
     look: Look<'a>,
-    editor: &'a BlockDiagramEditor,
+    editor: OpenDiagram<'a>,
     draft: &'a ExportDraft,
 ) -> Element<'a, TabEvent> {
     let r = resolve(look.tokens);
@@ -175,7 +173,7 @@ pub(super) fn view<'a>(
             .push(line(look, ids::BLOCK_DIAGRAM_EXPORT_PAGE, title_block));
     }
     body = body.push(line(look, ids::BLOCK_DIAGRAM_EXPORT_FILE, file));
-    if editor.is_dirty() {
+    if editor.doc.is_dirty() {
         body = body.push(
             text(look.t(ids::BLOCK_DIAGRAM_EXPORT_SAVED_ONLY))
                 .size(TS.dense)

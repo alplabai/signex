@@ -21,9 +21,10 @@ use signex_types::block_diagram::{
 use signex_types::schematic::Point as MmPoint;
 use uuid::Uuid;
 
+use super::OpenDiagram;
 use super::TabEvent;
 use super::canvas_review::PreviewTags;
-use super::state::{BlockDiagramEditor, Camera, DiagramItem, DiagramTool};
+use super::state::{Camera, DiagramItem, DiagramTool};
 use crate::double_click::DoubleClick;
 
 /// The share of the canvas the fitted diagram takes.
@@ -148,7 +149,7 @@ fn home_middle([x, y, w, h]: [f64; 4]) -> (f64, f64) {
 
 /// What the canvas reads.
 pub struct DiagramCanvas<'a> {
-    pub editor: &'a BlockDiagramEditor,
+    pub editor: OpenDiagram<'a>,
     pub look: CanvasLook,
     /// The Re-sync review's tag words.
     pub tags: PreviewTags,
@@ -178,11 +179,11 @@ pub struct CanvasState {
 
 impl DiagramCanvas<'_> {
     fn diagram(&self) -> &BlockDiagram {
-        &self.editor.diagram
+        &self.editor.doc.diagram
     }
 
     fn fit(&self, size: Size) -> Fit {
-        Fit::of(self.diagram(), self.editor.camera, size)
+        Fit::of(self.diagram(), self.editor.tab.camera, size)
     }
 
     /// The object under `at`: a port, a block, a connection, a group frame.
@@ -226,11 +227,11 @@ impl DiagramCanvas<'_> {
         if button == mouse::Button::Middle {
             state.gesture = Some(Gesture::Pan {
                 from: at,
-                camera: self.editor.camera,
+                camera: self.editor.tab.camera,
             });
             return None;
         }
-        if self.editor.tool == DiagramTool::Connect {
+        if self.editor.tab.tool == DiagramTool::Connect {
             return self.end_at(fit, at).map(TabEvent::EndPicked);
         }
         match self.hit(fit, at) {
@@ -253,7 +254,7 @@ impl DiagramCanvas<'_> {
             None => {
                 state.gesture = Some(Gesture::Pan {
                     from: at,
-                    camera: self.editor.camera,
+                    camera: self.editor.tab.camera,
                 });
                 (!state.modifiers.shift()).then_some(TabEvent::ItemPicked {
                     item: None,
@@ -370,7 +371,7 @@ impl canvas::Program<TabEvent> for DiagramCanvas<'_> {
                 };
                 let at = cursor.position_in(bounds)?;
                 Some(TabEvent::ViewChanged(fit.zoomed_at(
-                    self.editor.camera,
+                    self.editor.tab.camera,
                     at,
                     ZOOM_STEP.powf(lines),
                 )))
@@ -420,7 +421,7 @@ impl canvas::Program<TabEvent> for DiagramCanvas<'_> {
             Some(Gesture::Pan { .. }) => mouse::Interaction::Grabbing,
             Some(Gesture::Move { moved: true, .. }) => mouse::Interaction::Grabbing,
             _ if !cursor.is_over(bounds) => mouse::Interaction::default(),
-            _ if self.editor.tool == DiagramTool::Connect => mouse::Interaction::Crosshair,
+            _ if self.editor.tab.tool == DiagramTool::Connect => mouse::Interaction::Crosshair,
             _ => mouse::Interaction::default(),
         }
     }
@@ -440,7 +441,7 @@ impl Painter<'_, '_> {
     }
 
     fn selected(&self, item: DiagramItem) -> bool {
-        self.canvas.editor.selection.contains(&item)
+        self.canvas.editor.tab.selection.contains(&item)
     }
 
     fn paint(&self, frame: &mut Frame) {
@@ -456,11 +457,11 @@ impl Painter<'_, '_> {
         for block in &diagram.blocks {
             self.draw_block(frame, block);
         }
-        if let Some(review) = &self.canvas.editor.review {
+        if let Some(review) = &self.canvas.editor.tab.review {
             let tags = &self.canvas.tags;
             super::canvas_review::draw_review(frame, self.fit, diagram, review, look, tags);
         }
-        if let Some(end) = self.canvas.editor.connect_from {
+        if let Some(end) = self.canvas.editor.tab.connect_from {
             self.draw_connect_start(frame, diagram, end);
         }
     }
@@ -727,7 +728,7 @@ fn arrow_head(from: Point, tip: Point, length: f32) -> Path {
 
 /// The canvas as a widget filling its place.
 pub fn diagram_canvas<'a>(
-    editor: &'a BlockDiagramEditor,
+    editor: OpenDiagram<'a>,
     look: CanvasLook,
     tags: PreviewTags,
 ) -> Element<'a, TabEvent> {

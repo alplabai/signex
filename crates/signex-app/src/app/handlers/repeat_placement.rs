@@ -16,7 +16,7 @@ impl Signex {
     /// text the next click will use and remember it for Repeat last item.
     pub(crate) fn label_placed(&mut self, placed: &str) {
         let next = self.stepped_text(placed);
-        if let Some(pre) = self.document_state.panel_ctx.pre_placement.as_mut()
+        if let Some(pre) = self.document_view.panel_ctx.pre_placement.as_mut()
             && !pre.label_text.trim().is_empty()
         {
             pre.label_text = next.clone();
@@ -25,7 +25,7 @@ impl Signex {
             port: self.interaction_state.pending_port.clone(),
             text: next,
             style: self
-                .document_state
+                .document_view
                 .panel_ctx
                 .pre_placement
                 .as_ref()
@@ -82,7 +82,7 @@ impl Signex {
     ) {
         let tool_name = format!("{}", self.interaction_state.current_tool);
         let cursor_mm = (self.ui_state.cursor_x, self.ui_state.cursor_y);
-        if let Some(pre) = self.document_state.panel_ctx.pre_placement.as_mut() {
+        if let Some(pre) = self.document_view.panel_ctx.pre_placement.as_mut() {
             pre.kind = kind;
             pre.tool_name = tool_name;
             pre.label_text = text;
@@ -94,6 +94,6 @@ impl Signex {
         if let Some(style) = style {
             pre.set_style(style);
         }
-        self.document_state.panel_ctx.pre_placement = Some(pre);
+        self.document_view.panel_ctx.pre_placement = Some(pre);
     }
 }

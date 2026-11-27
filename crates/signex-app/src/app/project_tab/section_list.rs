@@ -110,7 +110,7 @@ impl Signex {
     /// The badge facts of `project`, read from the Model.
     pub(super) fn section_facts(&self, project: &LoadedProject) -> SectionFacts {
         let libraries = self.project_library_rows(project);
-        let tab = self.document_state.project_tabs.get(&project.id);
+        let tab = self.document_view.project_tabs.get(&project.id);
         SectionFacts {
             sheets: project.data.sheets.len(),
             variants: project.data.variant_definitions.len(),

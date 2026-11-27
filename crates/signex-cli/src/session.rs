@@ -52,7 +52,7 @@ impl Session {
             .map_err(|error| format!("opening {}: {error}", project.display()))?;
         if app.document_state.projects.is_empty() && app.document_state.engines.is_empty() {
             let detail = app
-                .document_state
+                .document_view
                 .error_notice
                 .take()
                 // CLI output stays en-US whatever the UI language.
@@ -204,7 +204,7 @@ impl Session {
             .app
             .run_command_request(RequestSurface::Headless, request);
         let settled = self.driver.settle(&mut self.app, task);
-        let notice = self.app.document_state.error_notice.take();
+        let notice = self.app.document_view.error_notice.take();
         if let Err(error) = settled {
             return (Status::Failed, Some(error.to_string()), None);
         }

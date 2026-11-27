@@ -17,9 +17,10 @@ use signex_widgets::{Label, button, text, text_input};
 use uuid::Uuid;
 
 use super::{Look, SP, TS, caption};
+use crate::app::block_diagram::OpenDiagram;
 use crate::app::block_diagram::TabEvent;
 use crate::app::block_diagram::fields::{mm_text, rails_text, specs_text};
-use crate::app::block_diagram::state::{BlockDiagramEditor, DiagramItem, PropertyField};
+use crate::app::block_diagram::state::{DiagramItem, PropertyField};
 use crate::choice::{Choice, chosen};
 use crate::styles::ti;
 use crate::styles::tokens::resolve;
@@ -29,11 +30,11 @@ const SWATCH_EMS: f32 = 1.2;
 
 type Items<'a> = Column<Element<'a, TabEvent>>;
 
-pub(super) fn view<'a>(look: Look<'a>, editor: &'a BlockDiagramEditor) -> Element<'a, TabEvent> {
-    let diagram = &editor.diagram;
+pub(super) fn view<'a>(look: Look<'a>, editor: OpenDiagram<'a>) -> Element<'a, TabEvent> {
+    let diagram = &editor.doc.diagram;
     let mut list: Items<'a> = column![caption(look, ids::BLOCK_DIAGRAM_PROPERTIES)].spacing(SP.xs);
-    let editable = !editor.is_read_only();
-    list = match editor.single_selection() {
+    let editable = !editor.doc.is_read_only();
+    list = match editor.tab.single_selection() {
         Some(DiagramItem::Block(id)) => match diagram.block(id) {
             Some(block) => block_rows(look, editor, block, editable, list),
             None => list,
@@ -50,10 +51,10 @@ pub(super) fn view<'a>(look: Look<'a>, editor: &'a BlockDiagramEditor) -> Elemen
             Some(group) => group_rows(look, editor, group, editable, list),
             None => list,
         },
-        None if editor.selection.is_empty() => {
+        None if editor.tab.selection.is_empty() => {
             list.push(hint(look, ids::BLOCK_DIAGRAM_PROP_NOTHING))
         }
-        None => list.push(hint_count(look, editor.selection.len())),
+        None => list.push(hint_count(look, editor.tab.selection.len())),
     };
     container(scrollable(list.padding(SP.s)).height(Length::Fill))
         .height(Length::Fill)
@@ -118,13 +119,13 @@ fn user(value: impl Into<String>) -> Label<'static> {
 /// A text field: the draft while one is typed, else `current`.
 fn field<'a>(
     look: Look<'a>,
-    editor: &'a BlockDiagramEditor,
+    editor: OpenDiagram<'a>,
     name: MessageId,
     which: PropertyField,
     current: String,
     editable: bool,
 ) -> Element<'a, TabEvent> {
-    let shown = editor.drafts.get(&which).cloned().unwrap_or(current);
+    let shown = editor.tab.drafts.get(&which).cloned().unwrap_or(current);
     let mut input = text_input(look.t(name), shown)
         .style(crate::panels::form_look::text_input_style)
         .size(TS.dense)
@@ -139,7 +140,7 @@ fn field<'a>(
 
 fn block_rows<'a>(
     look: Look<'a>,
-    editor: &'a BlockDiagramEditor,
+    editor: OpenDiagram<'a>,
     block: &'a Block,
     editable: bool,
     list: Items<'a>,
@@ -189,7 +190,7 @@ fn block_rows<'a>(
         .push(labelled(
             look,
             ids::BLOCK_DIAGRAM_PROP_GROUP,
-            group_picker(look, &editor.diagram, block, editable),
+            group_picker(look, &editor.doc.diagram, block, editable),
         ))
         .push(f(
             ids::BLOCK_DIAGRAM_PROP_RAILS,
@@ -291,12 +292,12 @@ fn end_text(diagram: &BlockDiagram, end: Endpoint) -> String {
 
 fn connection_rows<'a>(
     look: Look<'a>,
-    editor: &'a BlockDiagramEditor,
+    editor: OpenDiagram<'a>,
     link: &'a Connection,
     editable: bool,
     list: Items<'a>,
 ) -> Items<'a> {
-    let diagram = &editor.diagram;
+    let diagram = &editor.doc.diagram;
     let mut list = list
         .push(fact(
             look,
@@ -343,12 +344,13 @@ fn connection_rows<'a>(
 
 fn group_rows<'a>(
     look: Look<'a>,
-    editor: &'a BlockDiagramEditor,
+    editor: OpenDiagram<'a>,
     group: &'a BlockGroup,
     editable: bool,
     list: Items<'a>,
 ) -> Items<'a> {
     let members = editor
+        .doc
         .diagram
         .blocks
         .iter()

@@ -149,9 +149,9 @@ impl Signex {
         let seq = self.ui_state.sheet_open_seq;
         let stepping = matches!(open.then, AfterOpen::ArriveHistory { .. });
         // A back / forward step's own focus change is not a visit.
-        self.document_state.net_nav.history.hold(stepping);
+        self.document_view.net_nav.history.hold(stepping);
         let focused = self.focus_open_sheet(&path);
-        self.document_state.net_nav.history.hold(false);
+        self.document_view.net_nav.history.hold(false);
         if focused {
             return (self.arrive_at_sheet(&path, open), false);
         }
@@ -160,7 +160,7 @@ impl Signex {
         if let Err(refusal) = self.refuse_start_while_path_op(&path, "opened") {
             let detail = refusal.to_string();
             crate::diagnostics::log_warning(detail.clone());
-            self.document_state.error_notice = Some(crate::app::state::ErrorNotice::open(
+            self.document_view.error_notice = Some(crate::app::state::ErrorNotice::open(
                 crate::app::state::untranslated(detail),
             ));
             return (Task::none(), true);
@@ -246,7 +246,7 @@ impl Signex {
             }
             AfterOpen::ArriveHistory { forward } => {
                 let landed = self.active_tab_path().unwrap_or_else(|| path.to_path_buf());
-                self.document_state.net_nav.history.arrive(forward, &landed);
+                self.document_view.net_nav.history.arrive(forward, &landed);
                 Task::none()
             }
         }
@@ -362,7 +362,7 @@ impl Signex {
         }
         match open.open.then {
             AfterOpen::ArriveHistory { forward } => {
-                self.document_state.net_nav.history.peek(forward) != Some(path)
+                self.document_view.net_nav.history.peek(forward) != Some(path)
             }
             _ => false,
         }

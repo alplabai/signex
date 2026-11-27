@@ -15,6 +15,7 @@ impl Signex {
         window_id: iced::window::Id,
     ) -> Element<'_, Message> {
         let document = &self.document_state;
+        let document_view = &self.document_view;
         let board_import_name = document.altium_import_running.as_ref().map(|run| {
             run.input
                 .file_name()
@@ -40,7 +41,7 @@ impl Signex {
             self.status_tool(window_id),
             grid.size_mm,
             selected,
-            &document.panel_ctx.tokens,
+            &document_view.panel_ctx.tokens,
             document.inflight_git_commits.len(),
             board_import_name.as_deref(),
             activity.as_ref(),
@@ -138,7 +139,7 @@ impl Signex {
         let hotspot_key = ui
             .active_keymap
             .shortcut_label_for_id(crate::status_bar::HOTSPOTS_COMMAND);
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let card = crate::status_bar::grid_popover_view(
             &settings,
             &popover.hover,
@@ -337,7 +338,7 @@ mod tests {
         let size = iced::Size::new(1400.0, 1400.0);
         app.ui_state.window_size = (size.width, size.height);
         open_footprint_tab(&mut app);
-        let tokens = &app.document_state.panel_ctx.tokens;
+        let tokens = &app.document_view.panel_ctx.tokens;
         let bar_h = crate::status_bar::status_bar_height(tokens);
         let card_bottom = size.height - bar_h - crate::status_bar::POPUP_GAP;
         // The click lands on the caret, inside the bar.
@@ -425,13 +426,13 @@ mod tests {
             PanelMsg::ToggleSnapHotspots,
         )));
         assert_eq!(app.ui_state.snap_hotspots, !hotspots);
-        assert_eq!(app.document_state.panel_ctx.snap_hotspots, !hotspots);
+        assert_eq!(app.document_view.panel_ctx.snap_hotspots, !hotspots);
 
         let _ = app.update(grid_popover_message(GridPopoverEvent::SettingChanged(
             PanelMsg::SetVisibleGridSize(5.08),
         )));
         assert!((app.ui_state.visible_grid_mm - 5.08).abs() < f32::EPSILON);
-        assert!((app.document_state.panel_ctx.visible_grid_mm - 5.08).abs() < f32::EPSILON);
+        assert!((app.document_view.panel_ctx.visible_grid_mm - 5.08).abs() < f32::EPSILON);
     }
 
     /// A hover on a Pitch row lights its callout through the popover state.

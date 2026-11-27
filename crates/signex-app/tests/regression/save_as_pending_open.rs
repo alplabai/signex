@@ -69,7 +69,7 @@ fn tab_count(app: &Signex, path: &Path) -> usize {
 }
 
 fn panel_has(app: &Signex, needle: &str) -> bool {
-    app.document_state
+    app.document_view
         .panel_ctx
         .diagnostics
         .iter()
@@ -428,7 +428,7 @@ fn long_dir(root: &Path) -> std::path::PathBuf {
 /// The Messages entry naming `file` (unique per test: the log is global) and
 /// containing `needle`.
 fn panel_message_with(app: &Signex, file: &str, needle: &str) -> Option<String> {
-    app.document_state
+    app.document_view
         .panel_ctx
         .diagnostics
         .iter()

@@ -58,7 +58,7 @@ impl Signex {
             return Task::none();
         };
         let current = self
-            .document_state
+            .document_view
             .project_tabs
             .get(&project_id)
             .is_none_or(|tab| {
@@ -74,7 +74,7 @@ impl Signex {
         }
         let parameters = project.data.parameters.clone();
         let read = self.parts_read_of(project);
-        let Some(tab) = self.document_state.project_tabs.get_mut(&project_id) else {
+        let Some(tab) = self.document_view.project_tabs.get_mut(&project_id) else {
             return Task::none();
         };
         tab.variant_parts_parameters = Some(parameters);
@@ -108,7 +108,7 @@ impl Signex {
         epoch: u64,
         parts: Arc<Result<VariantMatrix, PartsReadError>>,
     ) {
-        let Some(tab) = self.document_state.project_tabs.get_mut(&project_id) else {
+        let Some(tab) = self.document_view.project_tabs.get_mut(&project_id) else {
             return;
         };
         if tab.variant_parts_generation != generation {

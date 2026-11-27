@@ -65,7 +65,7 @@ pub(super) fn user(text_: impl Into<String>) -> UserText {
 impl Signex {
     /// The notebook tab of project `id`.
     pub(crate) fn view_notebook_tab(&self, id: ProjectId) -> Element<'_, Message> {
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let Some((doc, tab)) = self.notebook_parts(id) else {
             return notice(tokens, t!(self.ui_state.i18n, ids::NOTEBOOK_TAB_READING));
         };

@@ -72,7 +72,7 @@ impl Signex {
     /// when there is no sheet to export.
     pub(super) fn view_pdf_viewer<'a>(&'a self, preview: &'a PreviewState) -> Element<'a, Message> {
         let i18n = self.ui_state.i18n.as_ref();
-        let look = Look::of(&self.document_state.panel_ctx.tokens);
+        let look = Look::of(&self.document_view.panel_ctx.tokens);
         let sunken = move |_: &iced::Theme| container::Style {
             background: Some(look.sunken.into()),
             ..container::Style::default()
@@ -126,7 +126,7 @@ impl Signex {
         look: &Look,
     ) -> Element<'a, Message> {
         let i18n = self.ui_state.i18n.as_ref();
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let theme = self.ui_state.theme_id;
         let look = *look;
         let count = preview.pages.len();

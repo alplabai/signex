@@ -52,7 +52,7 @@ impl Signex {
                 })
             }
             OverlayMsg::LinkOpenFailed(detail) => {
-                self.document_state.error_notice =
+                self.document_view.error_notice =
                     Some(crate::app::state::ErrorNotice::link(detail));
                 Task::none()
             }
@@ -76,13 +76,13 @@ impl Signex {
                 // Inlined rather than a handler in `menu/export`, which
                 // is where it used to live: the card is not export-only
                 // (#532), so neither is clearing it.
-                self.document_state.error_notice = None;
+                self.document_view.error_notice = None;
                 Task::none()
             }
             OverlayMsg::DiskConflictOverwriteChosen => self.handle_disk_conflict_overwrite(),
             OverlayMsg::DiskConflictReloadChosen => self.handle_disk_conflict_reload(),
             OverlayMsg::DiskConflictSaveAsChosen => self.handle_disk_conflict_save_as(),
-            OverlayMsg::ErrorNoticeCopyPressed => match &self.document_state.error_notice {
+            OverlayMsg::ErrorNoticeCopyPressed => match &self.document_view.error_notice {
                 Some(notice) => {
                     iced::clipboard::write(notice.copy_text(&self.ui_state.i18n)).discard()
                 }
@@ -987,7 +987,7 @@ impl Signex {
         interaction.submenu_launcher_hovered = None;
         interaction.submenu_panel_hovered = false;
         interaction.submenu_unhovered_since = None;
-        self.document_state.dock.tab_menu = None;
+        self.document_view.dock.tab_menu = None;
         self.library.components_panel.row_menu = None;
         self.ui_state.tab_overflow_menu_open = false;
     }

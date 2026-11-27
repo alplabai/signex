@@ -53,8 +53,9 @@ fn texts(app: &Signex, path: &Path) -> Vec<String> {
 }
 
 fn rail_loads(app: &Signex, path: &Path, net: &str) -> Vec<String> {
-    let editor = &app.document_state.block_diagrams.editors[path];
+    let editor = app.open_diagram(path).expect("open");
     let read = editor
+        .tab
         .power
         .read
         .as_ref()
@@ -89,8 +90,9 @@ fn the_variant_field_reads_the_tree_for_the_variant_picked() {
     );
 
     send(&mut app, &path, TabEvent::VariantPicked("Lite".into()));
-    let editor = &app.document_state.block_diagrams.editors[&path];
+    let editor = app.open_diagram(&path).expect("open");
     let read = editor
+        .tab
         .power
         .read
         .as_ref()
@@ -116,8 +118,9 @@ fn a_click_on_a_part_opens_its_sheet() {
         &path,
         TabEvent::ViewPicked(DiagramView::PowerTree),
     );
-    let editor = &app.document_state.block_diagrams.editors[&path];
+    let editor = app.open_diagram(&path).expect("open");
     let read = editor
+        .tab
         .power
         .read
         .as_ref()
@@ -165,7 +168,7 @@ fn show_gnd_hides_ground_connections_until_ticked() {
 
     let dir = tempfile::tempdir().unwrap();
     let (mut app, path) = with_rails(&dir);
-    assert!(!app.document_state.block_diagrams.editors[&path].show_ground);
+    assert!(!app.diagram_view(&path).show_ground);
     let clicked: Vec<TabEvent> =
         messages_on_click(app.view_block_diagram_tab(path.clone()), WINDOW, "Show GND")
             .into_iter()
@@ -176,13 +179,13 @@ fn show_gnd_hides_ground_connections_until_ticked() {
             .collect();
     assert_eq!(clicked, [TabEvent::ShowGroundToggled(true)]);
     let look = |app: &Signex| {
-        let editor = &app.document_state.block_diagrams.editors[&path];
+        let editor = app.open_diagram(&path).expect("open");
         let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::GraphiteLight);
         let look = super::view::Look {
             tokens: &tokens,
             i18n: &app.ui_state.i18n,
         };
-        let canvas = super::view::canvas_look(look, editor.show_ground);
+        let canvas = super::view::canvas_look(look, editor.tab.show_ground);
         (canvas.shows(&gnd), canvas.shows(&rail))
     };
     assert_eq!(look(&app), (false, true), "hidden as drawn");
@@ -287,10 +290,7 @@ fn the_popover_sends_its_pages_and_paper() {
     send(&mut app, &path, TabEvent::Export(budget));
     let paper = ExportEvent::PaperPicked(ExportPaper::A3);
     send(&mut app, &path, TabEvent::Export(paper));
-    let draft = app.document_state.block_diagrams.editors[&path]
-        .export
-        .clone()
-        .expect("open");
+    let draft = app.diagram_view(&path).export.clone().expect("open");
     assert_eq!(
         draft.pages,
         [
@@ -322,7 +322,7 @@ fn a_closed_diagram_in_the_folder_is_a_tree_row_that_opens() {
     let task = app.start_project_fs_probe(true).expect("a probe");
     TaskDriver::new().settle(&mut app, task).expect("settles");
     app.refresh_panel_ctx();
-    let tree = crate::panels::build_project_tree(&app.document_state.panel_ctx);
+    let tree = crate::panels::build_project_tree(&app.document_view.panel_ctx);
     let row = find(&tree, "docs/system.snxblk").expect("a row for the closed diagram");
     assert!(!row.is_open && !row.is_dirty);
     assert!(

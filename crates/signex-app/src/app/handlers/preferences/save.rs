@@ -71,7 +71,7 @@ impl Signex {
         // re-assert it so the saved and effective flags can't diverge.
         self.set_pcb_gpu_render(self.ui_state.pcb_gpu_render);
         self.sync_theme();
-        self.document_state.panel_ctx.ui_font_name = self.ui_state.ui_font_name.clone();
+        self.document_view.panel_ctx.ui_font_name = self.ui_state.ui_font_name.clone();
         // #1351 — every write is a background task, collected in `writes`
         // and never run inline in `update`. Each keeps its per-key ticket,
         // so a later toggle of the same key still wins over this Save.
@@ -79,7 +79,7 @@ impl Signex {
         // #629 — re-assert the symbol grid style from the committed value so
         // the saved and effective styles cannot diverge (same rule as the
         // PCB GPU flag above).
-        self.document_state.panel_ctx.symbol_grid_style = self.ui_state.symbol_grid_style;
+        self.document_view.panel_ctx.symbol_grid_style = self.ui_state.symbol_grid_style;
         self.commit_component_class_drafts();
         // Everything committed above is in `ui_state` now: queue its writes,
         // and hand new libraries the same values so none of them reads
@@ -124,7 +124,7 @@ impl Signex {
         self.ui_state.component_classes =
             crate::preferences::saved_classes(&self.ui_state.preferences_draft_component_classes);
         self.ui_state.preferences_draft_component_classes = self.ui_state.component_classes.clone();
-        self.document_state.panel_ctx.component_classes = self.ui_state.component_classes.clone();
+        self.document_view.panel_ctx.component_classes = self.ui_state.component_classes.clone();
         // A saved row is no longer the added one: its key stops following
         // its label, and the dedupe above may have moved it (mockup row 150).
         self.ui_state.preferences_pages.classes_view.new_row = None;

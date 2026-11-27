@@ -58,7 +58,7 @@ fn finish_run(app: &mut Signex, id: ProjectId, passed: &[&str]) {
         .map(|entry| entry.raw().clone())
         .collect();
     let tab = app
-        .document_state
+        .document_view
         .project_tabs
         .get_mut(&id)
         .expect("the tab");
@@ -127,7 +127,7 @@ fn picking_a_variant_and_unticking_fitted_parts_only_are_undo_steps() {
         stored(&app, 0),
         json!({"id": "parts", "kind": "parts_state"})
     );
-    let problem = app.document_state.project_tabs[&id]
+    let problem = app.document_view.project_tabs[&id]
         .requirements
         .problem
         .as_ref()

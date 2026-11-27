@@ -78,9 +78,7 @@ impl Signex {
             TabEvent::VariantPicked(variant) => return self.pick_power_variant(&path, variant),
             TabEvent::Review(event) => return self.block_diagram_review_event(&path, event),
             TabEvent::ShowGroundToggled(on) => {
-                if let Some(editor) = self.document_state.block_diagrams.editors.get_mut(&path) {
-                    editor.show_ground = on;
-                }
+                self.diagram_view_mut(&path).show_ground = on;
                 Ok(())
             }
             TabEvent::ResyncPressed => return self.resync_block_diagram(),
@@ -97,12 +95,11 @@ impl Signex {
             TabEvent::AddPortPressed => self.add_port_from_toolbar(&path),
             TabEvent::GroupPressed => self.group_from_toolbar(&path),
             TabEvent::DeletePressed => {
-                let items = self.diagram_editor(&path).map(|e| e.selection.clone());
-                match items {
-                    Some(items) if !items.is_empty() => {
-                        self.gui_edit(&path, DiagramEdit::RemoveItems(items))
-                    }
-                    _ => Ok(()),
+                let items = self.diagram_view(&path).selection.clone();
+                if items.is_empty() {
+                    Ok(())
+                } else {
+                    self.gui_edit(&path, DiagramEdit::RemoveItems(items))
                 }
             }
             TabEvent::FieldCommitted(field) => self.commit_field(&path, field),
@@ -134,19 +131,17 @@ impl Signex {
     /// The events that change only the tab's own state: no undo step, no
     /// dirty mark.
     fn session_event(&mut self, path: &Path, event: TabEvent) {
-        let Some(editor) = self.document_state.block_diagrams.editors.get_mut(path) else {
-            return;
-        };
+        let view = self.diagram_view_mut(path);
         match event {
             TabEvent::ToolPicked(tool) => {
-                editor.tool = tool;
-                editor.connect_from = None;
+                view.tool = tool;
+                view.connect_from = None;
             }
-            TabEvent::ItemPicked { item, add } => editor.pick(item, add),
-            TabEvent::ViewChanged(camera) => editor.camera = camera,
-            TabEvent::FitPressed => editor.camera = Camera::default(),
+            TabEvent::ItemPicked { item, add } => view.pick(item, add),
+            TabEvent::ViewChanged(camera) => view.camera = camera,
+            TabEvent::FitPressed => view.camera = Camera::default(),
             TabEvent::FieldEdited(field, text) => {
-                editor.drafts.insert(field, text);
+                view.drafts.insert(field, text);
             }
             _ => {}
         }
@@ -183,7 +178,7 @@ impl Signex {
         let Some(editor) = self.diagram_editor(path) else {
             return Ok(());
         };
-        let Some(DiagramItem::Block(block)) = editor.single_selection() else {
+        let Some(DiagramItem::Block(block)) = self.diagram_view(path).single_selection() else {
             return Ok(());
         };
         let Some(owner) = editor.diagram.block(block) else {
@@ -204,7 +199,7 @@ impl Signex {
         let Some(editor) = self.diagram_editor(path) else {
             return Ok(());
         };
-        let blocks = editor.selected_blocks();
+        let blocks = self.diagram_view(path).selected_blocks();
         if blocks.is_empty() {
             return Ok(());
         }
@@ -233,10 +228,9 @@ impl Signex {
             .get("id")
             .and_then(|id| id.as_str())
             .and_then(|id| Uuid::parse_str(id).ok());
-        if let (Some(id), Some(editor)) =
-            (id, self.document_state.block_diagrams.editors.get_mut(path))
-        {
-            editor.pick(Some(item(id)), false);
+        let open = self.diagram_editor(path).is_some();
+        if let (Some(id), true) = (id, open) {
+            self.diagram_view_mut(path).pick(Some(item(id)), false);
         }
     }
 
@@ -246,11 +240,12 @@ impl Signex {
         path: &Path,
         end: signex_types::block_diagram::Endpoint,
     ) -> Result<(), Refusal> {
-        let Some(editor) = self.document_state.block_diagrams.editors.get_mut(path) else {
+        if self.diagram_editor(path).is_none() {
             return Ok(());
-        };
-        let Some(from) = editor.connect_from.take() else {
-            editor.connect_from = Some(end);
+        }
+        let view = self.diagram_view_mut(path);
+        let Some(from) = view.connect_from.take() else {
+            view.connect_from = Some(end);
             return Ok(());
         };
         if from == end {
@@ -272,9 +267,7 @@ impl Signex {
         path: &Path,
         fill: impl FnOnce(&mut BlockPatch),
     ) -> Result<(), Refusal> {
-        let Some(DiagramItem::Block(block)) =
-            self.diagram_editor(path).and_then(|e| e.single_selection())
-        else {
+        let Some(DiagramItem::Block(block)) = self.diagram_view(path).single_selection() else {
             return Ok(());
         };
         let mut patch = BlockPatch::default();
@@ -288,9 +281,7 @@ impl Signex {
         interface: Option<Interface>,
         label: Option<String>,
     ) -> Result<(), Refusal> {
-        let Some(DiagramItem::Connection(id)) =
-            self.diagram_editor(path).and_then(|e| e.single_selection())
-        else {
+        let Some(DiagramItem::Connection(id)) = self.diagram_view(path).single_selection() else {
             return Ok(());
         };
         let edit = DiagramEdit::SetConnection {
@@ -306,7 +297,7 @@ impl Signex {
         path: &Path,
         color: Option<signex_types::theme::Color>,
     ) -> Result<(), Refusal> {
-        match self.diagram_editor(path).and_then(|e| e.single_selection()) {
+        match self.diagram_view(path).single_selection() {
             Some(DiagramItem::Block(block)) => {
                 let patch = BlockPatch {
                     color: Some(color),
@@ -329,13 +320,14 @@ impl Signex {
     /// Commit the text typed in `field` to the selected object. The draft
     /// goes either way; a refusal is named in Messages.
     fn commit_field(&mut self, path: &Path, field: PropertyField) -> Result<(), Refusal> {
-        let Some(editor) = self.document_state.block_diagrams.editors.get_mut(path) else {
+        let Some(editor) = self.document_state.block_diagrams.editors.get(path) else {
             return Ok(());
         };
-        let Some(text) = editor.drafts.remove(&field) else {
+        let view = super::view_of(&mut self.document_view.block_diagrams, path);
+        let Some(text) = view.drafts.remove(&field) else {
             return Ok(());
         };
-        let selected = editor.single_selection();
+        let selected = view.single_selection();
         let block = editor
             .diagram
             .block(match selected {

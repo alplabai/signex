@@ -166,7 +166,7 @@ fn a_colour_change_recolours_the_canvas_and_the_chip() {
     assert_eq!(&top(&after)[..3], &[1.0, 0.0, 1.0]);
     assert_ne!(top(&before), top(&after));
     assert_eq!(
-        app.document_state.panel_ctx.pcb_layers.colour(TOP),
+        app.document_view.panel_ctx.pcb_layers.colour(TOP),
         iced::Color::from_rgb8(255, 0, 255),
         "the chip shows the canvas colour"
     );
@@ -191,12 +191,12 @@ fn a_colour_change_recolours_the_canvas_and_the_chip() {
 fn used_on_and_the_active_layer_run_from_the_panel_and_the_commands() {
     let (mut app, path) = open();
     panel(&mut app, PcbViewMsg::UsedLayersOnlySet(true));
-    assert!(app.document_state.panel_ctx.pcb_layers.used.is_some());
+    assert!(app.document_view.panel_ctx.pcb_layers.used.is_some());
     assert_eq!(
         run(&mut app, &path, "show_used_layers_only", &["on=false"]),
         CommandOutcome::Ran
     );
-    assert!(app.document_state.panel_ctx.pcb_layers.used.is_none());
+    assert!(app.document_view.panel_ctx.pcb_layers.used.is_none());
     assert_eq!(
         run(&mut app, &path, "set_active_layer", &["layer=BottomCopper"]),
         CommandOutcome::Ran

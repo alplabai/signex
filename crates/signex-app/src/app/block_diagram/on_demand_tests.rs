@@ -62,9 +62,16 @@ fn an_edit_on_a_diagram_not_open_reads_it_first_and_holds_it_without_a_tab() {
         .as_str()
         .expect("the new block's id")
         .to_string();
-    let editor = &app.document_state.block_diagrams.editors[&path];
-    assert!(editor.diagram.blocks.iter().any(|b| b.id.to_string() == id));
-    assert!(editor.is_dirty(), "unsaved until saved");
+    let editor = app.open_diagram(&path).expect("open");
+    assert!(
+        editor
+            .doc
+            .diagram
+            .blocks
+            .iter()
+            .any(|b| b.id.to_string() == id)
+    );
+    assert!(editor.doc.is_dirty(), "unsaved until saved");
     assert_eq!(app.document_state.tabs.len(), tabs, "no tab was opened");
     assert_eq!(
         std::fs::read_to_string(&path).expect("kept"),
@@ -153,6 +160,13 @@ fn a_person_opening_the_file_later_sees_the_held_edits() {
     let task = app.open_block_diagram_file(path.clone());
     TaskDriver::new().settle(&mut app, task).expect("settles");
     assert!(app.block_diagram_tab(&path).is_some());
-    let editor = &app.document_state.block_diagrams.editors[&path];
-    assert!(editor.diagram.blocks.iter().any(|b| b.id.to_string() == id));
+    let editor = app.open_diagram(&path).expect("open");
+    assert!(
+        editor
+            .doc
+            .diagram
+            .blocks
+            .iter()
+            .any(|b| b.id.to_string() == id)
+    );
 }

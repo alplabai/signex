@@ -4,6 +4,7 @@
 
 pub(crate) mod block_diagram_editor;
 pub(crate) mod block_diagram_panes;
+pub(crate) mod block_diagram_view;
 pub(crate) mod branch_switch;
 pub(crate) mod case_fold;
 pub(crate) mod case_probe;

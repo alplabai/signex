@@ -131,10 +131,13 @@ fn resync_merges_into_the_open_diagram_as_one_undo_step() {
     assert!(translator::ran("regenerate_block_diagram"));
     TaskDriver::new().settle(&mut app, task).expect("settles");
 
-    let editor = &app.document_state.block_diagrams.editors[&file];
-    assert_eq!(editor.diagram.blocks.len(), 3, "Gamma came in");
-    assert_eq!(editor.diagram.block(moved).map(|b| b.position), Some(to));
-    assert_eq!(editor.undo.len(), steps + 1, "one undo step");
+    let editor = app.open_diagram(&file).expect("open");
+    assert_eq!(editor.doc.diagram.blocks.len(), 3, "Gamma came in");
+    assert_eq!(
+        editor.doc.diagram.block(moved).map(|b| b.position),
+        Some(to)
+    );
+    assert_eq!(editor.doc.undo.len(), steps + 1, "one undo step");
     assert!(app.document_state.is_document_dirty(&file));
     assert_eq!(
         std::fs::read(&file).expect("bytes"),

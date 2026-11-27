@@ -39,7 +39,7 @@ impl Signex {
         let Some(confirm) = self.ui_state.create_child_sheet_confirm.as_ref() else {
             return container(Space::new()).boxed();
         };
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let i18n = self.ui_state.i18n.as_ref();
         let later = msg(ProjectMsg::CreateChildSheetAnswered { create: false });
 
@@ -122,7 +122,7 @@ impl Signex {
         &'a self,
         confirm: &'a CreateChildSheetConfirmState,
     ) -> Element<'a, Message> {
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let i18n = self.ui_state.i18n.as_ref();
         let parent_dir = confirm.parent.parent().unwrap_or(std::path::Path::new(""));
         let full_folder = parent_dir.display().to_string();

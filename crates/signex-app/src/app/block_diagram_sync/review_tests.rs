@@ -84,15 +84,15 @@ fn resync_applies_the_new_block_and_reviews_the_unlink() {
     change_hierarchy(dir.path());
     send(&mut app, &file, TabEvent::ResyncPressed);
 
-    let editor = &app.document_state.block_diagrams.editors[&file];
-    assert_eq!(editor.undo.len(), 1, "Gamma came in as one step");
-    assert!(editor.diagram.blocks.iter().any(|b| b.name == "Gamma"));
+    let editor = app.open_diagram(&file).expect("open");
+    assert_eq!(editor.doc.undo.len(), 1, "Gamma came in as one step");
+    assert!(editor.doc.diagram.blocks.iter().any(|b| b.name == "Gamma"));
     assert_eq!(
         block_state(&app, &file, "Beta"),
         LinkState::Linked,
         "not yet"
     );
-    let review = editor.review.as_ref().expect("the review opened");
+    let review = editor.tab.review.as_ref().expect("the review opened");
     assert_eq!(review.unlink.len(), 1);
     assert_eq!(review.added.len(), 1);
     let shown = previews(review);
@@ -117,10 +117,7 @@ fn resync_applies_the_new_block_and_reviews_the_unlink() {
         &file,
         TabEvent::Review(ReviewEvent::RowToggled(beta, false)),
     );
-    let review = app.document_state.block_diagrams.editors[&file]
-        .review
-        .as_ref()
-        .expect("open");
+    let review = app.diagram_view(&file).review.as_ref().expect("open");
     let shown = previews(review);
     assert!(
         !shown.iter().any(|(_, p)| *p == Preview::Unlinked),
@@ -150,9 +147,9 @@ fn resync_applies_the_new_block_and_reviews_the_unlink() {
     .collect();
     assert_eq!(clicked, [TabEvent::Review(ReviewEvent::ApplyPressed)]);
     send(&mut app, &file, TabEvent::Review(ReviewEvent::ApplyPressed));
-    let editor = &app.document_state.block_diagrams.editors[&file];
-    assert!(editor.review.is_none());
-    assert_eq!(editor.undo.len(), 2, "Apply selected is one undo step");
+    let editor = app.open_diagram(&file).expect("open");
+    assert!(editor.tab.review.is_none());
+    assert_eq!(editor.doc.undo.len(), 2, "Apply selected is one undo step");
     assert_eq!(block_state(&app, &file, "Beta"), LinkState::Unlinked);
     send(&mut app, &file, TabEvent::UndoPressed);
     assert_eq!(block_state(&app, &file, "Beta"), LinkState::Linked);
@@ -165,7 +162,8 @@ fn an_unchecked_row_is_listed_again_next_time_and_nothing_to_change_closes() {
     open(&mut app, &file);
     change_hierarchy(dir.path());
     send(&mut app, &file, TabEvent::ResyncPressed);
-    let beta = app.document_state.block_diagrams.editors[&file]
+    let beta = app
+        .diagram_view(&file)
         .review
         .as_ref()
         .expect("open")
@@ -180,7 +178,8 @@ fn an_unchecked_row_is_listed_again_next_time_and_nothing_to_change_closes() {
     assert_eq!(block_state(&app, &file, "Beta"), LinkState::Linked);
 
     send(&mut app, &file, TabEvent::ResyncPressed);
-    let review = app.document_state.block_diagrams.editors[&file]
+    let review = app
+        .diagram_view(&file)
         .review
         .clone()
         .expect("listed again");
@@ -199,19 +198,11 @@ fn an_unchecked_row_is_listed_again_next_time_and_nothing_to_change_closes() {
     send(&mut app, &file, TabEvent::ResyncPressed);
     assert!(texts(&app, &file).iter().any(|t| t == "Nothing to change"));
     send(&mut app, &file, TabEvent::Review(ReviewEvent::Closed));
-    assert!(
-        app.document_state.block_diagrams.editors[&file]
-            .review
-            .is_none()
-    );
+    assert!(app.diagram_view(&file).review.is_none());
 
     // With nothing to unlink no review opens.
     send(&mut app, &file, TabEvent::ResyncPressed);
-    assert!(
-        app.document_state.block_diagrams.editors[&file]
-            .review
-            .is_none()
-    );
+    assert!(app.diagram_view(&file).review.is_none());
 }
 
 #[test]
@@ -279,10 +270,11 @@ fn previewed_blocks_carry_their_tags_in_their_colours() {
     change_hierarchy(dir.path());
     send(&mut app, &file, TabEvent::ResyncPressed);
 
-    let tokens = app.document_state.panel_ctx.tokens;
-    let editor = &app.document_state.block_diagrams.editors[&file];
+    let tokens = app.document_view.panel_ctx.tokens;
+    let editor = app.open_diagram(&file).expect("open");
     let id_of = |name: &str| {
         editor
+            .doc
             .diagram
             .blocks
             .iter()
@@ -323,13 +315,7 @@ fn previewed_blocks_carry_their_tags_in_their_colours() {
     };
     let shown = previews(&review);
     assert_eq!(shown, [(gamma, Preview::Renamed), (beta, Preview::Moved)]);
-    let editor = app
-        .document_state
-        .block_diagrams
-        .editors
-        .get_mut(&file)
-        .expect("open");
-    editor.review = Some(review);
+    app.diagram_view_mut(&file).review = Some(review);
     let tags = app.block_diagram_review_tags(&file);
     let moved = resolve(&tokens).info;
     assert_eq!(tags[0].1, "renamed");
@@ -344,7 +330,8 @@ fn hovering_a_row_outlines_its_block() {
     open(&mut app, &file);
     change_hierarchy(dir.path());
     send(&mut app, &file, TabEvent::ResyncPressed);
-    let beta = app.document_state.block_diagrams.editors[&file]
+    let beta = app
+        .diagram_view(&file)
         .review
         .as_ref()
         .expect("open")
@@ -379,7 +366,7 @@ fn hovering_a_row_outlines_its_block() {
     );
 
     let hovered = |app: &Signex| {
-        app.document_state.block_diagrams.editors[&file]
+        app.diagram_view(&file)
             .review
             .as_ref()
             .expect("open")
@@ -412,10 +399,10 @@ fn resync_refuses_a_sheet_without_an_id_and_changes_nothing() {
     std::fs::copy(leaf, dir.path().join("b.snxsch")).expect("Beta without an id");
     send(&mut app, &file, TabEvent::ResyncPressed);
 
-    let editor = &app.document_state.block_diagrams.editors[&file];
-    assert!(editor.undo.is_empty(), "no undo step");
-    assert_eq!(editor.diagram, before, "the diagram as it was");
-    assert!(editor.review.is_none());
+    let editor = app.open_diagram(&file).expect("open");
+    assert!(editor.doc.undo.is_empty(), "no undo step");
+    assert_eq!(editor.doc.diagram, before, "the diagram as it was");
+    assert!(editor.tab.review.is_none());
     assert_eq!(
         std::fs::read(&file).expect("bytes"),
         bytes,

@@ -42,7 +42,7 @@ fn app() -> Signex {
 /// A board sketch with a line selected; `slot` is its slot's size.
 fn line_selected(app: &Signex, slot: Option<(f64, f64)>) -> FootprintEditorPanelContext {
     let mut fp = app
-        .document_state
+        .document_view
         .panel_ctx
         .footprint_editor
         .as_deref()
@@ -69,7 +69,7 @@ fn line_selected(app: &Signex, slot: Option<(f64, f64)>) -> FootprintEditorPanel
 }
 
 fn texts(app: &Signex, fp: &FootprintEditorPanelContext) -> Vec<LaidOutText> {
-    let ctx = &app.document_state.panel_ctx;
+    let ctx = &app.document_view.panel_ctx;
     let i18n = signex_i18n::I18n::en_us();
     let cx = Ctx {
         fp,

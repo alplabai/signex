@@ -43,7 +43,7 @@ impl Signex {
         // A loose board's Layer Stack tab is titled by the board's file name.
         self.refresh_page_tab_titles();
         // Pending drafts belong to the sheet, not to the name it had.
-        self.document_state.drafts.rekey(old_path, new_path);
+        self.document_view.drafts.rekey(old_path, new_path);
         if let Some(mut engine) = self.document_state.remove_engine(old_path) {
             // `Engine::save` writes to its own path; leaving the old one
             // would write the renamed sheet back under its old filename.
@@ -105,7 +105,7 @@ impl Signex {
         self.rekey_page_setup(old_path, new_path);
         // Renaming does not rewrite the parents' sheet symbols, so the
         // placement no longer reaches this file.
-        self.document_state.tab_placements.forget(old_path);
+        self.document_view.tab_placements.forget(old_path);
         self.rekey_undocked_windows(old_path, new_path);
     }
 }

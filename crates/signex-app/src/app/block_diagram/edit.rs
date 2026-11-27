@@ -218,10 +218,11 @@ impl Signex {
         let answer = apply(&mut next, &mut UuidV7Ids, edit)?;
         if next != editor.diagram {
             // The view stays where it is while the diagram grows.
-            editor.camera.hold(&editor.diagram);
+            let view = super::view_of(&mut self.document_view.block_diagrams, path);
+            view.camera.hold(&editor.diagram);
             let before = std::mem::replace(&mut editor.diagram, next);
             editor.record(before, depth);
-            editor.prune_selection();
+            view.prune(&editor.diagram);
             self.document_state.sync_block_diagram_dirty(path);
         }
         Ok(answer)
@@ -235,10 +236,12 @@ impl Signex {
         if editor.is_read_only() {
             return false;
         }
-        editor.camera.hold(&editor.diagram);
+        let view = super::view_of(&mut self.document_view.block_diagrams, path);
+        view.camera.hold(&editor.diagram);
         if !editor.step(undo) {
             return false;
         }
+        view.prune(&editor.diagram);
         self.document_state.sync_block_diagram_dirty(path);
         true
     }

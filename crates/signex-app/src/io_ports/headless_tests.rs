@@ -269,7 +269,7 @@ fn a_headless_link_is_refused_and_reported() {
         crate::about::ExternalLink::Documentation,
     )));
     TaskDriver::new().settle(&mut app, task).expect("settled");
-    let notice = app.document_state.error_notice.as_ref().expect("a notice");
+    let notice = app.document_view.error_notice.as_ref().expect("a notice");
     assert!(
         notice.detail.render_en_us().contains("headless"),
         "{}",

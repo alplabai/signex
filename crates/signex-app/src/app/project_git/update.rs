@@ -88,7 +88,7 @@ impl Signex {
     /// is showing, so a commit or an outside branch change appears.
     pub(crate) fn reread_shown_project_repos(&mut self) -> Task<Message> {
         let shown: Vec<ProjectId> = self
-            .document_state
+            .document_view
             .project_tabs
             .iter()
             .filter(|(_, tab)| tab.section == ProjectSection::VersionControl)

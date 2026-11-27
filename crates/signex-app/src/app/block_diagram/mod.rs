@@ -60,8 +60,8 @@ pub(crate) use commands::{
 use crate::app::core::block_diagram_editor as state;
 pub use io::{DiagramFile, FileFailure};
 pub use state::{
-    BlockDiagramEditor, BlockDiagrams, Camera, DiagramItem, DiagramTool, DiagramView, ExportKind,
-    ExportPage, ExportPaper, PropertyField, ResyncReview,
+    BlockDiagramEditor, BlockDiagramViewState, BlockDiagrams, Camera, DiagramItem, DiagramTool,
+    DiagramView, ExportKind, ExportPage, ExportPaper, PropertyField, ResyncReview,
 };
 
 /// Whether `link` is a ground connection, which Show GND hides: a power
@@ -207,4 +207,69 @@ pub enum TabEvent {
     /// Re-sync: the diagram rebuilt from the sheet hierarchy, layout kept.
     ResyncPressed,
     Export(ExportEvent),
+}
+
+/// The view of a diagram no tab state is held for yet: a fresh one.
+static FRESH_VIEW: std::sync::LazyLock<BlockDiagramViewState> =
+    std::sync::LazyLock::new(BlockDiagramViewState::default);
+
+impl crate::app::Signex {
+    /// What the tab shows of the diagram at `path`; a fresh view while none
+    /// is held.
+    pub(crate) fn diagram_view(&self, path: &Path) -> &BlockDiagramViewState {
+        self.document_view
+            .block_diagrams
+            .get(path)
+            .unwrap_or(&FRESH_VIEW)
+    }
+
+    /// The view of the diagram at `path` while it is open; `None` when it
+    /// is not.
+    pub(crate) fn open_diagram_view(&self, path: &Path) -> Option<&BlockDiagramViewState> {
+        (self.document_state.block_diagrams.editors)
+            .contains_key(path)
+            .then(|| self.diagram_view(path))
+    }
+
+    /// [`Self::open_diagram_view`], to change.
+    pub(crate) fn open_diagram_view_mut(
+        &mut self,
+        path: &Path,
+    ) -> Option<&mut BlockDiagramViewState> {
+        (self.document_state.block_diagrams.editors)
+            .contains_key(path)
+            .then(|| view_of(&mut self.document_view.block_diagrams, path))
+    }
+
+    /// What the tab shows of the diagram at `path`, held from now on.
+    pub(crate) fn diagram_view_mut(&mut self, path: &Path) -> &mut BlockDiagramViewState {
+        view_of(&mut self.document_view.block_diagrams, path)
+    }
+
+    /// The diagram at `path` and its tab's view, while it is open.
+    pub(crate) fn open_diagram(&self, path: &Path) -> Option<OpenDiagram<'_>> {
+        let doc = self.document_state.block_diagrams.editors.get(path)?;
+        Some(OpenDiagram {
+            doc,
+            tab: self.diagram_view(path),
+        })
+    }
+}
+
+/// The view held for `path` in `views`, made fresh when none is: for an
+/// update that holds the diagram (`DocumentState`) and its view
+/// (`DocumentViewState`) at once.
+pub(crate) fn view_of<'a>(
+    views: &'a mut std::collections::BTreeMap<PathBuf, BlockDiagramViewState>,
+    path: &Path,
+) -> &'a mut BlockDiagramViewState {
+    views.entry(path.to_path_buf()).or_default()
+}
+
+/// One open diagram as its tab draws it: the document and the tab's view of
+/// it, held in `DocumentState` and `DocumentViewState`.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct OpenDiagram<'a> {
+    pub doc: &'a BlockDiagramEditor,
+    pub tab: &'a BlockDiagramViewState,
 }

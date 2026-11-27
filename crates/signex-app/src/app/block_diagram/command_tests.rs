@@ -156,8 +156,8 @@ fn a_block_added_without_a_point_lands_where_the_toolbar_puts_one() {
     answer(&mut app, "block_add", &[&doc, "name=A"]);
     let by_command = id_of(&answer(&mut app, "block_add", &[&doc, "name=B"]));
     let by_command = Uuid::parse_str(&by_command).unwrap();
-    let editor = &app.document_state.block_diagrams.editors[&path];
-    let at = editor.diagram.block(by_command).unwrap().position;
+    let editor = app.open_diagram(&path).expect("open");
+    let at = editor.doc.diagram.block(by_command).unwrap().position;
     let _ = app.update(Message::from(super::BlockDiagramMsg::Tab {
         path: path.clone(),
         event: TabEvent::UndoPressed,
@@ -166,8 +166,8 @@ fn a_block_added_without_a_point_lands_where_the_toolbar_puts_one() {
         path: path.clone(),
         event: TabEvent::AddBlockPressed,
     }));
-    let editor = &app.document_state.block_diagrams.editors[&path];
-    assert_eq!(editor.diagram.blocks[1].position, at);
+    let editor = app.open_diagram(&path).expect("open");
+    assert_eq!(editor.doc.diagram.blocks[1].position, at);
 }
 
 #[test]

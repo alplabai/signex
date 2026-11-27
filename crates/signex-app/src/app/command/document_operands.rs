@@ -342,7 +342,7 @@ pub(super) fn close(app: &mut Signex, args: &CommandArgs) -> Ran {
     let task = if app.agent.serving && index != app.document_state.active_tab {
         // The person's typed title-block or page-settings text is theirs to
         // commit or drop; the same check as the request gate.
-        let drafts = &app.document_state.drafts;
+        let drafts = &app.document_view.drafts;
         if drafts.has_sheet(&tab_path) {
             let which = if drafts.title_block_sheets().contains(&tab_path) {
                 "title-block draft"

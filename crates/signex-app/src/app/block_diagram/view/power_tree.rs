@@ -14,8 +14,9 @@ use signex_types::theme::ThemeTokens;
 use signex_widgets::{button, text};
 
 use super::{Look, SP, TS, caption};
+use crate::app::block_diagram::OpenDiagram;
 use crate::app::block_diagram::TabEvent;
-use crate::app::block_diagram::state::{BlockDiagramEditor, PowerTreeRead};
+use crate::app::block_diagram::state::PowerTreeRead;
 use crate::styles::tokens::resolve;
 use crate::styles::{Radii, ti};
 
@@ -277,8 +278,8 @@ fn arrow<'a>(look: Look<'a>) -> Element<'a, TabEvent> {
 }
 
 /// The canvas area: a row per rail, or why there is none.
-pub(super) fn main<'a>(look: Look<'a>, editor: &'a BlockDiagramEditor) -> Element<'a, TabEvent> {
-    let power = &editor.power;
+pub(super) fn main<'a>(look: Look<'a>, editor: OpenDiagram<'a>) -> Element<'a, TabEvent> {
+    let power = &editor.tab.power;
     let body: Element<'a, TabEvent> = match &power.read {
         None => note(look, look.t(ids::BLOCK_DIAGRAM_POWER_READING)),
         Some(Err(reason)) => note(
@@ -383,11 +384,11 @@ fn rail_facts<'a>(look: Look<'a>, read: &'a PowerTreeRead, rail: &'a PowerRail) 
 }
 
 /// The side panel: the rails, then the picked rail's facts.
-pub(super) fn side<'a>(look: Look<'a>, editor: &'a BlockDiagramEditor) -> Element<'a, TabEvent> {
+pub(super) fn side<'a>(look: Look<'a>, editor: OpenDiagram<'a>) -> Element<'a, TabEvent> {
     let mut list: Items<'a> = column![caption(look, ids::BLOCK_DIAGRAM_POWER_RAILS)].spacing(SP.xs);
-    if let Some(Ok(read)) = &editor.power.read {
+    if let Some(Ok(read)) = &editor.tab.power.read {
         for rail in &read.tree.rails {
-            let picked = editor.power.rail.as_deref() == Some(rail.net.as_str());
+            let picked = editor.tab.power.rail.as_deref() == Some(rail.net.as_str());
             let ink = if picked {
                 ti(look.tokens.accent)
             } else {
@@ -414,6 +415,7 @@ pub(super) fn side<'a>(look: Look<'a>, editor: &'a BlockDiagramEditor) -> Elemen
             );
         }
         let picked = editor
+            .tab
             .power
             .rail
             .as_deref()
@@ -437,8 +439,8 @@ pub(super) fn side<'a>(look: Look<'a>, editor: &'a BlockDiagramEditor) -> Elemen
 }
 
 /// The footer's count: "3 rails · 1 converter".
-pub(super) fn status(look: Look<'_>, editor: &BlockDiagramEditor) -> Localized {
-    match &editor.power.read {
+pub(super) fn status(look: Look<'_>, editor: OpenDiagram<'_>) -> Localized {
+    match &editor.tab.power.read {
         Some(Ok(read)) => t!(look.i18n, ids::BLOCK_DIAGRAM_POWER_FOOTER,
             "rails" => read.tree.rails.len(),
             "converters" => read.tree.converters.len()),

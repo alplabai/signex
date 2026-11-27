@@ -202,7 +202,7 @@ fn the_panel_opens_in_its_home_region_and_its_messages_reach_its_update() {
         "Notes"
     );
     assert!(
-        app.document_state
+        app.document_view
             .dock
             .locate(PanelKind::Extension(notes))
             .is_none()
@@ -210,7 +210,7 @@ fn the_panel_opens_in_its_home_region_and_its_messages_reach_its_update() {
 
     let _task = app.update(notes.open_message());
     assert!(matches!(
-        app.document_state.dock.locate(PanelKind::Extension(notes)),
+        app.document_view.dock.locate(PanelKind::Extension(notes)),
         Some(PanelSite::Docked(PanelPosition::Right, _))
     ));
 

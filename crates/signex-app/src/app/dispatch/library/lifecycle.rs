@@ -44,7 +44,7 @@ impl Signex {
             // Recoverable failures open their recovery dialog; anything
             // else must still reach the user, so raise the error card.
             if !route_open_error(&mut self.library, &path, &e) {
-                self.document_state.error_notice = Some(open_error_notice(
+                self.document_view.error_notice = Some(open_error_notice(
                     &self.library,
                     &path,
                     signex_i18n::ids::NOTICE_LIBRARY_CANNOT_OPEN,
@@ -176,7 +176,7 @@ impl Signex {
                     return;
                 }
                 if matches!(intent, crate::library::mount::MountIntent::OpenBrowserTab) {
-                    this.document_state.error_notice = Some(crate::app::state::ErrorNotice::open(
+                    this.document_view.error_notice = Some(crate::app::state::ErrorNotice::open(
                         crate::app::state::verbatim(format!("{error:#}")),
                     ));
                 }

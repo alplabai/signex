@@ -58,13 +58,13 @@ fn a_panel_opens_in_its_home_region_and_its_messages_reach_its_update_hook() {
 
     let _ = app.update(notes.open_message());
     assert!(matches!(
-        app.document_state.dock.locate(PanelKind::Extension(notes)),
+        app.document_view.dock.locate(PanelKind::Extension(notes)),
         Some(PanelSite::Docked(PanelPosition::Right, _))
     ));
 
     // Its view hook draws it; a click sends a message for the panel.
     let i18n = signex_i18n::I18n::en_us();
-    let tokens = &app.document_state.panel_ctx.tokens;
+    let tokens = &app.document_view.panel_ctx.tokens;
     let body = i18n.message(BODY, &[]).into_string();
     let view = app
         .extensions()
@@ -349,7 +349,7 @@ fn with_no_extension_every_surface_is_the_built_in_one() {
     assert!(host.menu_rows().is_empty());
     assert!(host.active_bar_rows().is_empty());
     let i18n = signex_i18n::I18n::en_us();
-    let cx = ViewContext::new(&app.document_state.panel_ctx.tokens, &i18n);
+    let cx = ViewContext::new(&app.document_view.panel_ctx.tokens, &i18n);
     assert!(
         host.view_start_screen_slot(StartScreenSlot::HomeEnd, cx)
             .is_empty()

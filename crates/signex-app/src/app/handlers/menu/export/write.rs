@@ -193,7 +193,7 @@ impl Signex {
     pub(crate) fn report_export_failure(&mut self, detail: impl Into<Translatable>) {
         let detail = detail.into();
         log::error!("{}", detail.render_en_us());
-        self.document_state.error_notice = Some(ErrorNotice::export(detail));
+        self.document_view.error_notice = Some(ErrorNotice::export(detail));
     }
 
     /// An export was refused up front (a precondition or an input of the
@@ -201,7 +201,7 @@ impl Signex {
     pub(crate) fn refuse_export(&mut self, reason: impl Into<Translatable>) {
         let reason = reason.into();
         crate::diagnostics::log_warning(reason.render_en_us());
-        self.document_state.error_notice = Some(ErrorNotice::export(reason));
+        self.document_view.error_notice = Some(ErrorNotice::export(reason));
     }
 
     /// Refuse an output of `issues`' scope when its channel names are not the
@@ -215,7 +215,7 @@ impl Signex {
 
     pub(crate) fn handle_export_written(&mut self, outcome: ExportWriteOutcome) -> Task<Message> {
         self.end_project_write(&outcome.path);
-        if let Some(preview) = self.document_state.preview.as_mut()
+        if let Some(preview) = self.document_view.preview.as_mut()
             && outcome.preview_source.as_ref() == Some(&preview.source)
         {
             preview.export_status = Some(export_status_line(&outcome.path, &outcome.result));
@@ -224,8 +224,8 @@ impl Signex {
             Ok(()) => {
                 log::info!("{}", outcome.success_log);
                 if let Some(notice) = outcome.advisory {
-                    if self.document_state.error_notice.is_none() {
-                        self.document_state.error_notice = Some(notice);
+                    if self.document_view.error_notice.is_none() {
+                        self.document_view.error_notice = Some(notice);
                     } else {
                         crate::diagnostics::log_warning(format!(
                             "Export advisory dropped, a notice is already showing: {}",

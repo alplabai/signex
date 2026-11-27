@@ -22,7 +22,7 @@ impl Signex {
     ) -> Element<'_, Message> {
         use signex_widgets::text;
 
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let i18n = &self.ui_state.i18n;
         let ink = crate::styles::ti(tokens.text);
         let muted = crate::styles::tokens::resolve(tokens).ink4;
@@ -45,7 +45,7 @@ impl Signex {
             crate::styles::PillTone::Neutral,
         ))
         .boxed();
-        let wire = crate::styles::ti(self.document_state.panel_ctx.canvas_colors.wire);
+        let wire = crate::styles::ti(self.document_view.panel_ctx.canvas_colors.wire);
         let title = hover_card_title(
             crate::styles::tinted_glyph(
                 crate::icons::icon_wire(self.ui_state.effective_theme_id()),

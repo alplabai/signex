@@ -190,7 +190,7 @@ fn the_queries_change_nothing() {
         before
     );
     assert!(!app.project_tab_history_available(id).0);
-    assert!(app.document_state.bom_preview.is_none(), "no dialog opens");
+    assert!(app.document_view.bom_preview.is_none(), "no dialog opens");
 }
 
 /// The command and Set as default make the same change, one General step;

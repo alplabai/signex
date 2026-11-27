@@ -283,7 +283,7 @@ impl Signex {
             "Place from library failed: {}",
             detail.render_en_us()
         ));
-        self.document_state.error_notice = Some(crate::app::state::ErrorNotice::new(
+        self.document_view.error_notice = Some(crate::app::state::ErrorNotice::new(
             signex_i18n::ids::NOTICE_PLACE_FAILED,
             detail,
         ));

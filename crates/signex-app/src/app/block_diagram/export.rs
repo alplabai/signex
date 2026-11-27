@@ -49,15 +49,15 @@ impl Signex {
         event: ExportEvent,
     ) -> Task<Message> {
         let stem = stem(path);
-        let Some(editor) = self.document_state.block_diagrams.editors.get_mut(path) else {
+        let Some(tab) = self.open_diagram_view_mut(path) else {
             return Task::none();
         };
         match event {
-            ExportEvent::Opened(kind) => editor.export = Some(ExportDraft::new(kind, &stem)),
-            ExportEvent::Cancelled => editor.export = None,
+            ExportEvent::Opened(kind) => tab.export = Some(ExportDraft::new(kind, &stem)),
+            ExportEvent::Cancelled => tab.export = None,
             ExportEvent::ExportPressed => return self.export_from_popover(path),
             edit => {
-                if let Some(draft) = editor.export.as_mut() {
+                if let Some(draft) = tab.export.as_mut() {
                     edit_draft(draft, edit, &stem);
                 }
             }
@@ -69,21 +69,15 @@ impl Signex {
     /// starts; a refusal keeps it open and says why in Messages.
     fn export_from_popover(&mut self, path: &Path) -> Task<Message> {
         let Some(draft) = self
-            .document_state
-            .block_diagrams
-            .editors
-            .get(path)
-            .and_then(|editor| editor.export.clone())
+            .open_diagram_view(path)
+            .and_then(|tab| tab.export.clone())
         else {
             return Task::none();
         };
         let target = export_path(path, &draft.file);
         let variant = self
-            .document_state
-            .block_diagrams
-            .editors
-            .get(path)
-            .and_then(|editor| editor.power.variant.clone());
+            .open_diagram_view(path)
+            .and_then(|tab| tab.power.variant.clone());
         let mut operands = vec![
             (
                 "path",
@@ -122,8 +116,8 @@ impl Signex {
             crate::diagnostics::log_warning(line.into_string());
             return task;
         }
-        if let Some(editor) = self.document_state.block_diagrams.editors.get_mut(path) {
-            editor.export = None;
+        if let Some(tab) = self.open_diagram_view_mut(path) {
+            tab.export = None;
         }
         task
     }

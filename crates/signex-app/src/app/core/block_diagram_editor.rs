@@ -1,18 +1,20 @@
-//! The block diagram tab's state (mockup row 171): every open diagram by
-//! its path, with its undo and redo steps, the selection, the armed tool,
-//! the view and the Properties text being typed. Pure data and pure rules;
-//! the reads and writes run in `app::block_diagram`, off the update thread.
+//! The block diagram tab's document state (mockup row 171): every open
+//! diagram by its path, with its undo and redo steps, and the types its view
+//! state names. Pure data and pure rules; the reads and writes run in
+//! `app::block_diagram`, off the update thread. What the tab shows of a
+//! diagram is in `block_diagram_view`.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
-use signex_types::block_diagram::{BlockDiagram, Endpoint, ReadBlockDiagram, SNXBLK_VERSION};
+use signex_types::block_diagram::{BlockDiagram, ReadBlockDiagram, SNXBLK_VERSION};
 use uuid::Uuid;
 
 pub use super::block_diagram_panes::{
     DiagramView, ExportDraft, ExportKind, ExportPage, ExportPaper, PowerTreeRead, PowerTreeView,
     ResyncReview,
 };
+pub use super::block_diagram_view::BlockDiagramViewState;
 
 /// Every open block diagram, and the paths being read or written.
 #[derive(Debug, Default)]
@@ -105,7 +107,10 @@ pub enum PropertyField {
     GroupName,
 }
 
-/// One open diagram.
+/// One open diagram: the document and its history. What the tab shows of
+/// it (selection, tool, camera, pane, popovers, the Re-sync review) is its
+/// [`BlockDiagramViewState`](super::block_diagram_view::BlockDiagramViewState),
+/// kept with the GUI state (`DocumentViewState::block_diagrams`).
 #[derive(Debug, Clone)]
 pub struct BlockDiagramEditor {
     pub diagram: BlockDiagram,
@@ -118,22 +123,6 @@ pub struct BlockDiagramEditor {
     pub undo: Vec<BlockDiagram>,
     /// States undone, the newest last.
     pub redo: Vec<BlockDiagram>,
-    pub selection: Vec<DiagramItem>,
-    pub tool: DiagramTool,
-    /// The first end picked with the Connect tool.
-    pub connect_from: Option<Endpoint>,
-    pub camera: Camera,
-    /// Properties text typed and not committed yet.
-    pub drafts: BTreeMap<PropertyField, String>,
-    /// What the tab shows.
-    pub view: DiagramView,
-    pub power: PowerTreeView,
-    /// The export popover while it is open.
-    pub export: Option<ExportDraft>,
-    /// Show GND (mockup row 171): ground connections are hidden until on.
-    pub show_ground: bool,
-    /// The Re-sync review while it is open (mockup row 210).
-    pub review: Option<ResyncReview>,
 }
 
 impl BlockDiagramEditor {
@@ -154,16 +143,6 @@ impl BlockDiagramEditor {
             saved: None,
             undo: Vec::new(),
             redo: Vec::new(),
-            selection: Vec::new(),
-            tool: DiagramTool::Select,
-            connect_from: None,
-            camera: Camera::default(),
-            drafts: BTreeMap::new(),
-            view: DiagramView::Blocks,
-            power: PowerTreeView::default(),
-            export: None,
-            show_ground: false,
-            review: None,
         }
     }
 
@@ -192,7 +171,8 @@ impl BlockDiagramEditor {
         self.redo.clear();
     }
 
-    /// One undo (or redo) step; `false` with none to take.
+    /// One undo (or redo) step; `false` with none to take. The tab's view
+    /// prunes what the step took away (`BlockDiagramViewState::prune`).
     pub fn step(&mut self, undo: bool) -> bool {
         let (from, to) = if undo {
             (&mut self.undo, &mut self.redo)
@@ -203,63 +183,7 @@ impl BlockDiagramEditor {
             return false;
         };
         to.push(std::mem::replace(&mut self.diagram, state));
-        self.prune_selection();
         true
-    }
-
-    /// Drop the selected objects and the connect start the diagram no
-    /// longer has, and the drafts typed for them.
-    pub fn prune_selection(&mut self) {
-        let diagram = &self.diagram;
-        let before = self.selection.clone();
-        self.selection.retain(|item| has_item(diagram, *item));
-        if self.selection != before {
-            self.drafts.clear();
-        }
-        let start_gone = self.connect_from.is_some_and(|end| {
-            diagram
-                .block(end.block)
-                .is_none_or(|b| end.port.is_some_and(|p| b.port(p).is_none()))
-        });
-        if start_gone {
-            self.connect_from = None;
-        }
-    }
-
-    /// The one selected object, when exactly one is.
-    pub fn single_selection(&self) -> Option<DiagramItem> {
-        match self.selection.as_slice() {
-            [item] => Some(*item),
-            _ => None,
-        }
-    }
-
-    /// The selected blocks, in selection order.
-    pub fn selected_blocks(&self) -> Vec<Uuid> {
-        self.selection
-            .iter()
-            .filter_map(|item| match item {
-                DiagramItem::Block(id) => Some(*id),
-                _ => None,
-            })
-            .collect()
-    }
-
-    /// Pick `item`, or with `add` add it to the selection or take it out.
-    pub fn pick(&mut self, item: Option<DiagramItem>, add: bool) {
-        self.drafts.clear();
-        match (item, add) {
-            (None, false) => self.selection.clear(),
-            (None, true) => {}
-            (Some(item), false) => self.selection = vec![item],
-            (Some(item), true) => {
-                if let Some(at) = self.selection.iter().position(|i| *i == item) {
-                    self.selection.remove(at);
-                } else {
-                    self.selection.push(item);
-                }
-            }
-        }
     }
 }
 

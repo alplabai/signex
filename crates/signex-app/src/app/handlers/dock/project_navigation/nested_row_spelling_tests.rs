@@ -45,7 +45,7 @@ fn delete_is_refused_for(shared: &str) {
 
     assert_eq!(confirmed.units(), 0);
     assert!(tmp.path().join(shared).exists(), "{shared} stays on disk");
-    assert!(app.document_state.error_notice.is_some());
+    assert!(app.document_view.error_notice.is_some());
 }
 
 #[test]
@@ -114,7 +114,7 @@ fn a_corrupt_sheet_can_be_deleted_but_blocks_deleting_others_with_its_name() {
     assert_eq!(confirmed.units(), 0);
     assert!(tmp.path().join("solo.snxsch").exists(), "refused");
     let detail = app
-        .document_state
+        .document_view
         .error_notice
         .as_ref()
         .map(|n| n.detail.render_en_us())
@@ -124,7 +124,7 @@ fn a_corrupt_sheet_can_be_deleted_but_blocks_deleting_others_with_its_name() {
         "names the sheet: {detail}"
     );
 
-    app.document_state.error_notice = None;
+    app.document_view.error_notice = None;
     let corrupt = key(&app, &["corrupt.snxsch"]);
     let opened = app.handle_project_tree_action(ProjectTreeAction::OpenRemoveDialog(corrupt));
     assert_eq!(opened.units(), 0);

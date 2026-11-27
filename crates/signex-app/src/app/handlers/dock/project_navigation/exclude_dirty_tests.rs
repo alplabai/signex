@@ -332,7 +332,7 @@ fn an_exclude_save_in_an_undecided_folder_names_the_kept_spelling() {
 
     exclude_then(&mut app, ExcludeDirtyChoice::Save);
 
-    let notice = app.document_state.error_notice.take().expect("card");
+    let notice = app.document_view.error_notice.take().expect("card");
     let detail = notice.detail.render_en_us();
     assert!(
         detail.starts_with("\"Lib.snxsch\" was not excluded: Save each spelling"),

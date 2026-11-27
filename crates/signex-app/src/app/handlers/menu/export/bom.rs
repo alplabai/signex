@@ -107,19 +107,19 @@ impl Signex {
             export_pending: false,
         };
         preview.refresh_rows();
-        self.document_state.bom_preview = Some(preview);
+        self.document_view.bom_preview = Some(preview);
         self.handle_detach_modal(crate::app::state::ModalId::BomPreview)
     }
 
     pub(crate) fn handle_bom_preview_set_grouping(&mut self, grouping: BomGrouping) {
-        if let Some(preview) = self.document_state.bom_preview.as_mut() {
+        if let Some(preview) = self.document_view.bom_preview.as_mut() {
             preview.options.grouping = grouping;
         }
         self.rerollup_bom_preview();
     }
 
     pub(crate) fn handle_bom_preview_set_format(&mut self, format: BomFormat) {
-        if let Some(preview) = self.document_state.bom_preview.as_mut() {
+        if let Some(preview) = self.document_view.bom_preview.as_mut() {
             preview.options.format = format;
         }
     }
@@ -127,7 +127,7 @@ impl Signex {
     /// The one not-fitted option over the two domain flags, which it always
     /// sets together (docs/DECISIONS.md, 2026-11-19).
     pub(crate) fn handle_bom_preview_include_not_fitted(&mut self, include: bool) {
-        if let Some(preview) = self.document_state.bom_preview.as_mut() {
+        if let Some(preview) = self.document_view.bom_preview.as_mut() {
             preview.options.include_dnp = include;
             preview.options.include_not_fitted = include;
         }
@@ -137,7 +137,7 @@ impl Signex {
     /// Select the line an issue points at and scroll it into view. A filter
     /// that hides the line is cleared, so the selection is never off screen.
     pub(crate) fn handle_bom_preview_issue_selected(&mut self, issue: usize) -> Task<Message> {
-        let Some(preview) = self.document_state.bom_preview.as_mut() else {
+        let Some(preview) = self.document_view.bom_preview.as_mut() else {
             return Task::none();
         };
         let Some(Some(at)) = preview.issue_lines.get(issue).copied() else {
@@ -166,7 +166,7 @@ impl Signex {
     /// The table body scrolled: move the sticky header to the same
     /// horizontal offset.
     pub(crate) fn handle_bom_preview_body_scrolled(&mut self, x: f32) -> Task<Message> {
-        let Some(preview) = self.document_state.bom_preview.as_mut() else {
+        let Some(preview) = self.document_view.bom_preview.as_mut() else {
             return Task::none();
         };
         if preview.scroll_x == x {
@@ -190,7 +190,7 @@ impl Signex {
         rule: signex_output::BomRule,
         enabled: bool,
     ) {
-        let Some(preview) = self.document_state.bom_preview.as_mut() else {
+        let Some(preview) = self.document_view.bom_preview.as_mut() else {
             return;
         };
         preview.options.rule_options.set_enabled(rule, enabled);
@@ -199,7 +199,7 @@ impl Signex {
         let Some(ctx) = super::build_bom_export_context(&self.document_state) else {
             return;
         };
-        if let Some(preview) = self.document_state.bom_preview.as_mut() {
+        if let Some(preview) = self.document_view.bom_preview.as_mut() {
             preview.validation_report = signex_output::bom::validate(&ctx, &opts, &preview.table);
         }
     }
@@ -213,7 +213,7 @@ impl Signex {
     pub(crate) fn handle_bom_preview_toggle_column(&mut self, col: BomColumn) {
         let is_computed = matches!(col, BomColumn::Computed(_));
         let mut added = false;
-        if let Some(preview) = self.document_state.bom_preview.as_mut() {
+        if let Some(preview) = self.document_view.bom_preview.as_mut() {
             if let Some(idx) = preview.options.columns.iter().position(|c| c == &col) {
                 preview.options.columns.remove(idx);
             } else {
@@ -232,7 +232,7 @@ impl Signex {
     /// One Messages line per computed cell of the preview that failed
     /// (#1988), naming its line and the error.
     pub(crate) fn report_computed_bom_issues(&self) {
-        let Some(preview) = self.document_state.bom_preview.as_ref() else {
+        let Some(preview) = self.document_view.bom_preview.as_ref() else {
             return;
         };
         for issue in signex_output::bom::computed_issues(&preview.table, &preview.options.columns) {
@@ -244,7 +244,7 @@ impl Signex {
     /// "Base" view (no variant override). Triggers a rerollup since
     /// variant_fitted resolution can flip qty totals.
     pub(crate) fn handle_bom_preview_set_variant(&mut self, variant: Option<String>) {
-        if let Some(preview) = self.document_state.bom_preview.as_mut() {
+        if let Some(preview) = self.document_view.bom_preview.as_mut() {
             preview.options.active_variant = variant;
         }
         self.rerollup_bom_preview();
@@ -257,7 +257,7 @@ impl Signex {
     /// final exported file should mirror the user's chosen sort, not
     /// the rollup default.
     pub(crate) fn handle_bom_preview_sort_column(&mut self, idx: usize) {
-        if let Some(preview) = self.document_state.bom_preview.as_mut() {
+        if let Some(preview) = self.document_view.bom_preview.as_mut() {
             // Click-no-move: arrived here via the on_release
             // sort branch. Clear the drag state so the highlight
             // doesn't linger.
@@ -273,14 +273,14 @@ impl Signex {
 
     pub(crate) fn handle_bom_preview_column_drag_start(&mut self, idx: usize) {
         let press_x = self.interaction_state.last_mouse_pos.0;
-        if let Some(preview) = self.document_state.bom_preview.as_mut() {
+        if let Some(preview) = self.document_view.bom_preview.as_mut() {
             preview.column_drag = Some(idx);
             preview.column_drag_press_x = Some(press_x);
         }
     }
 
     pub(crate) fn handle_bom_preview_column_drag_drop(&mut self, dest: usize) {
-        if let Some(preview) = self.document_state.bom_preview.as_mut() {
+        if let Some(preview) = self.document_view.bom_preview.as_mut() {
             preview.column_drag_press_x = None;
             if let Some(src) = preview.column_drag.take()
                 && src != dest
@@ -326,7 +326,7 @@ impl Signex {
     /// and finish in `handle_export_bom_finished`. Mirrors the
     /// PrintPreview → Export PDF pattern.
     pub(crate) fn handle_bom_preview_export(&mut self) -> Option<Task<Message>> {
-        let Some(preview) = self.document_state.bom_preview.as_mut() else {
+        let Some(preview) = self.document_view.bom_preview.as_mut() else {
             return Some(Task::none());
         };
         preview.export_pending = true;
@@ -377,7 +377,7 @@ impl Signex {
     /// the table, and Cancel, still work.
     pub(crate) fn bom_edit_waits_for_save(&self, msg: &BomPreviewMsg) -> bool {
         let pending = self
-            .document_state
+            .document_view
             .bom_preview
             .as_ref()
             .is_some_and(|preview| preview.export_pending);
@@ -399,7 +399,7 @@ impl Signex {
     /// The Export of `source` ended without closing its dialog: it takes
     /// edits again.
     fn end_bom_export(&mut self, source: &std::path::Path) {
-        if let Some(preview) = self.document_state.bom_preview.as_mut()
+        if let Some(preview) = self.document_view.bom_preview.as_mut()
             && preview.source == source
         {
             preview.export_pending = false;
@@ -417,7 +417,7 @@ impl Signex {
         let is_written = outcome.result.is_ok();
         let reported = self.handle_export_written(outcome);
         let is_open_for_source = self
-            .document_state
+            .document_view
             .bom_preview
             .as_ref()
             .is_some_and(|preview| preview.source == source);
@@ -429,7 +429,7 @@ impl Signex {
     }
 
     pub(crate) fn handle_bom_preview_close(&mut self) -> Task<Message> {
-        self.document_state.bom_preview = None;
+        self.document_view.bom_preview = None;
         self.ui_state
             .modal_offsets
             .remove(&crate::app::state::ModalId::BomPreview);
@@ -471,7 +471,7 @@ impl Signex {
 
     fn rerollup_bom_preview(&mut self) {
         let Some(opts) = self
-            .document_state
+            .document_view
             .bom_preview
             .as_ref()
             .map(|p| p.options.clone())
@@ -479,7 +479,7 @@ impl Signex {
             return;
         };
         if let Some((table, report)) = self.rebuild_bom_table(&opts)
-            && let Some(preview) = self.document_state.bom_preview.as_mut()
+            && let Some(preview) = self.document_view.bom_preview.as_mut()
         {
             preview.table = table;
             preview.validation_report = report;

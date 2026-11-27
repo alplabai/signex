@@ -230,5 +230,5 @@ fn notebook_row(app: &Signex) -> Option<TreeKey> {
         }
         None
     }
-    walk(&app.document_state.panel_ctx.project_tree, &mut Vec::new())
+    walk(&app.document_view.panel_ctx.project_tree, &mut Vec::new())
 }

@@ -15,7 +15,7 @@ impl Signex {
     /// Open the row of `part` (the part every channel's copy shares) into
     /// its copies, or close it.
     pub(super) fn toggle_channel_part(&mut self, project_id: ProjectId, part: SymbolLink) {
-        if let Some(tab) = self.document_state.project_tabs.get_mut(&project_id) {
+        if let Some(tab) = self.document_view.project_tabs.get_mut(&project_id) {
             let open = &mut tab.variant_manager.open_channel_parts;
             if !open.remove(&part) {
                 open.insert(part);

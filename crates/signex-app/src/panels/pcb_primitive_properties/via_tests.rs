@@ -25,7 +25,7 @@ const TYPE_SPEC: &str = "Through 1:4 · 0.6/0.3 · open";
 
 fn context() -> PanelContext {
     let (app, _boot) = Signex::new();
-    app.document_state.panel_ctx.clone()
+    app.document_view.panel_ctx.clone()
 }
 
 /// One via of a `kind` type, with the Not stored yet group open or not.

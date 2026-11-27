@@ -8,7 +8,7 @@ use crate::panels::PanelKind;
 
 fn app() -> Signex {
     let (mut app, _boot) = Signex::new();
-    app.document_state.dock = crate::dock::graphite_first_run();
+    app.document_view.dock = crate::dock::graphite_first_run();
     app
 }
 
@@ -21,11 +21,11 @@ fn an_alias_row_opens_the_library_panel_in_its_kind() {
         let mut app = app();
         let _opened = app.show_panel(alias);
         assert!(
-            app.document_state.dock.is_frontmost(PanelKind::Library),
+            app.document_view.dock.is_frontmost(PanelKind::Library),
             "{alias:?} opens the Library panel"
         );
         assert!(
-            app.document_state.dock.locate(alias).is_none(),
+            app.document_view.dock.locate(alias).is_none(),
             "{alias:?} is never docked"
         );
         assert_eq!(app.library_panel_kind(), kind, "{alias:?}");

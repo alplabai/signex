@@ -35,7 +35,7 @@ impl Signex {
         use crate::app::command_palette::MAX_RESULTS;
 
         let palette = &self.ui_state.command_palette;
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let i18n = &*self.ui_state.i18n;
         let muted_c = crate::styles::ti(tokens.text_secondary);
 
