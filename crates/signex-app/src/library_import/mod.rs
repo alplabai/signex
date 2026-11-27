@@ -11,6 +11,7 @@
 //! - [`events`] / [`stream`] — the NDJSON progress stream and its summary.
 //! - [`report`] — `import-report.json`.
 //! - [`run`] — one `library` run, with the 120 s silence rule.
+//! - [`output`] — the folder a new run takes, and what a failed one removes.
 //! - [`snapshot`] — git setup, the import commit, the default location.
 //! - [`run_state`] — what the app keeps about a run.
 //! - [`error`] — every refusal, as translatable text.
@@ -20,6 +21,7 @@ pub mod describe;
 pub mod discovery;
 pub mod error;
 pub mod events;
+pub mod output;
 mod process;
 pub mod report;
 pub mod run;
@@ -29,6 +31,8 @@ pub mod stream;
 
 #[cfg(all(test, unix))]
 mod discovery_tests;
+#[cfg(test)]
+mod output_tests;
 #[cfg(all(test, unix))]
 pub(crate) mod run_tests;
 #[cfg(all(test, unix))]

@@ -471,57 +471,10 @@ fn cancel_ends_a_converter_that_repeats_is_silent_or_never_exits() {
     }
 }
 
+/// #3123: an empty folder that was there is the user's (made by hand or
+/// picked with Browse), so a failed run empties it and keeps it.
 #[test]
-fn a_new_run_creates_its_folder_and_refuses_one_that_holds_anything() {
-    use super::run::claim_output;
-    let dir = tempfile::tempdir().unwrap();
-    let new = dir.path().join("a/b/New");
-    assert_eq!(
-        claim_output(&request(new.clone(), RunMode::Import)),
-        Ok(true)
-    );
-    assert!(new.is_dir(), "created with its parents");
-    // An empty folder is taken over: removed and created by this run.
-    assert_eq!(
-        claim_output(&request(new.clone(), RunMode::Preview)),
-        Ok(true)
-    );
-    std::fs::write(new.join("theirs.txt"), "keep").unwrap();
-    assert_eq!(
-        claim_output(&request(new.clone(), RunMode::Import)),
-        Err(ImportError::OutputNotEmpty { path: new.clone() })
-    );
-    assert!(new.join("theirs.txt").exists());
-    let file = dir.path().join("file");
-    std::fs::write(&file, "x").unwrap();
-    assert!(claim_output(&request(file.clone(), RunMode::Import)).is_err());
-    assert_eq!(
-        claim_output(&request(new.clone(), RunMode::Update)),
-        Ok(false)
-    );
-}
-
-/// A link is refused as a link, not as a folder that holds files, and
-/// neither it nor the folder it points at is touched.
-#[test]
-fn a_new_run_refuses_a_link_as_a_link() {
-    use super::run::claim_output;
-    let dir = tempfile::tempdir().unwrap();
-    let real = dir.path().join("real");
-    std::fs::create_dir(&real).unwrap();
-    let link = dir.path().join("link");
-    std::os::unix::fs::symlink(&real, &link).unwrap();
-    assert_eq!(
-        claim_output(&request(link.clone(), RunMode::Import)),
-        Err(ImportError::OutputIsLink { path: link.clone() })
-    );
-    assert!(real.is_dir() && link.exists(), "both left as they were");
-    let shown = ImportError::OutputIsLink { path: link }.to_string();
-    assert!(shown.contains("is a link"), "{shown}");
-}
-
-#[test]
-fn a_failed_run_into_an_empty_folder_removes_it_and_a_full_one_never_runs() {
+fn a_failed_run_into_an_empty_folder_empties_it_and_a_full_one_never_runs() {
     let dir = tempfile::tempdir().unwrap();
     let out = dir.path().join("P");
     std::fs::create_dir(&out).unwrap();
@@ -541,9 +494,13 @@ fn a_failed_run_into_an_empty_folder_removes_it_and_a_full_one_never_runs() {
     )
     .unwrap_err();
     assert!(failure.removed_output);
-    assert!(!out.exists(), "what the run wrote is gone");
+    assert!(out.is_dir(), "the folder itself is kept");
+    assert_eq!(
+        std::fs::read_dir(&out).unwrap().count(),
+        0,
+        "what the run wrote is gone"
+    );
     // A folder that holds something is refused before the converter runs.
-    std::fs::create_dir(&out).unwrap();
     std::fs::write(out.join("mine.txt"), "keep").unwrap();
     std::fs::remove_file(&ran).unwrap();
     let failure = run_library(

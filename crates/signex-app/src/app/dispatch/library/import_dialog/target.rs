@@ -2,7 +2,7 @@
 //! absent or empty takes a new import; one that holds an imported library
 //! with a clean history is offered as an update; anything else is refused
 //! with its reason. The check reads only; the run itself takes the folder
-//! (`library_import::run::claim_output`) or, for an update, holds its
+//! (`library_import::output::claim_output`) or, for an update, holds its
 //! write lock.
 
 use std::path::{Path, PathBuf};

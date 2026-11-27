@@ -9,6 +9,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use super::confine::{ConfineError, confine};
+use super::output::claim_output;
 use super::error::ImportError;
 use super::events::{ExitKind, ProgressEvent, StreamFold, Summary};
 use super::process::{Polled, ProcessGroup, Running};
@@ -189,7 +190,8 @@ pub struct RunFailure {
     /// The report, when the run got far enough to write one.
     pub report: Option<Box<ImportReport>>,
     pub stderr_tail: String,
-    /// The output folder this run created was removed.
+    /// Nothing the run wrote into the output folder is left: a folder it
+    /// created was removed, an empty one it adopted was emptied.
     pub removed_output: bool,
     /// For an update over a clean tree: whether the tree was put back to
     /// its last import.
@@ -220,9 +222,9 @@ impl RunFailure {
 }
 
 /// Run the converter's `library` command. `on_event` sees every progress
-/// event as it arrives. A new import or a dry run creates `--output` itself
-/// ([`claim_output`]) and removes it when it fails, is cancelled or goes
-/// silent; an update's folder is never removed.
+/// event as it arrives. A new import or a dry run takes `--output`
+/// ([`claim_output`]) and, when it fails, is cancelled or goes silent,
+/// removes what it created there; an update's folder is never removed.
 pub fn run_library(
     command: &ConverterCommand,
     request: &LibraryRunRequest,
@@ -245,72 +247,16 @@ pub fn run_library_in(
     on_event: &mut dyn FnMut(&ProgressEvent),
 ) -> Result<RunOutcome, RunFailure> {
     request.validate().map_err(RunFailure::refused)?;
-    let owned = claim_output(request).map_err(RunFailure::refused)?;
+    let claimed = claim_output(request).map_err(RunFailure::refused)?;
     let mut args = command.leading_args.clone();
     args.extend(request.args());
     let cwd = neutral_dir(Some(&request.output));
     let streamed = stream_run(command, &args, &cwd, limits, cancel, group, on_event);
     let result = streamed.and_then(|finished| finish(request, finished));
     result.map_err(|mut failure| {
-        if owned {
-            match std::fs::remove_dir_all(&request.output) {
-                Ok(()) => failure.removed_output = true,
-                Err(e) => log::warn!(
-                    "library import: could not remove {}: {e}",
-                    request.output.display()
-                ),
-            }
-        }
+        failure.removed_output = claimed.release_after_failure();
         failure
     })
-}
-
-/// Take `--output` for a new import or a dry run: this run creates the
-/// folder (and its parents), so a failed run removes only a folder it made.
-/// An empty folder already there is replaced by one this run creates; one
-/// that holds anything, a symbolic link, or anything else that is not a
-/// folder, is refused before the converter starts. `false` for an update,
-/// whose folder is never this run's to remove.
-pub fn claim_output(request: &LibraryRunRequest) -> Result<bool, ImportError> {
-    if request.mode == RunMode::Update {
-        return Ok(false);
-    }
-    let out = &request.output;
-    let unusable = |e: std::io::Error| ImportError::OutputUnusable {
-        path: out.clone(),
-        detail: e.to_string(),
-    };
-    let taken = || ImportError::OutputNotEmpty { path: out.clone() };
-    match std::fs::symlink_metadata(out) {
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            if let Some(parent) = out.parent() {
-                std::fs::create_dir_all(parent).map_err(unusable)?;
-            }
-        }
-        Err(e) => return Err(unusable(e)),
-        // remove_dir refuses a folder that is not empty, so nothing put in
-        // it meanwhile is lost.
-        Ok(meta) if meta.file_type().is_symlink() => {
-            return Err(ImportError::OutputIsLink { path: out.clone() });
-        }
-        Ok(meta) if meta.is_dir() => std::fs::remove_dir(out).map_err(|e| {
-            if e.kind() == std::io::ErrorKind::DirectoryNotEmpty {
-                taken()
-            } else {
-                unusable(e)
-            }
-        })?,
-        Ok(_) => return Err(taken()),
-    }
-    // create_dir fails when anything appeared there since.
-    std::fs::create_dir(out).map_err(|e| {
-        if e.kind() == std::io::ErrorKind::AlreadyExists {
-            taken()
-        } else {
-            unusable(e)
-        }
-    })?;
-    Ok(true)
 }
 
 /// A run whose process ended on its own.

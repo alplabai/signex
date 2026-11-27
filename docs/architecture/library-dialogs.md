@@ -208,9 +208,11 @@ what will be skipped. Back cancels a running dry run. A failed dry run is
 shown in the step, not as a notice.
 
 **Import** checks the folder again. The run itself takes the folder
-(`library_import::run::claim_output`): it creates it, replacing an empty
-folder and refusing one that holds anything before the converter starts, so
-a failed or cancelled run removes only a folder it made. Next waits ("The
+(`library_import::output::claim_output`): it creates it with its parents,
+adopts an empty folder as it is, and refuses one that holds anything before
+the converter starts. A failed or cancelled run removes only what it
+created: a folder it made and the parents it made while they are empty, or
+what it wrote into an adopted folder, which is kept. Next waits ("The
 previous run is stopping…") while a dry run left by Back or Close has not
 ended; that dry run's temp folder is removed when it does.
 
