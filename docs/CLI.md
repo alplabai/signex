@@ -2535,14 +2535,40 @@ reason. It is a query on the agent channel and needs only `read`.
 checked against (`null` for a row not read from a store). The library row
 and part write commands of #2944 are not in this build.
 
+## Board reports and PDF
+
+`export_board_report` writes a board report as CSV and `export_board_pdf`
+prints the board to PDF (`docs/BOARD_OUTPUT.md`). Both need the `export`
+capability (`--allow export`) and an open board.
+
+```text
+export_board_report document=<board> kind=bom|netlist|net_length|components path=<file.csv> [overwrite=true]
+export_board_pdf document=<board> path=<file.pdf> [overwrite=true] [layers=..] [pages=..] [scale=..] [..]
+```
+
+- `path` follows the one export rule of the notebook exports (#2470): the
+  `.csv` or `.pdf` extension, never a Signex document (`.snx*`), never inside
+  a `.git` folder, and on Windows no name ending in a dot or a space or
+  holding `:`.
+- A file already at `path` is refused, and left as it is, unless
+  `overwrite=true`. This is new in #2470: a run that wrote over an earlier
+  report or PDF now names `overwrite=true`.
+- The result line comes once the file is written: `answered`, with the path
+  and the rows or pages, or `refused` with the write's reason.
+- On the agent channel of a running Signex the `path` must also lie inside
+  the board's project folder ([AGENT_SOCKET.md](AGENT_SOCKET.md),
+  "Allowlist").
+
 ## Fabrication outputs
 
 `fabrication_outputs` writes what File ▸ Fabrication Outputs' Generate
 writes (#2470): the same files, built the same way from the board as it is in
 memory, into a folder. It needs the `export` capability (`--allow export`)
 and an open board (`open_document` it first). It changes nothing on the
-board and makes no undo step. It takes a `path`, so it is not on the agent
-channel of a running Signex.
+board and makes no undo step. On the agent channel of a running Signex
+(#2470), as for `export_board_pdf` and `export_board_report`, its `path`
+must lie inside the board's project folder ([AGENT_SOCKET.md](AGENT_SOCKET.md),
+"Allowlist").
 
 ```text
 fabrication_outputs document=<board> path=<folder> [kinds=<list>] [name=<stem>] [whole_panel=<bool>]
@@ -2786,7 +2812,16 @@ in the middle of continues.
   on the app's agent channel: sent on their own, with or without `document`,
   the CLI refuses them ("reaches a running Signex only through
   `apply_edits`") and sends nothing; send them as edits of an `apply_edits`
-  call.
+  call. `update_pcb_from_schematic` and `annotate_schematic_quietly` also
+  take an optional `document`, but the channel takes them as commands with
+  it named (#2470), so they are sent on their own and refused without one.
+- **Window layout.** The commands that act on the main window rather than a
+  document (`tile_windows_horizontally`, `tile_windows_vertically`,
+  `untile_documents`, `zoom_to_fit` and `set_dock_panel`) are sent by an
+  attached run though the first four only work in a window, which a
+  headless run refuses ([AGENT_SOCKET.md](AGENT_SOCKET.md), "Allowlist").
+  `set_dock_panel panel=<key> state=open|close|collapse|expand` names a
+  panel by its layout key (`messages`, `properties`, `projects`, ...).
 - **Only this run's folders are shown.** The app answers a query across every
   project it has open, so the CLI filters each answer before it prints it:
   a document whose `path` lies outside the folders this run may use (the

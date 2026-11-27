@@ -265,6 +265,9 @@ pub(super) const WRITES: &[(&[&str], Surface, Writes)] = &[
     ),
     // A custom keyboard profile, written to `keyboard_shortcuts.toml` (#2495).
     (&["keymap_assign", "keymap_clear"], Operand, Settings),
+    // A dock panel by its key (#2470): the dock, saved to the prefs as the
+    // panel list's open and close are.
+    (&["set_dock_panel"], Operand, Settings),
     (OPERAND_DOCUMENT, Operand, Document),
     // A read of the named board answered as a query is (#2939): it waits
     // for the library models off the UI thread, so it is an operand

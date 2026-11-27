@@ -153,6 +153,7 @@ define_ids! {
         CMD_MENU_TILE_WINDOWS_VERTICALLY = "cmd-menu-tile-windows-vertically";
         CMD_UNTILE_DOCUMENTS = "cmd-untile-documents";
         CMD_MENU_UNTILE_DOCUMENTS = "cmd-menu-untile-documents";
+        CMD_SET_DOCK_PANEL = "cmd-set-dock-panel";
         CMD_APPLY_LAYOUT_SCHEMATIC = "cmd-apply-layout-schematic";
         CMD_MENU_APPLY_LAYOUT_SCHEMATIC = "cmd-menu-apply-layout-schematic";
         CMD_APPLY_LAYOUT_BOARD = "cmd-apply-layout-board";

@@ -19,8 +19,8 @@ board_report_bom	pcb	Show the board's bill of materials: its components grouped 
 board_report_netlist	pcb	Show the board's netlist: each net and the pads on it	Board Netlist…	PCB	-	-	RequiresDocument(Pcb)	-	document:document
 board_report_net_length	pcb	Show each net's routed length, tracks and vias	Net Lengths…	PCB	-	-	RequiresDocument(Pcb)	-	document:document
 board_report_components	pcb	Show each component's designator, footprint, position, rotation and side	Component Report…	PCB	-	-	RequiresDocument(Pcb)	-	document:document
-export_board_report	reports	Export a board report as a CSV file	Export Report as CSV…	PCB	-	-	RequiresDocument(Pcb)	-	document:document,kind:text,path:path
-export_board_pdf	reports	Print the board's layers to a PDF file	Board Print / PDF…	PCB	-	-	RequiresDocument(Pcb)	-	document:document,path:path,layers:text?,pages:text?,scale:text?,monochrome:bool?,mirror_bottom:bool?,outline:bool?,drill_marks:bool?,title_block:bool?
+export_board_report	reports	Export a board report as a CSV file	Export Report as CSV…	PCB	-	-	RequiresDocument(Pcb)	-	document:document,kind:text,path:path,overwrite:bool?
+export_board_pdf	reports	Print the board's layers to a PDF file	Board Print / PDF…	PCB	-	-	RequiresDocument(Pcb)	-	document:document,path:path,overwrite:bool?,layers:text?,pages:text?,scale:text?,monochrome:bool?,mirror_bottom:bool?,outline:bool?,drill_marks:bool?,title_block:bool?
 export_assembly_svg	reports	Write the board's top and bottom assembly drawings as SVG files	Assembly Drawings as SVG…	PCB	-	-	RequiresDocument(Pcb)	-	document:document,path:path,sides:text?,mirror_bottom:bool?,monochrome:bool?
 board_assembly_drawing	pcb	Open Board Print / PDF for an assembly drawing	Assembly Drawing…	PCB	-	-	RequiresDocument(Pcb)	-	document:document,side:text,mirror_bottom:bool?,monochrome:bool?
 export_board_step	reports	Export the board and its parts as a STEP 3D model	STEP 3D Model…	PCB	-	-	RequiresDocument(Pcb)	-	document:document,path:path,schema:text?
@@ -477,6 +477,7 @@ previous_document_tab	window	Previous open document tab	-	General	-	-	Always	gui
 tile_windows_horizontally	window	Tile windows one above the other	Tile Horizontally	General	-	-	Always	gui_only	-
 tile_windows_vertically	window	Tile windows side by side	Tile Vertically	General	-	-	Always	gui_only	-
 untile_documents	window	Untile documents	Untile	General	-	-	Always	gui_only	-
+set_dock_panel	panels	Open, close, collapse or expand a dock panel	-	General	-	-	Always	-	panel:text,state:text
 toggle_floating_panels	window	Toggle floating panels	-	General	-	-	Always	gui_only	-
 toggle_properties_panel	panels	Toggle Properties panel	-	General	-	-	Always	gui_only	-
 toggle_schematic_filter_panel	panels	Toggle schematic filter panel	-	General	-	-	Always	gui_only	-

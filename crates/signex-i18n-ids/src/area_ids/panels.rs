@@ -524,4 +524,9 @@ define_ids! {
     PANELS_PCB_CLASSES_DIFF_PAIR = "panels-pcb-classes-diff-pair";
     // quit-list-snxout-cap
     PANELS_TAB_KIND_OUTPUT_JOB = "panels-tab-kind-output-job";
+    // #2470: the refusals of `set_dock_panel`.
+    PANELS_DOCK_COMMAND_UNKNOWN_PANEL = "panels-dock-command-unknown-panel";
+    PANELS_DOCK_COMMAND_UNKNOWN_STATE = "panels-dock-command-unknown-state";
+    PANELS_DOCK_COMMAND_IN_WINDOW = "panels-dock-command-in-window";
+    PANELS_DOCK_COMMAND_NOT_DOCKED = "panels-dock-command-not-docked";
 }

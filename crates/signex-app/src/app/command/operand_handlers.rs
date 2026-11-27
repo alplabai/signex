@@ -236,6 +236,11 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("set_footprint_side", fp_place::set_footprint_side),
     ("assign_footprint", fp_assign::assign_footprint),
     ("change_footprint", fp_assign::change_footprint),
+    // #2470: a dock panel by its layout key.
+    (
+        "set_dock_panel",
+        crate::app::handlers::dock::panel_command::set_dock_panel,
+    ),
     ("set_selection_filters", filter::set_selection_filters),
     (
         "apply_selection_filter_preset",
@@ -640,6 +645,11 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
         "set_layer_tab_names" => Some(
             "`set_layer_tab_names` needs the operand `style` — \
              right-click a layer tab under the board",
+        ),
+        // #2470: for agents and scripts; a person uses the dock itself.
+        "set_dock_panel" => Some(
+            "`set_dock_panel` needs the operands `panel` and `state` — \
+             use the panel list, a tab's close button or the region's arrow",
         ),
         // #2363: a person uses the Layers panel.
         "set_layer_visible" | "set_active_layer" | "set_layer_color" => Some(

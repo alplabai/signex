@@ -598,6 +598,7 @@ signex_standard	hint	-	Ctrl+Shift+TAB	previous_document_tab
 signex_standard	hint	-	W H	tile_windows_horizontally
 signex_standard	hint	-	W V	tile_windows_vertically
 signex_standard	hint	-	W U	untile_documents
+signex_standard	hint	-	-	set_dock_panel
 signex_standard	hint	-	F4	toggle_floating_panels
 signex_standard	hint	-	F11	toggle_properties_panel
 signex_standard	hint	-	F12	toggle_schematic_filter_panel
@@ -1247,6 +1248,7 @@ classic	hint	-	-	previous_document_tab
 classic	hint	-	Alt+Shift+H	tile_windows_horizontally
 classic	hint	-	Alt+Shift+V	tile_windows_vertically
 classic	hint	-	Alt+Shift+U	untile_documents
+classic	hint	-	-	set_dock_panel
 classic	hint	-	-	toggle_floating_panels
 classic	hint	-	-	toggle_properties_panel
 classic	hint	-	-	toggle_schematic_filter_panel

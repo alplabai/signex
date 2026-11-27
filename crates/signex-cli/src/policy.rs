@@ -9,6 +9,8 @@ use signex_app::keymap::{
     AppCommandId, CatalogTextExt, CommandMetadata, OperandKind, metadata_for,
 };
 
+use signex_app::headless::is_agent_window_command;
+
 use crate::capability::{Capability, capability_of};
 
 use crate::confine::confine;
@@ -61,10 +63,35 @@ impl Policy {
         base: &Path,
         roots: &[PathBuf],
     ) -> Result<Approved, String> {
+        self.authorize_in(request, base, roots, false)
+    }
+
+    /// [`Self::authorize`] for a run attached to a window: the window-layout
+    /// commands the agent channel takes pass though they only work in a
+    /// window (#2470).
+    pub fn authorize_attached(
+        &self,
+        request: &Request,
+        base: &Path,
+        roots: &[PathBuf],
+    ) -> Result<Approved, String> {
+        self.authorize_in(request, base, roots, true)
+    }
+
+    fn authorize_in(
+        &self,
+        request: &Request,
+        base: &Path,
+        roots: &[PathBuf],
+        attached: bool,
+    ) -> Result<Approved, String> {
         let command = AppCommandId::new(request.id.as_str())?;
         let meta = metadata_for(&command)
             .ok_or_else(|| format!("unknown command `{}`", command.as_str()))?;
-        if let Some(reason) = meta.headless_refusal() {
+        let window_command = attached && is_agent_window_command(command.as_str());
+        if let Some(reason) = meta.headless_refusal()
+            && !window_command
+        {
             return Err(reason);
         }
         let needed = capability_of(meta);
@@ -366,6 +393,30 @@ mod tests {
         // A modal the catalog classified as window only in #2170.
         let erc = authorize(&all, &fx, &request("open_erc_dialog", &[])).unwrap_err();
         assert_eq!(erc, "`open_erc_dialog` only works in a window");
+    }
+
+    /// #2470: an attached run lets the window-layout commands through, which
+    /// only work in a window; a headless run and any other window-only
+    /// command still refuse.
+    #[test]
+    fn an_attached_run_passes_the_window_layout_commands_only() {
+        let fx = fixture();
+        let read = policy(&[Capability::Read]);
+        let roots = std::slice::from_ref(&fx.root);
+        for id in ["zoom_to_fit", "tile_windows_vertically"] {
+            let err = authorize(&read, &fx, &request(id, &[])).unwrap_err();
+            assert_eq!(err, format!("`{id}` only works in a window"));
+            let ok = read.authorize_attached(&request(id, &[]), &fx.root, roots);
+            assert!(ok.is_ok(), "{id}: {ok:?}");
+        }
+        let dock = request("set_dock_panel", &["panel=messages", "state=collapse"]);
+        assert!(read.authorize_attached(&dock, &fx.root, roots).is_ok());
+        let gui =
+            read.authorize_attached(&request("toggle_properties_panel", &[]), &fx.root, roots);
+        assert_eq!(
+            gui.unwrap_err(),
+            "`toggle_properties_panel` only works in a window"
+        );
     }
 
     /// `signex-cli` installs no extension (#2495), so an extension's command

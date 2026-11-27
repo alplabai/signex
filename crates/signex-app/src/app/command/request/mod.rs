@@ -115,7 +115,7 @@ impl Signex {
         args: &CommandArgs,
     ) -> (RequestOutcome, Task<Message>) {
         if crate::app::agent::is_window_layout(command) {
-            let (outcome, task) = self.run_agent_window_layout(command);
+            let (outcome, task) = self.run_agent_window_layout(command, args);
             return (RequestOutcome::of(command.as_str(), outcome), task);
         }
         self.agent.serving = true;

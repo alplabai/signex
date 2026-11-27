@@ -1588,6 +1588,10 @@ set_diff_pair_width	operand_handler	run_operands: named document	core	selection,
 set_diff_pair_width	refusal_needs	Pcb	core	active document	routing
 set_diff_pair_width	refusal_needs_operands	needs_operands_reason	gui	none	routing
 set_diff_pair_width	headless_missing_operand	needs `document`	core	none	routing
+set_dock_panel	operand_handler	run_operands: active-tab gate unless a document is named	gui	active document,window	handler
+set_dock_panel	refusal_needs_operands	needs_operands_reason	gui	none	routing
+set_dock_panel	headless_missing_operand	needs `panel`	gui	none	routing
+set_dock_panel	agent_window_layout	run_agent_window_layout	gui	active document,window,origin	handler
 set_footprint_position	operand_handler	run_operands: named document	core	origin	handler
 set_footprint_position	refusal_needs	Pcb	core	active document	routing
 set_footprint_position	refusal_needs_operands	needs_operands_reason	gui	none	routing
@@ -1940,6 +1944,7 @@ zoom_to_fit	bridge	CanvasEvent(FitAll)	gui	active document,window,render cache	h
 zoom_to_fit	in_window_rewrite	canvas_in_window|document_window	gui	window	routing
 zoom_to_fit	refusal_needs	FitTarget	gui	active document,window	routing
 zoom_to_fit	headless_refusal	headless_refusal	gui	none	routing
+zoom_to_fit	agent_window_layout	run_agent_window_layout	gui	active document,window,origin	handler
 zoom_to_selection_area	bridge	CanvasEvent(FitSelection)	gui	selection,render cache	handler
 zoom_to_selection_area	in_window_rewrite	canvas_in_window|document_window	gui	window	routing
 zoom_to_selection_area	headless_refusal	headless_refusal	gui	none	routing
