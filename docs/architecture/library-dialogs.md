@@ -166,20 +166,27 @@ shows that severity in the list), a filter over the items' source name,
 message and code, the list (first 200 rows), and the selected item's kind,
 source, code, what it was written as and its detail fields. A dry run writes
 only the report (contract §2.2), so no symbol or footprint is drawn here; the
-caption says they can be looked at after the import. The amber strip counts
+caption says they can be looked at after the import (a drawn preview is
+follow-up #3171; approved deviation, DECISIONS.md 2026-11-27). The amber strip counts
 what will be skipped. Back cancels a running dry run. A failed dry run is
 shown in the step, not as a notice.
 
-**Import** checks the folder again; an empty folder is removed so the run
-creates it and owns it, which is what lets a failed or cancelled run remove
-everything it wrote (the engine removes only a folder the run created).
+**Import** checks the folder again. The run itself takes the folder
+(`library_import::run::claim_output`): it creates it, replacing an empty
+folder and refusing one that holds anything before the converter starts, so
+a failed or cancelled run removes only a folder it made. Next waits ("The
+previous run is stopping…") while a dry run left by Back or Close has not
+ended; that dry run's temp folder is removed when it does.
 
 **Step 3, import.** The phase name with "done of total" and the percent, the
 bar, "Now: <item>" from the progress stream, every phase so far, and the
 silence rule (no event for 120 s stops the run). Cancel stops after the
 current item: an item is in flight while the last event is a `progress`
 naming one, and the run is stopped on the next event that is not a repeat of
-it; with no item in flight it stops at once. Esc and the close button cancel
+it; with no item in flight it stops at once. While it waits the button reads
+Stop now: a second Cancel (or Esc, or Close) stops the run at once, so a
+converter stuck on one item, silent, or never exiting is always stopped.
+Quitting kills a running converter's process group. Esc and the close button cancel
 too while the import runs; the dialog stays until it has stopped, then says
 whether the folder was removed, with Back and Close. A finished import closes
 the dialog; the library is committed and mounted as described in
