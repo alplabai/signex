@@ -45,6 +45,7 @@ fn pad() -> Pad {
         custom_outline: Vec::new(),
         rotation: 45.0,
         net_locked: true,
+        thermal: Default::default(),
         layer_sizes: None,
         unknown: Default::default(),
         unknown_columns: Default::default(),

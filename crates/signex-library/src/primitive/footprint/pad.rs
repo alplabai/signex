@@ -245,6 +245,13 @@ pub struct Pad {
     pub copper_offset_x_mm: Option<f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub copper_offset_y_mm: Option<f64>,
+    /// The pad's own thermal relief air gap, spoke width and spokes
+    /// (#2593), each `None` following the pour; carried to the board pad.
+    #[serde(
+        default,
+        skip_serializing_if = "signex_types::pad_thermal::PadThermal::is_rule"
+    )]
+    pub thermal: signex_types::pad_thermal::PadThermal,
 }
 
 impl Default for Pad {
@@ -283,6 +290,7 @@ impl Default for Pad {
             hole_rotation_deg: None,
             copper_offset_x_mm: None,
             copper_offset_y_mm: None,
+            thermal: signex_types::pad_thermal::PadThermal::RULE,
         }
     }
 }

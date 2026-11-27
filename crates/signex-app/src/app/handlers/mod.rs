@@ -44,6 +44,7 @@ pub mod find_similar;
 pub(crate) mod grid_snap_popover;
 mod intro_wrap;
 pub(in crate::app) mod keymap_mod_prompt;
+pub(crate) mod length_matching;
 pub mod library_drift;
 pub mod library_footprint_choice;
 pub mod library_place;

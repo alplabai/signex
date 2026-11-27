@@ -25,11 +25,14 @@ format declares only its own table row below.
   target (#2517) or an array has a numbering sweep other than row by row
   (mockup row 126), `snxpcb/1.9` when a pour is shelved (#2738),
   `snxpcb/1.10` when its stackup carries a finish or a layer's loss tangent
-  (mockup rows 176 and 177) and `snxpcb/1.11` when it has a pour cutout
+  (mockup rows 176 and 177), `snxpcb/1.11` when it has a pour cutout
   (#2871), a dimension with a non-default look (#2868) or of a kind other
   than aligned (#2507), a drawing or
   string on a copper layer (#2883) or an unfilled pour (#2506), and
-  `snxpcb/1.12` when it has a layout plan (#2942). A project stays `snxprj/1`, byte for
+  `snxpcb/1.12` when it has a layout plan (#2942), a length-matching group
+  (#2797), a teardrop rule other than the default
+  (`[board_options.teardrops]`) or a pour with corners other than Sharp
+  (#2578) or a hatched fill (#2579). A project stays `snxprj/1`, byte for
   byte, and writes `snxprj/1.1` when it has variant settings. A build that
   reads only the lower token opens such a sheet or board read-only. A project
   is different: a released build refuses a `snxprj/1.1` project on load; see
@@ -74,13 +77,16 @@ format declares only its own table row below.
 | `.snxpcb`, drawn copper | `snxpcb/1.11` while a board drawing (`graphics`) or board string (`texts`) sits on a copper layer (`format::board_has_drawn_copper`, #2883; DECISIONS 2026-11-25), whatever else the board holds; else the tokens above, byte for byte. A 1.10 build would not count it as copper | `snxpcb/1.11`, as above | opens read-only | refused |
 | `.snxpcb`, unfilled pour | `snxpcb/1.11` while a pour that is not shelved carries `unfilled = true` (`Zone::is_unfilled_pour`, #2506; DECISIONS 2026-11-25), whatever else the board holds; else the tokens above, byte for byte, and the key is written only when on. A 1.10 build would flood the pour and export copper the author cleared | `snxpcb/1.11`, as above | opens read-only | refused |
 | `.snxpcb`, layout plan | `snxpcb/1.12` while `[board_options.layout_plan]` sets anything (`LayoutPlan::is_empty`, #2942; DECISIONS 2026-11-25), whatever else the board holds; else the tokens above, byte for byte, and clearing the last setting writes the lower token again. A 1.11 build would drop the plan on save | adds `snxpcb/1.12` | opens read-only | refused |
+| `.snxpcb`, length-matching groups | `snxpcb/1.12` while `[[board_options.length_groups]]` holds a group (#2797, [PCB_LENGTH_MATCHING.md](PCB_LENGTH_MATCHING.md)), whatever else the board holds; else the tokens above, byte for byte. A 1.11 build would drop the groups on save | `snxpcb/1.12`, as above | opens read-only | refused |
+| `.snxpcb`, pour corners, hatched fill | `snxpcb/1.12` while a polygon pour carries `corners` other than `sharp` (#2578) or `fill_mode = "hatched"` (#2579) (`Zone::has_pour_shape`), whatever else the board holds; else the tokens above, byte for byte. `corner_size`, `hatch_width` and `hatch_gap` are written only when not 0 and raise nothing on their own. A 1.11 build keeps the keys but would fill the pour solid with sharp corners and export copper the author did not ask for. An unknown corner or fill token is a load error | `snxpcb/1.12`, as above | opens read-only | refused |
+| `.snxpcb`, teardrop rule | `snxpcb/1.12` while `[board_options.teardrops]` holds a rule other than the default: which pads and vias take teardrops, their width and length shares, and per-pad overrides keyed by pad uuid (`TeardropRule`, `docs/PCB_TOOLS.md`, "Teardrop rule"), whatever else the board holds; else the tokens above, byte for byte, and the table is written only when not the default. A 1.11 build would drop the rule on save | `snxpcb/1.12`, as above | opens read-only | refused |
 | `.snxmat`, user material library | `snxmat/1` (`materials.snxmat` in the config folder: the person's own cores, prepregs, copper foils and masks, mockup row 177) | `snxmat/1` | refused | refused |
 | BOM template | `snxbomt/1` (a BOM column preset with computed columns, #1988; `docs/BOM_COLUMNS.md`). An unknown key is refused, so a newer template is never rewritten without it | `snxbomt/1` | refused | refused |
 | `.snxprj` | `snxprj/1` | `snxprj/1` | opens read-only | read as `snxprj/1` |
 | `.snxprj`, variant settings | `snxprj/1.1` while `variant_settings` is not empty (a default variant or a part entry, a channel's copy of a part on a repeated sheet included, #2662; `project::snxprj_token`; DECISIONS 2026-11-25); else `snxprj/1`, byte for byte. A `snxprj/1` build would keep the section but not follow a variant rename or removal. Builds released before this policy (v26.11.0 and earlier) refuse any newer minor on load, so they refuse a 1.1 project rather than open it read-only | adds `snxprj/1.1` | opens read-only | read as `snxprj/1` |
 | `.snxlib` | `snxlib/2` | `snxlib/2` | refused | refused |
-| `.snxfpt` | `snxfpt/1.1`, `1.2` with sketch links (reference dimensions, pattern sources and mirrors, per-instance pad overrides), or `1.3` with generated features (silkscreen outline, pad clearance, pin 1 marker, assembly outline; mockup row 124, #2834) or a pattern numbering sweep other than row by row (mockup row 126), whatever else it holds | `snxfpt/1`, `1.1`, `1.2`, `1.3`, `1.4` | refused | refused |
-| `.snxfpt`, embedded 3D models | `snxfpt/1.4` while the file embeds a STEP model a footprint attaches (`[[models]]`, #3107/#3108; DECISIONS 2026-11-26), whatever else it holds; else the tokens above, byte for byte, and removing the last model writes the lower token again. A 1.3 build would ignore the section and drop the models on save | adds `snxfpt/1.4` | refused | refused |
+| `.snxfpt` | `snxfpt/1.1`, `1.2` with sketch links (reference dimensions, pattern sources and mirrors, per-instance pad overrides), or `1.3` with generated features (silkscreen outline, pad clearance, pin 1 marker, assembly outline; mockup row 124, #2834) or a pattern numbering sweep other than row by row (mockup row 126), whatever else it holds; `1.4` while a pad or a sketch pad sets its own thermal relief air gap, spoke width or spoke count (#2593: the `thermal_air_gap`, `thermal_spoke_width` and `thermal_spokes` pad columns, the sketch pad's `stack.thermal`), whatever else it holds. A 1.3 build refuses the pad columns and would drop the sketch pad's values on save | `snxfpt/1`, `1.1`, `1.2`, `1.3`, `1.4` | refused | refused |
+| `.snxfpt`, embedded 3D models | `snxfpt/1.4` while the file embeds a STEP model a footprint attaches (`[[models]]`, #3107/#3108; DECISIONS 2026-11-26), whatever else it holds; else the tokens above, byte for byte, and removing the last model writes the lower token again. A 1.3 build would ignore the section and drop the models on save | `snxfpt/1.4`, as above | refused | refused |
 | `.snxblk`, block diagram | `snxblk/1` (mockup row 171, #2796; `docs/architecture/snxblk-format.md`) | `snxblk/1` | opens read-only | refused |
 | `.snxsym` | `snxsym/v1`, `v2` or `v3` by content; `v4` while any graphic is a Bezier, Pie Chart, Elliptical Arc or Round Rectangle (#2838), whatever else it holds | `snxsym/v1`, `v2`, `v3`, `v4` | refused | refused |
 | `.snxsim` | `snxsim/v1` | `snxsim/v1` | refused | refused |
@@ -112,6 +118,13 @@ new drawing kinds and directive fields may refuse to parse the sheet instead
 drops unknown keys of a typed `buses` row on save, so it opens a 1.4 sheet
 read-only and refuses its saves. A sheet with no styled bus keeps its lower
 token, byte for byte.
+
+**A pad's `thermal` cell needs no `.snxpcb` token.** A board pad's own
+thermal relief values (#2593) ride the optional `thermal` cell of the `pads`
+rows, written only when some pad sets one. A build that does not know the
+column keeps it as a foreign cell and writes it back unchanged, and it draws
+no thermal relief spokes at all, so it reads nothing differently because of
+the cell. A free pad has no such key: its own values are refused on save.
 
 **`.snxprj` stays `snxprj/1`.** The Schematic Refinement project settings
 (`schematic_design`: channel naming, harness definitions, differential pair

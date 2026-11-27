@@ -257,6 +257,19 @@ fn a_tab_dragged_before_its_board_lands_just_after_it() {
 }
 
 #[test]
+fn a_length_matching_tab_dragged_before_its_board_lands_just_after_it() {
+    let mut tabs = vec![
+        tab(TabKind::LengthMatching, "/b.snxpcb"),
+        tab(TabKind::Schematic, "/a.snxsch"),
+        tab(TabKind::Pcb, "/b.snxpcb"),
+    ];
+    let active = keep_pages_after_boards(&mut tabs, 0);
+    assert!(matches!(tabs[1].kind, TabKind::Pcb));
+    assert!(tabs[2].kind.is_length_matching());
+    assert_eq!(active, 2, "the dragged tab stays active");
+}
+
+#[test]
 fn the_active_tab_follows_when_a_page_moves_past_it() {
     let mut tabs = vec![
         tab(TabKind::LayerStack, "/b.snxpcb"),

@@ -150,6 +150,8 @@ define_ids! {
     PCB_BOARD_OPTIONS_UNDO = "pcb-board-options-undo";
     PCB_BOARD_LAYOUT_PLAN_UNDO = "pcb-board-layout-plan-undo";
     PCB_BOARD_OPTIONS_REFUSED = "pcb-board-options-refused";
+    PCB_BOARD_TEARDROP_RULE_UNDO = "pcb-board-teardrop-rule-undo";
+    PCB_BOARD_PAD_TEARDROP_UNDO = "pcb-board-pad-teardrop-undo";
     PCB_BOARD_GUIDE_VERTICAL = "pcb-board-guide-vertical";
     PCB_BOARD_GUIDE_HORIZONTAL = "pcb-board-guide-horizontal";
     PCB_BOARD_GUIDE_PLUS45 = "pcb-board-guide-plus45";

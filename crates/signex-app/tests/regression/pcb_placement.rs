@@ -43,6 +43,7 @@ fn pad(uuid: Uuid, shape: PadShape, at: (f64, f64), size: (f64, f64), rotation: 
         rotation,
         layer_sizes: None,
         net_locked: false,
+        thermal: Default::default(),
         unknown: Default::default(),
         unknown_columns: Default::default(),
     }

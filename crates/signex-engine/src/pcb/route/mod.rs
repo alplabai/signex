@@ -11,6 +11,7 @@ mod bus;
 mod cover;
 mod ends;
 mod pair;
+mod pair_tracks;
 mod tune;
 
 use pcb_geom::route::{
@@ -34,7 +35,8 @@ pub use ends::{
     PadAt, PadEnd, copper_under, end_via, join_pads, pad_end, start_on_copper, via_fits,
     via_pad_end,
 };
-pub use pair::{PairNets, PairTuned, diff_pair_of, pair_width_gap, tune_pair};
+pub use pair::{PairNets, PairTuned, diff_pair_of, pair_name, pair_width_gap, tune_pair};
+pub use pair_tracks::{coupled_partner, shared_gap_mm, with_partners};
 pub use tune::{Meander, NetsTuned, TuneRefusal, tune_length, tune_net, tune_nets};
 
 /// Lattice points one clicked leg's search may expand.
@@ -67,6 +69,25 @@ impl RouteMode {
             Self::Walkaround => Self::Shove,
             Self::Shove => Self::Walkaround,
         }
+    }
+
+    /// Every mode, in [`Self::next`] order.
+    pub const ALL: [Self; 2] = [Self::Walkaround, Self::Shove];
+
+    /// The mode's name for an agent or the CLI (`route_options`, #2719).
+    pub const fn token(self) -> &'static str {
+        match self {
+            Self::Walkaround => "walkaround",
+            Self::Shove => "push_and_shove",
+        }
+    }
+
+    /// The mode named `token` ([`Self::token`]), any case.
+    pub fn from_token(token: &str) -> Option<Self> {
+        let token = token.trim();
+        Self::ALL
+            .into_iter()
+            .find(|m| m.token().eq_ignore_ascii_case(token))
     }
 }
 
@@ -431,6 +452,8 @@ mod ends_tests;
 mod fit_tests;
 #[cfg(test)]
 mod pair_tests;
+#[cfg(test)]
+mod pair_track_tests;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]

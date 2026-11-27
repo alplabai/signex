@@ -36,6 +36,7 @@ pub(crate) fn pad_at(n: u128, x: f64, y: f64, size: f64, net: u32) -> Footprint 
         custom_outline: Vec::new(),
         rotation: 0.0,
         net_locked: false,
+        thermal: Default::default(),
         layer_sizes: None,
         unknown: Default::default(),
         unknown_columns: Default::default(),

@@ -245,8 +245,18 @@ board".
   break a clearance (the leg's via included) or enter a keepout is not
   pushed: the leg walks around instead.
   A track of no net is never pushed; the leg walks around it (Caner, 2026-11-25, #2515).
+- **Options (#2719, step 1).** `route_options document=<board>` reads the
+  options the router uses and sets any it is given: the conflict mode
+  (`walkaround`, `push_and_shove`), the corner mode (`90`, `45_start`,
+  `45_end`, `any_angle`, the one Shift+Space steps, shared with wires), the
+  track width and the via diameter and hole of the next leg; while a route
+  is drawn it also names the route's net, class, layer and lengths. The
+  command and the keys set one state, and a width set mid-route is the
+  width the route goes on with. Answer: [CLI.md](CLI.md), "Routing
+  options". The Properties panel's rows for these wait for their mockup row.
 - **Vias.** Making another copper layer active mid-route puts a through via
-  (the board's via size, grown to the written rules' minimum diameter and
+  (the via size set in the tool's form or with `route_options`, else the
+  board's, grown to the written rules' minimum diameter and
   drill for the net) at the route's end with the next leg; a via that would
   not keep the clearance is refused with the leg.
 - **Keepouts.** A leg stays out of a keepout that forbids tracks, a via out
@@ -291,8 +301,10 @@ a pointer or an empty corpus instead.
 
 - **Soak.** A seeded driver applies random actions through `BoardEngine`:
   routes and shoves (one or two legs from a ratsnest line or a pad, landed
-  as one step as the tool lands them), track and footprint moves, deletes,
-  undo and redo. After every action: nothing panicked, the engine's history
+  as one step as the tool lands them), track and footprint moves, track
+  drags (the tracks joined to its ends stretched after it, as a drop builds
+  them), vias placed on a track end (as the Via tool places them) and vias
+  moved with their tracks, deletes, undo and redo (#2967). After every action: nothing panicked, the engine's history
   matches the steps taken, undo and redo give back the board exactly as it
   was, ids are unique, tracks are finite, on copper and on known nets, no
   zero-length track appeared, a refused route changed nothing, and a
@@ -308,11 +320,20 @@ a pointer or an empty corpus instead.
   seed, action index and the command that replays it. A routed track laid
   over a same-net track already there and at least as wide (same layer, on
   one line, sharing a
-  stretch) fails the soak (#2492). Not checked yet (#2482):
-  dangling track ends and connectivity against the net list. The soak's own
-  edits make both on purpose (a stub routed into open board, a track moved
-  off its pads or across another net), so these checks must first tell an
-  edit's effect from a defect.
+  stretch) fails the soak (#2492). Connectivity (#2967): every net the
+  action did not touch keeps exactly its ratsnest lines, and a landed route
+  never leaves its own net with more open links. An edit only changes its
+  own nets' links, so this tells an edit's effect from a defect. Two kinds of
+  action are left out: a footprint move, undo and redo may change any net,
+  and a net with a zone may change after any edit, since a pour's fill is cut
+  back from other nets' copper. A route's own net is also left out when the
+  route pushed a track of that net. Shorts (#2967): a route's new track or via
+  that overlaps copper of another net on a shared layer fails the soak when
+  the design rule check reports that short; the overlap test only decides
+  whether to run the check. Not checked yet: dangling track ends, which the
+  soak's own stubs make on purpose. The soak also times every action that
+  changed the board and records the rounds of every shove; the stress report
+  below has the numbers.
 - **Bench.** One-leg routes, half of them shoves: the rounds each shove
   took (`pcb_geom::route::shove_run`). A shove converged when it settled
   within 8 rounds: it cleared the way, or found a push that cannot be made
@@ -436,6 +457,23 @@ else the selection, on the board in view only) and for Length Tuning the
 target in mm (`value`); the answer lists each tuned net and its length.
 Coupled (both nets at once) pair meanders are not done yet.
 
+### A differential pair in Properties
+
+Selecting a track of a differential pair (the pair the router finds:
+`_P` / `_N` or `+` / `-` names, or a net class with a pair gap that holds
+two nets) adds three read-only rows under Net in the Track panel (#2585,
+mockup row 95): **Pair** (what the two names share, `USB` for `USB_P` /
+`USB_N`), **Paired Net** (the other net; both when tracks of both nets are
+selected) and **Pair Gap** (the copper gap, edge to edge, to the coupled
+track: the nearest parallel track of the other net on the same layer that
+overlaps it along its length; empty when one track has none or the gaps
+differ). **Width** typed on a pair's tracks reaches the coupled tracks too,
+as one undo step. An agent or the CLI runs the same with
+`set_diff_pair_width document=<board> [net=<name>] width=<mm>`: with `net`,
+every track of both nets of the pair; without it, the selected tracks and
+their coupled tracks. Editing the gap itself moves routed copper and is not
+done; the router keeps the class's pair gap on new routes.
+
 ## Fill and Solid Region
 
 `place_board_fill` (`P F`) and `place_board_region` (`P R`). Both add solid
@@ -502,7 +540,8 @@ when above 0, else `PcbSetup::clearance`, else 0.2 mm).
 A pour's outline only bounds its copper. The copper, its fill, is computed by
 `pcb_geom::zone_fills`, in integer nm:
 
-- the outline less the pour's own holes;
+- the outline less the pour's own holes, its convex corners shaped by its
+  Corners (#2578, below);
 - less every pad (free pads #2373 included), track, free copper arc and via
   on the pour's layer whose net is not the pour's, at its size on that layer
   (#2401), grown by the clearance (copper of no net counts as another net,
@@ -517,6 +556,7 @@ A pour's outline only bounds its copper. The copper, its fill, is computed by
   outline;
 - with every part narrower than the zone's `min_thickness` removed, when it
   is set;
+- hatched, when its Fill Mode is Hatched (#2579, below);
 - with every island (separate piece) smaller than `min_island_area` (mm²)
   removed, when it is above 0, and, with `remove_dead_islands`, every island
   that touches no pad, free pad, track, free copper arc, via or solid copper
@@ -528,10 +568,99 @@ priorities in board order. A pour of the same net may overlap an earlier one;
 one of another net keeps its clearance from it. So of two overlapping pours
 of different nets, the higher priority keeps the overlap.
 
-Copper of the pour's own net is filled over: a pad joins the pour solidly, with
-no thermal relief spokes (`thermal_relief`, `thermal_gap` and `thermal_width`
-are kept but not read yet). Not modelled yet: copper text and footprint copper
-graphics are not cleared, hatched fill, and rounded or chamfered corners.
+Copper of the pour's own net is filled over. A pad of the pour's net joins it
+solidly while the pour's Thermal Relief is off, and through spokes while it is
+on (see "Thermal relief" below). Not modelled yet: copper text and footprint
+copper graphics are not cleared.
+
+#### Corners and hatched fill
+
+**Corners** (#2578, `Zone::corners`, `Zone::corner_size`): Sharp, Rounded
+or Chamfer, with a Corner Size in mm. A Rounded corner is an arc of that
+radius tangent to both edges, drawn with the offset's 64 points per turn,
+each on the true circle; a Chamfer cuts the corner back by the size along
+each edge. A corner takes at most half of each of its edges, so two corners
+never cross; a Rounded corner that would need more gets the radius that
+fits. Only the convex corners of the outline are shaped: a concave corner,
+the pour's own holes and every cut-out around other copper keep the shape
+the outline and the clearance give them, so the fill never reaches past the
+drawn outline nor nearer other copper than the clearance (open question
+for the maintainer; this is the conservative default). Sharp, or a size of
+0, fills the outline as drawn.
+
+**Fill Mode** (#2579, `Zone::fill_mode`): Solid or Hatched; there is no
+None, since the outline-only state is Shelve. A hatched fill is the solid
+fill (after the minimum width) cut to a square grid of lines `hatch_width`
+wide with `hatch_gap` between them, aligned to the board origin so moved
+pours keep the grid, joined by a border of the same width inside every edge
+of the fill, around the clearance cut-outs too. A width or gap of 0 uses
+the default, 0.25 mm and 0.5 mm. Islands are dropped after the hatch, so a
+hatch fragment that touches nothing of the pour's net is dead copper like
+any other. A hatch of more than 2000 lines across, or a width or gap the
+geometry cannot hold, is not drawn: the pour is listed as not filled
+(`Unfilled::Hatch`) and Properties says why.
+
+Every reader of the fill (the canvas, Gerber and the fabrication outputs,
+the PDF, the 3D view, the ratsnest, via stitching and the Copper card) takes
+the copper from `pcb_geom::zone_fills`, so each shows the same corners and
+hatch. The design rule check reads no pour copper either way.
+
+The keys (`corners`, `corner_size`, `fill_mode`, `hatch_width`,
+`hatch_gap`) are written only when they differ from Sharp, 0, Solid, 0 and
+0. A board with a pour whose corners are not Sharp or whose fill is Hatched
+writes `snxpcb/1.12`, so a build that knows only 1.11 opens it read-only
+instead of filling the pour solid with sharp corners. An unknown corner or
+fill token is a load error, as an unknown pad shape is.
+
+`set_pour_corners document=.. ids=.. corners=sharp|rounded|chamfer
+[corner_size=<mm>]` and `set_pour_fill document=.. ids=.. fill=solid|hatched
+[width=<mm>] [gap=<mm>]` set them for an agent or the CLI on the board
+`document` names: one undo step each, refused for an id that is no pour of
+the board, an unknown token or a negative length. Each answers with the
+pours as `repour_all` reports them (`zone`, `filled`, `pieces`, `area_mm2`,
+...) plus `corners`, `corner_size`, `fill`, `hatch_width` and `hatch_gap`.
+
+#### Thermal relief
+
+A pour with `thermal_relief` on (#2580) keeps every pad of its net on its
+layer clear by an air gap and bridges the gap with spokes
+(`pcb_geom` `zone_fill::relief`):
+
+- the air gap is the pad's copper on that layer grown by the gap; a
+  through-hole pad gets one on every layer the pour is on, a non-plated hole
+  none;
+- each spoke runs from the pad's centre across the gap and one spoke width
+  into the fill, along the pad's own axes (the footprint's and the pad's turn
+  composed): four spokes at 0°, 90°, 180° and 270°, two at 0° and 180°, one
+  at 0°, three 120° apart;
+- the spokes are cut to the copper the pour may hold, so they keep every
+  clearance to other nets, keepouts, cutouts and the board outline; they are
+  added after `min_thickness` removes the thin parts, so a spoke narrower than
+  it stays, and after a hatch, so a spoke stays solid; a spoke that meets no
+  fill is left out;
+- the gap and width are the pour's `thermal_gap` and `thermal_width`; a pour
+  switched on with neither stored (0) uses 0.508 mm and 0.254 mm
+  (`PCB_THERMAL_GAP_MM`, `PCB_THERMAL_BRIDGE_MM`), and so does the switch in
+  the panel, which writes them.
+
+A pad may set its own air gap, spoke width and spoke count (#2593,
+`Pad::thermal`, each Manual or Rule): its own value wins over the pour's, a
+Rule value follows the pour, and a pad on the Rule gets four spokes. A gap or
+width is a length above 0 mm, a count 1 to 4; anything else is refused on edit,
+on save and on load. The values come from the footprint (the pad Properties'
+Thermal relief rows in the footprint editor, saved as the `thermal_air_gap`,
+`thermal_spoke_width` and `thermal_spokes` pad columns of the `.snxfpt`, which
+write `snxfpt/1.4`), are carried to the board pad when the footprint is
+placed, and are saved in the board's optional `thermal` pad cell,
+`<gap nm>;<width nm>;<spokes>` with a Rule part left empty. A free pad takes
+no values yet: its own values are refused on save. Vias of the pour's net
+stay joined solidly.
+
+`set_pour_thermal_relief document= ids= [on=] [spoke_width=] [air_gap=]` sets
+the pours' switch, width and gap in one undo step;
+`set_pad_thermal_relief document= ids= [air_gap=rule|mm]
+[spoke_width=rule|mm] [spokes=rule|n]` sets footprint pads' own values in one
+undo step (`docs/CLI.md`, "Thermal relief").
 
 A shelved pour (`Zone::shelved`, #2523) keeps its outline and every setting
 but holds no copper: `pcb_geom::zone_fills` gives it no fill, so it clears no
@@ -567,14 +696,18 @@ when on; a board with one writes `snxpcb/1.11`, so a build that knows only
 A placed pour is picked inside its outline (`PickKind::Polygons`, the
 Polygons chip of the selection filter) and opens the area panel (#2523): its
 illustration, Net Information, then Net, Layer and the Pour section: Fill
-Mode (Solid; Hatched is greyed, not supported yet), Clearance, Minimum
-Width, Thermal Relief (the stored switch with Spoke / Gap, read only and
-greyed, since the fill draws no spokes), Corners and Corner Size (Sharp,
-size 0; greyed, not stored yet), Priority (a whole number from 0), Remove
-Islands (below an area in mm²), Remove Dead Copper, and the Copper card.
-Each edit is one undo step. `min_island_area` and `remove_dead_islands` are
-written to the file only when set. Fill Mode has no None: the outline-only
-state is Shelve.
+Mode (Solid or Hatched, #2579; with Hatch Width and Hatch Gap in mm while
+the pours are hatched, showing the default for a stored 0), Clearance,
+Minimum Width, Thermal Relief (the switch over Spoke / Gap in mm, live,
+#2580; the illustration draws the gap and spokes while on), Corners (Sharp, Rounded or
+Chamfer, #2578) and Corner Size in mm (greyed at 0 while Sharp), Priority (a
+whole number from 0), Remove Islands (below an area in mm²), Remove Dead
+Copper, and the Copper card. Each edit is one undo step; on a board that
+cannot be edited the Fill Mode and Corners segments send nothing. The same
+rows set the values the Polygon Pour tool places with while it is armed.
+`min_island_area` and `remove_dead_islands` are written to the file only
+when set. Fill Mode has no None: the outline-only state is Shelve. The
+illustration still draws a sharp, solid corner.
 
 The Copper card shows the copper the fill holds (area and pieces, read from
 the fills the app holds), or "shelved · no copper". Its buttons:
@@ -1578,7 +1711,9 @@ from a base across the track at the point nearest the pad's centre out to
 the track's width, one radius past where the track leaves the pad or at the
 track's far end when the track is shorter. The base reaches 0.9 of the way
 to the pad's (or via's) inscribed edge on the nearer side, so a track that
-enters off centre or at an angle keeps both sides on it. It is
+enters off centre or at an angle keeps both sides on it. Those are the
+defaults of the board's teardrop rule (below), which can change both and
+leave pads or vias out. It is
 a zone with `fill_type = "teardrop"` on the track's net and layer, solid
 copper like a Solid Region. A track as wide as the pad gets none. A teardrop
 that would come closer than the clearance to another net's copper, or meet a
@@ -1590,6 +1725,52 @@ on the net `net` names, or every net.
 
 Teardrops are not tied to their track: moving or deleting the track leaves
 the teardrop where it was until Teardrops runs again.
+
+### Teardrop rule
+
+The board carries one teardrop rule (`BoardOptions::teardrops`,
+`signex_types::pcb_teardrop_rule`) that Add Teardrops reads:
+
+| Field | Default | Meaning |
+|---|---|---|
+| `pads` | on | pads of the track's net take teardrops |
+| `vias` | on | vias of the track's net take teardrops |
+| `width_share` | 0.9 | how far the base reaches across, as a share of the pad's inscribed radius on the track's nearer side; above 0, at most 1 |
+| `length_share` | 1.0 | how far the tip runs past the pad's edge, in pad radii; above 0, at most 4 |
+| pad overrides | none | a pad set `on` always takes a teardrop, `off` never, whatever `pads` says |
+
+A track end that sits in both a via and a pad takes the via's teardrop
+when vias take them, else the pad's. A pad or via the rule leaves out is
+not counted as skipped. The default rule is what Add Teardrops did before
+the rule existed. A rule other than the default is saved as
+`[board_options.teardrops]` and the board writes `snxpcb/1.12`
+(`docs/FORMAT_VERSIONS.md`); pad overrides are keyed by pad uuid.
+Changing the rule does not move teardrops already on the board: run Add
+Teardrops again.
+
+`set_teardrop_rule document=.. [pads=..] [vias=..] [width_share=..]
+[length_share=..]` sets the fields given and keeps the others; a share out
+of range is refused. `set_pad_teardrop document=.. ids=.. teardrop=on|off|rule`
+sets the pads' own setting, `rule` going back to the rule; an id that is
+not a pad of the board refuses the whole edit. Each is one undo step and
+answers with the rule (`teardrop_rule`: `pads`, `vias`, `width_share`,
+`length_share`, `pad_overrides`) or the pads (`pads`: `id`, `teardrop`,
+`takes_teardrop`). No panel shows the rule yet; there is no mockup row for
+it or for a pad's Teardrop row.
+
+### Pour properties
+
+A polygon pour's fill priority and island removal are set in its
+Properties (Priority, Remove Islands, Remove Dead Copper) and in the
+Polygon Manager. A higher priority fills first and keeps its copper where
+pours of other nets overlap; Remove Islands drops copper pieces smaller
+than the area given (mm², 0 keeps every piece); Remove Dead Copper drops
+pieces that touch no copper of the pour's net (`pcb_geom::zone_fill`).
+`set_pour_properties document=.. ids=.. [priority=..] [islands_below=..]
+[dead_copper=..]` sets the same fields from operands as one undo step;
+priority is a whole number from 0, the area is not negative, and every id
+must be a polygon pour. It answers with `pours`: `id`, `priority`,
+`islands_below_mm2`, `dead_copper`.
 
 ### Gloss
 

@@ -24,6 +24,7 @@ mod board_graphic_operand_tests;
 mod board_graphic_operands;
 mod board_operands;
 mod board_route_operands;
+mod board_rule_operands;
 #[cfg(test)]
 mod board_view_operand_tests;
 mod board_view_operands;
@@ -87,6 +88,7 @@ mod opened;
 #[cfg(test)]
 mod operand_handler_tests;
 mod operand_handlers;
+pub(crate) mod operand_mm;
 mod operands;
 #[cfg(test)]
 mod parity;
@@ -113,6 +115,7 @@ mod placement_extras_operands;
 #[cfg(test)]
 mod placement_operand_tests;
 mod placement_operands;
+mod pour_operands;
 #[cfg(test)]
 pub(crate) mod project_name_tests;
 mod project_names;
@@ -144,6 +147,9 @@ mod sheet_variable_operand_tests;
 #[cfg(test)]
 mod smart_paste_operand_tests;
 mod smart_paste_operands;
+#[cfg(test)]
+mod thermal_operand_tests;
+mod thermal_operands;
 pub(crate) mod translator;
 #[cfg(test)]
 mod undo_agreement_tests;

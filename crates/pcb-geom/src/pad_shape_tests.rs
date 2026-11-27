@@ -25,6 +25,7 @@ pub(super) fn pad(n: u128, x: f64, size: (f64, f64), shape: PadShape, rotation: 
         rotation,
         layer_sizes: None,
         net_locked: false,
+        thermal: Default::default(),
         unknown: Default::default(),
         unknown_columns: Default::default(),
     }

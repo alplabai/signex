@@ -517,6 +517,11 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
                 crate::panels::PolygonMsg::ManagerOpened,
             )),
         )),
+        // #2797, mockup row 107: the Length Matching tab, the message its
+        // dock panel's Open as tab sends too.
+        "length_matching" => Message::Dock(crate::dock::DockMessage::Panel(
+            crate::panels::PanelMsg::LengthMatching(crate::panels::LengthMatchingMsg::TabOpened),
+        )),
         "lock_board_items" => Message::Pcb(PcbMsg::LockRequested { locked: true }),
         "unlock_board_items" => Message::Pcb(PcbMsg::LockRequested { locked: false }),
         // #2403: the net `net` names, else that of the board selection or

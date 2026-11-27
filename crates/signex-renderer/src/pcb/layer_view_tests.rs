@@ -652,6 +652,7 @@ fn free_pad(n: u128, x: f64, layers: &[&str], through: bool) -> signex_types::pc
         rotation: 0.0,
         layer_sizes: None,
         net_locked: false,
+        thermal: Default::default(),
     }
 }
 

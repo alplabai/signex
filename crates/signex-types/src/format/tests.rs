@@ -453,6 +453,7 @@ fn snxpcb_round_trip_with_data() {
         rotation: 0.0,
         layer_sizes: None,
         net_locked: false,
+        thermal: Default::default(),
     };
     let pad2 = Pad {
         unknown_columns: Default::default(),
@@ -475,6 +476,7 @@ fn snxpcb_round_trip_with_data() {
         rotation: 0.0,
         layer_sizes: None,
         net_locked: false,
+        thermal: Default::default(),
     };
 
     let footprint = Footprint {
@@ -574,6 +576,11 @@ fn snxpcb_round_trip_with_data() {
         remove_dead_islands: false,
         shelved: false,
         unfilled: false,
+        corners: Default::default(),
+        corner_size: 0.0,
+        fill_mode: Default::default(),
+        hatch_width: 0.0,
+        hatch_gap: 0.0,
         unknown: Default::default(),
     });
 
@@ -631,6 +638,11 @@ fn zone_without_holes_writes_no_holes_key() {
         remove_dead_islands: false,
         shelved: false,
         unfilled: false,
+        corners: Default::default(),
+        corner_size: 0.0,
+        fill_mode: Default::default(),
+        hatch_width: 0.0,
+        hatch_gap: 0.0,
         unknown: Default::default(),
     });
     let text = SnxPcb::new(board).write_string().expect("serialise");

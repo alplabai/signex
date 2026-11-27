@@ -26,9 +26,6 @@ use crate::{Label, LengthFormat, text};
 
 /// Tolerances from the target to each end of the axis.
 pub const AXIS_TOLERANCES: f64 = 4.0;
-/// Nanometres per millimetre: the band test compares at the stored
-/// resolution, so a length on the band edge is in the band.
-const NM_PER_MM: f64 = 1_000_000.0;
 /// Dash and gap of the band edges, in em.
 const DASH_EM: f32 = 3.0 / 12.0;
 
@@ -51,12 +48,10 @@ pub struct BandGeometry {
 
 /// Whether `value` is further than `tolerance` from `target`, compared in
 /// whole nanometres. A value that is not a number is out of band; a
-/// negative tolerance counts as zero.
-pub fn is_out_of_band(value: f64, target: f64, tolerance: f64) -> bool {
-    let off = ((value - target).abs() * NM_PER_MM).round();
-    let allowed = (tolerance.max(0.0) * NM_PER_MM).round();
-    off.is_nan() || off > allowed
-}
+/// negative tolerance counts as zero. The length report's own test
+/// (`signex_types::pcb_length::is_out_of_band`), so the bar and the
+/// report never disagree.
+pub use signex_types::pcb_length::is_out_of_band;
 
 /// The bar of `value` against `target` ± `tolerance`, all in mm.
 pub fn band_geometry(value: f64, target: f64, tolerance: f64) -> BandGeometry {

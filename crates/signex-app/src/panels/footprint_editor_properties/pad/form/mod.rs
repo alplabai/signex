@@ -29,6 +29,7 @@ mod paste_mask;
 mod properties;
 mod stack;
 mod template;
+mod thermal;
 mod view;
 
 pub(in crate::panels::footprint_editor_properties) use view::view_pad_form;

@@ -9,8 +9,8 @@ use iced::{Element, Length, Point, Rectangle, Size, Widget as _};
 use signex_i18n::{MessageId, ids, t};
 use signex_types::pcb_layer::{CopperLayer, PcbLayer, TechnicalLayer};
 use signex_widgets::property_illustration::{
-    Anchor, Callout, FieldId, Illustration, Ink, Leader, Paint, Part, Primitive, Style, TextLabel,
-    TextRole, Tint, Weight, property_illustration,
+    Anchor, Callout, Cap, FieldId, Illustration, Ink, Leader, Paint, Part, Primitive, Style,
+    TextLabel, TextRole, Tint, Weight, property_illustration,
 };
 use signex_widgets::{Label, text};
 
@@ -34,9 +34,19 @@ pub(super) const SLOT: FieldId = FieldId::new("pad-slot");
 pub(super) const PASTE: FieldId = FieldId::new("pad-paste");
 pub(super) const MASK: FieldId = FieldId::new("pad-mask");
 pub(super) const MASK_BOTTOM: FieldId = FieldId::new("pad-mask-bottom");
+/// The thermal relief rows (#2593): the air gap, and the spokes' width and
+/// count.
+pub(super) const THERMAL_GAP: FieldId = FieldId::new("pad-thermal-gap");
+pub(super) const THERMAL_SPOKE: FieldId = FieldId::new("pad-thermal-spoke");
+pub(super) const THERMAL_SPOKES: FieldId = FieldId::new("pad-thermal-spokes");
 /// Feature switches: a part that requires one drops out while it is off.
 const PASTE_ON: FieldId = FieldId::new("pad-paste-on");
 const MASK_ON: FieldId = FieldId::new("pad-mask-on");
+const THERMAL_ON: FieldId = FieldId::new("pad-thermal-on");
+/// The gap and spoke width drawn while the pour decides them, mm: a library
+/// pad has no pour to read them from.
+const RULE_GAP_MM: f64 = 0.5;
+const RULE_SPOKE_MM: f64 = 0.25;
 
 /// The view box of the approved drawings, and the pad's centre in it.
 const VIEW: Size = Size::new(264.0, 140.0);
@@ -276,11 +286,16 @@ pub(super) fn pad_illustration(form: &Form<'_>) -> Illustration {
 
     let mut drawing = Illustration::new(VIEW.width, VIEW.height)
         .feature(PASTE_ON, paste_on)
-        .feature(MASK_ON, mask_on);
+        .feature(MASK_ON, mask_on)
+        .feature(THERMAL_ON, v.stack.thermal_relief);
     let mask_fields = match class {
         PadClass::Smd(_) => vec![MASK],
         _ => vec![MASK, MASK_BOTTOM],
     };
+    // The spokes under the copper, so the pad covers their inner ends.
+    if class.has_copper_stack() {
+        drawing = drawing.parts(relief_parts(form, &copper, c, scale));
+    }
 
     // Copper (or the bare hole of an NPTH).
     if class == PadClass::Npth {
@@ -346,6 +361,44 @@ pub(super) fn pad_illustration(form: &Form<'_>) -> Illustration {
         },
         Ink::Faint,
     ))
+}
+
+/// The thermal relief of a plated pad while it is on (#2593): the air gap
+/// as a dashed ring round the copper and the spokes across it, at the pad's
+/// own values or, on the rule, at a nominal gap and width.
+fn relief_parts(form: &Form<'_>, copper: &Outline, c: Point, scale: f64) -> Vec<Part> {
+    let thermal = form.values.stack.thermal;
+    let gap = (thermal.air_gap.unwrap_or(RULE_GAP_MM) * scale).max(3.0) as f32;
+    let width = (thermal.spoke_width.unwrap_or(RULE_SPOKE_MM) * scale).clamp(1.5, 10.0) as f32;
+    let spokes = thermal
+        .spokes
+        .unwrap_or(signex_types::pad_thermal::DEFAULT_SPOKES);
+    let half = copper.half();
+    let reach = half.width.max(half.height) + gap + 4.0;
+    let mut parts = vec![
+        Part::new(copper.offset(gap).at(c), Style::dashed())
+            .linked(THERMAL_GAP)
+            .requires(THERMAL_ON),
+    ];
+    let paint = copper_paint(form.class);
+    for k in 0..spokes {
+        // Counter-clockwise from +x; the drawing's y is down.
+        let turn = std::f32::consts::TAU * f32::from(k) / f32::from(spokes);
+        let end = Point::new(c.x + reach * turn.cos(), c.y - reach * turn.sin());
+        parts.push(
+            Part::new(
+                Primitive::Band {
+                    points: vec![c, end],
+                    width,
+                    cap: Cap::Flat,
+                },
+                Style::edge().with_fill(paint, Tint::Body),
+            )
+            .linked_all([THERMAL_SPOKE, THERMAL_SPOKES])
+            .requires(THERMAL_ON),
+        );
+    }
+    parts
 }
 
 /// Size X above the pad and Size Y on its right (Size Ø for a hole).

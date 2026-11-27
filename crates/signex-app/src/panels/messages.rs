@@ -194,6 +194,13 @@ pub enum PanelMsg {
         idx: usize,
         value: bool,
     },
+    /// A pad's own thermal relief value typed (#2593): of the selected pad
+    /// `idx`, or of the next pad placed when `None`; empty text is Rule.
+    FpEditorPadThermalTyped {
+        idx: Option<usize>,
+        field: crate::library::editor::footprint::PadThermalField,
+        value: String,
+    },
     FpEditorSetSelectedPadFeatureTop {
         idx: usize,
         value: signex_sketch::attr::PadFeature,
@@ -717,6 +724,8 @@ pub enum PanelMsg {
     Room(crate::app::rooms::RoomMsg),
     /// The Layer Stack manager (#2401).
     LayerStack(super::LayerStackMsg),
+    /// The Length Matching tab and its dock panel (#2797).
+    LengthMatching(super::LengthMatchingMsg),
     /// F15 — Properties panel: open the primitive picker (symbol /
     /// footprint) for the row described by the active
     /// `PanelContext.library_row_detail`. Routes to

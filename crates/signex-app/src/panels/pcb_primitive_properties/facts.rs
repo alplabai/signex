@@ -7,7 +7,7 @@ use std::path::PathBuf;
 
 use pcb_geom::ItemRef;
 use signex_engine::pcb::draw::ArcMode;
-use signex_engine::pcb::via_types::ViaTypeKey;
+use signex_engine::pcb::via_types::{SizeOverride, ViaTypeKey};
 use signex_types::pcb::{MaskExpansion, PadShape, ViaType};
 use signex_types::pcb_dimension_kind::DimensionKind;
 use signex_types::pcb_dimension_style::{
@@ -17,6 +17,7 @@ use signex_types::pcb_graphic::BoardGraphicKind;
 use signex_types::pcb_layer::{BoardSide, CopperLayer, PcbLayer};
 use signex_types::pcb_stack::StackMode;
 use signex_types::pcb_via_protection::ViaProtection;
+use signex_types::zone_pour_shape::{PourCorners, PourFillMode};
 
 /// The board and the selected items a panel was built for. Every edit
 /// message carries it, so a selection change in between cannot send the
@@ -98,8 +99,16 @@ pub enum PrimitiveField {
     Precision,
     /// A polygon pour's priority, a whole number (#2216).
     Priority,
+    /// A polygon pour's corner radius or chamfer, in mm (#2578).
+    CornerSize,
+    /// A hatched pour's line width and the gap between lines, in mm (#2579).
+    HatchWidth,
+    HatchGap,
     /// The smallest island a polygon pour keeps, in mm² (#2216).
     MinIslandArea,
+    /// A polygon pour's thermal relief spoke width and air gap, mm (#2580).
+    ThermalSpokeWidth,
+    ThermalAirGap,
     /// An arc's or circle's centre on a board drawing (#2424).
     CenterX,
     CenterY,
@@ -334,6 +343,28 @@ pub struct TrackFacts {
     pub locked: Option<bool>,
     pub paste_mask: Option<MaskExpansion>,
     pub solder_mask: Option<MaskExpansion>,
+    /// The differential pair the tracks belong to (#2585); `None` for
+    /// tracks of no pair, of two pairs, or while placing.
+    pub pair: Option<PairFacts>,
+}
+
+/// The pair of a track selection (#2585, mockup row 95): its name, the
+/// paired net and the gap, and the tracks a Width edit reaches.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PairFacts {
+    /// What the two net names share (`USB_D`).
+    pub name: String,
+    pub positive: String,
+    pub negative: String,
+    /// The other net of the shown one; `None` when the selection holds
+    /// tracks of both nets (the row then names both).
+    pub paired_net: Option<String>,
+    /// The copper gap every selected track keeps to its partner, in mm;
+    /// `None` when one has no partner or the gaps differ.
+    pub gap_mm: Option<f64>,
+    /// The selected tracks and their partners, in board order: a Width
+    /// edit of a pair reaches both tracks (#2585).
+    pub tracks: Vec<uuid::Uuid>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -365,6 +396,10 @@ pub struct ViaFacts {
     pub type_size: Option<(f64, f64)>,
     /// Whether the vias' diameter or drill differs from their type's.
     pub overridden: Option<bool>,
+    /// Which of those sizes differ, as the engine judges it
+    /// (`via_types::overridden_fields`, #2735): what the Diameter and Drill
+    /// rows read. Filled with `overridden`, from the same judgement.
+    pub overridden_sizes: Option<SizeOverride>,
     /// The protection the vias share (IPC-4761); fill and cap read as none
     /// until the board stores them.
     pub protection: Option<ViaProtection>,
@@ -372,7 +407,8 @@ pub struct ViaFacts {
     pub drill_pair: Option<String>,
     /// The drill less the plating.
     pub finished_hole: Option<f64>,
-    /// The board's smallest via drill, when its setup sets one.
+    /// The smallest drill the vias are held to: the written design rule's
+    /// for them, as the check applies it, else the board setup's (#2735).
     pub min_drill: Option<f64>,
     /// Whether the vias reach the Top and the Bottom layer.
     pub reaches: (bool, bool),
@@ -434,8 +470,18 @@ pub struct ZoneFacts {
     /// Whether the selected pours are shelved (#2523); `None` when they
     /// differ or an area is not a pour.
     pub shelved: Option<bool>,
+    /// How the pours shape their corners and the size, in mm (#2578);
+    /// `None` where they differ.
+    pub corners: Option<PourCorners>,
+    pub corner_size: Option<f64>,
+    /// Solid or hatched (#2579), and the hatch line width and gap in mm the
+    /// fill uses (a stored 0 shows the default); `None` where they differ.
+    pub fill_mode: Option<PourFillMode>,
+    pub hatch_width: Option<f64>,
+    pub hatch_gap: Option<f64>,
     /// The thermal relief the pours store: on, spoke width and air gap in
-    /// mm; `None` when they differ. The fill does not draw spokes yet.
+    /// mm; `None` when they differ. While on, the fill joins the pads of
+    /// the pour's net through spokes (#2580).
     pub thermal: Option<(bool, f64, f64)>,
     /// The Copper card's menu of board-wide pour commands is open.
     pub menu_open: bool,

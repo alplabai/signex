@@ -762,6 +762,8 @@ impl Signex {
             pcb_board: self.pcb_board_summary().map(Box::new),
             layer_stack: self.layer_stack_facts(),
             polygons: self.polygon_facts(),
+            length_matching: self.length_matching_facts(),
+            length_matching_ui: self.document_view.panel_ctx.length_matching_ui.clone(),
             selection_count,
             selected_uuid,
             selected_kind,

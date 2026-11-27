@@ -395,6 +395,7 @@ macro_rules! expression_walker {
                         mask_bottom_tented: _,
                         thermal_relief: _,
                         corner_radius_pct: _,
+                        thermal: _,
                     } = stack;
                     visit_some!(visit, site(PadField::PasteTop), paste_top_expr);
                     visit_some!(visit, site(PadField::PasteBottom), paste_bottom_expr);

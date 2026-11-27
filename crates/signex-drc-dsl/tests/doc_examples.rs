@@ -64,6 +64,7 @@ fn pad_at(n: u128, x: f64, net: u32) -> Footprint {
         rotation: 0.0,
         layer_sizes: None,
         net_locked: false,
+        thermal: Default::default(),
         unknown: Default::default(),
         unknown_columns: Default::default(),
     };

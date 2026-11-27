@@ -17,6 +17,7 @@ use super::board_edit_operands as board_edit;
 use super::board_graphic_operands as graphic;
 use super::board_operands as board;
 use super::board_route_operands as route;
+use super::board_rule_operands as board_rule;
 use super::board_view_operands as board_view;
 use super::directive_operands as directive;
 use super::document_operands as doc;
@@ -32,6 +33,7 @@ use super::part_operands as part;
 use super::placed_operands as placed;
 use super::placement_extras_operands as extras;
 use super::placement_operands as place;
+use super::pour_operands as pour;
 use super::repair_reset_operands as repair_reset;
 use super::reuse_operands as snippet;
 use super::selection_filter_operands as filter;
@@ -39,11 +41,13 @@ use super::selection_operands as selection;
 use super::sheet_swap_operands as sheet_swap;
 use super::sheet_sync_operands as sheet_sync;
 use super::smart_paste_operands as smart_paste;
+use super::thermal_operands as thermal;
 use super::{CommandArgs, CommandOutcome, enablement};
 use crate::app::block_diagram as diagram;
 use crate::app::board_output as output;
 use crate::app::board_reuse as reuse;
 use crate::app::board_tools as tools;
+use crate::app::handlers::length_matching as length;
 use crate::app::handlers::pcb_component::part_swap_operands as swap;
 use crate::app::handlers::pcb_tune as tune;
 use crate::app::notebook_references::commands as notebook;
@@ -262,18 +266,29 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("delete_net_class", board::delete_net_class),
     ("set_net_class_rules", board::set_net_class_rules),
     ("assign_board_net_class", board::assign_board_net_class),
+    // #2719: the Interactive Routing options, read and set.
+    ("route_options", board::route_options),
     ("set_layer_stack", board_edit::set_layer_stack),
     ("lock_board_items", board_edit::lock_board_items),
     ("unlock_board_items", board_edit::unlock_board_items),
     ("set_via_span", board_edit::set_via_span),
     ("set_layer_sizes", board_edit::set_layer_sizes),
     ("set_pad_shape", board_edit::set_pad_shape),
+    ("set_pour_corners", pour::set_pour_corners),
+    ("set_pour_fill", pour::set_pour_fill),
+    // #2580, #2593: a pour's thermal relief and a pad's own values.
+    ("set_pour_thermal_relief", thermal::set_pour_thermal_relief),
+    ("set_pad_thermal_relief", thermal::set_pad_thermal_relief),
     ("select_board_net", select_board_net),
     ("highlight_board_net", highlight_board_net),
     // #2408, #2409: the board Tools edits on the board `document` names.
     ("stitch_vias", tools::stitch_by_operands),
     ("add_teardrops", tools::add_teardrops_by_operands),
     ("remove_teardrops", tools::remove_teardrops_by_operands),
+    // The board's teardrop rule, a pad's own setting, a pour's fill rules.
+    ("set_teardrop_rule", board_rule::set_teardrop_rule),
+    ("set_pad_teardrop", board_rule::set_pad_teardrop),
+    ("set_pour_properties", board_rule::set_pour_properties),
     ("gloss_selected_routes", tools::gloss_by_operands),
     ("board_shape_from_selection", tools::board_shape_by_operands),
     ("keepout_from_selection", tools::keepout_by_operands),
@@ -329,6 +344,15 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     // #2389: length tuning on a named board.
     ("tune_net_length", tune::tune_net_length),
     ("tune_diff_pair", tune::tune_diff_pair),
+    // #2585: a differential pair's track width on a named board.
+    (
+        "set_diff_pair_width",
+        crate::app::handlers::pcb_primitive::set_diff_pair_width,
+    ),
+    // #2797: a named board's length-matching groups.
+    ("length_matching", length::length_matching),
+    ("set_length_group", length::set_length_group),
+    ("remove_length_group", length::remove_length_group),
     ("panelize_board", crate::app::board_panel::panelize_board),
     (
         "remove_board_panel",
@@ -749,6 +773,13 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
             "`filter_drc_results` needs the operand `document` — \
              use the filters of the DRC panel",
         ),
+        // #2719: a person routes with Shift+Space and `cycle_route_mode`,
+        // and sets the width in Properties while Tab pauses the route.
+        "route_options" => Some(
+            "`route_options` needs the operand `document` — \
+             while routing, Shift+Space steps the corner mode and Tab pauses \
+             the route for its width in Properties",
+        ),
         // Mockup row 199: a person uses the notebook's margin lane.
         "export_notebook_timeline" => Some(
             "`export_notebook_timeline` needs the operands `document`, a target and `path` — \
@@ -774,6 +805,16 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
             "`set_layer_stack` needs the operands `document` and `stack` — \
              use the Layer Stack manager",
         ),
+        // #2585: a person types the width in the Track panel.
+        "set_diff_pair_width" => Some(
+            "`set_diff_pair_width` needs the operands `document` and `width` — \
+             select a track of the pair and use Width in Properties",
+        ),
+        // #2797: a person edits the groups in the Length Matching tab.
+        "set_length_group" | "remove_length_group" => Some(
+            "this command needs the operands `document` and `name` — \
+             use the Length Matching tab (Length Matching...)",
+        ),
         "set_via_span" => Some(
             "`set_via_span` needs the operands `document`, `ids` and `layers` — \
              use the From and To rows of the Via panel in Properties",
@@ -786,6 +827,32 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
             "`set_pad_shape` needs the operands `document`, `ids` and `shape`, \
              with `delta` for a trapezoid or `corners` for a custom pad — \
              trapezoid and custom pads are drawn in the footprint editor",
+        ),
+        "set_pour_corners" => Some(
+            "`set_pour_corners` needs the operands `document`, `ids` and `corners` — \
+             use the Corners row of a pour's panel in Properties",
+        ),
+        "set_pour_fill" => Some(
+            "`set_pour_fill` needs the operands `document`, `ids` and `fill` — \
+             use the Fill Mode row of a pour's panel in Properties",
+        ),
+        "set_pour_thermal_relief" => Some(
+            "`set_pour_thermal_relief` needs the operands `document` and `ids`, with \
+             `on`, `spoke_width` or `air_gap` — use the Thermal Relief rows of the \
+             pour panel in Properties",
+        ),
+        "set_pad_thermal_relief" => Some(
+            "`set_pad_thermal_relief` needs the operands `document` and `ids`, with \
+             `air_gap`, `spoke_width` or `spokes` — set a library pad's values in the \
+             footprint editor's pad Properties",
+        ),
+        "set_teardrop_rule" | "set_pad_teardrop" => Some(
+            "the teardrop rule edits need their operands, `document` first — \
+             no panel shows the teardrop rule yet",
+        ),
+        "set_pour_properties" => Some(
+            "`set_pour_properties` needs the operands `document` and `ids` — \
+             use the Priority and Remove Islands rows of the pour in Properties",
         ),
         "edit_blanket" => Some(
             "`edit_blanket` needs the operand `id` and the values to set — \

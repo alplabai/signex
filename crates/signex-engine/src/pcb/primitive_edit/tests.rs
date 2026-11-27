@@ -194,3 +194,47 @@ fn a_per_layer_size_too_small_for_the_trapezoid_delta_is_refused() {
         refused
     );
 }
+
+/// #2593: a pad's own thermal relief values are set one by one, back to the
+/// pour with `Some(None)`, and a value no pour can use is refused.
+#[test]
+fn a_pad_takes_its_own_thermal_relief_values_and_refuses_unusable_ones() {
+    use signex_types::pad_thermal::{PadThermal, PadThermalFault};
+    let mut b = board();
+    let pad = [(id(FP_A), id(PAD_A1))];
+    let set = PadEdit::Thermal {
+        air_gap: Some(Some(0.3)),
+        spoke_width: None,
+        spokes: Some(Some(2)),
+    };
+    let command = pad_edit_command(&b, &pad, &set).unwrap();
+    run(&mut b, command);
+    let want = PadThermal {
+        air_gap: Some(0.3),
+        spoke_width: None,
+        spokes: Some(2),
+    };
+    assert_eq!(b.footprints[0].pads[0].thermal, want);
+    let back = PadEdit::Thermal {
+        air_gap: Some(None),
+        spoke_width: None,
+        spokes: None,
+    };
+    let command = pad_edit_command(&b, &pad, &back).unwrap();
+    run(&mut b, command);
+    assert_eq!(b.footprints[0].pads[0].thermal.air_gap, None);
+    assert_eq!(
+        b.footprints[0].pads[0].thermal.spokes,
+        Some(2),
+        "left as it was"
+    );
+    let too_many = PadEdit::Thermal {
+        air_gap: None,
+        spoke_width: None,
+        spokes: Some(Some(9)),
+    };
+    assert_eq!(
+        pad_edit_command(&b, &pad, &too_many),
+        Err(PrimitiveEditRefusal::PadThermal(PadThermalFault::Spokes))
+    );
+}

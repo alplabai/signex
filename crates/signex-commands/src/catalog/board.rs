@@ -141,6 +141,20 @@ pub(super) const BOARD: &[CommandMetadata] = &[
         operands: super::operands::DOCUMENT,
         ..CommandMetadata::DEFAULT
     },
+    // #2216: a pour's fill priority and island removal, the Priority,
+    // Remove Islands and Remove Dead Copper rows of its Properties, on the
+    // pours named. One undo step. No default key.
+    CommandMetadata {
+        id: "set_pour_properties",
+        category: "modify",
+        label: command_ids::CMD_SET_POUR_PROPERTIES,
+        menu_label: None,
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::MUTATES,
+        operands: super::board_rule_operands::SET_POUR_PROPERTIES,
+        ..CommandMetadata::DEFAULT
+    },
     // #2506: clear the copper of the selected pours, keeping their outline,
     // until the next Repour; one undo step. It reads the selection, so it is
     // window only. No default key.

@@ -396,16 +396,19 @@ pcb-prim-dim-value-mil = { $value } mil
 pcb-prim-pour-fill-mode = Fill Mode
 pcb-prim-pour-fill-solid = Solid
 pcb-prim-pour-fill-hatched = Hatched
-pcb-prim-pour-hatched-tip = Hatched fill is not supported yet.
+pcb-prim-pour-hatched-tip = Hatched: a square grid of copper lines inside a copper border, Hatch Width wide with Hatch Gap between them. There is no None: a pour that keeps only its outline is shelved.
+# #2579: a hatched pour's line width and the gap between its lines.
+pcb-prim-pour-hatch-width = Hatch Width
+pcb-prim-pour-hatch-gap = Hatch Gap
 pcb-prim-pour-thermal = Thermal Relief
-pcb-prim-pour-thermal-tip = Pours join the pads of their net solidly; thermal relief spokes are not drawn yet.
+pcb-prim-pour-thermal-tip = On, the pour joins each pad of its net through spokes across an air gap; off, it joins them solidly. A pad may set its own gap, width and spokes.
 pcb-prim-pour-spoke-gap = Spoke / Gap
 pcb-prim-pour-corners = Corners
 pcb-prim-pour-corner-sharp = Sharp
 pcb-prim-pour-corner-rounded = Rounded
 pcb-prim-pour-corner-chamfer = Chamfer
 pcb-prim-pour-corner-size = Corner Size
-pcb-prim-pour-corners-tip = Not stored yet: a pour's copper keeps sharp corners.
+pcb-prim-pour-corners-tip = Shapes the convex corners of the pour's outline: a Rounded corner's radius or a Chamfer's cut. Cut-outs around other copper keep the shape the clearance gives them.
 # The label of the island rule; the field says "below" and the unit is mm².
 pcb-prim-pour-remove-islands = Remove Islands
 pcb-prim-pour-below = below
@@ -557,3 +560,70 @@ pcb-prim-dim-trailing-zeros = Trailing zeros
 # mockup row 96
 # The closed Via Type field's sizes; $diameter and $drill are in mm.
 pcb-prim-via-type-sizes = { $diameter }/{ $drill }
+
+# diff-pair-track
+# #2585, mockup row 95: the Track panel of a differential pair's tracks. Width
+# applies to both tracks of the pair.
+pcb-prim-pair = Pair
+pcb-prim-paired-net = Paired Net
+# The copper gap between the two tracks of the pair, edge to edge.
+pcb-prim-pair-gap = Pair Gap
+# Paired Net when the selection holds tracks of both nets.
+pcb-prim-pair-both-nets = { $positive } / { $negative }
+
+# length-matching
+# #2797, mockup row 107: the Length Matching tab of a board and its compact
+# dock panel. The tab's title is "<project> — Length Matching".
+# The mono kind code on the tab.
+length-matching-tab-kind = LEN
+length-matching-show-as-panel = Show as panel
+length-matching-filter = Show
+length-matching-filter-all = All
+length-matching-filter-out = Out of band
+# The toolbar's live status.
+length-matching-summary = { $groups ->
+    [one] 1 group
+   *[other] { $groups } groups
+} · { $members ->
+    [one] 1 member
+   *[other] { $members } members
+}
+length-matching-out-count = { $count } out of band
+length-matching-all-in-band = all in band
+length-matching-members = { $count ->
+    [one] 1 member
+   *[other] { $count } members
+}
+# A group's band; $target and $tolerance are in mm.
+length-matching-band = { $target } ± { $tolerance } mm
+# The High Speed rule the group stands for in the Rules manager.
+length-matching-rule = Rule: { $rule }
+length-matching-name = Name
+length-matching-target = Target
+length-matching-tolerance = Tolerance
+length-matching-topology = Topology
+length-matching-topology-star = Star
+length-matching-topology-chain = Chain
+length-matching-topology-fly-by = Fly-by
+length-matching-topology-t = T
+length-matching-new-group = New group
+length-matching-add-group = Add Group
+length-matching-add-net = Add net
+# $net is the member picked in the list.
+length-matching-remove-net = Remove { $net }
+length-matching-delete-group = Delete group
+length-matching-pick-group = Click a group to edit it.
+length-matching-status-over = over
+length-matching-status-short = short
+length-matching-status-unrouted = unrouted
+length-matching-status-missing = no such net
+# A member that is one net of a differential pair.
+length-matching-pair = pair { $pair }
+length-matching-measured = A member's length is its net's routed length: every track and copper arc of the net, added up.
+length-matching-footer = Lengths update as you route. Click a member to pick it; adding a net that sits in another group moves it here.
+length-matching-footer-note = Groups and their settings save with the board.
+length-matching-no-board-title = No board
+length-matching-no-board = Open a board to match the lengths of its nets.
+length-matching-no-match = No group has a member out of band.
+# The editor of the group picked in the list.
+length-matching-edit = Edit { $group }

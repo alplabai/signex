@@ -24,6 +24,7 @@ fn pad(uuid: Uuid, x: f64, y: f64, w: f64, h: f64) -> Pad {
         rotation: 0.0,
         layer_sizes: None,
         net_locked: false,
+        thermal: Default::default(),
         unknown: Default::default(),
         unknown_columns: Default::default(),
     }
@@ -385,6 +386,11 @@ fn area(uuid: Uuid, fill: &str, outline: &[(f64, f64)]) -> Zone {
         remove_dead_islands: false,
         shelved: false,
         unfilled: false,
+        corners: Default::default(),
+        corner_size: 0.0,
+        fill_mode: Default::default(),
+        hatch_width: 0.0,
+        hatch_gap: 0.0,
         unknown: Default::default(),
     }
 }

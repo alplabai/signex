@@ -5,7 +5,7 @@
 use std::collections::BTreeMap;
 
 use signex_types::net_class::{NetClass, first_matching_class};
-use signex_types::pcb::PcbBoard;
+use signex_types::pcb::{PcbBoard, Via};
 use signex_types::violation::Severity;
 
 use pcb_geom::{CopperItem, GeomError, MAX_ABS_NM, mm_to_nm};
@@ -227,6 +227,14 @@ impl DrcRules {
             limit(LimitKind::MinViaDiameter),
             limit(LimitKind::MinViaDrill),
         )
+    }
+
+    /// The smallest drill the written rules hold `via` to, in mm: the limit
+    /// the check measures its drill against (its net, the layers it
+    /// reaches); `None` where no rule sets one (#2735).
+    pub fn via_drill_limit_mm(&self, via: &Via) -> Option<f64> {
+        let (_, drill) = self.via_size_limits(via.net, pcb_geom::via_layers(via));
+        drill.map(pcb_geom::nm_to_mm)
     }
 
     /// The most clearance any pair of copper items can need here: the

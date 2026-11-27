@@ -41,12 +41,15 @@ mod board_layout_plan;
 mod board_options;
 mod board_panel;
 mod board_sketch;
+mod board_teardrops;
 mod drawn_copper;
 mod extras;
 mod finite_toml;
 mod header_id;
+mod length_groups;
 mod load_repair;
 mod pad_shape_cells;
+mod pad_thermal_cells;
 mod page_extras;
 mod pcb_cells;
 mod pcb_footprints;
@@ -86,6 +89,8 @@ mod board_sketch_targets_tests;
 #[cfg(test)]
 mod board_sketch_tests;
 #[cfg(test)]
+mod board_teardrops_tests;
+#[cfg(test)]
 mod body_style_tests;
 #[cfg(test)]
 mod bus_entry_tests;
@@ -103,6 +108,8 @@ mod extras_unknown_tests;
 mod font_family_tests;
 #[cfg(test)]
 mod integrity_tests;
+#[cfg(test)]
+mod length_groups_tests;
 #[cfg(test)]
 mod library_link_tests;
 #[cfg(test)]
@@ -129,6 +136,8 @@ mod pcb_lib_ref_tests;
 mod pcb_lock_name_tests;
 #[cfg(test)]
 mod pcb_pad_shape_tests;
+#[cfg(test)]
+mod pcb_pad_thermal_tests;
 #[cfg(test)]
 mod pcb_rooms_tests;
 #[cfg(test)]
@@ -161,6 +170,8 @@ mod unknown_value_type_tests;
 mod version_tests;
 #[cfg(test)]
 mod wire_color_tests;
+#[cfg(test)]
+mod zone_pour_shape_tests;
 #[cfg(test)]
 mod zone_shelved_tests;
 #[cfg(test)]

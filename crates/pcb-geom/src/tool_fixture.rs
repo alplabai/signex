@@ -88,6 +88,7 @@ pub(crate) fn pad_part(n: u128, at: (f64, f64), size: f64, net: u32) -> Footprin
         custom_outline: Vec::new(),
         rotation: 0.0,
         net_locked: false,
+        thermal: Default::default(),
         layer_sizes: None,
         unknown: Default::default(),
         unknown_columns: Default::default(),
@@ -138,6 +139,11 @@ pub(crate) fn zone(n: u128, net: u32, fill: &str, rect: (f64, f64, f64, f64)) ->
         remove_dead_islands: false,
         shelved: false,
         unfilled: false,
+        corners: Default::default(),
+        corner_size: 0.0,
+        fill_mode: Default::default(),
+        hatch_width: 0.0,
+        hatch_gap: 0.0,
         unknown: Default::default(),
     }
 }

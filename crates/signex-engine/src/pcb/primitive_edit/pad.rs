@@ -45,6 +45,13 @@ pub enum PadEdit {
     /// one size of a pad without them.
     LayerSizeX(CopperLayer, f64),
     LayerSizeY(CopperLayer, f64),
+    /// The pad's own thermal relief values (#2593): each `Some` sets that
+    /// value (`Some(None)` follows the pour again), each `None` leaves it.
+    Thermal {
+        air_gap: Option<Option<f64>>,
+        spoke_width: Option<Option<f64>>,
+        spokes: Option<Option<u8>>,
+    },
 }
 
 /// The command setting `edit` on every pad in `pads` (footprint, pad). A
@@ -153,6 +160,27 @@ pub(super) fn apply(
                 name,
             });
             pad.net_locked = true;
+        }
+        PadEdit::Thermal {
+            air_gap,
+            spoke_width,
+            spokes,
+        } => {
+            let mut thermal = pad.thermal;
+            if let Some(v) = air_gap {
+                thermal.air_gap = *v;
+            }
+            if let Some(v) = spoke_width {
+                thermal.spoke_width = *v;
+            }
+            if let Some(n) = spokes {
+                thermal.spokes = *n;
+            }
+            // The file refuses a value no pour can use, so the edit does too.
+            if let Some(fault) = thermal.fault() {
+                return Err(PrimitiveEditRefusal::PadThermal(fault));
+            }
+            pad.thermal = thermal;
         }
     }
     // The file refuses such a pad on save and load, so the edit does too.
