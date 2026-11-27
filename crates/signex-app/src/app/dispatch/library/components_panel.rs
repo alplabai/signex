@@ -735,6 +735,7 @@ mod tests {
                 display: crate::library::state::LibraryDisplaySettings::default(),
                 dangling: Default::default(),
                 pricing: Default::default(),
+                alternate_supply: Default::default(),
                 provenance: Default::default(),
             });
         place(&mut app, &key);

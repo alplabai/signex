@@ -68,6 +68,7 @@ fn mounted_library(app: &mut Signex, dir: &Path, name: &str) -> PathBuf {
             own_edit_stamp: None,
             display: Default::default(),
             pricing: Default::default(),
+            alternate_supply: Default::default(),
             provenance: Default::default(),
         });
     file

@@ -539,7 +539,7 @@ mod tests {
     use crate::app::{Message, Signex};
     use crate::dock::DockMessage;
     use crate::layout_probe::{lay_out_texts, messages_on_click};
-    use crate::panels::PanelMsg;
+    use crate::panels::{PanelMsg, SymbolDeleteWarning};
     use signex_library::{Symbol, SymbolFile};
     use std::path::PathBuf;
 

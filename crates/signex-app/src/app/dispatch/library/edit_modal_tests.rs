@@ -824,6 +824,7 @@ fn an_untouched_bool_slot_keeps_its_remove_until_it_is_edited() {
             allow_negative: false,
             display_plus_minus: false,
         }],
+        ..ParameterTemplate::default()
     };
     let library_id = app.library.library_at(&root).expect("library").library_id;
     std::sync::Arc::make_mut(&mut app.library.template_registry)
