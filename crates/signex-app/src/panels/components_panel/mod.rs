@@ -62,6 +62,9 @@ const ROW_TEXT_SIZE: f32 = crate::styles::TypeScale::DEFAULT.body;
 const HINT_TEXT_SIZE: f32 = crate::styles::TypeScale::DEFAULT.caption;
 /// Pointer travel that turns a row press into a drag.
 pub(crate) const DRAG_THRESHOLD: f32 = HINT_TEXT_SIZE;
+/// The command whose key a row menu shows beside Place and accepts while the
+/// menu is open (docs/DECISIONS.md, 2026-11-27, #2631).
+pub(crate) const ROW_PLACE_COMMAND: &str = "placement_accept";
 
 /// Render the Components Panel. Returns a `LibraryMessage`-typed
 /// element; the dock host wraps it in `DockMessage::Library` to route

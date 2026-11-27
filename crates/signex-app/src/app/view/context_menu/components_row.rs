@@ -10,16 +10,15 @@ use super::items::{dd_msg, text};
 use crate::dock::{PanelPosition, PanelSite};
 use crate::library::messages::LibraryMessage;
 use crate::library::state::ComponentsRowAction;
+use crate::panels::components_panel::ROW_PLACE_COMMAND;
 use signex_i18n::{I18n, menu_ids};
 use signex_types::theme::ThemeId;
 use signex_widgets::active_bar_dropdown::{DropdownEntry, MenuMetrics};
 
-/// The command whose key the Place row shows: Enter accepts a placement.
-const PLACE_HINT_COMMAND: &str = "placement_accept";
-
 /// Menu rows: pure data, so the labels and messages are tested without a
-/// renderer. `place_hint` is the key the active profile gives Enter's
-/// command ("" when it binds none); the icon column aligns the labels.
+/// renderer. `place_hint` is the key the active profile binds to
+/// [`ROW_PLACE_COMMAND`] ("" when it binds none), the key that places while
+/// the menu is open; the icon column aligns the labels.
 pub(super) fn components_row_menu_entries(
     i18n: &I18n,
     theme: ThemeId,
@@ -85,7 +84,7 @@ impl Signex {
         let entries = components_row_menu_entries(
             &self.ui_state.i18n,
             self.ui_state.effective_theme_id(),
-            &self.keymap_shortcut_label(PLACE_HINT_COMMAND),
+            &self.keymap_shortcut_label(ROW_PLACE_COMMAND),
         );
         let pointer = (menu_ctx.x, menu_ctx.y);
         let anchor = match menu_ctx.window {
@@ -244,7 +243,7 @@ mod tests {
         );
     }
 
-    /// A profile that binds no key to Enter's command shows no hint.
+    /// A profile that binds no key to the place command shows no hint.
     #[test]
     fn an_unbound_place_key_shows_no_hint() {
         let entries = components_row_menu_entries(I18n::en_us_ref(), ThemeId::GraphiteLight, "");

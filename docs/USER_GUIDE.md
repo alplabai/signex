@@ -523,7 +523,10 @@ To place a part, open a schematic sheet, then either:
   `P` then `P` in the default profile (`A` in Classic), or the Active Bar's
   **Part** button, which all open the same picker), select a part and press
   **Place**, or press `Enter` in the search field; or
-- press **Place** at the end of a part's row in the Components panel.
+- press **Place** at the end of a part's row in the Components panel, or
+  right-click the row and pick **Place**. The menu shows the key that places
+  from it, the one your shortcut profile binds to accepting a placement
+  (`Enter` in the default profile; Classic binds none).
 
 The picker's header counts the open libraries and their parts. Its search
 field and **Add range filter…** share the top row, and the list shows each
