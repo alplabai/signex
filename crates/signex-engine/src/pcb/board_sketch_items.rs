@@ -2,7 +2,7 @@
 //! (decision 2, Caner 2026-11-20): `SetBoardSketchBake` and its inverse
 //! `RestoreBoardSketchBake`. See `docs/PCB_SKETCH.md`, "Targets".
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use serde::Serialize;
 use signex_types::numeric::first_non_finite_path;
@@ -75,12 +75,16 @@ pub(in crate::pcb) fn set(
     }
 
     let owned = OwnedItems::of(board.sketch.as_ref(), sketch.as_deref());
+    let shelved: HashMap<Uuid, bool> = (board.zones.iter())
+        .filter(|zone| zone.shelved && owned.holds(zone.uuid))
+        .map(|zone| (zone.uuid, zone.unfilled))
+        .collect();
     let zones = board
         .zones
         .iter()
         .filter(|zone| !owned.holds(zone.uuid))
         .cloned()
-        .chain(items.zones)
+        .chain(items.zones.into_iter().map(|zone| keep_shelved(zone, &shelved)))
         .collect();
     let graphics = board
         .graphics
@@ -196,6 +200,16 @@ pub(in crate::pcb) fn owned_item_ids(
         .filter(|graphic| owned.holds(graphic.uuid))
         .map(|graphic| BoardItemId::Graphic(graphic.uuid));
     zones.chain(graphics).collect()
+}
+
+/// A pour shelved on the board stays shelved, with its `unfilled` flag,
+/// when the sketch re-bakes it under the same uuid (#2706, decision 8).
+fn keep_shelved(mut zone: Zone, shelved: &HashMap<Uuid, bool>) -> Zone {
+    if let Some(&unfilled) = shelved.get(&zone.uuid) {
+        zone.shelved = true;
+        zone.unfilled = unfilled;
+    }
+    zone
 }
 
 fn finite(p: Point) -> bool {
