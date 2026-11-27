@@ -197,9 +197,9 @@ step, re-solves and re-bakes the sketch, and dirties the tab.
   (`PadAttr::side`; both sides for a pad on every side), which are the
   layers the bake gives it; a drilled pad shows both sides and the hole
   details.
-- **Pattern.** The kind segment shows the pattern's kind; a pattern keeps
-  the kind it was made with. Start row / col and the letter skip apply to
-  BGA numbering and grey otherwise.
+- **Pattern.** The kind segment shows the pattern's kind and switches it
+  (see [Switching a pattern's kind](#switching-a-patterns-kind)). Start
+  row / col and the letter skip apply to BGA numbering and grey otherwise.
 
 The pattern illustration draws `signex_bake::array::preview_array`: the
 same walk the bake runs (`signex-bake/src/array/walk.rs`) gives each
@@ -207,6 +207,45 @@ instance its offset, number and dropped flag, so the drawing shows what the
 bake produces. Dropped instances are drawn dashed. When a count, spacing or
 mask does not evaluate, or the pattern has more than 256 instances, the
 drawing shows the source pad only, with a note.
+
+## Switching a pattern's kind {#switching-a-patterns-kind}
+
+The Pattern form's kind segment (Linear, Grid, Polar) switches the selected
+pattern to another kind (#2596, DECISIONS 2026-11-27). The reshaping is
+`signex_bake::array::switch_pattern_kind`; the segment and the centre pick
+are `updates/sketch/pattern_kind.rs`.
+
+- **Count.** The instance count carries over. A linear or polar pattern
+  becomes one grid row (`ny = 1`), or one column (`nx = 1`) when it steps
+  along Y only. A grid becomes a linear or polar pattern of `nx × ny`
+  instances: the side that is not 1 as written, else the product (a number
+  when both sides resolve, `(nx) * (ny)` when they do not). A polar pattern
+  takes the count over a full 360° sweep.
+- **Spacing.** dX and dY carry over between Linear and Grid as written. A
+  grid of several rows becomes a line along its row (dY 0), a one-column
+  grid a line down its column (dX 0). Polar has no spacing, so a polar
+  pattern switched away gets a 5 mm step along X, the Rectangular Pattern
+  default. The polar centre Point stays in the sketch, unless the switch
+  to Polar placed it (the centre click minted it) and nothing else uses it:
+  no entity, constraint, pattern or mirror names it and it has no role.
+  Such a centre goes in the same undo step. Which centres the switch
+  minted is known for the session only (`switch_minted_centres` in the
+  editor state); after a reload a centre counts as drawn and stays.
+- **Centre.** Linear and Grid switch at once. Polar first asks for a centre
+  through the Re-pick flow: the form shows "Click a Point… (Esc to
+  cancel)", and the next click on the canvas, under any tool, picks or
+  places the centre and switches the pattern. Esc, or the pattern's own
+  kind segment, cancels and leaves the pattern as it was.
+- **Instances.** The suppression list and the pattern's per-pad overrides
+  follow their instance in the row-by-row walk: cell `(i, j)` of a grid
+  `nx` wide is instance `j × nx + i` of a line. An entry with no place in
+  the new kind (past the count, past the last row such as a mirrored
+  instance, or in a later row of a grid whose width does not resolve) is
+  dropped, and a Messages line names the dropped instances. The mask
+  expression carries over as written (the bake warns where it does not
+  fit) and the numbering scheme is kept; the numbers follow the new walk.
+- **Undo.** The switch is one undo step; for Polar it is the step of the
+  click, centre Point included.
 
 ## Switching modes {#switching-modes}
 

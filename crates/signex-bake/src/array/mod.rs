@@ -28,6 +28,9 @@ use signex_sketch::sketch::SketchData;
 use signex_sketch::solver::FullSolveOutput;
 
 mod instance_at;
+mod kind_switch;
+#[cfg(test)]
+mod kind_switch_tests;
 mod layout;
 mod links;
 #[cfg(test)]
@@ -47,6 +50,10 @@ mod slots;
 mod walk;
 
 pub use instance_at::instance_at;
+pub use kind_switch::{
+    KindSwitchRefused, KindSwitched, KindTarget, PatternKind, remove_unused_point,
+    switch_pattern_kind,
+};
 pub use numbering::{
     NumberMaskRefusal, instances_numbered, number_mask_entries, suppressed_numbers,
 };

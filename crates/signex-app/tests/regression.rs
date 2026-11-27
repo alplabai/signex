@@ -955,3 +955,7 @@ mod board_sketch_router;
 // the 3D toggle that returns to the mode it came from.
 #[path = "regression/editor_mode_switch.rs"]
 mod editor_mode_switch;
+// #2596: a footprint pattern switches kind with its count, and the
+// instances that keep a place keep their skips and overrides.
+#[path = "regression/pattern_kind_switch.rs"]
+mod pattern_kind_switch;

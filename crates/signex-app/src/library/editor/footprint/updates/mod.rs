@@ -26,6 +26,7 @@ mod view;
 
 pub(crate) use active_bar::{apply_filter_preset, capture_filter_preset};
 pub(crate) use pad_scope::hold_patterned_pad_edit;
+pub(crate) use sketch::pattern_kind::kind_picked as pattern_kind_picked;
 pub(crate) use sketch::solved::settle_pending_inline;
 
 use crate::library::editor::footprint::sketch_solve_task;

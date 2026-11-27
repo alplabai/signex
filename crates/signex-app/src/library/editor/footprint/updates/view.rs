@@ -242,6 +242,17 @@ fn tool_escape(editor: &mut crate::app::FootprintDocument) {
         editor.canvas_cache.clear();
         return;
     }
+    // A centre pick from the Pattern form (Re-pick, or the switch to
+    // Polar, #2596) is cancelled before the selected pattern closes, so
+    // the form it came from stays up and the pattern stays as it was.
+    if matches!(
+        editor.state.tool_pending,
+        crate::library::editor::footprint::state::ToolPending::RepickPolarCenter { .. }
+    ) {
+        editor.state.tool_pending = crate::library::editor::footprint::state::ToolPending::Idle;
+        editor.canvas_cache.clear();
+        return;
+    }
     // The sketch canvas's constraint menu, value edit, then selected
     // pattern close next, one per Esc (mockup row 188).
     if editor.state.sketch_overlay.close_innermost() {

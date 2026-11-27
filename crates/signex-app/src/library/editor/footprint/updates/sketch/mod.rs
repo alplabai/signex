@@ -35,3 +35,7 @@ pub(super) mod close_gap;
 pub(super) mod add_fillets;
 // The role of a whole closed profile (mockup row 190).
 pub(super) mod profile_roles;
+// Switching a pattern's kind from Properties (#2596).
+pub(super) mod pattern_kind;
+#[cfg(test)]
+mod pattern_kind_tests;
