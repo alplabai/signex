@@ -242,6 +242,7 @@ fn importing() -> (Signex, Arc<AtomicBool>) {
         target: MountTarget::Global,
         cancel: cancel.clone(),
         group: Default::default(),
+        stage: Default::default(),
         progress: Some(ProgressEvent::Progress {
             done: 1,
             total: Some(3),
@@ -330,6 +331,7 @@ fn a_dry_run_result_or_failure_lands_in_step_two_and_back_returns_to_step_one() 
         target: MountTarget::Global,
         cancel: Arc::new(AtomicBool::new(false)),
         group: Default::default(),
+        stage: Default::default(),
         progress: None,
     });
     app.library.import_dialog = Some(Box::new(ImportDialogState {
@@ -371,6 +373,7 @@ fn back_during_a_dry_run_cancels_it_and_its_result_is_ignored() {
         target: MountTarget::Global,
         cancel: cancel.clone(),
         group: Default::default(),
+        stage: Default::default(),
         progress: None,
     });
     app.library.import_dialog = Some(Box::new(ImportDialogState {
@@ -543,6 +546,7 @@ fn next_waits_while_a_left_dry_run_is_still_stopping() {
         target: MountTarget::Global,
         cancel: Arc::new(AtomicBool::new(true)),
         group: Default::default(),
+        stage: Default::default(),
         progress: None,
     });
     drop(app.update(d(ImportDialogMsg::NextPressed)));
@@ -565,6 +569,7 @@ fn next_waits_for_a_run_the_dialog_did_not_start_and_says_so_neutrally() {
         target: MountTarget::Global,
         cancel: Arc::new(AtomicBool::new(false)),
         group: Default::default(),
+        stage: Default::default(),
         progress: None,
     });
     drop(app.update(d(ImportDialogMsg::NextPressed)));
@@ -595,6 +600,7 @@ fn a_dry_run_nobody_waits_for_leaves_no_temp_folder() {
         target: MountTarget::Global,
         cancel: Arc::new(AtomicBool::new(true)),
         group: Default::default(),
+        stage: Default::default(),
         progress: None,
     });
     let done = crate::library_import::ImportJobOutcome {
@@ -658,6 +664,28 @@ fn quitting_stops_a_running_import() {
     let (mut app, cancel) = importing();
     app.stop_library_import_at_quit();
     assert!(cancel.load(Ordering::Relaxed));
+}
+
+/// #3123: quit waits for the stopped run's worker, whose restore of an
+/// update may outlast the bound, before it goes on.
+#[test]
+fn quitting_waits_for_the_stopped_import_to_finish() {
+    use std::time::{Duration, Instant};
+    let (mut app, _cancel) = importing();
+    let stage = app.library.import.running.as_ref().unwrap().stage.clone();
+    stage.settling();
+    let guard = stage.done_on_drop();
+    let worker = std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(200));
+        drop(guard);
+    });
+    let started = Instant::now();
+    let task = app.wait_for_library_import_then(iced::Task::none());
+    crate::task_driver::TaskDriver::new()
+        .settle(&mut app, task)
+        .unwrap();
+    assert!(started.elapsed() >= Duration::from_millis(150));
+    worker.join().unwrap();
 }
 
 /// #3122: a dialog opened for a project mounts the import into that

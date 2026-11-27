@@ -73,6 +73,8 @@ pub struct ImportJob {
     pub limits: RunLimits,
     /// The converter's process group while it runs, for a kill at quit.
     pub group: super::process::ProcessGroup,
+    /// How far [`Self::run`] has got, for the quit wait.
+    pub stage: super::run_state::JobStage,
 }
 
 /// A finished import (or preview).
@@ -95,12 +97,15 @@ impl ImportJob {
     /// Run the job. An update is refused before the converter starts unless
     /// the library is a clean repository; it holds the library's write lock
     /// until its commit, and a failed update puts the tree back to its last
-    /// import.
+    /// import. The stage is marked done once everything, the write lock
+    /// included, is released.
     pub fn run(
         &self,
         cancel: &AtomicBool,
         on_event: &mut dyn FnMut(&ProgressEvent),
     ) -> Result<ImportJobOutcome, RunFailure> {
+        // Declared first, so dropped last.
+        let _done = self.stage.done_on_drop();
         let (local_commits, _write_lock) = match self.request.mode {
             RunMode::Update => {
                 let output = &self.request.output;
@@ -146,6 +151,7 @@ impl ImportJob {
         };
         let library_file = find_library_file(&library_dir).map_err(|e| keep_run(e, &run))?;
         let message = self.commit_message(&library_file);
+        self.stage.settling();
         let commit = record_snapshot(&library_dir, &message).map_err(|e| keep_run(e, &run))?;
         let (library_id, requires) = read_library_identity(&library_file);
         Ok(ImportJobOutcome {
@@ -164,6 +170,7 @@ impl ImportJob {
     fn restore_after_failed_update(&self, mut failure: RunFailure) -> RunFailure {
         // A refused run wrote nothing, so there is nothing to undo.
         if self.request.mode == RunMode::Update && !failure.refused {
+            self.stage.settling();
             let restored = signex_library::import_snapshot::restore_to_head(&self.request.output)
                 .map_err(|e| e.to_string());
             if let Err(why) = &restored {

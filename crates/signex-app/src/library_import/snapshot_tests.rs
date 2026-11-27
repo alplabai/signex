@@ -42,6 +42,7 @@ fn job(dir: &Path, mode: RunMode) -> ImportJob {
         request: request(dir.join("Conformance"), mode),
         limits: FAST,
         group: Default::default(),
+        stage: Default::default(),
     }
 }
 
@@ -248,6 +249,50 @@ fn a_silent_update_is_restored_too() {
     assert_eq!(*failure.error, ImportError::Silent { seconds: 1 });
     assert_eq!(failure.restored, Some(Ok(())));
     assert!(!out.join("symbols/added.snxsym").exists());
+}
+
+/// #3123: quit during an update kills the converter mid-write and waits
+/// for the worker, which has put the library back by the time the wait
+/// ends.
+#[test]
+fn quit_during_an_update_waits_until_the_library_is_put_back() {
+    use std::sync::Arc;
+    use std::sync::atomic::Ordering;
+    use std::time::{Duration, Instant};
+    let dir = tempfile::tempdir().unwrap();
+    let out = imported(dir.path());
+    let before = std::fs::read(out.join("Conformance.snxlib")).unwrap();
+    let started = dir.path().join("started");
+    let body = format!(
+        "echo broken > \"$out/Conformance.snxlib\"\necho x > \"$out/symbols/added.snxsym\"\n\
+         : > '{}'\nexec sleep 30\n",
+        started.display()
+    );
+    let job = update_with(dir.path(), &body);
+    let (group, stage) = (job.group.clone(), job.stage.clone());
+    let cancel = Arc::new(AtomicBool::new(false));
+    let worker = {
+        let cancel = Arc::clone(&cancel);
+        std::thread::spawn(move || job.run(&cancel, &mut |_| {}))
+    };
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while !started.exists() {
+        assert!(Instant::now() < deadline, "the converter never started");
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    // What `Signex::stop_library_import_at_quit` and the quit wait do.
+    cancel.store(true, Ordering::Relaxed);
+    group.kill();
+    assert!(stage.wait_at_quit(crate::library::writes::QUIT_WAIT));
+    // Read before the worker is joined: the wait alone covers the restore.
+    assert_eq!(
+        std::fs::read(out.join("Conformance.snxlib")).unwrap(),
+        before
+    );
+    assert!(!out.join("symbols/added.snxsym").exists());
+    assert!(check_update(&out).is_ok(), "clean again");
+    let failure = worker.join().unwrap().unwrap_err();
+    assert_eq!(failure.restored, Some(Ok(())));
 }
 
 #[test]

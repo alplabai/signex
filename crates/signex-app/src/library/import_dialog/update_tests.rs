@@ -154,6 +154,7 @@ fn updating() -> Signex {
         target: MountTarget::Global,
         cancel: Arc::new(AtomicBool::new(false)),
         group: Default::default(),
+        stage: Default::default(),
         progress: None,
     });
     app.library.import_dialog = Some(Box::new(ImportDialogState {
@@ -223,6 +224,7 @@ fn the_result_says_where_the_library_was_mounted_and_what_it_requires() {
         target: MountTarget::Global,
         cancel: Arc::new(AtomicBool::new(false)),
         group: Default::default(),
+        stage: Default::default(),
         progress: None,
     });
     app.library.import_dialog = Some(Box::new(ImportDialogState {

@@ -245,6 +245,7 @@ fn cancel_gives_the_window_back_whatever_the_converter_does() {
                 poll: Duration::from_millis(10),
             },
             group: Default::default(),
+            stage: Default::default(),
         };
         let (mut app, _boot) = Signex::new();
         let task = app.start_library_import(job, MountScope::AllProjects);
@@ -319,6 +320,7 @@ fn a_crash_and_a_fatal_exit_show_the_end_of_the_error_output() {
                 poll: Duration::from_millis(10),
             },
             group: Default::default(),
+            stage: Default::default(),
         };
         let (mut app, _boot) = Signex::new();
         let task = app.start_library_import(job, MountScope::AllProjects);

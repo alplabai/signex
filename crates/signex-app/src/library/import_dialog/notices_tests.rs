@@ -34,6 +34,7 @@ fn waiting(mode: RunMode) -> Signex {
         target: MountTarget::Global,
         cancel: Arc::new(AtomicBool::new(false)),
         group: Default::default(),
+        stage: Default::default(),
         progress: None,
     });
     let step = if mode == RunMode::Preview {

@@ -73,6 +73,7 @@ fn importing() -> Signex {
         target: MountTarget::Global,
         cancel: Arc::new(AtomicBool::new(false)),
         group: Default::default(),
+        stage: Default::default(),
         progress: None,
     });
     app.library.import_dialog = Some(Box::new(ImportDialogState {

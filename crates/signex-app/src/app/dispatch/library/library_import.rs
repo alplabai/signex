@@ -16,6 +16,7 @@ use crate::library::import_dialog::result::{Mounted, RequiredLibrary};
 use crate::library::messages::LibraryImportMsg;
 use crate::library::mount::{MountIntent, MountRequest, spawn_pending_mounts};
 use crate::library::refresh::{RefreshFollowUp, refresh_task};
+use crate::library::writes::QUIT_WAIT;
 use crate::library_import::run_state::{ImportFinished, ImportRun, MountTarget};
 use crate::library_import::{
     ExitKind, ImportError, ImportJob, ImportJobOutcome, MountScope, RunFailure, RunMode,
@@ -105,6 +106,7 @@ impl Signex {
             target: target.clone(),
             cancel: cancel.clone(),
             group: job.group.clone(),
+            stage: job.stage.clone(),
             progress: None,
         });
         log::info!(
@@ -277,6 +279,36 @@ impl Signex {
             run.cancel.store(true, Ordering::Relaxed);
             run.group.kill();
         }
+    }
+
+    /// Quit path, after [`Self::stop_library_import_at_quit`]: wait for the
+    /// stopped run's worker, then run `next`. A cancelled update puts its
+    /// library back to the last import on that worker; the process exiting
+    /// first would leave the library half written. The wait gives up after
+    /// `QUIT_WAIT` only while the worker has not reached its restore or
+    /// commit; one that has is waited for to the end.
+    pub(crate) fn wait_for_library_import_then(&mut self, next: Task<Message>) -> Task<Message> {
+        let Some(run) = &self.library.import.running else {
+            return next;
+        };
+        let stage = run.stage.clone();
+        Task::perform(
+            async move {
+                tokio::task::spawn_blocking(move || stage.wait_at_quit(QUIT_WAIT))
+                    .await
+                    .unwrap_or(false)
+            },
+            |done| {
+                if !done {
+                    crate::diagnostics::log_warning(format!(
+                        "Quit: the library import had not stopped after {} s; exiting anyway.",
+                        QUIT_WAIT.as_secs()
+                    ));
+                }
+                Message::noop()
+            },
+        )
+        .chain(next)
     }
 
     fn report_library_import_failure(&mut self, failure: &RunFailure) {

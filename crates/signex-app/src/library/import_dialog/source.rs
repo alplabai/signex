@@ -291,6 +291,7 @@ impl ImportDialogState {
             request: self.request(mode, output)?,
             limits: RunLimits::default(),
             group: Default::default(),
+            stage: Default::default(),
         })
     }
 
