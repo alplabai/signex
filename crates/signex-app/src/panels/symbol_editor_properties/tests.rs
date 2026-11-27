@@ -102,6 +102,7 @@ pub(super) fn ctx(
         part_drawing: PartDrawing::default(),
         props: Default::default(),
         display: SymbolDisplayOptions::default(),
+        pin_text_refusal: None,
     }
 }
 

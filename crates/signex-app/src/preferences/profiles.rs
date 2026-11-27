@@ -5,6 +5,11 @@
 
 mod editor;
 mod list;
+mod page_state;
+mod rule_list_filter;
+
+pub use page_state::{ProfileEditorTab, ProfileNameAction};
+pub use rule_list_filter::RuleListFilter;
 
 use std::sync::Arc;
 
@@ -14,9 +19,7 @@ use iced::{Element, Length};
 use signex_i18n::{I18n, ids, t};
 use signex_widgets::{raw, text};
 
-use crate::app::rule_profile_ui::{
-    MachineRulesIssue, ProfileEditorTab, ProfileManager, ProfileNameAction,
-};
+use crate::app::rule_profile_ui::{MachineRulesIssue, ProfileManager};
 use crate::rule_profiles::{ProfileKind, ProfileListing};
 
 /// The profile column: 300 px at the 12 px body.

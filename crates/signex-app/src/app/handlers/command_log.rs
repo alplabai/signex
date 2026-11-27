@@ -1,7 +1,7 @@
 //! The app side of the Command Log (#2458): a row per catalog command that
 //! ran, recorded once per outer dispatch, and the panel's actions (filters,
 //! Replay, copy, Save log as…, Jump to). The model is
-//! `app::core::command_log`; the panel is `panels::command_log`. Rules:
+//! `panels::command_log::model`; the panel is `panels::command_log`. Rules:
 //! `docs/COMMAND_LOG.md`.
 
 use std::path::{Path, PathBuf};
@@ -14,11 +14,11 @@ use signex_i18n::{ids, t};
 use signex_types::schematic::{SelectedItem, SelectedKind};
 
 use crate::app::command::{CommandArgs, CommandOutcome};
-use crate::app::core::command_log::RecordedTargets;
 use crate::app::document_ids::DocumentTarget;
 use crate::app::{Message, Signex};
 use crate::keymap::AppCommandId;
 use crate::panels::PanelMsg;
+use crate::panels::command_log::RecordedTargets;
 use crate::panels::command_log::{
     COPIED_FOR, CommandLogMsg, CopyTarget, JumpTarget, LogOutcome, LogRow, LogSource,
 };

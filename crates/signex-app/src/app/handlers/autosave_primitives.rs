@@ -90,6 +90,11 @@ impl Signex {
         dir: &Path,
         path: &Path,
     ) -> Option<Task<Message>> {
+        // A file that opened repaired gets no recovery copy: only the
+        // person's Save writes its repair (#3129).
+        if self.repaired_symbol_write_refusal(path).is_some() {
+            return None;
+        }
         let bytes = match self.primitive_autosave_bytes(path)? {
             Ok(bytes) => bytes,
             Err(error) => {

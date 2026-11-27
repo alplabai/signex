@@ -6,9 +6,9 @@ use std::path::{Path, PathBuf};
 use pcb_geom::{ClickMode, ItemRef, Selection};
 use signex_types::schematic::SelectedItem;
 
-use crate::app::core::command_log::RecordedTargets;
 use crate::app::state::WindowKind;
 use crate::app::{Signex, Tool};
+use crate::panels::command_log::RecordedTargets;
 use crate::pcb_canvas::PcbSelectionState;
 
 /// The main window's selection, taken while Replay runs.

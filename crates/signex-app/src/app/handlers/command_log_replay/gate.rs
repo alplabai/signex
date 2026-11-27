@@ -19,11 +19,11 @@ use super::safe_list::{ReplayProof, replay_proof};
 use super::selection::board_selection;
 use super::sheet_guard::{SheetTargetGuard, TargetGuard, copy_would_stack};
 use crate::app::Signex;
-use crate::app::core::command_log::RecordedTargets;
 use crate::app::handlers::clipboard_workflows::DEFAULT_PASTE_OFFSET_MM;
 use crate::app::handlers::pcb_placement::deletable_items;
 use crate::keymap::AppCommandId;
 use crate::panels::command_log::LogRow;
+use crate::panels::command_log::RecordedTargets;
 
 /// The board object a selected item stands for: a pad or a designator is
 /// its footprint. `None` for a room, which is no board item.
