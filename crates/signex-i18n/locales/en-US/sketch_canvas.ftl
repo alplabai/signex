@@ -47,8 +47,11 @@ sketch-canvas-menu-make-parameter-bound = This value is already the parameter { 
 sketch-canvas-menu-convert-reference = Convert to reference (driven)
 sketch-canvas-menu-suppress = Suppress
 sketch-canvas-menu-suppress-why = Not available yet: a sketch cannot store a suppressed constraint.
+sketch-canvas-menu-suppress-hint = not available yet
 sketch-canvas-menu-select-entities = Select constrained entities
 sketch-canvas-menu-show-conflicts = Show conflicts
+sketch-canvas-menu-show-conflicts-none = none
+sketch-canvas-menu-show-conflicts-none-why = This constraint is in no conflict.
 sketch-canvas-menu-delete = Delete
 
 ## Constraint names in the menu header.
