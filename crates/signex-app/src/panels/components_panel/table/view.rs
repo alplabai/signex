@@ -156,7 +156,7 @@ pub(crate) fn table_block<'a>(
                 .on_move(|p| msg(ComponentsTableMsg::ResizeMoved(p.x)))
                 .on_release(msg(ComponentsTableMsg::ResizeEnded));
         }
-        col = col.push(area);
+        col = col.push(area.boxed());
     }
     col.push(status_line(table, tokens, i18n))
         .height(Length::Fill)
@@ -228,12 +228,14 @@ fn empty_table<'a>(
     let mut col = column![text(why).size(ROW_TEXT_SIZE).color(muted)]
         .spacing(SP.s)
         .align_x(Alignment::Center);
-    let action = |label: signex_i18n::Localized, pressed: LibraryMessage| {
-        button(text(label).size(HINT_TEXT_SIZE).color(ti(tokens.text)))
-            .padding([3.0, 8.0])
-            .on_press(pressed)
-            .style(crate::styles::outline_button(tokens))
-    };
+    let action =
+        |label: signex_i18n::Localized, pressed: LibraryMessage| -> Element<'a, LibraryMessage> {
+            button(text(label).size(HINT_TEXT_SIZE).color(ti(tokens.text)))
+                .padding([3.0, 8.0])
+                .on_press(pressed)
+                .style(crate::styles::outline_button(tokens))
+                .boxed()
+        };
     if searched {
         col = col.push(action(
             t!(i18n, ids::PANELS_COMPONENTS_CLEAR_FILTER),

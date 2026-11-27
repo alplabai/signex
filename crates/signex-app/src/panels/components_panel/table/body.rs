@@ -173,7 +173,7 @@ pub(super) fn view<'a>(
             msg(ComponentsTableMsg::Scrolled {
                 x: offset.x,
                 y: offset.y,
-                viewport_h: scroll.viewport.bounds().height,
+                viewport_h: scroll.viewport.bounds.height,
             })
         })
         .width(Length::Fill)
@@ -275,7 +275,8 @@ fn part_line<'a>(
                 .padding([0.0, header::THUMB_PAD])
                 .width(Length::Fixed(header::thumb_cell_width()))
                 .height(lk.height)
-                .center_y(lk.height),
+                .center_y(lk.height)
+                .boxed(),
         );
     }
     for (i, (column, width)) in columns.iter().enumerate() {

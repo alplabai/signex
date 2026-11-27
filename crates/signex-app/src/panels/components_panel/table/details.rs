@@ -82,7 +82,8 @@ pub(crate) fn details_extras<'a>(
             button(text(label).size(HINT_TEXT_SIZE))
                 .padding([1.0, 6.0])
                 .on_press(msg(ComponentsTableMsg::ShowAllParametersToggled))
-                .style(crate::panels::form_look::ghost_button),
+                .style(crate::panels::form_look::ghost_button)
+                .boxed(),
         );
     }
     let details = &table.cache.details;
@@ -92,7 +93,8 @@ pub(crate) fn details_extras<'a>(
             col = col.push(
                 text(user_text(reference.clone()))
                     .size(ROW_TEXT_SIZE)
-                    .color(ink),
+                    .color(ink)
+                    .boxed(),
             );
         }
     }
@@ -132,7 +134,8 @@ pub(crate) fn details_extras<'a>(
                         .wrapping(iced::widget::text::Wrapping::None),
                 ]
                 .spacing(SP.s)
-                .align_y(Alignment::Center),
+                .align_y(Alignment::Center)
+                .boxed(),
             );
         }
     }

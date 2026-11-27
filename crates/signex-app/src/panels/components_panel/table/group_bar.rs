@@ -35,12 +35,18 @@ pub(super) fn view<'a>(
         chips = chips.push(
             text(t!(i18n, ids::PANELS_COMPONENTS_GROUP_HINT))
                 .size(HINT_TEXT_SIZE)
-                .color(muted),
+                .color(muted)
+                .boxed(),
         );
     }
     for (level, key) in group.iter().enumerate() {
         if level > 0 {
-            chips = chips.push(text(user_text("›")).size(HINT_TEXT_SIZE).color(muted));
+            chips = chips.push(
+                text(user_text("›"))
+                    .size(HINT_TEXT_SIZE)
+                    .color(muted)
+                    .boxed(),
+            );
         }
         let arrow = if key.descending { "↓" } else { "↑" };
         let flat = move |_: &Theme, _: button::Status| button::Style {
@@ -68,16 +74,19 @@ pub(super) fn view<'a>(
         ]
         .spacing(4)
         .align_y(Alignment::Center);
-        chips = chips.push(container(chip).padding([1.0, 6.0]).style(move |_: &Theme| {
-            container::Style {
-                background: Some(Background::Color(fill)),
-                border: Border {
-                    radius: 9.0.into(),
-                    ..Border::default()
-                },
-                ..container::Style::default()
-            }
-        }));
+        chips = chips.push(
+            container(chip)
+                .padding([1.0, 6.0])
+                .style(move |_: &Theme| container::Style {
+                    background: Some(Background::Color(fill)),
+                    border: Border {
+                        radius: 9.0.into(),
+                        ..Border::default()
+                    },
+                    ..container::Style::default()
+                })
+                .boxed(),
+        );
     }
     chips = chips.push(bar_button(
         t!(i18n, ids::PANELS_COMPONENTS_GROUP_ADD),

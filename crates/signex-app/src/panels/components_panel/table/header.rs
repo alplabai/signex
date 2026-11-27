@@ -82,7 +82,8 @@ pub(super) fn view<'a>(
         cells = cells.push(
             iced::widget::Space::new()
                 .width(thumb_cell_width())
-                .height(HEADER_HEIGHT),
+                .height(HEADER_HEIGHT)
+                .boxed(),
         );
     }
     for (column, width) in columns {
@@ -96,7 +97,12 @@ pub(super) fn view<'a>(
         .spacing(2)
         .align_y(Alignment::Center);
         if let Some(mark) = sort_mark(table, &column) {
-            label = label.push(text(user_text(mark)).size(HINT_TEXT_SIZE).color(muted));
+            label = label.push(
+                text(user_text(mark))
+                    .size(HINT_TEXT_SIZE)
+                    .color(muted)
+                    .boxed(),
+            );
         }
         let label = container(label)
             .padding([0.0, 6.0])

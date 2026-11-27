@@ -93,7 +93,8 @@ pub(crate) fn view<'a>(
             bottom: 0.0,
             left: look::EDGE,
         })
-        .width(Length::Fill),
+        .width(Length::Fill)
+        .boxed(),
     ]
     .spacing(0)
     .width(Length::Fill);
@@ -111,7 +112,7 @@ pub(crate) fn view<'a>(
     let block = table::table_block(state, thumb_look, tokens, i18n);
     if panel.table.list_only {
         return col
-            .push(container(block).height(Length::Fill))
+            .push(container(block).height(Length::Fill).boxed())
             .height(Length::Fill)
             .boxed();
     }
@@ -121,7 +122,7 @@ pub(crate) fn view<'a>(
         .as_ref()
         .and_then(|key| state.library_at(&key.library_path))
         .map(|lib| lib.display_name.as_str());
-    col.push(container(block).height(panel.list_height))
+    col.push(container(block).height(panel.list_height).boxed())
         .push(divider)
         .push(
             container(details::view(
@@ -134,7 +135,8 @@ pub(crate) fn view<'a>(
                 i18n,
             ))
             .height(Length::Fill)
-            .width(Length::Fill),
+            .width(Length::Fill)
+            .boxed(),
         )
         .height(Length::Fill)
         .boxed()

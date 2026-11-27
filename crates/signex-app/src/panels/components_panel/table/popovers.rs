@@ -77,7 +77,8 @@ fn title_line<'a>(
         button(text(t!(i18n, ids::PANELS_COMPONENTS_POPOVER_CLOSE)).size(HINT_TEXT_SIZE))
             .padding([1.0, 6.0])
             .on_press(msg(ComponentsTableMsg::PopoverDismissed))
-            .style(crate::panels::form_look::ghost_button),
+            .style(crate::panels::form_look::ghost_button)
+            .boxed(),
     )
     .boxed()
 }
@@ -227,7 +228,8 @@ fn columns_picker<'a>(
         col = col.push(
             text(t!(i18n, heading))
                 .size(HINT_TEXT_SIZE)
-                .color(resolve(tokens).ink3),
+                .color(resolve(tokens).ink3)
+                .boxed(),
         );
         for (column, visible) in shown {
             let covered = cache.coverage.get(column).copied().unwrap_or(0);
@@ -241,7 +243,8 @@ fn columns_picker<'a>(
         col = col.push(
             text(t!(i18n, ids::PANELS_COMPONENTS_COLUMNS_NO_MATCH))
                 .size(HINT_TEXT_SIZE)
-                .color(resolve(tokens).ink3),
+                .color(resolve(tokens).ink3)
+                .boxed(),
         );
     }
     let is_default = cache
@@ -255,12 +258,14 @@ fn columns_picker<'a>(
     col = col.push(
         text(tag)
             .size(HINT_TEXT_SIZE)
-            .color(resolve(tokens).accent_soft_ink),
+            .color(resolve(tokens).accent_soft_ink)
+            .boxed(),
     );
     col = col.push(
         text(user_text(default_summary(table, i18n)))
             .size(HINT_TEXT_SIZE)
-            .color(resolve(tokens).ink3),
+            .color(resolve(tokens).ink3)
+            .boxed(),
     );
     let mut reset =
         button(text(t!(i18n, ids::PANELS_COMPONENTS_RESET_DEFAULT)).size(HINT_TEXT_SIZE))
@@ -269,7 +274,7 @@ fn columns_picker<'a>(
     if !is_default {
         reset = reset.on_press(msg(ComponentsTableMsg::ResetPressed));
     }
-    col.push(reset).boxed()
+    col.push(reset.boxed()).boxed()
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -408,7 +413,8 @@ fn filter_popover<'a>(
         col = col.push(
             text(t!(i18n, ids::PANELS_COMPONENTS_FILTER_RANGE))
                 .size(HINT_TEXT_SIZE)
-                .color(resolve(tokens).ink3),
+                .color(resolve(tokens).ink3)
+                .boxed(),
         );
     }
     if let Some(f) = filters {
@@ -440,7 +446,8 @@ fn filter_popover<'a>(
                     })
                 })
                 .placeholder_label(t!(i18n, ids::LIBRARY_RANGE_FILTER_ADD))
-                .padding(SP.s),
+                .padding(SP.s)
+                .boxed(),
         );
     }
     let count = t!(i18n, ids::PANELS_COMPONENTS_FILTER_COUNT, "count" => table.cache.shown.len());
@@ -453,7 +460,8 @@ fn filter_popover<'a>(
             iced::widget::Space::new().width(Length::Fill),
             text(count).size(HINT_TEXT_SIZE).color(resolve(tokens).ink3),
         ]
-        .align_y(Alignment::Center),
+        .align_y(Alignment::Center)
+        .boxed(),
     )
     .boxed()
 }
@@ -527,7 +535,8 @@ fn range_row<'a>(
                         on: c.on,
                     })
                 })
-                .padding([3, 6]),
+                .padding([3, 6])
+                .boxed(),
         );
     }
     let covers = draft.on == RangeOn::Covers;
@@ -541,7 +550,8 @@ fn range_row<'a>(
             .on_select(move |op: RangeOp| {
                 range(RangeFilterMsg::OperatorPicked { key: k.clone(), op })
             })
-            .padding([3, 6]),
+            .padding([3, 6])
+            .boxed(),
         );
     }
     head = head.push(
@@ -550,7 +560,8 @@ fn range_row<'a>(
             .on_press(range(RangeFilterMsg::Cleared {
                 key: key.to_owned(),
             }))
-            .style(crate::panels::form_look::ghost_button),
+            .style(crate::panels::form_look::ghost_button)
+            .boxed(),
     );
     let mut bounds = row![bound(key, false, &draft.low, &draft.unit, tokens, i18n)]
         .spacing(SP.s)
@@ -560,7 +571,8 @@ fn range_row<'a>(
             .push(
                 text(t!(i18n, ids::LIBRARY_RANGE_FILTER_AND))
                     .size(HINT_TEXT_SIZE)
-                    .color(muted),
+                    .color(muted)
+                    .boxed(),
             )
             .push(bound(key, true, &draft.high, &draft.unit, tokens, i18n));
     }
@@ -571,7 +583,12 @@ fn range_row<'a>(
         } else {
             muted
         };
-        col = col.push(text(user_text(words)).size(HINT_TEXT_SIZE).color(color));
+        col = col.push(
+            text(user_text(words))
+                .size(HINT_TEXT_SIZE)
+                .color(color)
+                .boxed(),
+        );
     }
     col.boxed()
 }
