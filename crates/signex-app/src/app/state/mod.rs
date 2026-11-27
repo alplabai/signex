@@ -246,7 +246,7 @@ pub struct MoveSelectionState {
     pub sheet: Option<std::path::PathBuf>,
 }
 
-pub(crate) use crate::app::core::drawing_field::LiveDrawingEdit;
+pub(crate) use crate::panels::LiveDrawingEdit;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ModalId {

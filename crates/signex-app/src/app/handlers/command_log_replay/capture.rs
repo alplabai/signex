@@ -17,10 +17,10 @@ use super::rebase;
 use super::scope::{EditFamily, ReplayScope, replay_scope};
 use super::sheet_guard::SheetTargetGuard;
 use crate::app::Signex;
-use crate::app::core::command_log::{RECORDED_INPUT, RecordedTargets};
 use crate::keymap::AppCommandId;
 use crate::library::state::PickerMode;
 use crate::panels::command_log::{LogOutcome, LogSource};
+use crate::panels::command_log::{RECORDED_INPUT, RecordedTargets};
 
 /// Keystrokes of one field this close together are one row.
 const TYPING_RUN: Duration = Duration::from_secs(2);

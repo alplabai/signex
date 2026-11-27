@@ -3,6 +3,8 @@
 //! down stay for the keyboard. Esc or a release on no other row changes
 //! nothing.
 
+use std::path::PathBuf;
+
 use iced::Length;
 use signex_engine::ProjectSectionCommand;
 use signex_i18n::MessageId;
@@ -11,8 +13,21 @@ use super::general::tab_message;
 use super::table::{RowGrip, TS};
 use super::{ProjectTabMsg, ProjectTabState};
 use crate::app::Signex;
-pub use crate::app::core::row_drag::{RowDrag, RowKey};
 use crate::app::state::ProjectId;
+
+/// The row being dragged, by what the project stores for it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RowKey {
+    Sheet(String),
+    Library(PathBuf),
+}
+
+/// A row held by its grip, and the row the pointer is over.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RowDrag {
+    pub(crate) key: RowKey,
+    pub(crate) over: Option<usize>,
+}
 
 /// Width of the grip column (24 px).
 pub(super) const GRIP_W: f32 = TS.body * 2.0;

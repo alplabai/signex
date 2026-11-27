@@ -10,7 +10,7 @@ use signex_i18n::{ids, t};
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
 
-pub use crate::app::core::drawing_field::DrawingFieldId;
+pub use super::drawing_field::DrawingFieldId;
 
 impl DrawingFieldId {
     /// A Y coordinate on the sheet: shown and typed from the page origin.
