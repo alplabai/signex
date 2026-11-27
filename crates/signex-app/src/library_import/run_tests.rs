@@ -572,6 +572,7 @@ fn the_published_group_kills_a_converter_that_never_exits() {
                 limits,
                 &AtomicBool::new(false),
                 &group,
+                &super::run_state::JobStage::default(),
                 &mut |_| {},
             )
         });
@@ -606,6 +607,7 @@ fn the_published_group_is_cleared_once_the_converter_is_reaped() {
                 FAST,
                 &AtomicBool::new(false),
                 &group,
+                &super::run_state::JobStage::default(),
                 &mut |_| {},
             );
             (result, Instant::now())
