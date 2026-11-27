@@ -304,7 +304,7 @@ The rules follow Cockburn's Ports and Adapters (HaT Technical Report 2005.02) an
 - **H5 Dependencies point inward.** The core owns the port contracts. [3; 2, fig. 6.24]
 - **H6 The configurator wires them.** The host (desktop `main`, CLI `main`, a web or mobile shell, a server) creates the core and the adapters and connects them. [2, fig. 2.1]
 - **H7 Adapter state stays in the adapter, even as plain data.** Selection, tool, camera, typed input, open popovers and layout belong to the GUI adapter. Framework-free presentation logic lives outside the core. [4; 5]
-- **H8 MVU is the GUI adapter's internal design.** The iced Model is adapter state. `update` makes port calls or changes adapter state; `view` reads the core through queries. [4; 6]
+- **H8 MVU is the GUI adapter's internal design.** The iced Model is adapter state. `update` makes port calls or changes adapter state; `view` reads the core through queries. [4; 7]
 - **H9 The core is testable in isolation.** A test harness drives it, and test doubles stand in on the driven side. [1; 2, fig. 4.4]
 
 ### So any shell can host the core
@@ -337,9 +337,10 @@ Under this test, the view types in `app/core/` today move out: block diagram vie
 3. Robert C. Martin, "The Clean Architecture", 2012 (the Dependency Rule). <https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html>
 4. Martin Fowler, "Presentation Model", 2004. <https://martinfowler.com/eaaDev/PresentationModel.html>
 5. Martin Fowler, "Separated Presentation", 2006. <https://martinfowler.com/eaaDev/SeparatedPresentation.html>
-6. Microsoft, "Model-View-ViewModel", .NET MAUI architecture guide. <https://learn.microsoft.com/en-us/dotnet/architecture/maui/mvvm>
+6. Martin Fowler, "Domain Driven Design" (bliki), 2020. <https://martinfowler.com/bliki/DomainDrivenDesign.html>
+7. Thomas Bandt, "Model-View-Update (MVU) – How Does It Work?", 2020. <https://thomasbandt.com/model-view-update>
 
-Quotes and the reasoning behind each rule: [the research note](research/hexagonal-ddd.md), §1 and §5.1.
+The domain side follows DDD [6], as "How DDD maps onto it" above lays out; the rules here add the hexagonal boundary around it. Quotes and the reasoning behind each rule: [the research note](research/hexagonal-ddd.md), §1 and §5.1.
 
 ## Enforcement
 
