@@ -210,9 +210,27 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_pattern_instance
         if state.sketch_overlay.selected_pattern != Some(array.id)
             && let Some(dims) = linear_dimensions(array, sketch, &found, &state.canvas_text)
         {
-            draw_linear_dimensions(frame, cstate, &dims, &ink);
+            draw_linear_dimensions(frame, &lay_out_linear(&dims, cstate), &ink);
         }
     }
+}
+
+/// The screen sides a linear pattern's spacing dimensions stand off its
+/// instances on, one unit normal per dimension; empty for any other
+/// pattern. The pattern glyph keeps to the other side (`glyph_layout`).
+pub(in crate::library::editor::footprint::canvas) fn spacing_sides(
+    array: &Array,
+    sketch: &SketchData,
+    state: &FootprintEditorState,
+    cstate: &FootprintCanvasState,
+) -> Vec<Vector> {
+    let Some(solve) = state.last_solve.as_ref() else {
+        return Vec::new();
+    };
+    source_slots(array, sketch, solve)
+        .and_then(|found| linear_dimensions(array, sketch, &found, &state.canvas_text))
+        .map(|dims| lay_out_linear(&dims, cstate).sides)
+        .unwrap_or_default()
 }
 
 /// A kept instance as a dashed ring; a suppressed one fainter, finer
@@ -281,18 +299,25 @@ fn value_glyph(target: GlyphTarget, text: &str, at: Point, span: Option<(Point, 
     }
 }
 
+/// A linear pattern's dimensions on screen: the extension lines, the value
+/// pills, and the side each spacing dimension stands off on.
+struct LinearLayout {
+    extensions: Vec<(Point, Point)>,
+    pills: Vec<Glyph>,
+    sides: Vec<Vector>,
+}
+
 /// Each spacing dimension beside its instances, its pill on the line, and
 /// the count pill past the last instance.
-fn draw_linear_dimensions(
-    frame: &mut canvas::Frame,
-    cstate: &FootprintCanvasState,
-    dims: &LinearDimensions,
-    ink: &LabelInk,
-) {
+fn lay_out_linear(dims: &LinearDimensions, cstate: &FootprintCanvasState) -> LinearLayout {
     let clearance = dims.clearance_mm as f32 * cstate.scale;
     let off = clearance + GLYPH_TEXT * DIMENSION_OFFSET_EM;
     let reach = off + GLYPH_TEXT * EXTENSION_OVERSHOOT_EM;
-    let extension = dimension_stroke(ink, false, false);
+    let mut layout = LinearLayout {
+        extensions: Vec::new(),
+        pills: Vec::new(),
+        sides: Vec::new(),
+    };
     for dim in &dims.spacing {
         let a = cstate.world_to_screen(dim.from);
         let b = cstate.world_to_screen(dim.to);
@@ -301,28 +326,43 @@ fn draw_linear_dimensions(
         };
         let shift = |p: Point, by: f32| p + normal * by;
         for p in [a, b] {
-            frame.stroke(&Path::line(shift(p, clearance), shift(p, reach)), extension);
+            layout
+                .extensions
+                .push((shift(p, clearance), shift(p, reach)));
         }
         let span = (shift(a, off), shift(b, off));
         let mid = Point::new((span.0.x + span.1.x) / 2.0, (span.0.y + span.1.y) / 2.0);
         let target = GlyphTarget::PatternValue(dims.array, dim.field);
-        let pill = value_glyph(target, &dim.text, mid, Some(span));
-        draw_value(frame, &pill, ink, false);
+        layout
+            .pills
+            .push(value_glyph(target, &dim.text, mid, Some(span)));
+        layout.sides.push(normal);
     }
     let step = (
         cstate.world_to_screen(dims.step.0),
         cstate.world_to_screen(dims.step.1),
     );
-    let Some((dir, _)) = axes(step.0, step.1) else {
-        return;
-    };
-    let size = label_rect(Point::ORIGIN, &dims.count).size();
-    let half = (dir.x.abs() * size.width + dir.y.abs() * size.height) / 2.0;
-    let gap = clearance + GLYPH_TEXT * COUNT_GAP_EM + half;
-    let at = cstate.world_to_screen(dims.last) + dir * gap;
-    let target = GlyphTarget::PatternValue(dims.array, PatternField::Count);
-    let pill = value_glyph(target, &dims.count, at, None);
-    draw_value(frame, &pill, ink, false);
+    if let Some((dir, _)) = axes(step.0, step.1) {
+        let size = label_rect(Point::ORIGIN, &dims.count).size();
+        let half = (dir.x.abs() * size.width + dir.y.abs() * size.height) / 2.0;
+        let gap = clearance + GLYPH_TEXT * COUNT_GAP_EM + half;
+        let at = cstate.world_to_screen(dims.last) + dir * gap;
+        let target = GlyphTarget::PatternValue(dims.array, PatternField::Count);
+        layout
+            .pills
+            .push(value_glyph(target, &dims.count, at, None));
+    }
+    layout
+}
+
+fn draw_linear_dimensions(frame: &mut canvas::Frame, layout: &LinearLayout, ink: &LabelInk) {
+    let extension = dimension_stroke(ink, false, false);
+    for &(from, to) in &layout.extensions {
+        frame.stroke(&Path::line(from, to), extension);
+    }
+    for pill in &layout.pills {
+        draw_value(frame, pill, ink, false);
+    }
 }
 
 #[cfg(test)]
@@ -537,5 +577,113 @@ mod tests {
     fn a_grid_pattern_draws_no_linear_dimensions() {
         let (sketch, array) = circle_grid();
         assert_eq!(dimensions(&array, &sketch), None);
+    }
+
+    /// #3009, mockup row 126: at the default zoom a linear pattern's glyph
+    /// ("L×4") clears its spacing and count pills, and selecting the
+    /// pattern does not move it.
+    #[test]
+    fn a_linear_pattern_glyph_clears_its_dimension_pills() {
+        use crate::library::editor::footprint::canvas::glyph_layout::sketch_glyphs;
+        let (mut sketch, hole) = hole_sketch();
+        let array = linear(&mut sketch, hole, ["4", "1.27mm", "0mm"]);
+        let mut state = FootprintEditorState::empty();
+        state.canvas_text = words();
+        state.last_solve = Some(solved(&sketch));
+        let cstate = FootprintCanvasState::with_view(30.0, Point::new(200.0, 200.0));
+        let glyph_of = |state: &FootprintEditorState| {
+            sketch_glyphs(&sketch, state, &cstate)
+                .into_iter()
+                .find(|g| g.target == GlyphTarget::Pattern(array.id))
+                .expect("the pattern glyph")
+        };
+        let glyph = glyph_of(&state);
+        let dims = dimensions(&array, &sketch).expect("dimensions");
+        let layout = lay_out_linear(&dims, &cstate);
+        assert_eq!(layout.pills.len(), 2, "spacing X and count: {dims:?}");
+        assert_eq!(layout.sides, vec![Vector::new(0.0, 1.0)], "spacing below");
+        for pill in &layout.pills {
+            assert!(
+                glyph.rect.intersection(&pill.rect).is_none(),
+                "{glyph:?} covers {pill:?}"
+            );
+        }
+        assert!(
+            glyph.anchor.y < 200.0 + 2.0 * 30.0,
+            "above the row: {glyph:?}"
+        );
+
+        state.sketch_overlay.selected_pattern = Some(array.id);
+        assert_eq!(glyph_of(&state).anchor, glyph.anchor, "the glyph stays put");
+    }
+
+    /// #3009 on the app path: selecting the pattern through
+    /// `Signex::update` keeps its glyph where it was at rest.
+    #[test]
+    fn selecting_a_linear_pattern_in_the_app_keeps_its_glyph_in_place() {
+        use std::path::PathBuf;
+
+        use crate::app::{FootprintDocument, Message, Signex, TabInfo, TabKind};
+        use crate::library::editor::footprint::EditorMode;
+        use crate::library::editor::footprint::canvas::glyph_layout::sketch_glyphs;
+        use crate::library::editor::footprint::sketch_mode::SketchCanvasMsg;
+        use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
+        use signex_library::{Footprint, FootprintFile};
+
+        let (mut sketch, hole) = hole_sketch();
+        let array = linear(&mut sketch, hole, ["4", "1.27mm", "0mm"]);
+        let solve = solved(&sketch);
+        let mut fp = Footprint::empty("pattern");
+        fp.sketch = Some(sketch);
+        let path = PathBuf::from("pattern-glyph.snxfpt");
+        let mut editor = FootprintDocument::new(path.clone(), FootprintFile::from_footprint(fp));
+        editor.state.mode = EditorMode::Sketch;
+        editor.state.last_solve = Some(solve);
+        let (mut app, _task) = Signex::new();
+        app.document_state
+            .footprint_editors
+            .insert(path.clone(), editor);
+        app.document_state.tabs.push(TabInfo {
+            title: "pattern".into(),
+            path: path.clone(),
+            project_id: None,
+            kind: TabKind::FootprintEditor(path.clone()),
+        });
+        app.document_state.active_tab = 0;
+        let cstate = FootprintCanvasState::with_view(30.0, Point::new(200.0, 200.0));
+        let glyph = |app: &Signex| {
+            let editor = &app.document_state.footprint_editors[&path];
+            let sketch = editor.primitive().sketch.as_ref().expect("the sketch");
+            sketch_glyphs(sketch, &editor.state, &cstate)
+                .into_iter()
+                .find(|g| g.target == GlyphTarget::Pattern(array.id))
+                .expect("the pattern glyph")
+        };
+        let at_rest = glyph(&app);
+        drop(
+            app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
+                path: path.clone(),
+                msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SketchCanvas(
+                    SketchCanvasMsg::PatternSelected(Some(array.id)),
+                )),
+            })),
+        );
+        let selected = glyph(&app);
+        assert!(
+            matches!(selected.face, GlyphFace::Pattern { selected: true, .. }),
+            "{selected:?}"
+        );
+        assert_eq!(selected.anchor, at_rest.anchor, "the glyph stays put");
+    }
+
+    /// With no solve there are no spacing sides, so the glyph keeps its
+    /// place left of and below the source.
+    #[test]
+    fn without_a_solve_a_pattern_has_no_spacing_sides() {
+        let (mut sketch, hole) = hole_sketch();
+        let array = linear(&mut sketch, hole, ["4", "1.27mm", "0mm"]);
+        let state = FootprintEditorState::empty();
+        let cstate = FootprintCanvasState::with_view(30.0, Point::new(200.0, 200.0));
+        assert!(spacing_sides(&array, &sketch, &state, &cstate).is_empty());
     }
 }

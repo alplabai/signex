@@ -63,6 +63,8 @@ pub(super) use tool_ghosts::draw_sketch_tool_ghosts;
 // through the `draw::` re-export; keep them at their original
 // canvas-wide reach.
 pub(in crate::library::editor::footprint::canvas) use fills::{ClosedLoop, find_closed_loops};
+// The glyph layout keeps a pattern glyph off its spacing dimensions.
+pub(in crate::library::editor::footprint::canvas) use pattern_instances::spacing_sides;
 
 // The snap badge's words beside the glyph (Graphite mockup row 188).
 pub(super) use snap::draw_sketch_snap_badge;

@@ -7,8 +7,8 @@
 use iced::{Point, Rectangle, Size};
 use signex_i18n::{I18n, ids, t};
 use signex_widgets::property_illustration::{
-    Anchor, Callout, Illustration, Ink, Paint, Part, Primitive, Style, TextLabel, TextRole, Tint,
-    Weight,
+    Anchor, Callout, Illustration, Ink, Leader, Paint, Part, Primitive, Style, TextLabel, TextRole,
+    Tint, Weight,
 };
 
 use super::fields;
@@ -23,6 +23,10 @@ const CELL: f32 = 12.0;
 const ORIGIN: Point = Point::new(108.0, 84.0);
 /// The sample cursor, in fine cells right of and above the origin.
 const CURSOR_CELLS: (f32, f32) = (2.4, -2.6);
+const CURSOR: Point = Point::new(
+    ORIGIN.x + CURSOR_CELLS.0 * CELL,
+    ORIGIN.y + CURSOR_CELLS.1 * CELL,
+);
 /// Radius of a grid dot, in view units.
 const DOT_RADIUS: f32 = 0.7;
 const COARSE_DOT_RADIUS: f32 = 1.1;
@@ -36,6 +40,10 @@ const MAX_AXIS_HALF: f32 = 18.0;
 const STEP_Y: f32 = VIEW_H - 8.0;
 const AXIS_CALLOUT_X: f32 = VIEW_W - 12.0;
 const LABEL_GAP: f32 = 4.0;
+/// Where the Snap Distance leader ends and its label starts: right of and
+/// above the largest circle drawn, so the label never covers the circle
+/// or the cursor (mockup row 124).
+const SNAP_LABEL_AT: Point = Point::new(CURSOR.x + MAX_SNAP_RADIUS + LABEL_GAP, 12.0);
 /// The coarse grid is drawn only for multipliers in this range.
 const COARSE_RANGE: std::ops::RangeInclusive<u32> = 2..=12;
 
@@ -196,13 +204,12 @@ fn axis_parts(half: f32, i18n: &I18n) -> Vec<Part> {
     ]
 }
 
-/// The sample cursor, its snap distance circle and callout, and the grid
-/// point it snaps to; the circle and the target only while snapping.
+/// The sample cursor, its snap distance circle and leader, and the grid
+/// point it snaps to; the circle and the target only while snapping. The
+/// leader runs from the circle up and right to its label, clear of the
+/// drawing, as on mockup row 124.
 fn snap_parts(radius: f32, snaps_to_grid: bool, i18n: &I18n) -> Vec<Part> {
-    let cursor = Point::new(
-        ORIGIN.x + CURSOR_CELLS.0 * CELL,
-        ORIGIN.y + CURSOR_CELLS.1 * CELL,
-    );
+    let cursor = CURSOR;
     let mut parts = cross(cursor, Ink::Accent);
     parts.push(
         Part::new(
@@ -215,13 +222,14 @@ fn snap_parts(radius: f32, snaps_to_grid: bool, i18n: &I18n) -> Vec<Part> {
         .linked(fields::SNAP_DISTANCE)
         .requires(fields::SNAPPING_ON),
     );
-    let edge = Point::new(cursor.x + radius, cursor.y);
+    let diagonal = radius * std::f32::consts::FRAC_1_SQRT_2;
     parts.push(
-        Part::callout(
-            Callout::new(cursor, edge)
-                .label(t!(i18n, ids::EDITORS_FP_PROPS_SNAP_DISTANCE))
-                .label_at(Point::new(edge.x + LABEL_GAP, cursor.y), Anchor::Start),
-        )
+        Part::leader(Leader {
+            at: Point::new(cursor.x + diagonal, cursor.y - diagonal),
+            label_at: SNAP_LABEL_AT,
+            label: t!(i18n, ids::EDITORS_FP_PROPS_SNAP_DISTANCE).into(),
+            anchor: Anchor::Start,
+        })
         .linked(fields::SNAP_DISTANCE)
         .requires(fields::SNAPPING_ON),
     );
