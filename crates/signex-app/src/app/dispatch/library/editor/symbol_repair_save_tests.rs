@@ -53,7 +53,7 @@ fn a_repaired_symbol_is_written_by_no_path_but_the_persons_save() {
 
     // Canvas and library-panel edits are refused.
     let editor = app.document_state.symbol_editors.get_mut(&path).unwrap();
-    crate::library::editor::symbol::updates::apply_symbol_primitive_edit(
+    crate::library::editor::symbol::apply_symbol_primitive_edit(
         editor,
         SymbolEditorMsg::AddPin { x: 0.0, y: 0.0 },
     );
@@ -104,7 +104,7 @@ fn a_repaired_symbol_is_written_by_no_path_but_the_persons_save() {
     assert_eq!(saved.symbols[0].pins[1].name, "IN");
     let editor = app.document_state.symbol_editors.get_mut(&path).unwrap();
     assert!(!editor.draft.is_read_only(), "editable once saved");
-    crate::library::editor::symbol::updates::apply_symbol_primitive_edit(
+    crate::library::editor::symbol::apply_symbol_primitive_edit(
         editor,
         SymbolEditorMsg::AddPin { x: 0.0, y: 0.0 },
     );

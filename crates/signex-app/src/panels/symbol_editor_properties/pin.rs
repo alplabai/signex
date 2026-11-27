@@ -184,8 +184,7 @@ fn pin_rows<'a>(
             "function" => 4,
             _ => 1,
         };
-        let line =
-            crate::library::editor::symbol::updates::pin_text_refused(refusal, &pin.number, i18n);
+        let line = crate::library::editor::symbol::pin_text_refused(refusal, &pin.number, i18n);
         rows.insert(under, form.caption(line));
     }
     rows

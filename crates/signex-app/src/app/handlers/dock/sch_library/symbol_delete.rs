@@ -22,7 +22,7 @@ impl Signex {
         };
         // A file that opened repaired takes no edit until it is saved (#3129).
         if editor.draft.is_read_only() {
-            crate::library::editor::symbol::updates::refuse_read_only(editor);
+            crate::library::editor::symbol::refuse_read_only(editor);
             self.refresh_panel_ctx();
             return Task::none();
         }

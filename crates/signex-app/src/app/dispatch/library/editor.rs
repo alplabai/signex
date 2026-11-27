@@ -267,7 +267,7 @@ impl Signex {
         // Symbol-only mutations.
         let replay_probe = self.probe_symbol_edit(&path, &msg);
         if let Some(editor) = self.document_state.symbol_editors.get_mut(&path) {
-            crate::library::editor::symbol::updates::apply_symbol_primitive_edit(editor, msg);
+            crate::library::editor::symbol::apply_symbol_primitive_edit(editor, msg);
             // v0.20 — primitive editor edits (designator/size/etc, and
             // critically `placement_paused`) need the panel context
             // rebuilt so the right-dock view reads the new value next
