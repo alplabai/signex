@@ -10,6 +10,7 @@
 //! active (see `library::state::panel_kind`). Open Library… is the folder
 //! button in the dock title bar.
 
+mod chip_fit;
 mod empty;
 mod footprint_tile;
 mod footprints;

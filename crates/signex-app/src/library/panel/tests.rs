@@ -576,3 +576,57 @@ fn thumbnail_parts_rows_ask_for_their_symbols() {
         "a closed library lists no rows"
     );
 }
+
+/// Mockup row 119 (#3007): at the default left dock width the kind chips
+/// stay on one line whichever is on, the counts inside the panel; at the
+/// mockup's 300 px they keep their full padding, so they sit as wide apart
+/// as drawn.
+#[test]
+fn the_kind_chips_stay_on_one_line_at_the_default_dock_width() {
+    let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::GraphiteLight);
+    let i18n = signex_i18n::I18n::en_us_ref();
+    let counts = KindCounts {
+        symbols: 3,
+        footprints: 12,
+        parts: 305,
+    };
+    let lay_out = |kind, width: f32| {
+        lay_out_texts(
+            frame::kind_chips(kind, counts, true, &tokens, i18n),
+            iced::Size::new(width, 200.0),
+        )
+    };
+    let dock = crate::dock::DEFAULT_LEFT_DOCK_WIDTH;
+    for kind in [
+        LibraryPanelKind::Symbols,
+        LibraryPanelKind::Footprints,
+        LibraryPanelKind::Parts,
+    ] {
+        let texts = lay_out(kind, dock);
+        let at = |label: &str| crate::layout_probe::find(&texts, label).bounds;
+        let line = at("Symbols").center_y();
+        for label in ["3", "Footprints", "12", "Parts", "305"] {
+            assert!(
+                (at(label).center_y() - line).abs() < 2.0,
+                "{kind:?}: {label} left the line: {texts:#?}"
+            );
+        }
+        let count = at("305");
+        assert!(
+            count.x + count.width <= dock - frame::SP.m + 0.5,
+            "{kind:?}: the Parts count ends inside the padding: {count:?}"
+        );
+    }
+    // Wider than they need: the gap from Symbols to Footprints is the full
+    // padding on both sides plus the chip spacing, as in the mockup.
+    let wide = lay_out(LibraryPanelKind::Footprints, 300.0);
+    let tight = lay_out(LibraryPanelKind::Footprints, dock);
+    let gap = |texts: &[crate::layout_probe::LaidOutText]| {
+        crate::layout_probe::find(texts, "Footprints").bounds.x
+            - crate::layout_probe::find(texts, "Symbols").bounds.x
+    };
+    assert!(
+        gap(&wide) > gap(&tight),
+        "the padding gives way only when needed"
+    );
+}
