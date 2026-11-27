@@ -194,6 +194,8 @@ pub(super) struct SectionsSnapshot {
     channel_naming: ChannelNaming,
     /// The harness definitions (#1280); only the definitions view writes them.
     harness_definitions: Vec<signex_types::schematic::HarnessDefinition>,
+    /// The design checklist (#1291) as stored; only its tab writes it.
+    design_checklist: Option<serde_json::Value>,
 }
 
 impl SectionsSnapshot {
@@ -208,6 +210,7 @@ impl SectionsSnapshot {
             requirements: data.requirements.clone(),
             channel_naming: data.schematic_design.channel_naming.clone(),
             harness_definitions: data.schematic_design.harness_definitions.clone(),
+            design_checklist: data.design_checklist_value().cloned(),
         }
     }
 
@@ -221,5 +224,6 @@ impl SectionsSnapshot {
         data.requirements = self.requirements;
         data.schematic_design.channel_naming = self.channel_naming;
         data.schematic_design.harness_definitions = self.harness_definitions;
+        data.restore_design_checklist_value(self.design_checklist);
     }
 }

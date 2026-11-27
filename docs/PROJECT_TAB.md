@@ -8,7 +8,8 @@ history, which the ERC dialog and the Rules tab share.
 
 ## Page tabs (#2523)
 
-The Project, Rules, Layer Stack and Variant Manager tabs are page tabs:
+The Project, Rules, Layer Stack, Variant Manager and Design Checklist
+([DESIGN_CHECKLIST.md](DESIGN_CHECKLIST.md)) tabs are page tabs:
 document tabs that show one of a project's pages rather than a drawing. The
 later page kinds (Length Matching, Polygon Manager, BOM Studio, Export Job,
 Design Notebook) join them. Two rules hold for every page tab, in

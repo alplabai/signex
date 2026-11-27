@@ -493,6 +493,9 @@ pub(super) fn project(ctx: &MenuContext) -> Vec<MenuEntry> {
             MenuMessage::OpenProjectOptions,
             ctx.commands.has_open_project,
         ),
+        // #1291 (mockup row 206): the project's checklist as a document tab;
+        // greyed with no project open.
+        cmd_item_gated(ctx, cmd("open_design_checklist", "")),
         SEP,
         item_if(
             ctx,

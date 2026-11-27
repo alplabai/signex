@@ -134,6 +134,10 @@ impl Signex {
                 .kind
                 .as_variant_manager()
                 .map(|id| self.view_variant_manager_tab(id)),
+            Some(tab) if tab.kind.as_design_checklist().is_some() => tab
+                .kind
+                .as_design_checklist()
+                .map(|id| self.view_design_checklist_tab(id)),
             Some(tab) if tab.kind.is_layer_stack() => Some(self.view_layer_stack_tab()),
             Some(tab) if tab.kind.is_polygon_manager() => Some(self.view_polygon_manager_tab()),
             Some(tab) if tab.kind.is_pin_table() => Some(self.view_pin_table_tab(&tab.path)),

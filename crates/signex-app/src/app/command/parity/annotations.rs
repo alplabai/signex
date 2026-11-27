@@ -142,6 +142,8 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "save_layer_set",
             "delete_layer_set",
             "set_layer_tab_names",
+            "project_checklist_templates",
+            "project_save_checklist_template",
         ],
         Operand,
         &[Settings],
@@ -225,6 +227,15 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "project_set_version_control",
             "project_set_requirement",
             "project_enable_requirement",
+            "project_start_checklist",
+            "project_add_checklist_item",
+            "project_set_checklist_item",
+            "project_set_checklist_state",
+            "project_remove_checklist_item",
+            "project_reset_checklist",
+            "project_import_checklist",
+            "project_export_checklist_csv",
+            "project_open_checklist_link",
             "bring_drawings_forward",
             "bring_drawings_to_front",
             "send_drawings_backward",
@@ -267,8 +278,13 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
         Operand,
         &[InProgressEdit],
     ),
-    // A run already going in the Project tab skips this one.
-    (&["project_run_requirements"], Operand, &[Window]),
+    // A run already going in the Project tab (or the Design Checklist tab)
+    // skips this one.
+    (
+        &["project_run_requirements", "project_run_checklist"],
+        Operand,
+        &[Window],
+    ),
     // The board update targets the window acting, else the active document.
     (
         &["update_pcb_from_schematic"],
@@ -437,6 +453,13 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "query_pins",
             "read_document",
         ],
+        Query,
+        &[],
+    ),
+    // The checklist's last run is check results, core-bound session state
+    // (scripts/uifree-state.txt), so it is no implicit input.
+    (
+        &["project_checklist", "project_checklist_link_choices"],
         Query,
         &[],
     ),

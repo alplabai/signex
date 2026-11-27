@@ -4,6 +4,7 @@
 
 pub(crate) mod branch_switch;
 pub(crate) mod case_fold;
+pub(crate) mod checklist_tab;
 pub(crate) mod command_log;
 pub(crate) mod compiled_design;
 pub(crate) mod component_class;

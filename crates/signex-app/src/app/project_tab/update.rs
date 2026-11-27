@@ -19,6 +19,12 @@ impl Signex {
             ProjectTabMsg::Requirements { project_id, msg } => {
                 return self.dispatch_requirements(project_id, msg);
             }
+            ProjectTabMsg::Checklist { project_id, msg } => {
+                return self.dispatch_checklist(project_id, msg);
+            }
+            ProjectTabMsg::ChecklistOpenRequested { project } => {
+                return self.open_design_checklist(project);
+            }
             ProjectTabMsg::AddSchematicRequested { project_id } => {
                 return self.add_schematic_from_tab(project_id);
             }
@@ -239,6 +245,8 @@ impl Signex {
             // Routed by `dispatch_project_tab_message`, which returns their task.
             ProjectTabMsg::SetupEdited { .. }
             | ProjectTabMsg::Requirements { .. }
+            | ProjectTabMsg::Checklist { .. }
+            | ProjectTabMsg::ChecklistOpenRequested { .. }
             | ProjectTabMsg::PreviewActed { .. }
             | ProjectTabMsg::VariantPartsReadRequested { .. }
             | ProjectTabMsg::VariantManager { .. } => {}
@@ -496,6 +504,7 @@ impl Signex {
         // Requirement drafts are by id: only a stepped entry's go (#2547).
         tab.requirements
             .follow_step(&requirements_before, &project.data.requirements);
+        tab.checklist.clear_drafts();
         if moved {
             // Dirty unless the step landed back on the saved state.
             document.sync_project_history_dirty(project_id, true);

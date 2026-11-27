@@ -54,6 +54,7 @@ pub(crate) const EN_US_SOURCES: [&str; 60] = [
     include_str!("../locales/en-US/board_panel.ftl"),
     include_str!("../locales/en-US/panel_body.ftl"),
     include_str!("../locales/en-US/requirements.ftl"),
+    include_str!("../locales/en-US/checklist.ftl"),
     include_str!("../locales/en-US/command_needs.ftl"),
     include_str!("../locales/en-US/gerber_viewer.ftl"),
     include_str!("../locales/en-US/passive_calculator.ftl"),

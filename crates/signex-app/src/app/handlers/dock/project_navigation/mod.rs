@@ -369,6 +369,11 @@ impl Signex {
                     return self.open_variant_manager(project_idx);
                 }
             }
+            ProjectTreeAction::OpenDesignChecklist(_) => {
+                if let Some(&project_idx) = tree_path.first() {
+                    return self.open_design_checklist_at(project_idx);
+                }
+            }
             ProjectTreeAction::AddExistingToProject(_) => {
                 return self.add_existing_to_project(tree_path);
             }

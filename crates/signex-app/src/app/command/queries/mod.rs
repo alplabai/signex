@@ -8,9 +8,10 @@
 //! rule profile library, read off the update loop first), and the board
 //! queries `measure_board`, `query_board_nets` and `find_similar_items`
 //! (#2403), `board_panel` (#2410, `app::board_panel`), and the Project tab's
-//! `project_settings` (#1689-#1693, `app::project_tab`), and
+//! `project_settings` (#1689-#1693, `app::project_tab`),
 //! `query_cross_references` (#1273), answered once the project's net index
-//! is current. Each
+//! is current, and `project_checklist` (#1291, with the last run of the
+//! checklist's checks). Each
 //! answers with data through [`CommandOutcome::Answered`], never a bare
 //! `Ran`, and reads only the documents (engines, boards, editors, projects,
 //! the library): no active tab, window, selection or panel is looked at, and
@@ -68,6 +69,8 @@ const QUERY_IDS: &[&str] = &[
     "rules_preset_diff",
     "board_panel",
     "project_settings",
+    "project_checklist",
+    "project_checklist_link_choices",
 ];
 
 /// The queries that run a check (`check_run`): each says nothing in
@@ -152,6 +155,19 @@ impl Signex {
             // The Project tab's sections (#1689-#1693).
             "project_settings" => {
                 let outcome = match self.project_settings(args) {
+                    Ok(value) => CommandOutcome::Answered(value),
+                    Err(reason) => CommandOutcome::disabled(reason),
+                };
+                return Some((outcome, Task::none()));
+            }
+            // The Design Checklist tab (#1291) and its link picker.
+            "project_checklist" | "project_checklist_link_choices" => {
+                let answer = if id == "project_checklist" {
+                    self.project_checklist(args)
+                } else {
+                    self.project_checklist_link_choices(args)
+                };
+                let outcome = match answer {
                     Ok(value) => CommandOutcome::Answered(value),
                     Err(reason) => CommandOutcome::disabled(reason),
                 };

@@ -49,7 +49,23 @@ impl Signex {
         project: &LoadedProject,
     ) -> impl FnOnce() -> (CheckReport, Option<(f64, f64)>) + Send + 'static {
         let data = &project.data;
-        let needs = Needs::of(&data.requirements);
+        let requirements = data.requirements.clone();
+        self.requirements_job_over(project, requirements, data.has_unreadable_requirements())
+    }
+
+    /// The check of `requirements` over `project`, as
+    /// `requirements_measured_check_job` runs the project's own list; the
+    /// design checklist (#1291) runs the requirements its items link to and
+    /// its own ERC and DRC checks this way. `unreadable_list` says the
+    /// project's stored list is not a list.
+    pub(crate) fn requirements_job_over(
+        &self,
+        project: &LoadedProject,
+        requirements: Vec<signex_types::project::RequirementEntry>,
+        unreadable_list: bool,
+    ) -> impl FnOnce() -> (CheckReport, Option<(f64, f64)>) + Send + 'static {
+        let data = &project.data;
+        let needs = Needs::of(&requirements);
         let confined = self.headless_answers().is_some() || self.agent.serving;
         let confine = confined.then(|| project.dir().to_path_buf());
         let board_path = board_path(project);
@@ -66,8 +82,8 @@ impl Signex {
         let boms = (needs.parts || needs.bom).then(|| self.requirements_bom_inputs(project));
         let base = Facts {
             project: project.path.display().to_string(),
-            requirements: data.requirements.clone(),
-            unreadable_list: data.has_unreadable_requirements(),
+            requirements,
+            unreadable_list,
             erc: None,
             drc: None,
             board: Board::NotListed,

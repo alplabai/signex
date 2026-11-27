@@ -490,6 +490,9 @@ pub enum ProjectTreeAction {
     /// Project root: Variant Manager opens the Project tab on its Variants
     /// section (mockup row 20).
     OpenVariantManager(signex_widgets::tree_view::TreeKey),
+    /// Project root: Design Checklist opens (or focuses) the project's
+    /// Design Checklist tab (mockup row 206).
+    OpenDesignChecklist(signex_widgets::tree_view::TreeKey),
     /// Project root: open a file dialog and add the picked file
     /// to the project. Files outside the project directory are copied
     /// in; files already inside just trigger a tree refresh.
@@ -557,6 +560,7 @@ impl ProjectTreeAction {
             | OpenProjectRenameDialog(k)
             | OpenProjectOptions(k)
             | OpenVariantManager(k)
+            | OpenDesignChecklist(k)
             | AddExistingToProject(k)
             | AddNewSchematic(k)
             | AddNewPcb(k)

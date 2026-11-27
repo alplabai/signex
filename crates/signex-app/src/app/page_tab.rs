@@ -27,6 +27,7 @@ pub(crate) fn page_name(kind: &TabKind) -> Option<MessageId> {
         TabKind::LayerStack => Some(ids::PCB_STACK_TITLE),
         TabKind::PinTable => Some(ids::EDITORS_PIN_TABLE_PAGE),
         TabKind::VariantManager(_) => Some(ids::VARIANT_MANAGER_TAB_TITLE),
+        TabKind::DesignChecklist(_) => Some(ids::CHECKLIST_TAB_TITLE),
         TabKind::Schematic
         | TabKind::Pcb
         | TabKind::ComponentEditor(_)
@@ -46,6 +47,7 @@ pub(crate) fn page_project(kind: &TabKind) -> Option<ProjectId> {
     kind.as_project()
         .or_else(|| kind.as_rules())
         .or_else(|| kind.as_variant_manager())
+        .or_else(|| kind.as_design_checklist())
 }
 
 /// `<project> — <page>` in the language of `i18n`, without bidi marks so

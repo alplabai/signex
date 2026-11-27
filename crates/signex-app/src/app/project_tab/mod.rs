@@ -13,6 +13,7 @@
 //! is the catalog surface of the sections (#1689-#1693).
 
 mod agent_journals;
+mod checklist;
 mod commands;
 mod erc_annotation;
 mod general;
@@ -52,6 +53,13 @@ mod setup_tests;
 #[cfg(test)]
 mod undo_routing_tests;
 
+pub use checklist::ChecklistMsg;
+pub(crate) use checklist::{
+    project_add_checklist_item, project_checklist_templates, project_export_checklist_csv,
+    project_import_checklist, project_open_checklist_link, project_remove_checklist_item,
+    project_reset_checklist, project_run_checklist, project_save_checklist_template,
+    project_set_checklist_item, project_set_checklist_state, project_start_checklist,
+};
 pub(crate) use commands::{
     project_add_variant, project_move_library, project_move_sheet, project_remove_variant,
     project_rename_variant, project_set_active_variant, project_set_annotate_undo,
@@ -198,6 +206,9 @@ pub struct ProjectTabState {
     pub variant_manager: crate::app::core::variant_cell::VariantManagerUi,
     /// The Requirements section's drafts, refusal and last run (#2339).
     pub requirements: RequirementsTabState,
+    /// The Design Checklist tab's filter, selection, drafts and last run
+    /// (#1291).
+    pub checklist: crate::app::core::checklist_tab::ChecklistTabState,
     /// The Parameters filter as typed (mockup row 30).
     pub parameter_filter: String,
     /// The Parameters Title block group is folded shut.
@@ -453,6 +464,16 @@ pub enum ProjectTabMsg {
     Requirements {
         project_id: ProjectId,
         msg: RequirementsMsg,
+    },
+    /// The Design Checklist tab (#1291, mockup row 206).
+    Checklist {
+        project_id: ProjectId,
+        msg: ChecklistMsg,
+    },
+    /// Project ▸ Design Checklist: the tab of `project`, else of the active
+    /// document's project, as Design ▸ Rules picks it.
+    ChecklistOpenRequested {
+        project: Option<ProjectId>,
     },
     /// A preview's value label, drag handle or larger window (mockup rows
     /// 31 and 36).
