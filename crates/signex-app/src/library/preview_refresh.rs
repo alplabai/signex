@@ -224,6 +224,14 @@ impl LibraryState {
         // The caller has just reloaded the primitive listings; caches built
         // from them (the browser's name search and sort) are now stale.
         self.touch_data();
+        // This path reloads listings without a snapshot, so the thumbnails
+        // are marked here (the async path marks them in `apply_snapshot`).
+        if let Some(id) = self
+            .write_target_library(saved, fold)
+            .map(|lib| lib.library_id)
+        {
+            self.components_panel.thumbs.mark_library_stale(id);
+        }
         if let Some(plan) = self.plan_preview_refresh(saved, fold) {
             self.apply_preview_readout(plan.read());
         }

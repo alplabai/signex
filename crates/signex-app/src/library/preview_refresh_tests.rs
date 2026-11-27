@@ -305,3 +305,31 @@ fn a_save_in_a_nested_library_refreshes_its_own_previews() {
         "the inner library's preview was not planned for re-reading"
     );
 }
+
+/// The blocking save path asks for the saved library's row thumbnails
+/// again, as the async path does through its snapshot (#2631).
+#[test]
+fn a_blocking_refresh_asks_for_the_libraries_thumbnails_again() {
+    let mut fx = fixture();
+    let library_id = fx.state.library_at(&fx.root).expect("open").library_id;
+    let symbol = PrimitiveRef::new(library_id, Uuid::from_u128(1));
+    let thumbs = &mut fx.state.components_panel.thumbs;
+    let asked = thumbs.take_missing([symbol]);
+    thumbs.finish(asked.into_iter().map(|r| (r, None)).collect());
+    assert!(
+        fx.state
+            .components_panel
+            .thumbs
+            .take_missing([symbol])
+            .is_empty()
+    );
+
+    let saved = fx.root.parent().unwrap().join("symbols/a.snxsym");
+    fx.state
+        .refresh_loaded_previews(&saved, crate::app::CaseFold::host_default());
+
+    assert_eq!(
+        fx.state.components_panel.thumbs.take_missing([symbol]),
+        [symbol]
+    );
+}
