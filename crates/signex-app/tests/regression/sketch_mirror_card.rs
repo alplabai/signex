@@ -6,7 +6,10 @@
 
 use std::path::{Path, PathBuf};
 
-use signex_app::app::{FootprintDocument, Message, Signex, TabInfo, TabKind};
+use signex_app::app::{
+    BoardSketchMsg, ContextMenuMsg, FootprintDocument, Message, PcbMsg, Signex, TabContextAction,
+    TabInfo, TabKind,
+};
 use signex_app::library::editor::footprint::sketch_dispatch::apply_sketch_edit;
 use signex_app::library::editor::footprint::sketch_mode::SketchEdit;
 use signex_app::library::editor::footprint::sketch_mode::mirror_card::{
@@ -428,5 +431,38 @@ fn cancel_on_a_board_sketch_writes_nothing() {
 
     assert_eq!(board_sketch_of(&f), before, "no Point, no copy");
     assert_eq!(board_undo_len(&f), undo_before);
+    assert!(!f.app.library.mirror_cards.contains_key(&f.path));
+}
+
+// ─── Lifetime (#2859) ───────────────────────────────────────────────────────
+
+/// Closing a footprint tab with Mirror armed drops its card.
+#[test]
+fn closing_the_tab_drops_its_mirror_card() {
+    let (mut app, path, _) = picked("mirror-tab-close");
+    assert!(is_open(&app, &path));
+
+    let close = ContextMenuMsg::TabAction(TabContextAction::Close(0));
+    let task = app.update(Message::ContextMenu(close));
+    crate::drive::drive(&mut app, task);
+
+    assert!(app.document_state.tabs.iter().all(|t| t.path != path));
+    assert!(!is_open(&app, &path));
+}
+
+/// Leaving the board sketch with Mirror armed drops the board's card.
+#[test]
+fn ending_the_board_sketch_drops_its_mirror_card() {
+    let (mut f, _, _) = board_picked();
+    assert!(f.app.library.mirror_cards.contains_key(&f.path));
+
+    for msg in [
+        BoardSketchMsg::DiscardRequested,
+        BoardSketchMsg::DiscardConfirmed,
+    ] {
+        board_sketch::send(&mut f, Message::Pcb(PcbMsg::Sketch(msg)));
+    }
+
+    assert!(!board_sketch::in_sketch(&f));
     assert!(!f.app.library.mirror_cards.contains_key(&f.path));
 }
