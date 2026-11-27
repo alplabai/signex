@@ -83,6 +83,9 @@ pub struct SnapshotState {
     pub uncommitted: Vec<String>,
     /// Commits reachable from HEAD that are not imports.
     pub local_commits: usize,
+    /// HEAD's history holds at least one Signex import commit: the folder
+    /// is a library Signex imported, so an update can run over it.
+    pub has_import: bool,
 }
 
 fn backend(what: &str, e: impl std::fmt::Display) -> LibraryError {
@@ -128,18 +131,20 @@ pub fn read_snapshot_state(root: &Path) -> Result<SnapshotState, LibraryError> {
         .filter_map(|entry| entry.path().ok().map(str::to_owned))
         .filter(|path| !is_write_lock_file(Path::new(path)))
         .collect();
+    let (has_import, local_commits) = count_local_commits(&repo)?;
     Ok(SnapshotState {
         has_repo: true,
         uncommitted,
-        local_commits: count_local_commits(&repo)?,
+        local_commits,
+        has_import,
     })
 }
 
-/// Commits on HEAD made after its newest import commit (all of them when
-/// there is none).
-fn count_local_commits(repo: &git2::Repository) -> Result<usize, LibraryError> {
+/// Whether HEAD's history holds an import commit, and the commits on HEAD
+/// made after its newest one (all of them when there is none).
+fn count_local_commits(repo: &git2::Repository) -> Result<(bool, usize), LibraryError> {
     let Some(tip) = repo.head().ok().and_then(|head| head.target()) else {
-        return Ok(0);
+        return Ok((false, 0));
     };
     let log = |e: git2::Error| backend("git log", e);
     let walk_from_tip = || -> Result<git2::Revwalk<'_>, LibraryError> {
@@ -162,7 +167,7 @@ fn count_local_commits(repo: &git2::Repository) -> Result<usize, LibraryError> {
     if let Some(import) = newest_import {
         walk.hide(import).map_err(log)?;
     }
-    Ok(walk.count())
+    Ok((newest_import.is_some(), walk.count()))
 }
 
 /// Put the working tree back to HEAD after a failed update over a tree that
@@ -444,6 +449,23 @@ mod tests {
         std::fs::write(dir.path().join("b.snxsym"), "b\n").unwrap();
         commit_snapshot(dir.path(), IMPORT).unwrap();
         assert_eq!(read_snapshot_state(dir.path()).unwrap().local_commits, 0);
+    }
+
+    #[test]
+    fn only_a_history_with_an_import_commit_counts_as_imported() {
+        let dir = library_dir();
+        prepare_snapshot_repo(dir.path()).unwrap();
+        assert!(
+            !read_snapshot_state(dir.path()).unwrap().has_import,
+            "no commit yet"
+        );
+        commit_snapshot(dir.path(), "mine\n").unwrap();
+        let state = read_snapshot_state(dir.path()).unwrap();
+        assert!(!state.has_import, "a hand commit is not an import");
+        assert_eq!(state.local_commits, 1);
+        std::fs::write(dir.path().join("a.snxsym"), "a\n").unwrap();
+        commit_snapshot(dir.path(), IMPORT).unwrap();
+        assert!(read_snapshot_state(dir.path()).unwrap().has_import);
     }
 
     #[test]

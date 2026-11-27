@@ -33,14 +33,22 @@ pub struct UpdateCheck {
     pub local_commits: usize,
 }
 
-/// Before `--update`: refuse a folder with no repository or with
-/// uncommitted changes, and count the commits since the last import.
+/// Before `--update`: refuse a folder with no repository, with no import
+/// commit in its history or with uncommitted changes, and count the
+/// commits since the last import.
 pub fn check_update(library_dir: &Path) -> Result<UpdateCheck, ImportError> {
     let state = read_snapshot_state(library_dir).map_err(|e| ImportError::Git {
         detail: e.to_string(),
     })?;
     if !state.has_repo {
         return Err(ImportError::NotAnImportedLibrary {
+            dir: library_dir.to_path_buf(),
+        });
+    }
+    // Caner (2026-11-27): only a library Signex imported is offered an
+    // update; a repository without an import commit is someone's own.
+    if !state.has_import {
+        return Err(ImportError::NoImportHistory {
             dir: library_dir.to_path_buf(),
         });
     }

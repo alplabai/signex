@@ -69,6 +69,11 @@ pub enum ImportError {
     NotAnImportedLibrary {
         dir: PathBuf,
     },
+    /// An update was asked for a repository whose history holds no Signex
+    /// import commit.
+    NoImportHistory {
+        dir: PathBuf,
+    },
     /// An update was asked while the library has unsaved work in the app.
     UnsavedInApp {
         what: String,
@@ -170,6 +175,9 @@ impl ImportError {
             }
             Self::NotAnImportedLibrary { dir } => {
                 Translatable::new(ids::LIBRARY_IMPORT_NOT_A_REPOSITORY).arg("path", path(dir))
+            }
+            Self::NoImportHistory { dir } => {
+                Translatable::new(ids::LIBRARY_IMPORT_NO_IMPORT_HISTORY).arg("path", path(dir))
             }
             Self::UnsavedInApp { what } => {
                 Translatable::new(ids::LIBRARY_IMPORT_UNSAVED).arg("what", what.as_str())

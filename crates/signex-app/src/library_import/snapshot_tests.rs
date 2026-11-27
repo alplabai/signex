@@ -182,6 +182,27 @@ fn an_update_of_a_folder_without_history_is_refused() {
     assert!(!dir.path().join("Conformance.ran").exists(), "not run");
 }
 
+/// Caner (2026-11-27): a repository Signex did not import is never
+/// updated over, even when it is clean.
+#[test]
+fn an_update_of_a_repository_without_an_import_commit_is_refused() {
+    signex_library::git_identity::test_identity::install();
+    let dir = tempfile::tempdir().unwrap();
+    let out = dir.path().join("Conformance");
+    std::fs::create_dir_all(&out).unwrap();
+    std::fs::write(out.join("Conformance.snxlib"), "").unwrap();
+    signex_library::import_snapshot::prepare_snapshot_repo(&out).unwrap();
+    signex_library::import_snapshot::commit_snapshot(&out, "My own library\n").unwrap();
+    let failure = job(dir.path(), RunMode::Update)
+        .run(&AtomicBool::new(false), &mut |_| {})
+        .unwrap_err();
+    assert!(matches!(
+        *failure.error,
+        ImportError::NoImportHistory { .. }
+    ));
+    assert!(!dir.path().join("Conformance.ran").exists(), "not run");
+}
+
 fn imported(dir: &Path) -> PathBuf {
     signex_library::git_identity::test_identity::install();
     job(dir, RunMode::Import)

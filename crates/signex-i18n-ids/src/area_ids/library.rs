@@ -373,6 +373,7 @@ define_ids! {
     LIBRARY_IMPORT_NO_PROJECT = "library-import-no-project";
     LIBRARY_IMPORT_LIBRARY_NOT_OUTPUT = "library-import-library-not-output";
     LIBRARY_IMPORT_NOT_A_REPOSITORY = "library-import-not-a-repository";
+    LIBRARY_IMPORT_NO_IMPORT_HISTORY = "library-import-no-import-history";
     LIBRARY_IMPORT_UNSAVED = "library-import-unsaved";
     LIBRARY_IMPORT_UPDATE_RESTORED = "library-import-update-restored";
     LIBRARY_IMPORT_UPDATE_NOT_RESTORED = "library-import-update-not-restored";

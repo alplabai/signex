@@ -931,6 +931,7 @@ library-import-no-project = No project is open to add the library to; it was add
 # $path is the folder the converter reported, $output the one it was given.
 library-import-library-not-output = The converter reported the library at { $path }, not in { $output } where it was asked to write it.
 library-import-not-a-repository = { $path } has no version history, so it is not an imported library that can be updated. Import into a new folder instead.
+library-import-no-import-history = { $path } holds a library with version history, but Signex did not import it, so it is not updated over. Import into a new folder instead.
 # $what names an unsaved document or editor.
 library-import-unsaved = The library has unsaved changes in Signex ({ $what }). Save or close them before updating it.
 # $error is why the update failed.
