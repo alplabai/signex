@@ -81,7 +81,7 @@ pub(super) fn view<'a>(frame: &Frame<'a>) -> Element<'a, Message> {
         ]
         .spacing(SP.s)
         .align_y(Alignment::Center);
-        list = list.push(head);
+        list = list.push_boxed(head);
         for output in members {
             list = list.push(output_row(frame, &output.name, output.enabled));
         }

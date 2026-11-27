@@ -166,7 +166,7 @@ pub(super) fn empty<'a>(ctx: &Ctx) -> Element<'a, Message> {
     if let Some(saved) = saved_cards(ctx, &picked) {
         body = body.push(saved);
     }
-    body = body.push(start);
+    body = body.push_boxed(start);
     if let Some(line) = notice_line(ctx) {
         body = body.push(line);
     }

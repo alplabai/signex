@@ -4,6 +4,7 @@
 //! the Outputs card with a View link on the rows the viewer reads; and the
 //! history kept in the `.snxout`, a row opening its summary.
 
+use iced::Widget as _;
 use iced::widget::{Column, column, row};
 use iced::{Alignment, Element, Length};
 use signex_i18n::{MessageId, UserText, ids, t};
@@ -112,7 +113,7 @@ pub(super) fn view<'a>(frame: &Frame<'a>) -> Element<'a, Message> {
         ),
     ]
     .spacing(SP.s)
-    .into();
+    .boxed();
     let mut parts = vec![back];
     match shown(frame) {
         Some(shown) => {
@@ -191,14 +192,15 @@ fn summary_card<'a>(frame: &Frame<'a>, shown: &Shown) -> Element<'a, Message> {
                         Some(Message::from(JobTabMsg::CopyPathPressed { job }))
                     ),
                 ]
-                .spacing(SP.s),
+                .spacing(SP.s)
+                .boxed(),
             )
             .push(kit::quiet(
                 look,
                 look.t(ids::OUTPUT_JOB_VIEW_IN_GERBER_NOTE),
             ));
     }
-    kit::card(look.tokens, col.into())
+    kit::card(look.tokens, col.boxed())
 }
 
 /// Every output with its file count; a View link on those with files the
@@ -242,9 +244,9 @@ fn outputs_card<'a>(frame: &Frame<'a>, shown: &Shown) -> Element<'a, Message> {
                 })),
             ));
         }
-        col = col.push(line);
+        col = col.push_boxed(line);
     }
-    kit::card(look.tokens, col.into())
+    kit::card(look.tokens, col.boxed())
 }
 
 /// The history kept in the job file, newest first; a row opens its summary.
@@ -290,5 +292,5 @@ fn history<'a>(frame: &Frame<'a>) -> Element<'a, Message> {
         });
     }
     col = col.push(kit::quiet(look, look.t(ids::OUTPUT_JOB_HISTORY_NOTE)));
-    kit::card(look.tokens, col.into())
+    kit::card(look.tokens, col.boxed())
 }

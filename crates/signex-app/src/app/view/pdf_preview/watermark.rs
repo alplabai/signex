@@ -46,6 +46,7 @@ fn swatch_button<'a>(rgb: [u8; 3], is_picked: bool, look: &Look) -> Element<'a, 
                 width: ring_w,
                 color: ring,
                 radius: SWATCH_RADIUS.into(),
+                ..iced::Border::default()
             },
             ..container::Style::default()
         },
@@ -158,7 +159,7 @@ impl Signex {
             colour = colour.push(swatch_button(rgb, settings.colour_rgb == rgb, &look));
         }
         let colour = colour
-            .push(Space::new().width(Length::Fill))
+            .push_boxed(Space::new().width(Length::Fill))
             .push(num_field(
                 &draft.colour_input,
                 Length::Fixed(HEX_W),

@@ -125,7 +125,10 @@ impl Signex {
             self.activate_tab_for_path(&path);
         }
         let command = if drc { "run_drc" } else { "run_erc" };
-        Task::done(Message::Menu(MenuMessage::command(command)))
+        match crate::keymap::AppCommandId::new(command) {
+            Ok(id) => Task::done(Message::Menu(MenuMessage::Command(id))),
+            Err(_) => Task::none(),
+        }
     }
 
     /// Where the run the tab's summary shows wrote: the picked history row,

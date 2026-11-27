@@ -127,7 +127,7 @@ fn container<'a>(frame: &Frame<'a>, profile: &'a JobProfile) -> Element<'a, Mess
         ),
     ]
     .spacing(SP.s)
-    .into()
+    .boxed()
 }
 
 /// Validate, On errors and On warnings.
@@ -178,5 +178,5 @@ fn pipeline<'a>(frame: &Frame<'a>, profile: &'a JobProfile) -> Element<'a, Messa
         ),
     ]
     .spacing(SP.s)
-    .into()
+    .boxed()
 }

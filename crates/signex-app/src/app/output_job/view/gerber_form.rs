@@ -6,6 +6,7 @@
 use std::path::PathBuf;
 
 use iced::Element;
+use iced::Widget as _;
 use iced::widget::{Column, column};
 use signex_i18n::{MessageId, ids, t};
 use signex_types::output_job::{
@@ -172,5 +173,5 @@ pub(super) fn fields<'a>(
         apertures,
     ]
     .spacing(SP.s)
-    .into()
+    .boxed()
 }

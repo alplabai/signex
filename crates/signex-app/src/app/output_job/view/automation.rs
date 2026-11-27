@@ -4,6 +4,7 @@
 //! for CI with Copy, and the recent auto runs from the history.
 
 use iced::Element;
+use iced::Widget as _;
 use iced::widget::{Column, column};
 use signex_i18n::{ids, t};
 use signex_types::output_job::BeforeClose;
@@ -111,10 +112,10 @@ pub(super) fn view<'a>(frame: &Frame<'a>) -> Element<'a, Message> {
         back,
         kit::head(look, ids::OUTPUT_JOB_PAGE_AUTOMATION),
         kit::quiet(look, look.t(ids::OUTPUT_JOB_AUTOMATION_NOTE)),
-        kit::card(look.tokens, on_save.into()),
-        kit::card(look.tokens, keep.into()),
-        kit::card(look.tokens, close.into()),
-        kit::card(look.tokens, tag.into()),
+        kit::card(look.tokens, on_save.boxed()),
+        kit::card(look.tokens, keep.boxed()),
+        kit::card(look.tokens, close.boxed()),
+        kit::card(look.tokens, tag.boxed()),
     ];
     parts.push(command_card(frame));
     parts.push(recent_auto_runs(frame));
@@ -138,7 +139,7 @@ fn command_card<'a>(frame: &Frame<'a>) -> Element<'a, Message> {
         kit::quiet(look, look.t(ids::OUTPUT_JOB_COMMAND_LINE_NOTE)),
     ]
     .spacing(super::SP.s);
-    kit::card(look.tokens, col.into())
+    kit::card(look.tokens, col.boxed())
 }
 
 /// The auto runs of the history, newest first.
@@ -171,5 +172,5 @@ fn recent_auto_runs<'a>(frame: &Frame<'a>) -> Element<'a, Message> {
     if !any {
         col = col.push(kit::quiet(look, look.t(ids::OUTPUT_JOB_RECENT_AUTO_NONE)));
     }
-    kit::card(look.tokens, col.into())
+    kit::card(look.tokens, col.boxed())
 }

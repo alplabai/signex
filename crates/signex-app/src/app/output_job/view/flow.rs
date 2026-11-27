@@ -3,6 +3,7 @@
 //! Package and Done, each lit by its state; the question Validate asks, or
 //! the banner of a stopped run; and the log of the picked node.
 
+use iced::Widget as _;
 use iced::widget::{Column, Row, column, row};
 use iced::{Alignment, Element};
 use signex_i18n::{UserText, ids, t};
@@ -71,7 +72,7 @@ pub(super) fn view<'a>(frame: &Frame<'a>) -> Element<'a, Message> {
         kit::quiet(look, policy_line(look, run)),
     ]
     .spacing(SP.xs);
-    let mut parts = vec![back, head.into()];
+    let mut parts = vec![back, head.boxed()];
     if let Some(banner) = banner(frame, run) {
         parts.push(banner);
     }
@@ -130,7 +131,7 @@ fn banner<'a>(frame: &Frame<'a>, run: &'a JobRun) -> Option<Element<'a, Message>
             .spacing(SP.s),
         ]
         .spacing(SP.s);
-        return Some(kit::card(look.tokens, col.into()));
+        return Some(kit::card(look.tokens, col.boxed()));
     }
     let stopped = run.stopped.as_ref()?;
     let mut actions: Row<Element<'a, Message>> = Row::new().spacing(SP.s);
@@ -171,7 +172,7 @@ fn banner<'a>(frame: &Frame<'a>, run: &'a JobRun) -> Option<Element<'a, Message>
         actions,
     ]
     .spacing(SP.s);
-    Some(kit::card(look.tokens, col.into()))
+    Some(kit::card(look.tokens, col.boxed()))
 }
 
 /// Validate, the outputs by group, Package and Done.
@@ -189,7 +190,7 @@ fn nodes<'a>(frame: &Frame<'a>, run: &'a JobRun) -> Element<'a, Message> {
             ),
         ]
         .spacing(SP.xs);
-        lanes = lanes.push(col);
+        lanes = lanes.push_boxed(col);
     }
     for group in OutputGroup::ALL {
         let members: Vec<(usize, &FlowNode)> = run
@@ -206,15 +207,15 @@ fn nodes<'a>(frame: &Frame<'a>, run: &'a JobRun) -> Element<'a, Message> {
         for (index, node) in members {
             col = col.push(node_button(frame, Some(index), node.name.clone(), node));
         }
-        lanes = lanes.push(col);
+        lanes = lanes.push_boxed(col);
     }
     let package = column![
         kit::head(look, ids::OUTPUT_JOB_STEP_PACKAGE),
         state_chip(look, run.package, run.report.file_count()),
     ]
     .spacing(SP.xs);
-    lanes = lanes.push(package);
-    lanes.align_y(Alignment::Start).into()
+    lanes = lanes.push_boxed(package);
+    lanes.align_y(Alignment::Start).boxed()
 }
 
 fn node_button<'a>(
@@ -236,7 +237,7 @@ fn node_button<'a>(
     row![label, state_chip(look, node.state, node.files)]
         .spacing(SP.xs)
         .align_y(Alignment::Center)
-        .into()
+        .boxed()
 }
 
 /// The log of the picked node (Validate when none is picked).
@@ -256,5 +257,5 @@ fn log<'a>(frame: &Frame<'a>, run: &'a JobRun) -> Element<'a, Message> {
         }
         _ => col = col.push(kit::quiet(look, look.t(ids::OUTPUT_JOB_LOG_EMPTY))),
     }
-    kit::card(look.tokens, col.into())
+    kit::card(look.tokens, col.boxed())
 }

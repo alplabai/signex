@@ -185,7 +185,8 @@ pub(super) fn with_menus<'a>(
                         }))
                     ),
                 ]
-                .spacing(SP.s),
+                .spacing(SP.s)
+                .boxed(),
             );
     } else {
         for profile in &frame.draft.profiles {

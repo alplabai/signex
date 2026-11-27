@@ -36,6 +36,7 @@ pub(super) fn card(preview: &TilePreview, mc: MenuColors) -> Element<'static, Me
                         color: mc.border,
                         width: 1.0,
                         radius: 3.0.into(),
+                        ..Border::default()
                     },
                     ..container::Style::default()
                 })
@@ -60,6 +61,7 @@ pub(super) fn card(preview: &TilePreview, mc: MenuColors) -> Element<'static, Me
                 color: mc.border,
                 width: 1.0,
                 radius: 6.0.into(),
+                ..Border::default()
             },
             shadow: mc.shadow,
             ..container::Style::default()

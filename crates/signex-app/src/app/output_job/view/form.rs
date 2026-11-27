@@ -3,6 +3,7 @@
 //! start with), the settings its kind takes (PNG resolution, the ODB++
 //! folder form) and what the writer fixes, and Remove.
 
+use iced::Widget as _;
 use iced::widget::{Column, column, row};
 use iced::{Alignment, Element};
 use signex_i18n::{MessageId, ids, t};
@@ -41,7 +42,7 @@ pub(super) fn view<'a>(frame: &Frame<'a>) -> Element<'a, Message> {
             kit::quiet(look, look.t(ids::OUTPUT_JOB_FORM_NOTHING_BODY)),
         ]
         .spacing(SP.s)
-        .into();
+        .boxed();
     };
     let Some(kind) = output.known_kind() else {
         return kit::quiet(
@@ -114,7 +115,7 @@ pub(super) fn view<'a>(frame: &Frame<'a>) -> Element<'a, Message> {
         look.t(ids::OUTPUT_JOB_FORM_REMOVE),
         Some(Message::from(JobTabMsg::OutputRemoved { job, name })),
     ))
-    .into()
+    .boxed()
 }
 
 /// The file the output writes, or the stem a board output's files start
@@ -144,5 +145,5 @@ fn file_field<'a>(frame: &Frame<'a>, output: &JobOutput, kind: OutputKind) -> El
         kit::quiet(look, look.t(note)),
     ]
     .spacing(SP.xs)
-    .into()
+    .boxed()
 }

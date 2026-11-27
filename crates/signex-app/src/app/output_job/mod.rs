@@ -61,9 +61,7 @@ pub(crate) use gerber_commands::{
 pub(crate) use operands::{export_sheet_png, run_output_job};
 pub use pipeline::{Built, Packaged, RunMsg, ValidateOutcome};
 pub use run::RunAsk;
-pub use tab::{
-    GerberEdit, JobTabMsg, NamingMode, OutputJobUi, PackagingSwitch, TabPage, TriggerEdit,
-};
+pub use tab::{JobTabMsg, NamingMode, OutputJobUi, PackagingSwitch, TabPage, TriggerEdit};
 pub use write::{CheckCounts, JobReport, WrittenOutput};
 
 impl From<OutputJobMsg> for Message {

@@ -91,7 +91,7 @@ pub(super) fn history<'a>(ctx: &Ctx, item: &ChecklistItem) -> Option<Element<'a,
         if let Some(stamp) = stamp_words(line, i18n) {
             entry = entry.push(note(stamp, tokens));
         }
-        lines = lines.push(entry.spacing(SP.xs));
+        lines = lines.push_boxed(entry.spacing(SP.xs));
     }
     Some(lines.boxed())
 }
