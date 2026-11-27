@@ -346,6 +346,52 @@ fn edit_and_delete_are_off_while_the_filter_hides_the_highlighted_footprint() {
     assert!(matches!(tools(&app), (Some(_), Some(_))));
 }
 
+/// #2747: Place, Edit and Delete on the Parts kind act only on a highlighted
+/// row the filter shows. Filtering R-10K out leaves all three sending
+/// nothing; showing it again brings them back.
+#[test]
+fn parts_tools_are_off_while_the_filter_hides_the_highlighted_row() {
+    let (mut app, _boot) = Signex::new();
+    let lib = passives();
+    let r10k = signex_library::RowId::from_uuid(lib.tables["res"][0].row_id);
+    app.library.open_libraries.push(lib);
+    let root = PathBuf::from(LIB_ROOT);
+    app.library.library_browsers.insert(
+        root.clone(),
+        crate::library::state::LibraryBrowserState::new(root.clone()),
+    );
+    app.library.panel_selected = Some(crate::library::state::ComponentsPanelRowKey {
+        library_path: root,
+        table: "res".into(),
+        row_id: r10k,
+    });
+    app.library.touch_data();
+    app.library.sync_view_caches();
+    app.refresh_panel_ctx();
+    let tools = |app: &Signex| {
+        let mut ctx = app.document_view.panel_ctx.clone();
+        ctx.has_schematic = true;
+        let tools = parts::view(&app.library, &ctx).tools;
+        (tools.place, tools.edit, tools.delete)
+    };
+    assert!(
+        matches!(tools(&app), (Some(_), Some(_), Some(_))),
+        "with no filter the tools act on the highlighted R-10K"
+    );
+    let search = |s: &str| {
+        Message::Library(LibraryMessage::Picker(PickerMsg::PanelSearchChanged(
+            s.into(),
+        )))
+    };
+    let _task = app.update(search("GRM"));
+    assert!(
+        matches!(tools(&app), (None, None, None)),
+        "the filter shows only C-100N: no tool acts on the hidden R-10K"
+    );
+    let _task = app.update(search("ERA"));
+    assert!(matches!(tools(&app), (Some(_), Some(_), Some(_))));
+}
+
 /// Mockup row 119: the row the editor shows draws selected, so Edit is live
 /// on it with no separate highlight; Delete still waits for one.
 #[test]
