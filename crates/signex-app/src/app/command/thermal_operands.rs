@@ -29,7 +29,10 @@ pub(super) fn set_pour_thermal_relief(app: &mut Signex, args: &CommandArgs) -> R
         Ok(targets) => targets,
         Err(reason) => return refused(reason),
     };
-    let edits = pour_edits(args);
+    let edits = match pour_edits(args) {
+        Ok(edits) => edits,
+        Err(reason) => return refused(reason),
+    };
     if edits.is_empty() {
         return refused(format!(
             "{WHAT} needs at least one of `on`, `spoke_width` and `air_gap`"
@@ -72,19 +75,27 @@ pub(super) fn set_pour_thermal_relief(app: &mut Signex, args: &CommandArgs) -> R
 }
 
 /// The pour edits the operands ask for, the switch first so switching on
-/// seeds what the others then set. A length operand is above 0 already.
-fn pour_edits(args: &CommandArgs) -> Vec<ZoneEdit> {
+/// seeds what the others then set. The lengths are Text by the one operand
+/// convention; the engine refuses one not above 0.
+fn pour_edits(args: &CommandArgs) -> Result<Vec<ZoneEdit>, String> {
     let mut edits = Vec::new();
     if let Some(OperandValue::Bool(on)) = args.operand("on") {
         edits.push(ZoneEdit::ThermalRelief(*on));
     }
-    if let Some(OperandValue::Length(mm)) = args.operand("spoke_width") {
-        edits.push(ZoneEdit::ThermalSpokeWidth(*mm));
+    let length = |name: &str| {
+        text(args, name)
+            .map(|raw| {
+                parse_number(raw).ok_or_else(|| format!("`{name}` is a length in mm, not `{raw}`"))
+            })
+            .transpose()
+    };
+    if let Some(mm) = length("spoke_width")? {
+        edits.push(ZoneEdit::ThermalSpokeWidth(mm));
     }
-    if let Some(OperandValue::Length(mm)) = args.operand("air_gap") {
-        edits.push(ZoneEdit::ThermalAirGap(*mm));
+    if let Some(mm) = length("air_gap")? {
+        edits.push(ZoneEdit::ThermalAirGap(mm));
     }
-    edits
+    Ok(edits)
 }
 
 /// `set_pad_thermal_relief document=.. ids=.. [air_gap=rule|<mm>]

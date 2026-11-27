@@ -25,6 +25,7 @@ use crate::app::document::DocumentKey;
 use crate::app::handlers::board_net_classes::{typed_mm, with_rule};
 use crate::app::handlers::pcb_tool::RouteOptionsEdit;
 use crate::app::{Message, Signex};
+use crate::panels::pcb_primitive_properties::parse_number;
 use crate::panels::{BoardNetClassField, DrcFilter};
 
 /// What running one command from its operands did, and any follow-up task.
@@ -291,16 +292,21 @@ fn route_options_answer(app: &mut Signex, args: &CommandArgs) -> Result<Value, S
                 .ok_or_else(|| one_of("corner_mode", &CornerMode::ALL.map(CornerMode::token)))
         })
         .transpose()?;
-    let length = |name: &str| match args.operand(name) {
-        Some(OperandValue::Length(mm)) => Some(*mm),
-        _ => None,
+    // `width`, `via_diameter` and `via_hole` are Text by the one operand
+    // convention; `route_options` refuses a size not above zero.
+    let length = |name: &str| {
+        text(args, name)
+            .map(|raw| {
+                parse_number(raw).ok_or_else(|| format!("`{name}` is a length in mm, not `{raw}`"))
+            })
+            .transpose()
     };
     let edit = RouteOptionsEdit {
         conflict_mode,
         corner_mode,
-        width_mm: length("width"),
-        via_diameter_mm: length("via_diameter"),
-        via_hole_mm: length("via_hole"),
+        width_mm: length("width")?,
+        via_diameter_mm: length("via_diameter")?,
+        via_hole_mm: length("via_hole")?,
     };
     app.route_options(&board, edit)
 }

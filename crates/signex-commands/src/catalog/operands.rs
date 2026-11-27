@@ -710,9 +710,9 @@ pub const ROUTE_OPTIONS: &[Operand] = &[
     required("document", OperandKind::Document),
     optional("conflict_mode", OperandKind::Text),
     optional("corner_mode", OperandKind::Text),
-    optional("width", OperandKind::Length),
-    optional("via_diameter", OperandKind::Length),
-    optional("via_hole", OperandKind::Length),
+    optional("width", OperandKind::Text),
+    optional("via_diameter", OperandKind::Text),
+    optional("via_hole", OperandKind::Text),
 ];
 /// `measure_board` (#2403): point to point from `start` to `end`, or edge to
 /// edge between the two items `ids` names.
@@ -1112,8 +1112,8 @@ pub const SET_POUR_THERMAL_RELIEF: &[Operand] = &[
     required("document", OperandKind::Document),
     required("ids", OperandKind::Targets),
     optional("on", OperandKind::Bool),
-    optional("spoke_width", OperandKind::Length),
-    optional("air_gap", OperandKind::Length),
+    optional("spoke_width", OperandKind::Text),
+    optional("air_gap", OperandKind::Text),
 ];
 /// `set_pad_thermal_relief` (#2593): footprint pads by uuid; each of
 /// `air_gap` and `spoke_width` is `rule` or mm, `spokes` is `rule` or a count
