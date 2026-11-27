@@ -128,6 +128,7 @@ impl ImportJob {
             self.limits,
             cancel,
             &self.group,
+            &self.stage,
             on_event,
         )
         .map_err(|failure| self.restore_after_failed_update(failure))?;

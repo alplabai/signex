@@ -11,9 +11,10 @@ use std::time::{Duration, Instant};
 use super::confine::{ConfineError, confine};
 use super::error::ImportError;
 use super::events::{ExitKind, ProgressEvent, StreamFold, Summary};
-use super::output::claim_output;
+use super::output::{Held, claim_output};
 use super::process::{Polled, ProcessGroup, Running};
 use super::report::{ImportReport, read_report};
+use super::run_state::JobStage;
 use super::stream::Line;
 
 /// How long a run may go without an event before it is stopped (§3.1).
@@ -238,17 +239,20 @@ pub fn run_library(
     on_event: &mut dyn FnMut(&ProgressEvent),
 ) -> Result<RunOutcome, RunFailure> {
     let group = ProcessGroup::default();
-    run_library_in(command, request, limits, cancel, &group, on_event)
+    let stage = JobStage::default();
+    run_library_in(command, request, limits, cancel, &group, &stage, on_event)
 }
 
 /// [`run_library`], with the converter's process group published in
-/// `group` while it runs.
+/// `group` while it runs, and `stage` settling while a failed run removes
+/// what it wrote, so quit waits for that cleanup to end.
 pub fn run_library_in(
     command: &ConverterCommand,
     request: &LibraryRunRequest,
     limits: RunLimits,
     cancel: &AtomicBool,
     group: &ProcessGroup,
+    stage: &JobStage,
     on_event: &mut dyn FnMut(&ProgressEvent),
 ) -> Result<RunOutcome, RunFailure> {
     request.validate().map_err(RunFailure::refused)?;
@@ -259,6 +263,11 @@ pub fn run_library_in(
     let streamed = stream_run(command, &args, &cwd, limits, cancel, group, on_event);
     let result = streamed.and_then(|finished| finish(request, finished));
     result.map_err(|mut failure| {
+        // A large folder takes a while to remove; quit cut it short would
+        // leave half of it, which the next run refuses as not empty.
+        if claimed.held != Held::NotOwned {
+            stage.settling();
+        }
         failure.removed_output = claimed.release_after_failure();
         failure
     })

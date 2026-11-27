@@ -231,6 +231,39 @@ fn a_failed_new_import_removes_its_folder() {
     assert!(!out.exists());
 }
 
+/// #3123: a failed new import settles before it removes its folder, so a
+/// quit waits for the removal past its bound instead of leaving half of it.
+#[test]
+fn quit_waits_for_a_failed_new_imports_cleanup() {
+    use super::process::ProcessGroup;
+    use super::run::run_library_in;
+    use super::run_state::JobStage;
+    let dir = tempfile::tempdir().unwrap();
+    let out = dir.path().join("Passives");
+    let body = format!("echo x > \"$out/half.snxsym\"\n{}\nexit 1\n", summary("failed", false));
+    let stage = JobStage::default();
+    let failure = run_library_in(
+        &sh(dir.path(), &body),
+        &request(out.clone(), RunMode::Import),
+        FAST,
+        &AtomicBool::new(false),
+        &ProcessGroup::default(),
+        &stage,
+        &mut |_| {},
+    )
+    .unwrap_err();
+    assert!(failure.removed_output && !out.exists());
+    // Zero bound: a worker still working would be given up on at once.
+    let waiter = {
+        let stage = stage.clone();
+        std::thread::spawn(move || stage.wait_at_quit(Duration::ZERO))
+    };
+    std::thread::sleep(Duration::from_millis(100));
+    assert!(!waiter.is_finished(), "the cleanup is waited for");
+    drop(stage.done_on_drop());
+    assert!(waiter.join().unwrap());
+}
+
 #[test]
 fn exit_code_and_summary_must_agree() {
     let body = format!(
