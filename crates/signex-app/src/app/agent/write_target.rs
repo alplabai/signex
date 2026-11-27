@@ -58,7 +58,8 @@ impl Signex {
     }
 }
 
-#[cfg(test)]
+// The test paths are unix paths, so the module builds on unix only.
+#[cfg(all(test, unix))]
 mod tests {
     use super::*;
     use crate::keymap::AppCommandId;
@@ -70,7 +71,6 @@ mod tests {
             .expect("operands")
     }
 
-    #[cfg(unix)]
     #[test]
     fn only_a_plain_absolute_path_passes_the_gate() {
         assert_eq!(path_refusal(&args("/work/p/out/board.pdf")), None);
