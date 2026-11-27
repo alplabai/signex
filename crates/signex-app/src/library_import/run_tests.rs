@@ -24,7 +24,7 @@ pub(crate) const PREAMBLE: &str = r#"out=""; prev=""
 for a in "$@"; do [ "$prev" = "--output" ] && out="$a"; prev="$a"; done
 "#;
 
-pub(super) fn sh(dir: &Path, body: &str) -> ConverterCommand {
+pub(crate) fn sh(dir: &Path, body: &str) -> ConverterCommand {
     let script = dir.join("fake-converter.sh");
     std::fs::write(&script, format!("{PREAMBLE}{body}")).unwrap();
     ConverterCommand {
@@ -33,7 +33,7 @@ pub(super) fn sh(dir: &Path, body: &str) -> ConverterCommand {
     }
 }
 
-pub(super) fn request(output: PathBuf, mode: RunMode) -> LibraryRunRequest {
+pub(crate) fn request(output: PathBuf, mode: RunMode) -> LibraryRunRequest {
     LibraryRunRequest {
         inputs: vec![PathBuf::from("/in/Passives.lib1")],
         output,
@@ -424,4 +424,153 @@ fn a_library_run_works_in_the_outputs_parent_folder() {
         PathBuf::from(cwd.trim()).canonicalize().unwrap(),
         dir.path().canonicalize().unwrap()
     );
+}
+
+/// Run `body` as a new import on a thread, set cancel after a moment, and
+/// return the result, how long it took, and the output folder.
+fn cancel_after_a_moment(body: &str) -> (Result<RunOutcome, RunFailure>, Duration, PathBuf) {
+    let dir = tempfile::tempdir().unwrap();
+    let command = sh(dir.path(), body);
+    let out = dir.path().join("P");
+    let cancel = AtomicBool::new(false);
+    let limits = RunLimits {
+        silence: Duration::from_secs(60),
+        ..FAST
+    };
+    let started = Instant::now();
+    let result = std::thread::scope(|scope| {
+        let handle = scope.spawn(|| {
+            run_library(
+                &command,
+                &request(out.clone(), RunMode::Import),
+                limits,
+                &cancel,
+                &mut |_| {},
+            )
+        });
+        std::thread::sleep(Duration::from_millis(300));
+        cancel.store(true, Ordering::Relaxed);
+        handle.join().unwrap()
+    });
+    let gone = !out.exists();
+    assert!(gone, "the folder the run made is removed");
+    (result, started.elapsed(), out)
+}
+
+/// Cancel ends a run whatever the converter does: repeat one event
+/// forever, say nothing, or ignore termination and never exit.
+#[test]
+fn cancel_ends_a_converter_that_repeats_is_silent_or_never_exits() {
+    let heartbeat = "while :; do echo '{\"event\":\"progress\",\"done\":1,\"total\":3,\"item\":\"A\"}'; sleep 0.05; done\n";
+    let silent = "mkdir -p \"$out\"; echo x > \"$out/half.snxsym\"; sleep 30\n";
+    let stubborn = "trap '' TERM INT HUP; while :; do sleep 0.1; done\n";
+    for body in [heartbeat, silent, stubborn] {
+        let (result, took, _out) = cancel_after_a_moment(body);
+        assert_eq!(result.unwrap_err().error, ImportError::Cancelled, "{body}");
+        assert!(took < Duration::from_secs(5), "{body}: took {took:?}");
+    }
+}
+
+#[test]
+fn a_new_run_creates_its_folder_and_refuses_one_that_holds_anything() {
+    use super::run::claim_output;
+    let dir = tempfile::tempdir().unwrap();
+    let new = dir.path().join("a/b/New");
+    assert_eq!(
+        claim_output(&request(new.clone(), RunMode::Import)),
+        Ok(true)
+    );
+    assert!(new.is_dir(), "created with its parents");
+    // An empty folder is taken over: removed and created by this run.
+    assert_eq!(
+        claim_output(&request(new.clone(), RunMode::Preview)),
+        Ok(true)
+    );
+    std::fs::write(new.join("theirs.txt"), "keep").unwrap();
+    assert_eq!(
+        claim_output(&request(new.clone(), RunMode::Import)),
+        Err(ImportError::OutputNotEmpty { path: new.clone() })
+    );
+    assert!(new.join("theirs.txt").exists());
+    let file = dir.path().join("file");
+    std::fs::write(&file, "x").unwrap();
+    assert!(claim_output(&request(file.clone(), RunMode::Import)).is_err());
+    assert_eq!(
+        claim_output(&request(new.clone(), RunMode::Update)),
+        Ok(false)
+    );
+}
+
+#[test]
+fn a_failed_run_into_an_empty_folder_removes_it_and_a_full_one_never_runs() {
+    let dir = tempfile::tempdir().unwrap();
+    let out = dir.path().join("P");
+    std::fs::create_dir(&out).unwrap();
+    let ran = dir.path().join("ran");
+    let body = format!(
+        ": > '{}'\necho x > \"$out/half.snxsym\"\n{}\nexit 1\n",
+        ran.display(),
+        summary("failed", false)
+    );
+    let command = sh(dir.path(), &body);
+    let failure = run_library(
+        &command,
+        &request(out.clone(), RunMode::Import),
+        FAST,
+        &AtomicBool::new(false),
+        &mut |_| {},
+    )
+    .unwrap_err();
+    assert!(failure.removed_output);
+    assert!(!out.exists(), "what the run wrote is gone");
+    // A folder that holds something is refused before the converter runs.
+    std::fs::create_dir(&out).unwrap();
+    std::fs::write(out.join("mine.txt"), "keep").unwrap();
+    std::fs::remove_file(&ran).unwrap();
+    let failure = run_library(
+        &command,
+        &request(out.clone(), RunMode::Import),
+        FAST,
+        &AtomicBool::new(false),
+        &mut |_| {},
+    )
+    .unwrap_err();
+    assert!(matches!(failure.error, ImportError::OutputNotEmpty { .. }));
+    assert!(!ran.exists(), "not run");
+    assert!(out.join("mine.txt").exists());
+}
+
+/// Quitting kills the converter through its published process group,
+/// without the run's own stop.
+#[test]
+fn the_published_group_kills_a_converter_that_never_exits() {
+    use super::process::ProcessGroup;
+    let dir = tempfile::tempdir().unwrap();
+    let command = sh(dir.path(), "trap '' TERM; while :; do sleep 0.1; done\n");
+    let group = ProcessGroup::default();
+    let limits = RunLimits {
+        silence: Duration::from_secs(60),
+        ..FAST
+    };
+    let started = Instant::now();
+    let result = std::thread::scope(|scope| {
+        let handle = scope.spawn(|| {
+            super::run::run_library_in(
+                &command,
+                &request(dir.path().join("P"), RunMode::Import),
+                limits,
+                &AtomicBool::new(false),
+                &group,
+                &mut |_| {},
+            )
+        });
+        while group.current().is_none() && started.elapsed() < Duration::from_secs(5) {
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        group.kill();
+        handle.join().unwrap()
+    });
+    assert!(result.is_err(), "killed, so no library");
+    assert!(started.elapsed() < Duration::from_secs(10));
+    assert!(group.current().is_none(), "cleared once it ended");
 }

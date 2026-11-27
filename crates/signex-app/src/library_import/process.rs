@@ -27,6 +27,49 @@ const STDERR_TAIL: usize = 4 << 10;
 /// How long the pipes may stay open after the converter exited.
 pub const PIPE_GRACE: Duration = Duration::from_secs(2);
 
+/// The process group of the converter a run has started, `0` while none
+/// runs; the app holds a clone so quitting can kill it
+/// ([`ProcessGroup::kill`]).
+#[derive(Debug, Clone, Default)]
+pub struct ProcessGroup(Arc<std::sync::atomic::AtomicU32>);
+
+impl ProcessGroup {
+    pub(super) fn set(&self, group: u32) {
+        self.0.store(group, Ordering::Release);
+    }
+
+    /// The group of the converter running now, if one is.
+    pub fn current(&self) -> Option<u32> {
+        Some(self.0.load(Ordering::Acquire)).filter(|&g| g != 0)
+    }
+
+    /// Kill the running converter's whole group (Unix); nothing when none
+    /// runs. For quitting the app, where the run's own stop never comes.
+    pub fn kill(&self) {
+        if let Some(group) = self.current() {
+            kill_group_id(group);
+        }
+    }
+}
+
+#[cfg(unix)]
+fn kill_group_id(group: u32) {
+    let Ok(group) = libc::pid_t::try_from(group) else {
+        return;
+    };
+    // SAFETY: killpg only sends a signal, to the group the converter was
+    // started in (`process_group(0)`).
+    if unsafe { libc::killpg(group, libc::SIGKILL) } != 0 {
+        log::debug!(
+            "library import: killpg: {}",
+            std::io::Error::last_os_error()
+        );
+    }
+}
+
+#[cfg(not(unix))]
+fn kill_group_id(_group: u32) {}
+
 /// A started converter.
 pub struct Running {
     child: Child,
@@ -153,23 +196,14 @@ impl Running {
     /// Kill whatever is left in the converter's process group. After the
     /// converter exited and was reaped the group id cannot be reused while
     /// a member lives, so this only reaches what it started.
-    #[cfg(unix)]
     pub fn kill_group(&self) {
-        let Ok(group) = libc::pid_t::try_from(self.child.id()) else {
-            return;
-        };
-        // SAFETY: killpg only sends a signal; the group is the one the
-        // converter was started in (`process_group(0)`).
-        if unsafe { libc::killpg(group, libc::SIGKILL) } != 0 {
-            log::debug!(
-                "library import: killpg: {}",
-                std::io::Error::last_os_error()
-            );
-        }
+        kill_group_id(self.child.id());
     }
 
-    #[cfg(not(unix))]
-    pub fn kill_group(&self) {}
+    /// The converter's process id, which is also its group id on Unix.
+    pub fn id(&self) -> u32 {
+        self.child.id()
+    }
 }
 
 /// Read stdout on a thread into a bounded queue that closes at the end of

@@ -24,6 +24,8 @@ pub struct ImportRun {
     pub mode: RunMode,
     pub target: MountTarget,
     pub cancel: Arc<AtomicBool>,
+    /// The converter's process group while it runs.
+    pub group: super::process::ProcessGroup,
     /// The latest progress event, for the dialog's progress bar.
     pub progress: Option<ProgressEvent>,
 }

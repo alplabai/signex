@@ -13,7 +13,7 @@ use signex_library::import_snapshot::{
 use super::error::ImportError;
 use super::events::ProgressEvent;
 use super::run::{
-    ConverterCommand, LibraryRunRequest, RunFailure, RunLimits, RunMode, RunOutcome, run_library,
+    ConverterCommand, LibraryRunRequest, RunFailure, RunLimits, RunMode, RunOutcome, run_library_in,
 };
 
 /// Where the library is mounted after the import.
@@ -63,6 +63,8 @@ pub struct ImportJob {
     pub converter_version: String,
     pub request: LibraryRunRequest,
     pub limits: RunLimits,
+    /// The converter's process group while it runs, for a kill at quit.
+    pub group: super::process::ProcessGroup,
 }
 
 /// A finished import (or preview).
@@ -105,8 +107,15 @@ impl ImportJob {
             }
             RunMode::Import | RunMode::Preview => (0, None),
         };
-        let run = run_library(&self.command, &self.request, self.limits, cancel, on_event)
-            .map_err(|failure| self.restore_after_failed_update(failure))?;
+        let run = run_library_in(
+            &self.command,
+            &self.request,
+            self.limits,
+            cancel,
+            &self.group,
+            on_event,
+        )
+        .map_err(|failure| self.restore_after_failed_update(failure))?;
         let Some(library_dir) = run.library.clone() else {
             return Ok(ImportJobOutcome {
                 run,

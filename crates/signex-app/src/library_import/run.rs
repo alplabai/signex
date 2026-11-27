@@ -11,7 +11,7 @@ use std::time::{Duration, Instant};
 use super::confine::{ConfineError, confine};
 use super::error::ImportError;
 use super::events::{ExitKind, ProgressEvent, StreamFold, Summary};
-use super::process::{Polled, Running};
+use super::process::{Polled, ProcessGroup, Running};
 use super::report::{ImportReport, read_report};
 use super::stream::Line;
 
@@ -207,8 +207,9 @@ impl RunFailure {
 }
 
 /// Run the converter's `library` command. `on_event` sees every progress
-/// event as it arrives. A folder this run created is removed when it fails,
-/// is cancelled or goes silent; a folder that existed before never is.
+/// event as it arrives. A new import or a dry run creates `--output` itself
+/// ([`claim_output`]) and removes it when it fails, is cancelled or goes
+/// silent; an update's folder is never removed.
 pub fn run_library(
     command: &ConverterCommand,
     request: &LibraryRunRequest,
@@ -216,15 +217,29 @@ pub fn run_library(
     cancel: &AtomicBool,
     on_event: &mut dyn FnMut(&ProgressEvent),
 ) -> Result<RunOutcome, RunFailure> {
+    let group = ProcessGroup::default();
+    run_library_in(command, request, limits, cancel, &group, on_event)
+}
+
+/// [`run_library`], with the converter's process group published in
+/// `group` while it runs.
+pub fn run_library_in(
+    command: &ConverterCommand,
+    request: &LibraryRunRequest,
+    limits: RunLimits,
+    cancel: &AtomicBool,
+    group: &ProcessGroup,
+    on_event: &mut dyn FnMut(&ProgressEvent),
+) -> Result<RunOutcome, RunFailure> {
     request.validate().map_err(RunFailure::new)?;
-    let created_output = !request.output.exists();
+    let owned = claim_output(request).map_err(RunFailure::new)?;
     let mut args = command.leading_args.clone();
     args.extend(request.args());
     let cwd = neutral_dir(Some(&request.output));
-    let streamed = stream_run(command, &args, &cwd, limits, cancel, on_event);
+    let streamed = stream_run(command, &args, &cwd, limits, cancel, group, on_event);
     let result = streamed.and_then(|finished| finish(request, finished));
     result.map_err(|mut failure| {
-        if created_output && request.output.exists() {
+        if owned {
             match std::fs::remove_dir_all(&request.output) {
                 Ok(()) => failure.removed_output = true,
                 Err(e) => log::warn!(
@@ -235,6 +250,51 @@ pub fn run_library(
         }
         failure
     })
+}
+
+/// Take `--output` for a new import or a dry run: this run creates the
+/// folder (and its parents), so a failed run removes only a folder it made.
+/// An empty folder already there is replaced by one this run creates; one
+/// that holds anything, or anything that is not a folder, is refused before
+/// the converter starts. `false` for an update, whose folder is never this
+/// run's to remove.
+pub fn claim_output(request: &LibraryRunRequest) -> Result<bool, ImportError> {
+    if request.mode == RunMode::Update {
+        return Ok(false);
+    }
+    let out = &request.output;
+    let unusable = |e: std::io::Error| ImportError::OutputUnusable {
+        path: out.clone(),
+        detail: e.to_string(),
+    };
+    let taken = || ImportError::OutputNotEmpty { path: out.clone() };
+    match std::fs::symlink_metadata(out) {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            if let Some(parent) = out.parent() {
+                std::fs::create_dir_all(parent).map_err(unusable)?;
+            }
+        }
+        Err(e) => return Err(unusable(e)),
+        // remove_dir refuses a folder that is not empty, so nothing put in
+        // it meanwhile is lost.
+        Ok(meta) if meta.is_dir() => std::fs::remove_dir(out).map_err(|e| {
+            if e.kind() == std::io::ErrorKind::DirectoryNotEmpty {
+                taken()
+            } else {
+                unusable(e)
+            }
+        })?,
+        Ok(_) => return Err(taken()),
+    }
+    // create_dir fails when anything appeared there since.
+    std::fs::create_dir(out).map_err(|e| {
+        if e.kind() == std::io::ErrorKind::AlreadyExists {
+            taken()
+        } else {
+            unusable(e)
+        }
+    })?;
+    Ok(true)
 }
 
 /// A run whose process ended on its own.
@@ -259,10 +319,23 @@ fn stream_run(
     cwd: &Path,
     limits: RunLimits,
     cancel: &AtomicBool,
+    group: &ProcessGroup,
     on_event: &mut dyn FnMut(&ProgressEvent),
 ) -> Result<Finished, RunFailure> {
     let mut running =
         Running::spawn(command, args, cwd, RUN_STDOUT_CAP).map_err(RunFailure::new)?;
+    group.set(running.id());
+    let result = stream_loop(&mut running, limits, cancel, on_event);
+    group.set(0);
+    result
+}
+
+fn stream_loop(
+    running: &mut Running,
+    limits: RunLimits,
+    cancel: &AtomicBool,
+    on_event: &mut dyn FnMut(&ProgressEvent),
+) -> Result<Finished, RunFailure> {
     let mut fold = StreamFold::default();
     let mut watch = SilenceWatch::new(limits.silence, Instant::now());
     let mut take = |line: Line, watch: &mut SilenceWatch| {
@@ -284,7 +357,7 @@ fn stream_run(
             take(line, &mut watch);
         }
         if cancel.load(Ordering::Relaxed) {
-            return Err(stopped(&mut running, ImportError::Cancelled));
+            return Err(stopped(running, ImportError::Cancelled));
         }
         match running.try_wait() {
             Ok(Some(status)) => break status,
@@ -293,14 +366,14 @@ fn stream_run(
                 let error = ImportError::WaitFailed {
                     detail: e.to_string(),
                 };
-                return Err(stopped(&mut running, error));
+                return Err(stopped(running, error));
             }
         }
         if watch.expired(Instant::now()) {
             let error = ImportError::Silent {
                 seconds: limits.silence.as_secs(),
             };
-            return Err(stopped(&mut running, error));
+            return Err(stopped(running, error));
         }
     };
     // Exited: what is still in the pipes is read for a bounded time; a

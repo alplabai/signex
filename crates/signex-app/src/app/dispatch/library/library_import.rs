@@ -77,6 +77,7 @@ impl Signex {
             mode: job.request.mode,
             target: target.clone(),
             cancel: cancel.clone(),
+            group: job.group.clone(),
             progress: None,
         });
         log::info!(
@@ -196,9 +197,25 @@ impl Signex {
     /// A run ended. The Import Library dialog shows a dry run's result and
     /// a failed import itself; no notice repeats them.
     fn finish_library_import(&mut self, finished: ImportFinished) -> Task<Message> {
-        let mode = self.library.import.running.take().map(|run| run.mode);
+        let run = self.library.import.running.take();
+        let mode = run.as_ref().map(|run| run.mode);
         let shown = self.import_dialog_run_finished(&finished, mode);
+        // A dry run the dialog stopped waiting for (Back, Close) leaves its
+        // temp folder; a failed one was removed by the engine already.
+        let leftover = match (&run, shown) {
+            (Some(run), false) if run.mode == RunMode::Preview => {
+                super::import_dialog::remove_preview_dir(run.output.clone())
+            }
+            _ => Task::none(),
+        };
         let task = match &finished.result {
+            Err(failure) if failure.error == ImportError::Cancelled => {
+                log::info!("Library import: cancelled");
+                if !shown && mode != Some(RunMode::Preview) {
+                    self.report_library_import_failure(failure);
+                }
+                Task::none()
+            }
             Err(failure) if shown || mode == Some(RunMode::Preview) => {
                 crate::diagnostics::log_error(
                     "Library import",
@@ -213,7 +230,18 @@ impl Signex {
             Ok(outcome) => self.mount_imported_library(outcome, &finished),
         };
         self.library.import.last = Some(Box::new(finished));
-        task
+        Task::batch([task, leftover])
+    }
+
+    /// Quitting: the worker and its converter would outlive the window, so
+    /// the run is told to stop and the converter's process group is killed
+    /// now. Synchronous: it only sends signals.
+    pub(crate) fn stop_library_import_at_quit(&mut self) {
+        if let Some(run) = &self.library.import.running {
+            log::info!("Library import: stopped by quit ({})", run.output.display());
+            run.cancel.store(true, Ordering::Relaxed);
+            run.group.kill();
+        }
     }
 
     fn report_library_import_failure(&mut self, failure: &RunFailure) {

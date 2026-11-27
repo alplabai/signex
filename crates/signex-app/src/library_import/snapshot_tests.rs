@@ -41,6 +41,7 @@ fn job(dir: &Path, mode: RunMode) -> ImportJob {
         converter_version: "0.16.0".into(),
         request: request(dir.join("Conformance"), mode),
         limits: FAST,
+        group: Default::default(),
     }
 }
 

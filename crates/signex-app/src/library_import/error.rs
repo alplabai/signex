@@ -92,6 +92,15 @@ pub enum ImportError {
     NoLibraryFile {
         dir: PathBuf,
     },
+    /// A new import's folder already holds something.
+    OutputNotEmpty {
+        path: PathBuf,
+    },
+    /// A new import's folder could not be created.
+    OutputUnusable {
+        path: PathBuf,
+        detail: String,
+    },
 }
 
 /// How many uncommitted paths the refusal names.
@@ -187,6 +196,14 @@ impl ImportError {
             }
             Self::NoLibraryFile { dir } => {
                 Translatable::new(ids::LIBRARY_IMPORT_NO_LIBRARY_FILE).arg("path", path(dir))
+            }
+            Self::OutputNotEmpty { path: p } => {
+                Translatable::new(ids::LIBRARY_IMPORT_DIALOG_TARGET_NOT_EMPTY).arg("path", path(p))
+            }
+            Self::OutputUnusable { path: p, detail } => {
+                Translatable::new(ids::LIBRARY_IMPORT_DIALOG_TARGET_UNREADABLE)
+                    .arg("path", path(p))
+                    .arg("error", detail.as_str())
             }
         }
     }

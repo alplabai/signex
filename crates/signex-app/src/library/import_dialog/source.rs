@@ -30,6 +30,8 @@ pub enum Blocker {
     TargetRefused,
     /// The folder check behind Next is running.
     Checking,
+    /// A dry run left by Back or Close is still stopping.
+    RunStopping,
 }
 
 /// Whether an input kind belongs on the `kind` side of the picker.
@@ -184,6 +186,9 @@ impl ImportDialogState {
         if self.checking_target {
             return Some(Blocker::Checking);
         }
+        if self.run_stopping {
+            return Some(Blocker::RunStopping);
+        }
         None
     }
 
@@ -255,6 +260,7 @@ impl ImportDialogState {
             converter_version: converter.description.version.clone(),
             request: self.request(mode, output)?,
             limits: RunLimits::default(),
+            group: Default::default(),
         })
     }
 

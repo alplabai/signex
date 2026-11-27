@@ -38,6 +38,7 @@ pub use describe::{ConverterDescription, InputKind, InputKindClass, PickerFilter
 pub use discovery::{DiscoveredConverter, Discovery, DiscoveryCache, DiscoveryEnv};
 pub use error::ImportError;
 pub use events::{ExitKind, ProgressEvent, Summary};
+pub use process::ProcessGroup;
 pub use report::ImportReport;
 pub use run::{
     ConverterCommand, LibraryRunRequest, ModelsMode, RunFailure, RunLimits, RunMode, RunOutcome,
