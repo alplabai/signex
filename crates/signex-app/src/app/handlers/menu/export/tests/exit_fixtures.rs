@@ -34,6 +34,16 @@ pub(crate) fn fixture_dir(project: &str) -> PathBuf {
         .join(project)
 }
 
+/// Noon on `(year, month, day)` in the local zone: one local time in every
+/// zone, and the same calendar day whatever the zone.
+pub(crate) fn fixture_noon((year, month, day): (i32, u32, u32)) -> chrono::DateTime<chrono::Local> {
+    use chrono::TimeZone;
+    chrono::Local
+        .with_ymd_and_hms(year, month, day, 12, 0, 0)
+        .single()
+        .expect("noon is one local time")
+}
+
 fn read(path: &Path) -> String {
     std::fs::read_to_string(path).unwrap_or_else(|e| {
         panic!(
@@ -43,10 +53,15 @@ fn read(path: &Path) -> String {
     })
 }
 
+/// The day the fixtures' exports print for an empty title-block Date, so a
+/// golden PDF gives the same bytes on any day.
+const FIXTURE_DAY: (i32, u32, u32) = (2026, 11, 26);
+
 /// A `Signex` with the fixture `project` loaded and active and every sheet
-/// it lists open, its root in view.
+/// it lists open, its root in view, its clock fixed at [`FIXTURE_DAY`].
 pub(crate) fn open_fixture(project: &str) -> Signex {
     let (mut app, _task) = Signex::new();
+    app.document_state.times.now = Some(fixture_noon(FIXTURE_DAY));
     let dir = fixture_dir(project);
     let path = dir.join(format!("{project}.snxprj"));
     assert!(
@@ -227,6 +242,24 @@ fn each_variant_exports_its_golden_pdf_of_the_top_page_and_four_channels() {
         );
         check_golden(&format!("{FOUR_CHANNEL}.{variant}.pdf"), &bytes);
     }
+}
+
+/// The PDF's date comes from the clock kept in state, the one
+/// [`open_fixture`] fixes: another day there gives other bytes, and the same
+/// day gives the same bytes again, so the golden holds on any day.
+#[test]
+fn the_pdf_prints_the_day_of_the_clock_in_state() {
+    let mut app = open_fixture(FOUR_CHANNEL);
+    let options = pdf_options("Full");
+    let pinned = pdf(&app, &options).0;
+    app.document_state.times.now = Some(fixture_noon((2027, 3, 4)));
+    let other_day = pdf(&app, &options).0;
+    assert!(other_day != pinned, "another day prints another date");
+    app.document_state.times.now = Some(fixture_noon(FIXTURE_DAY));
+    assert!(
+        pdf(&app, &options).0 == pinned,
+        "the pinned day prints again"
+    );
 }
 
 /// The net named on `pin` (`U1.2`) in `netlist`, with its class.
