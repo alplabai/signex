@@ -826,16 +826,3 @@ pub(super) const DOCUMENTS: &[CommandMetadata] = &[
         ..CommandMetadata::DEFAULT
     },
 ];
-
-/// A schematic printed to PDF (#2610, #2787): which document and the file;
-/// the rest defaults as the Export PDF dialog opens. `pages` is `all`,
-/// `current` or a list of sheet numbers and ranges (`1-2, 4`); `layers` is
-/// `all` or the ids of the PDF layers visible on open (`PdfLayer::id`), and
-/// writes a flat PDF when left out; `variant` names the printed variant.
-const SCHEMATIC_PDF: &[Operand] = &[
-    operands::required("document", OperandKind::Document),
-    operands::required("path", OperandKind::Path),
-    operands::optional("pages", OperandKind::Text),
-    operands::optional("layers", OperandKind::Text),
-    operands::optional("variant", OperandKind::Text),
-];

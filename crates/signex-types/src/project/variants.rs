@@ -71,7 +71,7 @@ impl ProjectData {
 
     /// The variant `name` names, as the project spells it: Base, or one of
     /// its definitions. `None` when the project has no such variant.
-    pub fn defined_variant(&self, name: &str) -> Option<&str> {
+    pub fn named_variant(&self, name: &str) -> Option<&str> {
         if is_base_variant(name) {
             return Some(BASE_VARIANT);
         }

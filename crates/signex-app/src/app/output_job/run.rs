@@ -130,7 +130,7 @@ impl Signex {
         };
         project
             .data
-            .defined_variant(named)
+            .named_variant(named)
             .map(str::to_string)
             .ok_or_else(|| format!("the project has no variant named {named:?}"))
     }

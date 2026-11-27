@@ -83,7 +83,7 @@ fn variants_round_trip_through_the_file() {
 fn a_named_variant_is_found_as_the_project_spells_it() {
     let mut data = project();
     data.add_variant("Lite").unwrap();
-    assert_eq!(data.defined_variant(" base "), Some(BASE_VARIANT));
-    assert_eq!(data.defined_variant("LITE"), Some("Lite"));
-    assert_eq!(data.defined_variant("Pro"), None);
+    assert_eq!(data.named_variant(" base "), Some(BASE_VARIANT));
+    assert_eq!(data.named_variant("LITE"), Some("Lite"));
+    assert_eq!(data.named_variant("Pro"), None);
 }
