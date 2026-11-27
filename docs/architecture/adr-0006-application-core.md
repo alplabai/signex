@@ -293,19 +293,19 @@ The rules follow Cockburn's Ports and Adapters (HaT Technical Report 2005.02) an
 
 ### Hexagonal
 
-- **H1 Inside and outside.** The core is inside. The GUI, CLI, agent, test harness, storage, OS and network are outside.
-- **H2 Ports are named by purpose.**
+- **H1 Inside and outside.** The core is inside. The GUI, CLI, agent, test harness, storage, OS and network are outside. [1; 2, fig. 5.2]
+- **H2 Ports are named by purpose.** [2, figs. 3.1 and 4.3]
   - Driving ports: for editing, querying and checking a design.
   - Driven ports: for storing documents and for reading libraries.
   - Results and events return to the caller. A "for notifying" port exists only for a recipient that is not the caller.
   - When several drivers share one instance, one adapter owns it and forwards (epic D12; "Events are a return value, not a bus").
-- **H3 Adapters live outside.** The desktop GUI, the CLI, an agent, the test harness, a web or mobile front end and a REST API are all adapters. The clients of a REST API (another agent or service) are driving actors like any other.
-- **H4 Drivers are equal.** Every driver uses the same driving ports with the same meaning. No driver gets a private entry.
-- **H5 Dependencies point inward.** The core owns the port contracts.
-- **H6 The configurator wires them.** The host (desktop `main`, CLI `main`, a web or mobile shell, a server) creates the core and the adapters and connects them.
-- **H7 Adapter state stays in the adapter, even as plain data.** Selection, tool, camera, typed input, open popovers and layout belong to the GUI adapter. Framework-free presentation logic lives outside the core.
-- **H8 MVU is the GUI adapter's internal design.** The iced Model is adapter state. `update` makes port calls or changes adapter state; `view` reads the core through queries.
-- **H9 The core is testable in isolation.** A test harness drives it, and test doubles stand in on the driven side.
+- **H3 Adapters live outside.** The desktop GUI, the CLI, an agent, the test harness, a web or mobile front end and a REST API are all adapters. The clients of a REST API (another agent or service) are driving actors like any other. [1; 2, fig. 6.18]
+- **H4 Drivers are equal.** Every driver uses the same driving ports with the same meaning. No driver gets a private entry. [1]
+- **H5 Dependencies point inward.** The core owns the port contracts. [3; 2, fig. 6.24]
+- **H6 The configurator wires them.** The host (desktop `main`, CLI `main`, a web or mobile shell, a server) creates the core and the adapters and connects them. [2, fig. 2.1]
+- **H7 Adapter state stays in the adapter, even as plain data.** Selection, tool, camera, typed input, open popovers and layout belong to the GUI adapter. Framework-free presentation logic lives outside the core. [4; 5]
+- **H8 MVU is the GUI adapter's internal design.** The iced Model is adapter state. `update` makes port calls or changes adapter state; `view` reads the core through queries. [4; 6]
+- **H9 The core is testable in isolation.** A test harness drives it, and test doubles stand in on the driven side. [1; 2, fig. 4.4]
 
 ### So any shell can host the core
 
@@ -329,6 +329,17 @@ Apply it per value, not per struct.
 3. Anything else is adapter state. If a port call needs the value, the adapter passes it as an argument. A value that can be rebuilt from a query or from events is a projection.
 
 Under this test, the view types in `app/core/` today move out: block diagram view state (#3169), the Variant Manager UI, row drag, the rule editor filter and tabs, the drawing field edit, the command log filters and `PinSelectionMode`. In `DocumentTimes` the clock becomes an argument and formatting moves to the adapter. `CompiledResult.miniatures` leaves the core result.
+
+### Sources
+
+1. Alistair Cockburn, "Hexagonal Architecture" (Ports and Adapters), HaT Technical Report 2005.02. <https://alistair.cockburn.us/hexagonal-architecture/>
+2. Alistair Cockburn and Juan Manuel Garrido de Paz, *Hexagonal Architecture Explained*, Humans and Technology Press, 2024 (figure numbers from the preview edition).
+3. Robert C. Martin, "The Clean Architecture", 2012 (the Dependency Rule). <https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html>
+4. Martin Fowler, "Presentation Model", 2004. <https://martinfowler.com/eaaDev/PresentationModel.html>
+5. Martin Fowler, "Separated Presentation", 2006. <https://martinfowler.com/eaaDev/SeparatedPresentation.html>
+6. Microsoft, "Model-View-ViewModel", .NET MAUI architecture guide. <https://learn.microsoft.com/en-us/dotnet/architecture/maui/mvvm>
+
+Quotes and the reasoning behind each rule: [the research note](research/hexagonal-ddd.md), §1 and §5.1.
 
 ## Enforcement
 
