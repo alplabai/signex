@@ -545,6 +545,10 @@ const NOT_YET_IN_LISTS: &[&str] = &[
     // #1261: a schematic swap is its own step until a list is decided.
     "swap_schematic_pins",
     "swap_schematic_gates",
+    // #1114: without `source` Apply takes the person's typing in the editor,
+    // an in-progress edit an agent's list must not carry (the parity kill
+    // list, ADR-0006 slice C).
+    "apply_rich_note_edit",
 ];
 
 /// Why `command` may not be one of the edits, or `None` when it may: it must
@@ -718,8 +722,6 @@ mod tests {
     #[test]
     fn the_editable_commands_are_the_sheet_placements_and_net_colours() {
         let expected = [
-            // #1114: a rich note's text from `source`.
-            "apply_rich_note_edit",
             "autoplace_fields",
             // #2796: the block diagram edits (DECISIONS, "Block diagram
             // tab", point 8).
@@ -750,6 +752,8 @@ mod tests {
             "draw_wire",
             "edit_blanket",
             "edit_no_erc_rules",
+            // #2836: the dimension tools from their operands.
+            "place_aligned_dimension",
             "place_blanket",
             "place_bus",
             "place_compile_mask",
@@ -758,6 +762,9 @@ mod tests {
             "place_global_label",
             "place_hierarchical_label",
             "place_junction",
+            // #2836: the dimension tools from their operands, as the other
+            // sheet placements.
+            "place_linear_dimension",
             "place_local_net_label",
             "place_net_label",
             "place_no_connect",

@@ -47,7 +47,7 @@ annotate_schematic_quietly	disabled_still_runs	explains_when_unavailable	core	ac
 apply_board_schematic_differences	operand_handler	run_operands: named document	core	origin	handler
 apply_board_schematic_differences	refusal_needs_operands	needs_operands_reason	gui	none	routing
 apply_board_schematic_differences	headless_missing_operand	needs `document`	core	none	routing
-apply_edits	operand_handler	run_operands: named document	core	active document,tool state,in-progress edit,origin	handler
+apply_edits	operand_handler	run_operands: named document	core	active document,tool state,origin	handler
 apply_edits	refusal_needs_operands	needs_operands_reason	gui	none	routing
 apply_edits	headless_missing_operand	needs `document`	core	none	routing
 apply_layout_board	bridge	DockLayout(Workspace(ApplyRequested(Builtin(Layout))))	gui	window,settings	handler
@@ -1351,7 +1351,7 @@ print	headless_refusal	headless_refusal	gui	none	routing
 project_add_checklist_item	operand_handler	run_operands: named document	core	origin	handler
 project_add_checklist_item	refusal_needs_operands	needs_operands_reason	gui	none	routing
 project_add_checklist_item	headless_missing_operand	needs `document`	core	none	routing
-project_add_font	operand_handler	run_operands: named document	core	origin	gate
+project_add_font	operand_handler	run_operands: named document	core	origin	handler
 project_add_font	refusal_needs_operands	needs_operands_reason	gui	none	routing
 project_add_font	headless_missing_operand	needs `document`	core	none	routing
 project_add_requirement	operand_handler	run_operands: named document	core	in-progress edit,origin	handler
@@ -1391,7 +1391,7 @@ project_open_checklist_link	headless_missing_operand	needs `document`	gui	none	r
 project_remove_checklist_item	operand_handler	run_operands: named document	core	origin	handler
 project_remove_checklist_item	refusal_needs_operands	needs_operands_reason	gui	none	routing
 project_remove_checklist_item	headless_missing_operand	needs `document`	core	none	routing
-project_remove_font	operand_handler	run_operands: named document	core	origin	gate
+project_remove_font	operand_handler	run_operands: named document	core	origin	handler
 project_remove_font	refusal_needs_operands	needs_operands_reason	gui	none	routing
 project_remove_font	headless_missing_operand	needs `document`	core	none	routing
 project_remove_requirement	operand_handler	run_operands: named document	core	in-progress edit,origin	handler
@@ -1433,7 +1433,7 @@ project_set_checklist_state	headless_missing_operand	needs `document`	core	none	
 project_set_default_variant	operand_handler	run_operands: named document	core	origin	handler
 project_set_default_variant	refusal_needs_operands	needs_operands_reason	gui	none	routing
 project_set_default_variant	headless_missing_operand	needs `document`	core	none	routing
-project_set_font_license	operand_handler	run_operands: named document	core	origin	gate
+project_set_font_license	operand_handler	run_operands: named document	core	origin	handler
 project_set_font_license	refusal_needs_operands	needs_operands_reason	gui	none	routing
 project_set_font_license	headless_missing_operand	needs `document`	core	none	routing
 project_set_rail	operand_handler	run_operands: named document	core	origin	handler

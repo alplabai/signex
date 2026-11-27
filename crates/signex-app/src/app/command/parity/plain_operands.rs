@@ -104,6 +104,11 @@ pub(super) const NAMED_DOCUMENT_ONLY: &[&str] = &[
     "project_export_checklist_csv",
     "project_open_checklist_link",
     "project_set_rail",
+    // #1178: the Fonts section's edits on the named project; the added
+    // font file is the `path` operand.
+    "project_add_font",
+    "project_remove_font",
+    "project_set_font_license",
     "bring_drawings_forward",
     "bring_drawings_to_front",
     "send_drawings_backward",
