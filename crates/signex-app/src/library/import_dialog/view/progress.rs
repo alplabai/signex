@@ -257,11 +257,18 @@ pub(super) fn footer<'a>(
             tokens,
         );
     }
-    let cancel = if state.cancel_pending {
+    let cancel = if state.stop_requested {
         dialog_button(
             t!(i18n, ids::LIBRARY_IMPORT_DIALOG_CANCELLING),
             DialogButtonKind::Cancel,
             None,
+            tokens,
+        )
+    } else if state.cancel_pending {
+        // Waiting for the current item; a second press stops the run now.
+        cancel_btn(
+            t!(i18n, ids::LIBRARY_IMPORT_DIALOG_STOP_NOW),
+            msg(ImportDialogMsg::CancelPressed),
             tokens,
         )
     } else {

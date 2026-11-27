@@ -1041,3 +1041,5 @@ library-import-dialog-route-arrow = →
 library-import-dialog-severity-chip = { $label } { $count }
 # $key and $value come from the converter's report.
 library-import-dialog-detail-line = { $key }: { $value }
+library-import-dialog-stop-now = Stop now
+library-import-dialog-run-stopping = The previous run is stopping…

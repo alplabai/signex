@@ -241,6 +241,7 @@ fn importing() -> (Signex, Arc<AtomicBool>) {
         mode: RunMode::Import,
         target: MountTarget::Global,
         cancel: cancel.clone(),
+        group: Default::default(),
         progress: Some(ProgressEvent::Progress {
             done: 1,
             total: Some(3),
@@ -326,6 +327,7 @@ fn a_dry_run_result_or_failure_lands_in_step_two_and_back_returns_to_step_one() 
         mode: RunMode::Preview,
         target: MountTarget::Global,
         cancel: Arc::new(AtomicBool::new(false)),
+        group: Default::default(),
         progress: None,
     });
     app.library.import_dialog = Some(Box::new(ImportDialogState {
@@ -366,6 +368,7 @@ fn back_during_a_dry_run_cancels_it_and_its_result_is_ignored() {
         mode: RunMode::Preview,
         target: MountTarget::Global,
         cancel: cancel.clone(),
+        group: Default::default(),
         progress: None,
     });
     app.library.import_dialog = Some(Box::new(ImportDialogState {
@@ -386,28 +389,23 @@ fn back_during_a_dry_run_cancels_it_and_its_result_is_ignored() {
 }
 
 #[test]
-fn a_folder_that_holds_files_is_refused_and_an_empty_one_is_left_to_the_run() {
+fn a_folder_that_holds_files_is_refused_and_the_check_removes_nothing() {
     use crate::app::dispatch::library::import_dialog_target_problem as problem;
     let dir = tempfile::tempdir().unwrap();
     let absent = dir.path().join("new");
-    assert!(problem(&absent, true).is_none());
+    assert!(problem(&absent).is_none());
     let empty = dir.path().join("empty");
     std::fs::create_dir(&empty).unwrap();
-    assert!(problem(&empty, false).is_none());
-    assert!(empty.exists(), "the check alone keeps it");
-    assert!(problem(&empty, true).is_none());
-    assert!(
-        !empty.exists(),
-        "the run creates it, and removes it on cancel"
-    );
+    assert!(problem(&empty).is_none());
+    assert!(empty.exists(), "the check never removes anything");
     let full = dir.path().join("full");
     std::fs::create_dir(&full).unwrap();
     std::fs::write(full.join("mine.txt"), "x").unwrap();
-    assert!(problem(&full, true).is_some());
+    assert!(problem(&full).is_some());
     assert!(full.join("mine.txt").exists());
     let file = dir.path().join("file");
     std::fs::write(&file, "x").unwrap();
-    assert!(problem(&file, false).is_some());
+    assert!(problem(&file).is_some());
 }
 
 #[test]
@@ -474,4 +472,112 @@ fn the_step_note_names_the_step() {
         .filter(|c| !matches!(c, '\u{2068}' | '\u{2069}'))
         .collect();
     assert_eq!(plain, "Step 2 of 3 · Preview");
+}
+
+#[test]
+fn a_second_cancel_or_esc_stops_a_converter_stuck_on_one_item() {
+    for second in [ImportDialogMsg::CancelPressed, ImportDialogMsg::Closed] {
+        let (mut app, cancel) = importing();
+        drop(app.update(d(ImportDialogMsg::CancelPressed)));
+        // The converter keeps repeating its progress on item A (§3.1).
+        for _ in 0..3 {
+            let same = ProgressEvent::Progress {
+                done: 1,
+                total: Some(3),
+                item: Some("A".into()),
+            };
+            drop(app.update(import(LibraryImportMsg::ProgressReported(same))));
+        }
+        assert!(!cancel.load(Ordering::Relaxed), "still waiting for A");
+        assert!(dialog(&app).cancel_pending && !dialog(&app).stop_requested);
+        drop(app.update(d(second)));
+        assert!(cancel.load(Ordering::Relaxed), "stopped now");
+        assert!(dialog(&app).stop_requested);
+        drop(app.update(cancelled(true)));
+        drop(app.update(d(ImportDialogMsg::Closed)));
+        assert!(app.library.import_dialog.is_none(), "the window closes");
+    }
+}
+
+#[test]
+fn next_waits_while_a_left_dry_run_is_still_stopping() {
+    let (mut app, _boot) = Signex::new();
+    let mut state = found(vec![converter("/bin/a", A)]);
+    picked(&mut state, &["/in/P.lib1"]);
+    app.library.import_dialog = Some(Box::new(state));
+    app.library.import.running = Some(ImportRun {
+        output: "/tmp/signex-library-preview-old".into(),
+        mode: RunMode::Preview,
+        target: MountTarget::Global,
+        cancel: Arc::new(AtomicBool::new(true)),
+        group: Default::default(),
+        progress: None,
+    });
+    drop(app.update(d(ImportDialogMsg::NextPressed)));
+    assert_eq!(dialog(&app).blocker(), Some(Blocker::RunStopping));
+    assert!(!dialog(&app).checking_target, "nothing started");
+    drop(app.update(cancelled(true)));
+    assert_eq!(dialog(&app).blocker(), None, "free again");
+    assert!(app.document_state.error_notice.is_none());
+}
+
+#[test]
+fn a_dry_run_nobody_waits_for_leaves_no_temp_folder() {
+    let dir = std::env::temp_dir().join(format!(
+        "signex-library-preview-test-{}",
+        uuid::Uuid::now_v7()
+    ));
+    std::fs::create_dir(&dir).unwrap();
+    std::fs::write(dir.join("import-report.json"), REPORT).unwrap();
+    let (mut app, _boot) = Signex::new();
+    app.library.import.running = Some(ImportRun {
+        output: dir.clone(),
+        mode: RunMode::Preview,
+        target: MountTarget::Global,
+        cancel: Arc::new(AtomicBool::new(true)),
+        group: Default::default(),
+        progress: None,
+    });
+    let done = crate::library_import::ImportJobOutcome {
+        run: outcome(),
+        library_file: None,
+        commit: None,
+        local_commits: 0,
+        library_id: None,
+    };
+    let task = app.update(import(LibraryImportMsg::Finished(Box::new(
+        ImportFinished {
+            result: Ok(done),
+            target: MountTarget::Global,
+        },
+    ))));
+    crate::task_driver::TaskDriver::new()
+        .settle(&mut app, task)
+        .unwrap();
+    assert!(!dir.exists(), "the left dry run's folder is removed");
+}
+
+#[test]
+fn a_refused_folder_says_nothing_was_kept() {
+    let (mut app, _cancel) = importing();
+    let failed = RunFailure::new(ImportError::OutputNotEmpty {
+        path: "/out/P".into(),
+    });
+    drop(app.update(import(LibraryImportMsg::Finished(Box::new(
+        ImportFinished {
+            result: Err(failed),
+            target: MountTarget::Global,
+        },
+    )))));
+    assert!(matches!(
+        dialog(&app).import_end,
+        Some(ImportEnd::Failed { removed: true, .. })
+    ));
+}
+
+#[test]
+fn quitting_stops_a_running_import() {
+    let (mut app, cancel) = importing();
+    app.stop_library_import_at_quit();
+    assert!(cancel.load(Ordering::Relaxed));
 }

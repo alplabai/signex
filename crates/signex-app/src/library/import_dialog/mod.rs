@@ -116,6 +116,11 @@ pub struct ImportDialogState {
     /// Cancel was pressed while an item was in flight: the run stops at
     /// the next item boundary.
     pub cancel_pending: bool,
+    /// The run was told to stop now (a second Cancel, or no item in
+    /// flight); the footer has nothing left to press but waits for it.
+    pub stop_requested: bool,
+    /// A run the dialog no longer waits for is still stopping; Next waits.
+    pub run_stopping: bool,
     pub phases: Vec<progress::PhaseLine>,
     pub import_end: Option<ImportEnd>,
 }
@@ -146,6 +151,8 @@ impl ImportDialogState {
             selected_item: None,
             awaiting: None,
             cancel_pending: false,
+            stop_requested: false,
+            run_stopping: false,
             phases: Vec::new(),
             import_end: None,
         }

@@ -152,3 +152,63 @@ fn a_folder_that_holds_files_sends_the_import_back_to_step_one() {
         "keep"
     );
 }
+
+/// Cancel always gives the window back, whatever the converter does: it
+/// repeats its progress on one item forever, says nothing, or ignores
+/// termination and never exits. The run is started through the engine and
+/// the dialog's own Cancel (pressed twice while an item is in flight).
+#[test]
+fn cancel_gives_the_window_back_whatever_the_converter_does() {
+    use crate::library_import::run_tests::{request, sh};
+    use crate::library_import::{ImportJob, MountScope, ProgressEvent, RunLimits, RunMode};
+    let heartbeat = "while :; do echo '{\"event\":\"progress\",\"done\":1,\"total\":3,\"item\":\"A\"}'; sleep 0.05; done\n";
+    let silent = "sleep 30\n";
+    let stubborn = "trap '' TERM INT HUP; while :; do sleep 0.1; done\n";
+    for (body, in_flight) in [(heartbeat, true), (silent, false), (stubborn, false)] {
+        let dir = tempfile::tempdir().unwrap();
+        let out = dir.path().join("P");
+        let job = ImportJob {
+            command: sh(dir.path(), body),
+            converter: "fake-import".into(),
+            converter_version: "1".into(),
+            request: request(out.clone(), RunMode::Import),
+            limits: RunLimits {
+                silence: Duration::from_secs(60),
+                poll: Duration::from_millis(10),
+            },
+            group: Default::default(),
+        };
+        let (mut app, _boot) = Signex::new();
+        let task = app.start_library_import(job, MountScope::AllProjects);
+        app.library.import_dialog = Some(Box::new(super::ImportDialogState {
+            step: Step::Import,
+            awaiting: Some(RunMode::Import),
+            location: out.display().to_string(),
+            ..super::ImportDialogState::new()
+        }));
+        if in_flight {
+            app.library.import.running.as_mut().unwrap().progress = Some(ProgressEvent::Progress {
+                done: 1,
+                total: Some(3),
+                item: Some("A".into()),
+            });
+        }
+        drop(app.update(d(ImportDialogMsg::CancelPressed)));
+        if in_flight {
+            // Waiting for A; the second press stops it now.
+            drop(app.update(d(ImportDialogMsg::CancelPressed)));
+        }
+        let started = std::time::Instant::now();
+        TaskDriver::new().settle(&mut app, task).unwrap();
+        assert!(started.elapsed() < Duration::from_secs(10), "{body}");
+        let state = app.library.import_dialog.as_deref().expect("open");
+        assert_eq!(
+            state.import_end,
+            Some(super::ImportEnd::Cancelled { removed: true }),
+            "{body}"
+        );
+        assert!(!out.exists(), "{body}: nothing kept");
+        drop(app.update(d(ImportDialogMsg::Closed)));
+        assert!(app.library.import_dialog.is_none(), "{body}: closes");
+    }
+}

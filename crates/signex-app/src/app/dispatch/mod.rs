@@ -231,6 +231,7 @@ impl Signex {
                 }
                 let mut layout_persist = Task::none();
                 let mut quit_answer = Task::none();
+                let mut dialog_cleanup = Task::none();
                 let mut annotate_close = Task::none();
                 // Drop the entry and dismiss the backing modal state so
                 // closing the OS window fully exits the modal instead of
@@ -342,7 +343,9 @@ impl Signex {
                             ModalId::LibraryCreateOptions => self.library.create_options = None,
                             ModalId::LibraryStockCopy => self.library.stock_copy = None,
                             ModalId::LibraryUpdates => self.library.library_updates = None,
-                            ModalId::LibraryImport => self.import_dialog_window_vanished(),
+                            ModalId::LibraryImport => {
+                                dialog_cleanup = self.import_dialog_window_vanished()
+                            }
                             ModalId::LibraryCloseConfirm => {
                                 self.library.close_library_confirm = None
                             }
@@ -417,7 +420,7 @@ impl Signex {
                         WindowKind::ComponentEditor { .. } => {}
                     }
                 }
-                Task::batch([layout_persist, quit_answer, annotate_close])
+                Task::batch([layout_persist, quit_answer, annotate_close, dialog_cleanup])
             }
             WindowMsg::DetachModal(modal) => self.handle_detach_modal(modal),
             WindowMsg::DetachedModalOpened { modal, id } => {

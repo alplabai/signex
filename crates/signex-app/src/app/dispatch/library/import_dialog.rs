@@ -26,10 +26,9 @@ fn dialog_message(m: ImportDialogMsg) -> Message {
 }
 
 /// Why `location` cannot take a new library, or `None` when it can: it is
-/// absent, or an empty folder. For the import itself (`for_import`) an
-/// empty folder is removed, so the run creates it and a failed or
-/// cancelled run removes it again with what was written. Blocking.
-pub(crate) fn target_problem(location: &Path, for_import: bool) -> Option<Translatable> {
+/// absent, or an empty folder. Only a check: the run itself takes the
+/// folder (`library_import::run::claim_output`). Blocking.
+pub(crate) fn target_problem(location: &Path) -> Option<Translatable> {
     let path = || location.display().to_string();
     let meta = match std::fs::symlink_metadata(location) {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return None,
@@ -52,11 +51,6 @@ pub(crate) fn target_problem(location: &Path, for_import: bool) -> Option<Transl
         Ok(false) => {
             Some(Translatable::new(ids::LIBRARY_IMPORT_DIALOG_TARGET_NOT_EMPTY).arg("path", path()))
         }
-        Ok(true) if for_import => std::fs::remove_dir(location).err().map(|e| {
-            Translatable::new(ids::LIBRARY_IMPORT_DIALOG_TARGET_UNREADABLE)
-                .arg("path", path())
-                .arg("error", e.to_string())
-        }),
         Ok(true) => None,
         Err(e) => Some(
             Translatable::new(ids::LIBRARY_IMPORT_DIALOG_TARGET_UNREADABLE)
@@ -68,7 +62,7 @@ pub(crate) fn target_problem(location: &Path, for_import: bool) -> Option<Transl
 
 /// Remove a dry run's temp folder on a worker; anything not named like one
 /// is left alone.
-fn remove_preview_dir(dir: PathBuf) -> Task<Message> {
+pub(super) fn remove_preview_dir(dir: PathBuf) -> Task<Message> {
     let ours = dir
         .file_name()
         .and_then(|n| n.to_str())
@@ -261,23 +255,27 @@ impl Signex {
         if d.step != from || d.awaiting.is_some() || d.checking_target || d.blocker().is_some() {
             return Task::none();
         }
+        // An earlier run (a dry run left by Back or Close) is still
+        // stopping: the engine takes one run at a time.
+        if self.library.import.running.is_some() {
+            d.run_stopping = true;
+            return Task::none();
+        }
         d.checking_target = true;
         d.pending_run = Some(mode);
         let location = d.location_path();
-        let for_import = mode == RunMode::Import;
         Task::perform(
             async move {
                 let checked = location.clone();
-                let problem =
-                    tokio::task::spawn_blocking(move || target_problem(&checked, for_import))
-                        .await
-                        .unwrap_or_else(|e| {
-                            Some(
-                                Translatable::new(ids::LIBRARY_IMPORT_DIALOG_TARGET_UNREADABLE)
-                                    .arg("path", location.display().to_string())
-                                    .arg("error", e.to_string()),
-                            )
-                        });
+                let problem = tokio::task::spawn_blocking(move || target_problem(&checked))
+                    .await
+                    .unwrap_or_else(|e| {
+                        Some(
+                            Translatable::new(ids::LIBRARY_IMPORT_DIALOG_TARGET_UNREADABLE)
+                                .arg("path", location.display().to_string())
+                                .arg("error", e.to_string()),
+                        )
+                    });
                 (location, problem)
             },
             |(location, problem)| {
@@ -420,33 +418,40 @@ impl Signex {
 
     /// The dialog's window went away without a close request: as Closed,
     /// except that a running import keeps the dialog (the sync shows the
-    /// window again). A dry run's temp folder is left to the system.
-    pub(crate) fn import_dialog_window_vanished(&mut self) {
+    /// window again).
+    pub(crate) fn import_dialog_window_vanished(&mut self) -> Task<Message> {
         let importing = self
             .library
             .import_dialog
             .as_deref()
             .is_some_and(|d| d.awaiting == Some(RunMode::Import));
         if importing {
-            return;
+            return Task::none();
         }
         self.stop_dialog_preview();
+        let cleanup = self.take_preview_dir();
         self.library.import_dialog = None;
+        cleanup
     }
 
     /// Cancel the import: at once when no item is in flight, else at the
-    /// next item boundary ([`Self::import_dialog_progress`]).
+    /// next item boundary ([`Self::import_dialog_progress`]). A second
+    /// Cancel (or Esc, or Close) while it waits stops the run now, so a
+    /// converter stuck on one item can always be stopped.
     fn request_dialog_cancel(&mut self) {
         let Some(d) = self.library.import_dialog.as_deref_mut() else {
             return;
         };
-        if d.cancel_pending {
-            return;
-        }
-        d.cancel_pending = true;
-        if let Some(run) = &self.library.import.running
-            && !item_in_flight(run.progress.as_ref())
-        {
+        let now = d.cancel_pending || {
+            d.cancel_pending = true;
+            self.library
+                .import
+                .running
+                .as_ref()
+                .is_none_or(|run| !item_in_flight(run.progress.as_ref()))
+        };
+        if now && let Some(run) = &self.library.import.running {
+            d.stop_requested = true;
             run.cancel.store(true, Ordering::Relaxed);
             log::info!("Library import: cancelling {}", run.output.display());
         }
@@ -465,6 +470,7 @@ impl Signex {
             && run.mode == RunMode::Preview
         {
             run.cancel.store(true, Ordering::Relaxed);
+            d.run_stopping = true;
         }
     }
 
@@ -510,11 +516,14 @@ impl Signex {
         let Some(d) = self.library.import_dialog.as_deref_mut() else {
             return false;
         };
+        // Whatever ended, the engine is free for the next run.
+        d.run_stopping = false;
         if mode.is_none() || d.awaiting != mode {
             return false;
         }
         d.awaiting = None;
         d.cancel_pending = false;
+        d.stop_requested = false;
         match (mode, &finished.result) {
             (Some(RunMode::Preview), Ok(outcome)) => {
                 d.preview = Some(PreviewState::Ready(Box::new(outcome.run.clone())));
@@ -524,7 +533,16 @@ impl Signex {
             }
             (_, Ok(_)) => self.library.import_dialog = None,
             (_, Err(failure)) => {
-                let removed = failure.removed_output;
+                // A folder the run was refused before taking holds nothing
+                // of the run's.
+                use crate::library_import::ImportError as E;
+                let removed = failure.removed_output
+                    || matches!(
+                        failure.error,
+                        E::OutputNotEmpty { .. }
+                            | E::OutputUnusable { .. }
+                            | E::PathNotAbsolute { .. }
+                    );
                 d.import_end = Some(match failure.error {
                     crate::library_import::ImportError::Cancelled => {
                         ImportEnd::Cancelled { removed }
