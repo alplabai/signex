@@ -151,7 +151,7 @@ fn option_inks(is_live: bool, tokens: &ThemeTokens) -> (Color, Color) {
 /// An option card: a hairline-bordered card holding a switch, a title and
 /// a help caption. A press anywhere on the card sends `on_toggle`, as the
 /// switch does.
-fn option_card<'a>(
+pub(crate) fn option_card<'a>(
     is_on: bool,
     is_live: bool,
     title: Localized,

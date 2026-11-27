@@ -195,6 +195,7 @@ impl Signex {
             | ModalId::LibraryCreateOptions
             | ModalId::LibraryStockCopy
             | ModalId::LibraryUpdates
+            | ModalId::LibraryImport
             | ModalId::LibraryCloseConfirm
             | ModalId::LibraryDeleteConfirm
             | ModalId::LibraryRecovery

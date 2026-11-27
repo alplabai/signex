@@ -206,6 +206,7 @@ fn open(app: &mut Signex, modal: ModalId) {
                     Vec::new(),
                 ))
         }
+        ModalId::LibraryImport => app.library.import_dialog = Some(Box::default()),
         ModalId::NetlistIncompletePrompt => panic!("needs an export context"),
         ModalId::LibraryEditRow | ModalId::LibraryDeleteConfirm => {
             panic!("per-browser: see the browser tests")
@@ -852,6 +853,7 @@ fn every_dialog_window_is_filled_by_its_body_on_the_theme_surface() {
                     | ModalId::LibraryRecovery
                     | ModalId::LibraryStockCopy
                     | ModalId::LibraryUpdates
+                    | ModalId::LibraryImport
                     | ModalId::LibraryPicker
                     | ModalId::LibraryPrimitivePicker
                     | ModalId::AppQuitConfirm

@@ -120,3 +120,67 @@ the Messages panel.
 It is painted by `library_updates_overlay` via `collect_overlays`, which runs
 every frame; the builder's `library_updates.is_some()` guard is the only open
 check. The card itself is in `updates_dialog::view`.
+
+## Import Library dialog
+
+`crates/signex-app/src/library/import_dialog/` (mockup row 211, #3117–#3120),
+opened by File ▸ Import ▸ Library… (`import_library`, also in the command
+palette). It runs an installed library converter
+([LIBRARY_CONVERTER_CONTRACT.md](../LIBRARY_CONVERTER_CONTRACT.md)) through the
+engine in `crate::library_import`, in three steps under a stepper; the header
+note repeats the step ("Step 2 of 3 · Preview"). Handlers:
+`app/dispatch/library/import_dialog.rs`. It is a tool window (resizable), and
+`ModalId::LibraryImport` follows `import_dialog` like the other library
+dialogs.
+
+**Step 1, source and options.** Opening the dialog searches for converters on
+a worker (`discovery::discover`, answered from the session's cache when PATH
+and the candidates are unchanged). With none, an info notice gives the install
+hint, lists why candidates were set aside, and offers Look again; Next stays
+off. Signex ships no converter (contract §1), so the mockup's "Install
+converter…" is Look again. The source is several library files, or one
+database link file when a converter reads that kind (a Files / Database
+choice shows only when both are offered); the picker's filters are built from
+every converter's `describe` inputs, so no foreign extension is compiled in.
+Detected shows a chip per input kind the converter matched and "Read by
+<converter> <version>"; when several converters read every picked file, a
+chip per converter chooses one. A file no converter reads, or files no single
+converter reads together, keep Next off. A database input adds the Database
+override (passed as `--db`; empty means the link file's own). Name follows the
+first file's stem until typed; Location is `~/Signex/Libraries/<name>` and
+follows the name until changed by hand. Mount for all projects is on by
+default; off adds the library to the active project only, and with no project
+open it is forced on and greyed. Include 3D models (embedded) passes
+`--models include|skip`. The mockup's "Track with version control" switch is
+not built: every import is a git snapshot (see the 2026-11-26 snapshot row in
+DECISIONS.md).
+
+**Next** checks the folder on a worker: absent or empty is accepted, a file
+or a folder that holds anything is refused with a banner and nothing runs.
+
+**Step 2, preview.** A `--dry-run` into a new temp folder
+(`signex-library-preview-<uuid>` under the system temp folder, removed when the
+dialog moves on or closes). It shows the counts (parts, symbols, footprints,
+3D models, skipped), a chip per report severity present (a press hides or
+shows that severity in the list), a filter over the items' source name,
+message and code, the list (first 200 rows), and the selected item's kind,
+source, code, what it was written as and its detail fields. A dry run writes
+only the report (contract §2.2), so no symbol or footprint is drawn here; the
+caption says they can be looked at after the import. The amber strip counts
+what will be skipped. Back cancels a running dry run. A failed dry run is
+shown in the step, not as a notice.
+
+**Import** checks the folder again; an empty folder is removed so the run
+creates it and owns it, which is what lets a failed or cancelled run remove
+everything it wrote (the engine removes only a folder the run created).
+
+**Step 3, import.** The phase name with "done of total" and the percent, the
+bar, "Now: <item>" from the progress stream, every phase so far, and the
+silence rule (no event for 120 s stops the run). Cancel stops after the
+current item: an item is in flight while the last event is a `progress`
+naming one, and the run is stopped on the next event that is not a repeat of
+it; with no item in flight it stops at once. Esc and the close button cancel
+too while the import runs; the dialog stays until it has stopped, then says
+whether the folder was removed, with Back and Close. A finished import closes
+the dialog; the library is committed and mounted as described in
+DECISIONS.md (the result card and loss report are a later step, #3121).

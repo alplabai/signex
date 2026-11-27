@@ -342,6 +342,7 @@ impl Signex {
                             ModalId::LibraryCreateOptions => self.library.create_options = None,
                             ModalId::LibraryStockCopy => self.library.stock_copy = None,
                             ModalId::LibraryUpdates => self.library.library_updates = None,
+                            ModalId::LibraryImport => self.import_dialog_window_vanished(),
                             ModalId::LibraryCloseConfirm => {
                                 self.library.close_library_confirm = None
                             }

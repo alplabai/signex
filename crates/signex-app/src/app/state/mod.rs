@@ -319,6 +319,8 @@ pub enum ModalId {
     /// Which library receives a copy of a stock primitive (#813).
     LibraryStockCopy,
     LibraryUpdates,
+    /// File ▸ Import ▸ Library… (mockup row 211).
+    LibraryImport,
     /// Close library with unsaved drafts (confirm class).
     LibraryCloseConfirm,
     /// Delete the selected library row (confirm class).

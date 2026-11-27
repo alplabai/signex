@@ -48,13 +48,6 @@ impl Signex {
     /// Start `job`, mounting the result for `scope`. Refused while another
     /// import runs. `ThisProject` with no project open mounts for all
     /// projects instead, and says so.
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "the entry point of the Import Library dialog (batch D); tests call it"
-        )
-    )]
     pub(crate) fn start_library_import(
         &mut self,
         job: ImportJob,
@@ -164,11 +157,18 @@ impl Signex {
     pub(super) fn handle_library_import(&mut self, msg: LibraryImportMsg) -> Task<Message> {
         match msg {
             LibraryImportMsg::ProgressReported(event) => {
-                if let Some(run) = self.library.import.running.as_mut() {
-                    run.progress = Some(event);
+                let previous = self
+                    .library
+                    .import
+                    .running
+                    .as_mut()
+                    .map(|run| run.progress.replace(event.clone()));
+                if let Some(previous) = previous {
+                    self.import_dialog_progress(previous.as_ref(), &event);
                 }
                 Task::none()
             }
+            LibraryImportMsg::Dialog(msg) => self.handle_import_dialog(msg),
             LibraryImportMsg::CancelRequested => {
                 if let Some(run) = &self.library.import.running {
                     run.cancel.store(true, Ordering::Relaxed);
@@ -193,9 +193,19 @@ impl Signex {
         }
     }
 
+    /// A run ended. The Import Library dialog shows a dry run's result and
+    /// a failed import itself; no notice repeats them.
     fn finish_library_import(&mut self, finished: ImportFinished) -> Task<Message> {
-        self.library.import.running = None;
+        let mode = self.library.import.running.take().map(|run| run.mode);
+        let shown = self.import_dialog_run_finished(&finished, mode);
         let task = match &finished.result {
+            Err(failure) if shown || mode == Some(RunMode::Preview) => {
+                crate::diagnostics::log_error(
+                    "Library import",
+                    &anyhow::anyhow!("{}\n{}", failure.error, failure.stderr_tail.trim()),
+                );
+                Task::none()
+            }
             Err(failure) => {
                 self.report_library_import_failure(failure);
                 Task::none()

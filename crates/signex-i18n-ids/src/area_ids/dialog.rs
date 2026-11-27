@@ -111,6 +111,7 @@ define_ids! {
     DIALOG_TITLE_LIBRARY_OPTIONS = "dialog-title-library-options";
     DIALOG_TITLE_COPY_TO_LIBRARY = "dialog-title-copy-to-library";
     DIALOG_TITLE_LIBRARY_UPDATES = "dialog-title-library-updates";
+    DIALOG_TITLE_IMPORT_LIBRARY = "dialog-title-import-library";
     DIALOG_TITLE_CLOSE_LIBRARY = "dialog-title-close-library";
     DIALOG_TITLE_DELETE_COMPONENT = "dialog-title-delete-component";
     DIALOG_TITLE_LIBRARY_RECOVERY = "dialog-title-library-recovery";

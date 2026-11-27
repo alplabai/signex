@@ -37,6 +37,7 @@ mod edit_row_params;
 pub mod editor;
 pub mod external_poll;
 pub mod held_back;
+pub mod import_dialog;
 pub mod loose_symbols;
 pub(crate) mod measurement_slot;
 pub mod messages;

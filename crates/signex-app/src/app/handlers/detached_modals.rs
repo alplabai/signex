@@ -7,7 +7,7 @@ use crate::app::Message;
 use crate::app::state::{ModalId, Signex, WindowKind};
 
 /// Dialogs whose window follows their open state, whatever code flips it.
-const FOLLOWED: [ModalId; 25] = [
+const FOLLOWED: [ModalId; 26] = [
     ModalId::NewProject,
     ModalId::FindReplace,
     ModalId::RenameDialog,
@@ -30,6 +30,7 @@ const FOLLOWED: [ModalId; 25] = [
     ModalId::LibraryCreateOptions,
     ModalId::LibraryStockCopy,
     ModalId::LibraryUpdates,
+    ModalId::LibraryImport,
     ModalId::LibraryCloseConfirm,
     ModalId::LibraryRecovery,
     ModalId::NetColorCustom,
@@ -92,6 +93,7 @@ impl Signex {
             ModalId::LibraryCreateOptions => self.library.create_options.is_some(),
             ModalId::LibraryStockCopy => self.library.stock_copy.is_some(),
             ModalId::LibraryUpdates => self.library.library_updates.is_some(),
+            ModalId::LibraryImport => self.library.import_dialog.is_some(),
             ModalId::LibraryCloseConfirm => self.library.close_library_confirm.is_some(),
             ModalId::LibraryRecovery => self.library.recovery.is_some(),
             ModalId::NetColorCustom => ui.net_color_custom.show,

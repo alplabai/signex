@@ -118,6 +118,7 @@ pub(crate) fn detached_modal_title(modal: ModalId) -> MessageId {
         ModalId::LibraryCreateOptions => ids::DIALOG_TITLE_LIBRARY_OPTIONS,
         ModalId::LibraryStockCopy => ids::DIALOG_TITLE_COPY_TO_LIBRARY,
         ModalId::LibraryUpdates => ids::DIALOG_TITLE_LIBRARY_UPDATES,
+        ModalId::LibraryImport => ids::DIALOG_TITLE_IMPORT_LIBRARY,
         ModalId::LibraryCloseConfirm => ids::DIALOG_TITLE_CLOSE_LIBRARY,
         ModalId::LibraryDeleteConfirm => ids::DIALOG_TITLE_DELETE_COMPONENT,
         ModalId::LibraryRecovery => ids::DIALOG_TITLE_LIBRARY_RECOVERY,
