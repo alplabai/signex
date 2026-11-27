@@ -511,7 +511,12 @@ plain Cutout on the same loop is not checked.
 The board pour is its own `BakedKind::BoardPours` (token `board_pours`), not
 the footprint's `Pours`: a board bake answers for exactly
 `SketchHost::Board.bake_targets()`, and `Pours` is a footprint field. A
-pour's net is a name the board's net table must hold (`UnknownNet`), an
+pour's Corners and Corner size (#2598, the footprint Pour form's rows) bake
+into the zone's `corners` and `corner_size` as they are (a size that is no
+number from 0 bakes as 0), so the board fill shapes the corners by its own
+rule (`docs/PCB_TOOLS.md`, "Corners and hatched fill"); a re-bake takes them
+from the sketch, never from the old zone. A pour's net is a name the board's
+net table must hold (`UnknownNet`), an
 anchor's component a footprint the board holds (`UnknownComponent`; no
 component picked is `AnchorWithoutComponent`).
 
@@ -533,5 +538,6 @@ The `.snxpcb` token is `snxpcb/1.7` while the board sketch carries any of
 `board_slot`, `pour`, `mechanical` or `component_anchor`
 (`SketchData::carries_board_targets`), `snxpcb/1.8` when a pattern repeats a
 target (`SketchData::repeats_baked_target`), else what it was (1.4, or 1.5
-with layer colours), byte for byte. Still to do: the drill and route output emits a
+with layer colours), byte for byte; `snxpcb/1.13` while a board sketch pour
+has corners other than Sharp (`docs/FORMAT_VERSIONS.md`). Still to do: the drill and route output emits a
 Slot cutout as a stadium cutout, not a routed slot.

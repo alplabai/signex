@@ -176,8 +176,9 @@ step, re-solves and re-bakes the sketch, and dirties the tab.
   (`pcb_geom::shaped_outline_mm`, `docs/PCB_TOOLS.md`, "Corners and hatched
   fill"), so the canvas and the baked `pours` show the shaped outline;
   Sharp, or a size of 0, bakes the outline as drawn. A board sketch pour
-  shows no Corners rows: its board pour has its own. A pour with corners
-  other than Sharp saves as `snxfpt/1.5` (`docs/FORMAT_VERSIONS.md`).
+  shows the same rows and bakes them into its board zone
+  (`docs/PCB_SKETCH.md`). A pour with corners other than Sharp saves as
+  `snxfpt/1.5`, or `snxpcb/1.13` on a board (`docs/FORMAT_VERSIONS.md`).
 - **Keepout.** The **Layer** dropdown writes `KeepoutAttr::layer`. It offers
   Top Layer and Bottom Layer, plus the stored layer when a file names
   another one. A keepout on all layers or on the inner layers only cannot

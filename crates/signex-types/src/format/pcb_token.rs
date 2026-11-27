@@ -81,17 +81,17 @@ pub const SNXPCB_FORMAT_V1_12: &str = "snxpcb/1.12";
 pub const SNXPCB_FORMAT_V1_13: &str = "snxpcb/1.13";
 
 /// Whether `board` holds content only [`SNXPCB_FORMAT_V1_13`] carries. One rule for
-/// every 1.13 trigger; today a board sketch whose linear pattern has a
-/// suppression list (#2688).
+/// every 1.13 trigger: a board sketch whose linear pattern has a
+/// suppression list (#2688), or whose pour has corners other than Sharp
+/// (#2598).
 fn needs_1_13(board: &PcbBoard) -> bool {
-    board
-        .sketch
-        .as_ref()
-        .is_some_and(|stored| stored.sketch.has_linear_suppression())
+    board.sketch.as_ref().is_some_and(|stored| {
+        stored.sketch.has_linear_suppression() || stored.sketch.has_pour_corners()
+    })
 }
 
 /// The token a save of `board` writes, from its content, highest need
-/// first: a linear pattern's suppression list needs
+/// first: a board sketch's linear suppression list or pour corners need
 /// [`SNXPCB_FORMAT_V1_13`]; a layout plan, a length-matching group, a
 /// teardrop rule or a shaped pour (corners or hatch)
 /// [`SNXPCB_FORMAT_V1_12`]; a pour cutout, a

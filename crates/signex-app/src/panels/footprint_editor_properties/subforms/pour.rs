@@ -1,12 +1,11 @@
 //! Pour role sub-form (mockup row 126): header, the pour illustration (region, fill
-//! style, net, priority) and the Pour properties section. A footprint
-//! sketch pour adds Corners and Corner size, the board pour's rows (#2598).
+//! style, net, priority) and the Pour properties section, with Corners and
+//! Corner size, the board pour's rows, in both sketch hosts (#2598).
 
 use iced::{Element, Point};
 use signex_i18n::{I18n, Localized, UserText, ids, t};
 use signex_sketch::attr::PourFillType;
 use signex_sketch::id::SketchEntityId;
-use signex_types::sketch::SketchHost;
 use signex_types::theme::ThemeTokens;
 use signex_types::zone_pour_shape::PourCorners;
 use signex_widgets::property_illustration::{
@@ -104,10 +103,7 @@ pub(super) fn view<'a>(
         segmented(fills),
         tokens,
     ));
-    // A board sketch pour bakes to a board pour, which has its own rows.
-    if fp.sketch_host == SketchHost::Footprint {
-        parts.extend(corner_rows(fp, pour, id, tokens, i18n));
-    }
+    parts.extend(corner_rows(fp, pour, id, tokens, i18n));
     form(parts)
 }
 

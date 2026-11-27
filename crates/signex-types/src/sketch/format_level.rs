@@ -53,7 +53,8 @@ impl SketchData {
 
     /// Whether a pour has corners other than Sharp (#2598): an older build,
     /// which does not know the keys, would bake the outline sharp and drop
-    /// them on save. A trigger of `SNXFPT_FORMAT_V1_5`.
+    /// them on save. A trigger of `SNXFPT_FORMAT_V1_5` and
+    /// `SNXPCB_FORMAT_V1_13`.
     pub fn has_pour_corners(&self) -> bool {
         self.entities
             .iter()
