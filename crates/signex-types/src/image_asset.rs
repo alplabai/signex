@@ -477,7 +477,7 @@ pub fn pick_asset_name(wanted: &str, hash: &str, existing: &[(String, String)]) 
     same.sort_unstable();
     if let Some(name) = same.iter().find(|n| **n == wanted).or(same.first()) {
         return AssetChoice {
-            file: path(*name),
+            file: path(name),
             reuses_existing: true,
         };
     }
