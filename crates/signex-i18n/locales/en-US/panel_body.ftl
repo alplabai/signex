@@ -157,7 +157,6 @@ panels-components-details-no-parameters = No parameters.
 
 ## Planned panels: what each will do, under its name and the planned note
 panels-stub-variants = Design variant management
-panels-stub-output-jobs = Manufacturing output config
 panels-stub-bom-studio = Bill of Materials management
 panels-stub-favorites = Favorite components
 panels-stub-snippets = Reusable schematic snippets

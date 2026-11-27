@@ -44,9 +44,10 @@ impl PanelGroup {
 
 /// The group `kind` is listed under. A tool document leaves the list only
 /// once it opens as a document tab (DECISIONS 2026-11-24, mockup row 7):
-/// Layer Stack does, so it has none; BOM Studio, Export Jobs, Variants and
-/// the Design Notebook are still panels and keep their Project row. To-Do
-/// folds into the Design Notebook (DECISIONS 2026-11-24, mockup row 7).
+/// Layer Stack does, so it has none; BOM Studio, Variants and the Design
+/// Notebook are still panels and keep their Project row. Export Jobs keeps
+/// its row, which opens the Export Job tab (mockup row 114). To-Do folds
+/// into the Design Notebook (DECISIONS 2026-11-24, mockup row 7).
 pub fn panel_group(kind: PanelKind) -> Option<PanelGroup> {
     let group = match kind {
         PanelKind::LayerStack | PanelKind::Todo => return None,
@@ -57,7 +58,8 @@ pub fn panel_group(kind: PanelKind) -> Option<PanelGroup> {
         | PanelKind::Annotations
         | PanelKind::Favorites
         | PanelKind::Snippets
-        // Tool documents that do not open as tabs yet.
+        // Tool documents that do not open as tabs yet; Export Jobs' row
+        // opens its tab (mockup row 114).
         | PanelKind::BomStudio
         | PanelKind::OutputJobs
         | PanelKind::Variants

@@ -47,6 +47,8 @@ impl Signex {
             M::BoardClicked { at, tolerance } => {
                 self.on_gerber_package(|o| o.click_at(at, tolerance))
             }
+            M::RunBannerClosed => self.close_gerber_run_banner(),
+            M::BackToRunPressed => self.back_to_gerber_run(),
         }
     }
 
@@ -72,6 +74,9 @@ impl Signex {
         self.open_gerber_viewer_tab();
         let viewer = &mut self.document_state.gerber_viewer;
         viewer.open_menu = false;
+        // Files opened any other way are not a run's (mockup row 193b).
+        viewer.from_run = None;
+        viewer.run_missing = false;
         let job = viewer.start_read();
         let read = Task::perform(
             crate::app::path_op_jobs::run_blocking(move || read_paths(paths)),
@@ -139,6 +144,8 @@ impl Signex {
         let read = match result {
             Ok(read) => Arc::unwrap_or_clone(read),
             Err(why) => {
+                // A run's files moved since: the banner says where they were.
+                viewer.run_missing = viewer.from_run.is_some();
                 log_read_failure(&self.ui_state.i18n, &why);
                 return self.check_recent_gerber_packages();
             }

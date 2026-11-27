@@ -33,8 +33,9 @@ pub(crate) fn page_name(kind: &TabKind) -> Option<MessageId> {
         | TabKind::SymbolEditor(_)
         | TabKind::FootprintEditor(_)
         | TabKind::LibraryBrowser(_) => None,
-        // Titled by its package, not a project (`app/gerber_viewer/tab`).
-        TabKind::GerberViewer => None,
+        // Titled by its package, not a project (`app/gerber_viewer/tab`);
+        // an Export Job by its file (`app/output_job/document`).
+        TabKind::GerberViewer | TabKind::OutputJob => None,
     }
 }
 

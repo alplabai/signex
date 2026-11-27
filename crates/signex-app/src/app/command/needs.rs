@@ -415,6 +415,10 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         "report_manager_bom" => Needs::Schematic,
         // #1298: Export PDF of the sheet in view.
         "export_schematic_pdf" => Needs::Schematic,
+        // #1299: the pages of the schematic in view as PNG; an Export Job
+        // belongs to an open project.
+        "export_sheet_png" => Needs::Schematic,
+        "run_output_job" | "open_output_job" | "new_output_job" => Needs::OpenProject,
         "leave_sheet" | "navigate_up_hierarchy" => Needs::ParentSheet,
         "delete_selection" => Needs::DeleteTarget,
         "rotate_clockwise"

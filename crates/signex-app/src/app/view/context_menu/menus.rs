@@ -298,7 +298,8 @@ impl Signex {
                 // The Gerber Viewer draws in the main window only.
                 undock_unavailable: already_undocked
                     || tab.kind.is_project_page()
-                    || tab.kind.is_gerber_viewer(),
+                    || tab.kind.is_gerber_viewer()
+                    || tab.kind.is_output_job(),
                 has_file: crate::tab_bar::tab_file_path(tab).is_some(),
                 in_project: self.project_tree_key_of_file(&tab.path).is_some(),
                 close_shortcut: &close_shortcut,

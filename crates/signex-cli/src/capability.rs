@@ -104,6 +104,13 @@ const SAVES: &[&str] = &[
     "save_layer_set",
     // Writes the named workspace layout into the user's preferences (mockup row 166).
     "save_workspace_layout",
+    // Write an Export Job file: a new one, or an edit of one no tab holds
+    // (#1299, mockup row 114).
+    "new_output_job",
+    "add_job_output",
+    "set_job_output",
+    "set_job_profile",
+    "set_job_triggers",
 ];
 
 /// The one capability `command` needs, from its catalog flags.
@@ -199,6 +206,15 @@ mod tests {
             (Capability::Export, "export_schematic_pdf"),
             (Capability::Export, "export_assembly_svg"),
             (Capability::Export, "export_board_step"),
+            // #1299: PNG pages, and an Export Job's outputs.
+            (Capability::Export, "export_sheet_png"),
+            (Capability::Export, "run_output_job"),
+            // Mockup row 114: the Export Job edits write its file.
+            (Capability::Save, "new_output_job"),
+            (Capability::Save, "add_job_output"),
+            (Capability::Save, "set_job_output"),
+            (Capability::Save, "set_job_profile"),
+            (Capability::Save, "set_job_triggers"),
         ]);
         assert_eq!(non_default, pinned);
     }

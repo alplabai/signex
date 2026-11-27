@@ -21,6 +21,7 @@ mod erc;
 mod grid;
 mod hierarchy;
 mod history;
+mod job_operands;
 mod layers;
 mod library;
 mod nets;

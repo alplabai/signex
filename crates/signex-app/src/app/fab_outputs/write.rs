@@ -49,6 +49,28 @@ pub(crate) struct GenerateJob {
 /// Run `job`: make every file first, then write them all; when one cannot
 /// be made, nothing is written.
 pub(crate) fn run_generate(job: GenerateJob) -> Result<FabWritten, FabProblem> {
+    let folder = job.folder.clone();
+    let made = make_generate(job)?;
+    write_made(
+        made.files,
+        &folder,
+        &made.name,
+        made.notes,
+        made.board_notes,
+    )
+}
+
+/// The files one Generate makes, not written yet: an Export Job run (#1299)
+/// writes them with the rest of its outputs.
+pub(crate) struct Made {
+    pub name: String,
+    pub files: Vec<MadeFile>,
+    pub notes: Vec<FabNote>,
+    pub board_notes: Vec<BoardNote>,
+}
+
+/// Make every file of `job`; when one cannot be made, none is.
+pub(crate) fn make_generate(job: GenerateJob) -> Result<Made, FabProblem> {
     let board = fab_board(job.board, job.whole_panel)?;
     let name = check_job(&board, &job.name)
         .map_err(FabProblem::Refused)?
@@ -70,7 +92,12 @@ pub(crate) fn run_generate(job: GenerateJob) -> Result<FabWritten, FabProblem> {
         job.documents,
         &mut board_notes,
     )?);
-    write_made(made, &job.folder, &name, notes, board_notes)
+    Ok(Made {
+        name,
+        files: made,
+        notes,
+        board_notes,
+    })
 }
 
 /// Build `board`'s fabrication files and write them into `folder`,

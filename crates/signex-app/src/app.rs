@@ -54,6 +54,7 @@ mod library_delete;
 mod load_gateway;
 mod mutation_gateway;
 pub(crate) mod new_project;
+pub(crate) mod output_job;
 pub(crate) mod page_tab;
 pub mod parent_reference_disk;
 mod parked_sheets;
@@ -170,6 +171,11 @@ pub(crate) use handlers::selection_workflow::passes_filter;
 pub use handlers::window_geometry_events::GeometryReadout;
 pub use handlers::window_tiling::{Tile, TileLayout, TilePlan, tiles};
 pub use new_project::{NewProjectMsg, NewProjectState, ProfileUndo};
+pub use output_job::{
+    AutoMsg, Built, CheckCounts, JobDocMsg, JobRead, JobReport, JobTabMsg, JobWritten, ListPurpose,
+    NamingMode, OutputJobMsg, Packaged, PackagingSwitch, RunAsk, RunMsg, TabPage, TriggerEdit,
+    ValidateOutcome, WrittenOutput,
+};
 pub use sheet_numbering::{NumberingProblem, SheetNumberingMsg, SheetNumberingState};
 pub use sheet_sync::{SheetSyncMsg, SheetSyncProblem, SheetSyncState};
 pub use signex_history::History;

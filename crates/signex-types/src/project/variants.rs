@@ -69,6 +69,16 @@ impl ProjectData {
             .position(|defined| defined.eq_ignore_ascii_case(name))
     }
 
+    /// The variant `name` names, as the project spells it: Base, or one of
+    /// its definitions. `None` when the project has no such variant.
+    pub fn defined_variant(&self, name: &str) -> Option<&str> {
+        if is_base_variant(name) {
+            return Some(BASE_VARIANT);
+        }
+        self.variant_index(name)
+            .map(|index| self.variant_definitions[index].as_str())
+    }
+
     /// `name` trimmed, when it may name a new variant (or `renaming`'s new
     /// name: a case-only rename of the same variant is allowed).
     pub fn check_variant_name(

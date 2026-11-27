@@ -28,6 +28,7 @@ mod gerber_viewer;
 mod library;
 mod new_project;
 mod notice;
+mod output_job;
 mod overlay;
 mod panel_body;
 mod panels;
@@ -81,6 +82,7 @@ pub use gerber_viewer::*;
 pub use library::*;
 pub use new_project::*;
 pub use notice::*;
+pub use output_job::*;
 pub use overlay::*;
 pub use panel_body::*;
 pub use panels::*;
@@ -137,6 +139,7 @@ pub(crate) fn area_lists() -> Vec<crate::MessageId> {
         library::LIBRARY,
         new_project::NEW_PROJECT,
         notice::NOTICE,
+        output_job::OUTPUT_JOB,
         overlay::OVERLAY,
         panel_body::PANEL_BODY,
         panels::PANELS,

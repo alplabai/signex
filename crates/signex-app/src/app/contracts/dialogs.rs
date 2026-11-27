@@ -543,6 +543,8 @@ pub enum ExportMsg {
         source: std::path::PathBuf,
         outcome: Box<ExportWriteOutcome>,
     },
+    /// An Export Job run or a PNG export (#1299).
+    OutputJob(crate::app::OutputJobMsg),
 }
 
 /// What an export's background file write produced, carried back to `update`

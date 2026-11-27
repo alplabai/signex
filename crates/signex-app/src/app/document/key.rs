@@ -58,6 +58,8 @@ impl DocumentKey {
             TabKind::LibraryBrowser(_) => None,
             // Read-only fabrication files: nothing to save or undo.
             TabKind::GerberViewer => None,
+            // Saved by its own path (`app/output_job/document`); no undo.
+            TabKind::OutputJob => None,
         }
     }
 }

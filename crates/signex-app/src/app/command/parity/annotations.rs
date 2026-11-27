@@ -93,6 +93,24 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
         Operand,
         &[Settings],
     ),
+    // #1299: checks the job's project and starts its read; the build is later.
+    // The tab's commands (mockup row 114) read the job's draft or its file.
+    (
+        &[
+            "run_output_job",
+            "new_output_job",
+            "open_output_job",
+            "read_output_job",
+            "add_job_output",
+            "set_job_output",
+            "set_job_profile",
+            "set_job_triggers",
+            "stop_output_job",
+            "view_output_job_run",
+        ],
+        Operand,
+        &[],
+    ),
     // Save As of a background sheet is refused (`active_path`).
     (&["save_document_as"], Operand, &[ActiveDocument]),
     // The rfd picker (`save_as_dialog_for_active_tab`).
@@ -155,6 +173,7 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "color_net",
             "export_board_report",
             "export_board_step",
+            "export_sheet_png",
             "export_assembly_svg",
             "board_assembly_drawing",
             "board_report_bom",

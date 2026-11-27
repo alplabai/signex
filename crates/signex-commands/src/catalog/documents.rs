@@ -338,6 +338,126 @@ pub(super) const DOCUMENTS: &[CommandMetadata] = &[
         operands: super::operands::BOARD_STEP,
         ..CommandMetadata::DEFAULT
     },
+    // #1299: the pages of the schematic's project as PNG files in a folder
+    // the person picks; headless it writes `document`'s pages into `path`.
+    CommandMetadata {
+        id: "export_sheet_png",
+        category: "reports",
+        label: command_ids::CMD_EXPORT_SHEET_PNG,
+        menu_label: None,
+        group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::NONE,
+        operands: super::operands::SHEET_PNG_EXPORT,
+        ..CommandMetadata::DEFAULT
+    },
+    // #1299: an Export Job (`.snxout`) the person picks, or the one `path`
+    // names, runs a profile, every enabled output or the one `name` names.
+    CommandMetadata {
+        id: "run_output_job",
+        category: "reports",
+        label: command_ids::CMD_RUN_OUTPUT_JOB,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: super::job_operands::OUTPUT_JOB_RUN,
+        ..CommandMetadata::DEFAULT
+    },
+    // Mockup row 114: the Export Job tab's actions, each a command. A new
+    // job in its tab, or written at `path`.
+    CommandMetadata {
+        id: "new_output_job",
+        category: "file",
+        label: command_ids::CMD_NEW_OUTPUT_JOB,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: super::job_operands::OUTPUT_JOB_PATH_OPTIONAL,
+        ..CommandMetadata::DEFAULT
+    },
+    // View ▸ Panels ▸ Export Jobs: the project's job, or `path`, in its tab.
+    CommandMetadata {
+        id: "open_output_job",
+        category: "panels",
+        label: command_ids::CMD_OPEN_OUTPUT_JOB,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: super::job_operands::OUTPUT_JOB_PATH_OPTIONAL,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "read_output_job",
+        category: "design",
+        label: command_ids::CMD_READ_OUTPUT_JOB,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: super::job_operands::OUTPUT_JOB_PATH,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "add_job_output",
+        category: "design",
+        label: command_ids::CMD_ADD_JOB_OUTPUT,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: super::job_operands::JOB_OUTPUT_ADD,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "set_job_output",
+        category: "design",
+        label: command_ids::CMD_SET_JOB_OUTPUT,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: super::job_operands::JOB_OUTPUT_SET,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "set_job_profile",
+        category: "design",
+        label: command_ids::CMD_SET_JOB_PROFILE,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: super::job_operands::JOB_PROFILE_SET,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "set_job_triggers",
+        category: "design",
+        label: command_ids::CMD_SET_JOB_TRIGGERS,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: super::job_operands::JOB_TRIGGERS_SET,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "stop_output_job",
+        category: "design",
+        label: command_ids::CMD_STOP_OUTPUT_JOB,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: super::job_operands::OUTPUT_JOB_PATH,
+        ..CommandMetadata::DEFAULT
+    },
+    // Mockup row 193b: a run's files on the Gerber Viewer.
+    CommandMetadata {
+        id: "view_output_job_run",
+        category: "view",
+        label: command_ids::CMD_VIEW_OUTPUT_JOB_RUN,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: super::job_operands::JOB_RUN_VIEW,
+        ..CommandMetadata::DEFAULT
+    },
     CommandMetadata {
         id: "project_settings",
         category: "design",

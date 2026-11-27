@@ -36,6 +36,11 @@ impl Signex {
             self.open_layer_stack_tab();
             return Task::none();
         }
+        // Export Jobs is a document tab too (mockup row 114): its row opens
+        // the project's `.snxout`, or focuses it.
+        if kind == PanelKind::OutputJobs {
+            return self.open_project_output_job();
+        }
         // On a board, Net Classes is a mode of the PCB panel (mockup row 106).
         if kind == PanelKind::NetClasses && self.has_active_pcb() {
             self.document_state.panel_ctx.pcb_panel.mode = crate::panels::PcbPanelMode::NetClasses;

@@ -101,6 +101,10 @@ impl Signex {
     ) -> anyhow::Result<Option<Task<Message>>> {
         // Reported as this file's failure; the rest of the batch still saves.
         self.refuse_save_while_restoring(path)?;
+        // An Export Job's draft, open or parked (`app/output_job/document`).
+        if self.document_state.output_jobs.contains_key(path) {
+            return Ok(Some(self.write_output_job_draft(path, None)));
+        }
         match self.document_state.document_key_for_path(path) {
             Some(DocumentKey::Schematic(_)) => self
                 .begin_schematic_save(path.to_path_buf(), None)

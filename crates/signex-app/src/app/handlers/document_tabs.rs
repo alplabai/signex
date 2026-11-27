@@ -236,6 +236,12 @@ impl Signex {
         {
             return self.close_gerber_viewer_tab(idx, keep_session);
         }
+        // An Export Job's draft is keyed by its path (`app/output_job`).
+        if let Some(tab) = self.document_state.tabs.get(idx)
+            && tab.kind.is_output_job()
+        {
+            return self.close_output_job_tab(idx, park_dirty, keep_session);
+        }
         if let Some(tab) = self.document_state.tabs.get(idx) {
             let path = tab.path.clone();
             if park_dirty && !keep_session {

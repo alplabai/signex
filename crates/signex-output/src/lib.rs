@@ -54,8 +54,8 @@ pub use pdf::{
     check_page_range, parse_custom_edge_mm, parse_mm, parse_percent, printed_sheet_numbers,
 };
 pub use preview::{
-    MAX_PREVIEW_EDGE_PX, PreviewOptions, PreviewPage, PreviewPageInfo, PreviewRasterizer,
-    preview_raster_size,
+    MAX_PREVIEW_EDGE_PX, PreviewOptions, PreviewPage, PreviewPageInfo, PreviewRasterizer, SheetPng,
+    encode_png, png_resolution_capped, preview_raster_size,
 };
 pub use reference_display::show_board_references;
 pub use substitution::{SubstitutionContext, resolve, resolve_text};

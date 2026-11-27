@@ -383,6 +383,12 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
             ))
         }
         "export_board_step" => Message::from(crate::app::BoardOutputMsg::StepExportRequested),
+        // #1299: the PNG pages and an Export Job, each through its picker.
+        "export_sheet_png" => Message::from(crate::app::OutputJobMsg::PngRequested),
+        "run_output_job" => Message::from(crate::app::OutputJobMsg::RunRequested),
+        // Mockup row 114: View ▸ Panels ▸ Export Jobs and New Export Job.
+        "open_output_job" => Message::from(crate::app::OutputJobMsg::OpenRequested),
+        "new_output_job" => Message::from(crate::app::OutputJobMsg::NewRequested),
         // #2410: Tools ▸ Panelize Board and Remove Panel, on the board in view.
         "panelize_board" => Message::from(crate::app::BoardPanelMsg::PanelizeRequested),
         "remove_board_panel" => Message::from(crate::app::BoardPanelMsg::RemoveRequested),

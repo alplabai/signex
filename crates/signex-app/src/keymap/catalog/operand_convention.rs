@@ -120,6 +120,31 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("wiring", OperandKind::Text),
     // #2610: the variant a PDF prints, by name.
     ("variant", OperandKind::Text),
+    // #1299: a PNG export's resolution, whole dots per inch.
+    ("dpi", OperandKind::Text),
+    // Mockup row 114: an Export Job's outputs, profiles and triggers.
+    ("selected", OperandKind::Bool),
+    ("odb_folder", OperandKind::Bool),
+    ("from", OperandKind::Text),
+    ("to", OperandKind::Text),
+    ("default", OperandKind::Bool),
+    ("outputs", OperandKind::Text),
+    ("validate", OperandKind::Bool),
+    ("on_errors", OperandKind::Text),
+    ("on_warnings", OperandKind::Text),
+    ("folder", OperandKind::Text),
+    ("naming", OperandKind::Text),
+    ("zip", OperandKind::Bool),
+    ("group_folders", OperandKind::Bool),
+    ("release_folder", OperandKind::Bool),
+    ("clear_folder", OperandKind::Bool),
+    ("on_save", OperandKind::Bool),
+    ("sources", OperandKind::Text),
+    ("wait", OperandKind::Text),
+    ("keep_up_to_date", OperandKind::Bool),
+    ("before_close", OperandKind::Text),
+    ("tag", OperandKind::Text),
+    ("run", OperandKind::Text),
 ];
 
 /// The commands whose `ids` is still text, not targets (#2326): a design
