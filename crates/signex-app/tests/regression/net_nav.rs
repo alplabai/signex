@@ -150,6 +150,10 @@ pub(crate) mod flows {
                 disk: None,
             }));
         }
+        // Opening a sheet with a Global label starts the net index build its
+        // cross references read (#1273); the updates above dropped that task,
+        // so build it here, or every later request would wait on it.
+        app.settle_net_index_blocking();
         assert_eq!(app.document_state.active_path.as_deref(), Some(a.as_path()));
         (app, a, b)
     }
