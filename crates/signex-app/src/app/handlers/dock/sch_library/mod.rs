@@ -607,6 +607,9 @@ impl Signex {
             PanelMsg::FpEditorBeginRepickPolarCenter { array_id } => {
                 self.fp_editor_begin_repick_polar_center(*array_id)
             }
+            PanelMsg::FpEditorPatternKindPicked { array_id, kind } => {
+                self.fp_editor_pattern_kind_picked(*array_id, *kind)
+            }
             PanelMsg::FpEditorToggleArrayInstance {
                 array_id,
                 i,

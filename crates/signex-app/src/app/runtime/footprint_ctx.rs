@@ -548,7 +548,7 @@ pub(super) fn build_footprint_editor_panel_ctx(
         };
         let repicking_polar_center = matches!(
             editor.state.tool_pending,
-            ToolPending::RepickPolarCenter { array_id } if array_id == array.id
+            ToolPending::RepickPolarCenter { array_id, .. } if array_id == array.id
         );
         let source = sketch.entities.iter().find(|e| e.id == sel_id);
         let source_position_mm = source.and_then(|e| match e.kind {

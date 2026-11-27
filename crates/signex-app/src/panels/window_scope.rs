@@ -224,6 +224,7 @@ impl PanelMsg {
             | Self::FpEditorSetBgaStartCol { .. }
             | Self::FpEditorDeleteArray { .. }
             | Self::FpEditorBeginRepickPolarCenter { .. }
+            | Self::FpEditorPatternKindPicked { .. }
             | Self::FpEditorToggleArrayInstance { .. }
             | Self::FpEditorToggleSnapOption { .. }
             | Self::FpEditorSetSnapGridStep { .. }

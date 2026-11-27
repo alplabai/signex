@@ -29,13 +29,8 @@ const NUMBERING_SECTION: &str = "fp_role_pattern_numbering";
 const MAX_GRID_CHECKBOX_DIM: u32 = 32;
 const MAX_ROW_CHECKBOX_COUNT: u32 = 64;
 
-/// The kind of a pattern, for the kind segment.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum PatternKind {
-    Linear,
-    Grid,
-    Polar,
-}
+// The kind of a pattern, for the kind segment (the bake's, #2596).
+pub(super) use signex_bake::array::PatternKind;
 
 pub(super) fn kind_of(pattern: &ArraySummary) -> PatternKind {
     match pattern.kind {
@@ -45,10 +40,12 @@ pub(super) fn kind_of(pattern: &ArraySummary) -> PatternKind {
     }
 }
 
-/// The kind segment: the pattern's kind, the other kinds shown and
-/// disabled (a pattern keeps the kind it was made with).
+/// The kind segment (#2596): the pattern's kind is lit and every kind
+/// switches it; Polar asks for a centre first, and the lit kind cancels
+/// that pick.
 pub(super) fn kind_segments(pattern: &ArraySummary, i18n: &I18n) -> Vec<Segment> {
     let current = kind_of(pattern);
+    let array_id = pattern.array_id;
     [
         (PatternKind::Linear, ids::EDITORS_ROLE_PATTERN_KIND_LINEAR),
         (PatternKind::Grid, ids::EDITORS_ROLE_PATTERN_KIND_GRID),
@@ -58,7 +55,7 @@ pub(super) fn kind_segments(pattern: &ArraySummary, i18n: &I18n) -> Vec<Segment>
     .map(|(kind, name)| Segment {
         label: t!(i18n, name),
         active: kind == current,
-        msg: None,
+        msg: Some(PanelMsg::FpEditorPatternKindPicked { array_id, kind }),
     })
     .collect()
 }
@@ -121,6 +118,11 @@ pub(super) fn view<'a>(
             .width(Length::Fill)
             .boxed(),
     ];
+    // A switch to Polar waiting for its centre (a polar pattern shows its
+    // own Re-pick state on the Centre row).
+    if pattern.repicking_polar_center && kind_of(pattern) != PatternKind::Polar {
+        parts.push(note(t!(i18n, ids::EDITORS_ROLE_PATTERN_REPICKING), tokens));
+    }
     let layout_open = is_open(LAYOUT_SECTION, collapsed, true);
     parts.push(section_header(
         LAYOUT_SECTION,

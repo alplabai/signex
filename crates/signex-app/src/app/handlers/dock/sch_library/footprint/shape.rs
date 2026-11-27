@@ -593,7 +593,10 @@ impl Signex {
     ) -> bool {
         if let Some(editor) = self.active_footprint_editor_mut() {
             use crate::library::editor::footprint::state::ToolPending;
-            editor.state.tool_pending = ToolPending::RepickPolarCenter { array_id };
+            editor.state.tool_pending = ToolPending::RepickPolarCenter {
+                array_id,
+                is_kind_switch: false,
+            };
             editor.canvas_cache.clear();
         }
         self.refresh_panel_ctx();

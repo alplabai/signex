@@ -528,4 +528,7 @@ define_ids! {
     EDITORS_PIN_TABLE_LENGTH_REFUSED = "editors-pin-table-length-refused";
     // library-dialog-polish
     EDITORS_SYMBOL_BAR_PIN_TYPE = "editors-symbol-bar-pin-type";
+    // #2596
+    EDITORS_ROLE_PATTERN_KIND_DROPPED_SKIPS = "editors-role-pattern-kind-dropped-skips";
+    EDITORS_ROLE_PATTERN_KIND_DROPPED_OVERRIDES = "editors-role-pattern-kind-dropped-overrides";
 }

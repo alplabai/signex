@@ -333,11 +333,19 @@ impl FootprintCanvas<'_> {
             Some(SketchInference::Off) | None if !snapped_off_point => snap_id,
             _ => None,
         };
+        // A centre pick from the Pattern form takes the click under any
+        // tool, Select included (#2596).
+        let picks_centre = matches!(
+            self.state.tool_pending,
+            crate::library::editor::footprint::state::ToolPending::RepickPolarCenter { .. }
+        );
         let msg = match self.state.active_tool {
-            SketchTool::Select => EditorMsg::Footprint(FootprintEditorMsg::SketchSelect {
-                id: select_id,
-                shift: false,
-            }),
+            SketchTool::Select if !picks_centre => {
+                EditorMsg::Footprint(FootprintEditorMsg::SketchSelect {
+                    id: select_id,
+                    shift: false,
+                })
+            }
             // #361 — Drag Track End arms its endpoint grab on PRESS
             // (`try_drag_track_end_grab`); a release reaching here means
             // the press missed every line, so an un-moved empty click is
@@ -372,6 +380,7 @@ impl FootprintCanvas<'_> {
             | SketchTool::Chamfer
             | SketchTool::Extend
             | SketchTool::LinearPattern
+            | SketchTool::Select
             // #372 — Break Track routes its single click through the
             // same SketchToolClick path as Trim; the dispatcher's edit
             // arm hit-tests the Line and hands off to `split_line`.

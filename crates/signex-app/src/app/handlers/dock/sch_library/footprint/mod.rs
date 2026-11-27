@@ -16,6 +16,7 @@ mod pad_input;
 mod pad_library;
 mod pad_stack;
 mod pad_trapezoid;
+mod pattern_kind;
 mod pattern_mask;
 mod properties_view;
 mod props;

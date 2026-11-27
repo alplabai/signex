@@ -765,9 +765,22 @@ fn try_consume_repick_polar_center(
     use crate::library::editor::footprint::sketch_mode::SketchEdit;
     use crate::library::editor::footprint::state::ToolPending;
 
-    let ToolPending::RepickPolarCenter { array_id } = editor.state.tool_pending else {
+    let ToolPending::RepickPolarCenter {
+        array_id,
+        is_kind_switch,
+    } = editor.state.tool_pending
+    else {
         return false;
     };
+    editor.state.tool_pending = ToolPending::Idle;
+    if is_kind_switch {
+        // #2596: the picked Point is the centre of the pattern turned Polar.
+        let target = signex_bake::array::KindTarget::Polar {
+            centre: resolved_id,
+        };
+        super::pattern_kind::switch_kind(editor, array_id, target);
+        return true;
+    }
     if let Some(sketch) = editor.primitive_mut().sketch.as_mut()
         && let Some(array) = sketch.arrays.iter_mut().find(|a| a.id == array_id)
         && let signex_sketch::array::ArrayKind::Polar { center, .. } = &mut array.kind
@@ -777,6 +790,5 @@ fn try_consume_repick_polar_center(
     editor.with_parts(|state, primitive| {
         apply_sketch_edit_with_warnings(state, primitive, SketchEdit::ForceRebuild);
     });
-    editor.state.tool_pending = ToolPending::Idle;
     true
 }

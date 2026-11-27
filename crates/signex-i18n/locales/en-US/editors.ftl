@@ -1243,3 +1243,9 @@ editors-pin-table-length-refused = Pin length { $value } was not applied: a pin 
 # The header of the symbol editor's Place Pin dropdown (mockup row 141): the
 # type picked under it stays for every following pin.
 editors-symbol-bar-pin-type = Pin type
+# #2596 Messages panel: a pattern switched kind and some of its skipped
+# instances have no place in the new kind. $kind is Linear, Grid or Polar;
+# $instances lists the dropped instances as (column, row).
+editors-role-pattern-kind-dropped-skips = Pattern switched to { $kind }: the skip on instances { $instances } was dropped; the new pattern has no such instance.
+# Same, for the per-pad overrides of those instances.
+editors-role-pattern-kind-dropped-overrides = Pattern switched to { $kind }: the pad overrides of instances { $instances } were dropped; the new pattern has no such instance.
