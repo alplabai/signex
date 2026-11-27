@@ -208,7 +208,10 @@ impl Signex {
             return Vec::new();
         };
         let mut out: Vec<Element<'_, Message>> = Vec::new();
-        let y_offset: f32 = canvas_region::chrome_top(&document.panel_ctx.tokens);
+        // The top of the canvas the bar spans: under the focused pane's tab
+        // strip in a tiled main window, else under the chrome.
+        let undocked = (self.ui_state.main_window_id != Some(window_id)).then_some(window_id);
+        let y_offset: f32 = self.canvas_bounds_in(undocked).y;
         let bar_margin = crate::active_bar::bar_top_margin();
         let theme_id = self.ui_state.effective_theme_id();
         let tokens = &document.panel_ctx.tokens;
