@@ -935,8 +935,12 @@ that hold tabs, beside Tile's one pane per document.
 - **Kept per project** (decided as drawn). A drop or a pane command keeps
   the split for the active tab's project, per user, in `prefs.json` under
   `document_panes`, keyed by the project file:
-  `{"direction": "side_by_side", "panes": [{"tabs": [{"path": "power.snxsch", "page": "schematic"}], "shown": {…}}, …], "rest": 0, "focused": 1}`,
-  documents relative to the project folder. The split comes back, once a
+  `{"direction": "side_by_side", "panes": [{"id": 0, "tabs": [{"path": "power.snxsch", "page": "schematic"}], "shown": {…}}, …], "rest": 0, "focused": 1, "next_id": 2}`,
+  documents relative to the project folder. Each pane has an id that stays
+  with it while the split lasts (an entry without ids reads them as the
+  panes' places; two panes with one id are refused), so an earlier pane
+  closing never moves the view kept for a later one to another pane. The
+  split comes back, once a
   session, when two of its panes have a document open again. Untile, or
   Tile's one pane per document, forgets it; closing the documents does not.
   An entry this build cannot read is left as it is, and a key it does not

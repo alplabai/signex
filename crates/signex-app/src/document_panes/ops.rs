@@ -4,7 +4,7 @@
 
 use crate::app::TileLayout;
 
-use super::model::{Pane, PaneSplit, SplitRefusal};
+use super::model::{Pane, PaneId, PaneSplit, SplitRefusal};
 
 impl<K: Clone + PartialEq> PaneSplit<K> {
     /// Panes in `direction` holding `groups` of `docked` (positions in the
@@ -20,14 +20,18 @@ impl<K: Clone + PartialEq> PaneSplit<K> {
         let panes: Vec<Pane<K>> = groups
             .iter()
             .map(|group| {
-                let tabs: Vec<K> = group
+                group
                     .iter()
                     .filter_map(|&at| docked.get(at).cloned())
-                    .collect();
-                let shown = tabs.first().cloned();
-                Pane { tabs, shown }
+                    .collect::<Vec<K>>()
             })
-            .filter(|pane| !pane.tabs.is_empty())
+            .filter(|tabs| !tabs.is_empty())
+            .zip(0u32..)
+            .map(|(tabs, id)| Pane {
+                id: PaneId(id),
+                shown: tabs.first().cloned(),
+                tabs,
+            })
             .collect();
         if panes.len() < 2 {
             return None;
@@ -36,11 +40,13 @@ impl<K: Clone + PartialEq> PaneSplit<K> {
             .iter()
             .position(|pane| pane.tabs.contains(active))
             .unwrap_or(0);
+        let next_id = panes.len() as u32;
         let mut split = Self {
             direction,
             panes,
             rest: focused,
             focused,
+            next_id,
         };
         if split.panes[focused].tabs.contains(active) {
             split.panes[focused].shown = Some(active.clone());

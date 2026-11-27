@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 use serde_json::{Map, Value, json};
 
 use super::PaneTab;
-use super::model::{Pane, PaneSplit};
+use super::model::{Pane, PaneId, PaneSplit};
 use crate::app::TileLayout;
 
 /// The `prefs.json` key.
@@ -135,6 +135,7 @@ pub fn split_to_json(split: &PaneSplit<PaneTab>, folder: &Path, old: Option<&Val
         .iter()
         .map(|pane| {
             json!({
+                "id": pane.id.0,
                 "tabs": pane.tabs.iter().map(|tab| tab_to_json(tab, folder)).collect::<Vec<_>>(),
                 "shown": pane.shown.as_ref().map(|tab| tab_to_json(tab, folder)),
             })
@@ -145,32 +146,51 @@ pub fn split_to_json(split: &PaneSplit<PaneTab>, folder: &Path, old: Option<&Val
     entry.insert("panes".into(), Value::Array(panes));
     entry.insert("rest".into(), json!(split.rest));
     entry.insert("focused".into(), json!(split.focused));
+    entry.insert("next_id".into(), json!(split.next_id));
     Value::Object(entry)
+}
+
+/// The stored pane at `index`: its id (the index when the entry has none,
+/// as one written before panes had ids), its tabs and the tab it shows.
+fn pane_from_json(pane: &Value, index: usize, folder: &Path) -> Option<Pane<PaneTab>> {
+    let id = match pane.get("id") {
+        None => u32::try_from(index).ok()?,
+        Some(id) => u32::try_from(id.as_u64()?).ok()?,
+    };
+    let tabs = pane
+        .get("tabs")?
+        .as_array()?
+        .iter()
+        .map(|tab| tab_from_json(tab, folder))
+        .collect::<Option<Vec<_>>>()?;
+    let shown = match pane.get("shown") {
+        None | Some(Value::Null) => None,
+        Some(tab) => Some(tab_from_json(tab, folder)?),
+    };
+    Some(Pane {
+        id: PaneId(id),
+        tabs,
+        shown,
+    })
 }
 
 /// The split stored for the project in `folder`, or `None` when the entry
 /// is not one this build can read: an unknown direction, fewer than two
-/// panes, a pane or tab without its fields, an index past the panes.
+/// panes, a pane or tab without its fields, two panes with one id, an index
+/// past the panes.
 pub fn split_from_json(json: &Value, folder: &Path) -> Option<PaneSplit<PaneTab>> {
     let direction = direction_from_key(json.get("direction")?.as_str()?)?;
     let panes = json
         .get("panes")?
         .as_array()?
         .iter()
-        .map(|pane| {
-            let tabs = pane
-                .get("tabs")?
-                .as_array()?
-                .iter()
-                .map(|tab| tab_from_json(tab, folder))
-                .collect::<Option<Vec<_>>>()?;
-            let shown = match pane.get("shown") {
-                None | Some(Value::Null) => None,
-                Some(tab) => Some(tab_from_json(tab, folder)?),
-            };
-            Some(Pane { tabs, shown })
-        })
+        .enumerate()
+        .map(|(index, pane)| pane_from_json(pane, index, folder))
         .collect::<Option<Vec<_>>>()?;
+    let ids: std::collections::BTreeSet<PaneId> = panes.iter().map(|pane| pane.id).collect();
+    if ids.len() != panes.len() {
+        return None;
+    }
     let index = |key: &str| {
         json.get(key)?
             .as_u64()
@@ -178,10 +198,19 @@ pub fn split_from_json(json: &Value, folder: &Path) -> Option<PaneSplit<PaneTab>
             .filter(|n| *n < panes.len())
     };
     let (rest, focused) = (index("rest")?, index("focused")?);
+    // Past every id read, whatever the entry says, so no id is handed out
+    // twice.
+    let past_ids = ids.last().map_or(0, |id| id.0.saturating_add(1));
+    let stored = json
+        .get("next_id")
+        .and_then(Value::as_u64)
+        .and_then(|n| u32::try_from(n).ok())
+        .unwrap_or(0);
     (panes.len() >= 2).then_some(PaneSplit {
         direction,
         panes,
         rest,
         focused,
+        next_id: stored.max(past_ids),
     })
 }

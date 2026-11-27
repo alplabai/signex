@@ -28,7 +28,7 @@ use serde_json::Value;
 
 pub use geometry::{PANE_STRIP_HEIGHT, PaneShares, Splitter, grid_groups, pane_tiles, splitters};
 pub use model::{
-    DropEdge, DropTarget, MAX_PANES, Pane, PaneSplit, ShownPane, SplitRefusal, drop_target,
+    DropEdge, DropTarget, MAX_PANES, Pane, PaneId, PaneSplit, ShownPane, SplitRefusal, drop_target,
 };
 pub use store::{DocumentPanesStore, PrefsDocumentPanesStore};
 
@@ -77,9 +77,11 @@ pub struct DocumentPanesState {
     pub splitter_drag: Option<usize>,
     /// The pane whose ⋯ menu is open, by its place among the panes.
     pub menu: Option<usize>,
-    /// The pane the main canvases drew at the last settle and its
-    /// document: a pane that loses the focus keeps their view.
-    pub focus: Option<(usize, PathBuf)>,
+    /// The pane the main canvases drew at the last settle, by its id
+    /// (`None` under plain tiling, where a pane is its one tab), and its
+    /// document: a pane that loses the focus keeps their view. An id, not a
+    /// place, so an earlier pane closing does not read as a focus move.
+    pub focus: Option<(Option<PaneId>, PathBuf)>,
     /// What the panes outlined for the focused selection last, so the
     /// outline is drawn again only when it changed.
     pub outlined: Option<u64>,

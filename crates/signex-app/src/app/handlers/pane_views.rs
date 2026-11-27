@@ -72,7 +72,9 @@ impl Signex {
         let view = self.tiled_pane_view()?;
         let focused = self.pane_document(&view, view.focused)?;
         let (was_pane, was_path) = self.ui_state.workspace_layouts.panes.focus.clone()?;
-        if was_pane == view.focused && was_path == focused {
+        // By id: an earlier pane that closed moved this one's place, not
+        // the focus.
+        if was_pane == view.focused_id && was_path == focused {
             return None;
         }
         let same = was_path == focused;
@@ -103,7 +105,7 @@ impl Signex {
         }
         let focus = self.tiled_pane_view().and_then(|view| {
             let path = self.pane_document(&view, view.focused)?;
-            Some((view.focused, path))
+            Some((view.focused_id, path))
         });
         self.ui_state.workspace_layouts.panes.focus = focus;
     }

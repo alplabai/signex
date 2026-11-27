@@ -108,17 +108,25 @@ pub enum SplitRefusal {
     NoZoom,
 }
 
+/// A pane's name for as long as the split lasts. A pane's place among the
+/// panes moves when an earlier one closes; its id does not, so what was
+/// kept for a pane (the view the focused pane had) stays with it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct PaneId(pub u32);
+
 /// One pane: the tabs dropped into it, and the tab it shows while another
 /// pane has the focus.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Pane<K> {
+    pub id: PaneId,
     pub tabs: Vec<K>,
     pub shown: Option<K>,
 }
 
 impl<K> Pane<K> {
-    fn of(tab: K, shown: Option<K>) -> Self {
+    fn of(id: PaneId, tab: K, shown: Option<K>) -> Self {
         Self {
+            id,
             tabs: vec![tab],
             shown,
         }
@@ -135,6 +143,8 @@ pub struct PaneSplit<K> {
     pub rest: usize,
     /// The pane with the focus, which shows the active tab.
     pub focused: usize,
+    /// The id the next new pane takes; ids are never handed out twice.
+    pub next_id: u32,
 }
 
 /// A pane as the window shows it: its index in [`PaneSplit::panes`] and its
@@ -163,9 +173,10 @@ impl<K: Clone + PartialEq> PaneSplit<K> {
         if !second_view && docked.len() < 2 {
             return Err(SplitRefusal::LastTab);
         }
-        let dropped = Pane::of(tab.clone(), Some(tab.clone()));
+        let dropped = Pane::of(PaneId(1), tab.clone(), Some(tab.clone()));
         let stays = (second_view || active != tab).then(|| active.clone());
         let rest = Pane {
+            id: PaneId(0),
             tabs: if second_view {
                 vec![tab.clone()]
             } else {
@@ -183,7 +194,20 @@ impl<K: Clone + PartialEq> PaneSplit<K> {
             panes,
             rest,
             focused,
+            next_id: 2,
         })
+    }
+
+    /// A fresh id for a new pane.
+    fn new_id(&mut self) -> PaneId {
+        let id = PaneId(self.next_id);
+        self.next_id += 1;
+        id
+    }
+
+    /// The id of the pane at `index` in [`Self::panes`].
+    pub fn id_of(&self, index: usize) -> Option<PaneId> {
+        self.panes.get(index).map(|pane| pane.id)
     }
 
     /// A further split of an existing one: a new pane on `edge` takes `tab`
@@ -222,8 +246,9 @@ impl<K: Clone + PartialEq> PaneSplit<K> {
         } else {
             self.panes.len()
         };
+        let id = self.new_id();
         self.panes
-            .insert(at, Pane::of(tab.clone(), Some(tab.clone())));
+            .insert(at, Pane::of(id, tab.clone(), Some(tab.clone())));
         if at == 0 {
             self.rest += 1;
         }

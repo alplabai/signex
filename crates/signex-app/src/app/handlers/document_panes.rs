@@ -15,8 +15,8 @@ use signex_i18n::{MessageId, ids, t};
 use crate::app::{Message, PaneMsg, Signex, TabInfo, TabKind, TileLayout, WindowMsg};
 use crate::diagnostics::{log_error_line, log_warning};
 use crate::document_panes::{
-    DropEdge, DropTarget, MAX_PANES, PaneShares, PaneSplit, PaneTab, SplitRefusal, drop_target,
-    store,
+    DropEdge, DropTarget, MAX_PANES, PaneId, PaneShares, PaneSplit, PaneTab, SplitRefusal,
+    drop_target, store,
 };
 
 /// The main window's panes as it draws them.
@@ -28,6 +28,8 @@ pub(crate) struct TiledPanes {
     pub tabs: Vec<usize>,
     /// The pane with the focus, which draws the active tab.
     pub focused: usize,
+    /// The split's id of the focused pane; `None` under plain tiling.
+    pub focused_id: Option<PaneId>,
 }
 
 /// The pane key of `tab`: its file and which page of it the tab shows.
@@ -46,6 +48,8 @@ pub(crate) fn pane_tab(tab: &TabInfo) -> PaneTab {
         TabKind::LayerStack => "layer_stack",
         TabKind::VariantManager(_) => "variants",
         TabKind::PinTable => "pin_table",
+        TabKind::OutputJob => "output_job",
+        TabKind::DesignChecklist(_) => "checklist",
     };
     PaneTab {
         path: tab.path.clone(),
@@ -103,6 +107,7 @@ impl Signex {
                 layout,
                 tabs,
                 focused,
+                focused_id: None,
             });
         };
         let (docked, keys) = self.docked_pane_tabs();
@@ -121,6 +126,7 @@ impl Signex {
             layout: split.direction,
             tabs,
             focused,
+            focused_id: split.id_of(shown[focused].pane),
         })
     }
 

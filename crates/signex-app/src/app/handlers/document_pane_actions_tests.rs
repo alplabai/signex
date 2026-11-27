@@ -255,3 +255,46 @@ fn the_tile_rows_preview_where_each_document_lands() {
         Some(TileLayout::Grid)
     );
 }
+
+/// Each pane has a stable id (mockup row 207): an earlier pane closing moves
+/// the later panes' places, not the focus, so two views of one sheet keep
+/// their own pan and zoom rather than swapping them.
+#[test]
+fn closing_an_earlier_pane_keeps_each_view_with_its_pane() {
+    let (mut app, main) = app();
+    let io = path("io.snxsch");
+    // power alone on the left, then io's pane focused again.
+    drop_tab(&mut app, main, 0, (0.05, 0.5));
+    send(&mut app, Message::Window(WindowMsg::TilePanePressed(1)));
+    assert_eq!(
+        app.document_state.tabs[app.document_state.active_tab].path,
+        io
+    );
+    // A second view of io on the right takes the focus.
+    second_view(&mut app, main, 2);
+    let view = app.tiled_pane_view().expect("three panes");
+    assert_eq!((view.tabs.len(), view.focused), (3, 2));
+    let focused_id = view.focused_id.expect("a split pane");
+    let (left, right) = ((3.0, 4.0, 7.0), (12.0, 34.0, 5.0));
+    app.interaction_state.canvas.set_pane_camera(right);
+    app.interaction_state
+        .tile_panes
+        .schematic
+        .get_mut(&io)
+        .expect("the other view of io")
+        .set_pane_camera(left);
+
+    // Closing power's tab closes the first pane.
+    let task = app.close_tab_now(0);
+    settle_task(&mut app, task);
+    let view = app.tiled_pane_view().expect("two panes");
+    assert_eq!((view.tabs.len(), view.focused), (2, 1), "its place moved");
+    assert_eq!(view.focused_id, Some(focused_id), "its id did not");
+    let other = app.interaction_state.tile_panes.schematic[&io].live_camera();
+    assert_eq!(other, left, "the other view kept its own view");
+    assert_ne!(
+        app.interaction_state.canvas.live_camera(),
+        left,
+        "the focused view did not take the other pane's"
+    );
+}

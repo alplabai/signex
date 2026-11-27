@@ -3,8 +3,8 @@
 //! (`super::links`). The marks are laid out by
 //! [`crate::cross_ref`], the same layout the canvas draws.
 
-use super::links::{LinkTarget, PageLink};
 use super::layout::PageTransform;
+use super::links::{LinkTarget, PageLink};
 use super::*;
 use crate::cross_ref::{CrossRefMark, lower_cross_refs};
 

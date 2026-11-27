@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use serde_json::json;
 
 use super::PaneTab;
-use super::model::{DropEdge, DropTarget, MAX_PANES, PaneSplit, SplitRefusal, drop_target};
+use super::model::{DropEdge, DropTarget, MAX_PANES, PaneId, PaneSplit, SplitRefusal, drop_target};
 use super::store::{split_from_json, split_to_json};
 use crate::app::TileLayout;
 
@@ -220,4 +220,75 @@ fn a_kept_split_survives_a_write_and_a_read() {
     ] {
         assert_eq!(split_from_json(&broken, &folder), None, "{broken}");
     }
+}
+
+fn ids_of(split: &PaneSplit<&'static str>) -> Vec<PaneId> {
+    split.panes.iter().map(|pane| pane.id).collect()
+}
+
+/// A pane keeps its id when an earlier pane closes, so the focus stays with
+/// its pane; a new pane never takes the id of one that closed.
+#[test]
+fn a_pane_keeps_its_id_when_an_earlier_pane_closes() {
+    let docked = ["a", "b", "c"];
+    let mut split = PaneSplit::first(&docked, &"a", &"c", DropEdge::Left, false).expect("split");
+    split
+        .add(&docked, &"c", DropEdge::Right, true)
+        .expect("second view");
+    assert_eq!(ids_of(&split), [PaneId(1), PaneId(0), PaneId(2)]);
+    assert_eq!(split.id_of(split.focused), Some(PaneId(2)));
+
+    let left = ["b", "c"];
+    assert!(split.prune(&left), "two panes left");
+    assert_eq!(ids_of(&split), [PaneId(0), PaneId(2)]);
+    assert_eq!(split.focused, 1, "its place moved");
+    assert_eq!(
+        split.id_of(split.focused),
+        Some(PaneId(2)),
+        "its id did not"
+    );
+
+    split
+        .add(&left, &"b", DropEdge::Right, false)
+        .expect("moved");
+    assert_eq!(split.id_of(split.focused), Some(PaneId(3)), "a fresh id");
+}
+
+/// The ids are kept with the split; an entry written before panes had ids
+/// reads them as the panes' places, and two panes with one id are refused.
+#[test]
+fn a_kept_split_keeps_its_pane_ids() {
+    let folder = PathBuf::from("/w/buck-3v3");
+    let docked = [
+        tab(&folder, "power.snxsch", "schematic"),
+        tab(&folder, "buck-3v3.snxpcb", "pcb"),
+    ];
+    let split =
+        PaneSplit::first(&docked, &docked[1], &docked[0], DropEdge::Left, false).expect("split");
+    let written = split_to_json(&split, &folder, None);
+    assert_eq!(written["panes"][0]["id"], 1);
+    assert_eq!(written["next_id"], 2);
+    assert_eq!(split_from_json(&written, &folder), Some(split));
+
+    let before_ids = json!({
+        "direction": "stacked",
+        "panes": [
+            { "tabs": [{ "path": "power.snxsch", "page": "schematic" }] },
+            { "tabs": [] },
+        ],
+        "rest": 1,
+        "focused": 0,
+    });
+    let read = split_from_json(&before_ids, &folder).expect("read");
+    let ids: Vec<PaneId> = read.panes.iter().map(|pane| pane.id).collect();
+    assert_eq!(ids, [PaneId(0), PaneId(1)]);
+    assert_eq!(read.next_id, 2);
+
+    let twice = json!({
+        "direction": "stacked",
+        "panes": [{ "id": 4, "tabs": [] }, { "id": 4, "tabs": [] }],
+        "rest": 0,
+        "focused": 0,
+    });
+    assert_eq!(split_from_json(&twice, &folder), None);
 }
