@@ -474,6 +474,21 @@ and the row points at its symbol, so the link breaks if that library is not
 open) or **Copy into** the row's library. A symbol in no library can only be
 copied; the original file stays as it is. **Cancel** goes back to the list.
 
+**Deleting a symbol that is still in use.** The SCH Library panel's Delete
+asks first when component rows bind the symbol or sheets place it. The
+**Delete Symbol?** dialog says how many component rows will show a broken
+symbol binding, and lists the rows, open sheets, closed sheets and anything it
+could not read as key / value rows; the first six rows are listed, **Show
+all** lists the rest. **Re-bind all to…** opens the symbol picker once and
+binds the picked symbol to every listed row; a row's own **Re-bind…** does it
+for that row. A re-bound row takes the new symbol wherever it used the old one,
+as its default symbol or as an alternate, and keeps everything else. The
+dialog then comes back with the new count; once nothing uses the symbol its
+button reads **Delete**. Cancelling the picker writes nothing. A picked symbol
+is pinned at its current version, here and for a Pick Symbol in the Library
+Browser. When the listed rows are in several libraries, pick a symbol from a
+library: one from outside every library cannot be copied into them.
+
 **Typed values and the range filter.** A measurement such as a resistance or a
 capacitance is a number, an SI prefix and a unit, each chosen separately: you
 type the number, pick the prefix (`k`, `µ`, ...) from a list, and the unit is

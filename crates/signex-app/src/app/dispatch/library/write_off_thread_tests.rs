@@ -267,7 +267,7 @@ fn start_browser_bind(f: &mut Fixture) -> Task<Message> {
     let primitive = PrimitiveRef::new(f.library_id, Uuid::now_v7());
     let address = f.address(0);
     f.app
-        .apply_primitive_pick_to_browser_row(address, PrimitiveKind::Footprint, primitive)
+        .apply_primitive_pick_to_browser_row(address, PrimitiveKind::Footprint, primitive, None)
 }
 
 fn start_preview_bind(f: &mut Fixture) -> Task<Message> {
@@ -767,7 +767,7 @@ fn the_git_reinit_of_a_library_runs_off_the_ui_thread() {
 fn bind_footprint(f: &mut Fixture, row: usize, primitive: PrimitiveRef) -> Task<Message> {
     let address = f.address(row);
     f.app
-        .apply_primitive_pick_to_browser_row(address, PrimitiveKind::Footprint, primitive)
+        .apply_primitive_pick_to_browser_row(address, PrimitiveKind::Footprint, primitive, None)
 }
 
 #[test]
