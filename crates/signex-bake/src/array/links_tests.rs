@@ -297,8 +297,10 @@ fn a_source_loop_in_a_damaged_file_is_refused_with_a_warning() {
     let (pads, warnings) = bake(&f.sketch);
 
     assert!(warnings.iter().any(|w| w.contains("loops")), "{warnings:?}");
-    // Neither looped pattern places a pad; nothing hangs.
-    assert!(pads.is_empty(), "{pads:?}");
+    // Neither looped pattern places a pad and nothing hangs. As for any
+    // pattern skipped with a warning, the source pad itself stays (#2689).
+    assert_eq!(pads.len(), 1, "{pads:?}");
+    assert_eq!(pad_at(&pads, 1.0, 0.0).number, "1");
 }
 
 /// Mockup row 179e, #2772: a pattern of something that is not a pad is

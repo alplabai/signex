@@ -238,12 +238,6 @@ impl Walk<'_, '_> {
         sweep_angle_expr: &str,
         depopulation: Option<&GridDepopulation>,
     ) -> Result<Option<Walked>, SketchError> {
-        if self.xy(source).is_none() {
-            self.warnings.push(format!(
-                "polar array source {source}: position unknown — array skipped"
-            ));
-            return Ok(None);
-        }
         let Some(centre) = self.xy(center) else {
             self.warnings.push(format!(
                 "polar array center {center}: position unknown — array skipped"

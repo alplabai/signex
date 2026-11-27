@@ -204,6 +204,10 @@ fn a_polar_array_bakes_each_kept_turn_of_the_source() {
     let places = [0, 1, 3, 4]
         .into_iter()
         .map(|i| {
+            // The unturned instance is the source itself, exactly.
+            if i == 0 {
+                return at_offset(s, [0.0, 0.0]);
+            }
             let (sin, cos) = (i as f64 * sweep / 5.0).sin_cos();
             let rx = c.0 + dx * cos - dy * sin;
             let ry = c.1 + dx * sin + dy * cos;

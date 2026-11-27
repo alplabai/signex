@@ -316,10 +316,21 @@ pub(crate) fn bake_pattern(
         warnings.push(super::not_a_pad(label, sketch, solve, source));
         return Ok(());
     };
+    let at = point_xy(source, &solve.result.state, &solve.result.index, sketch);
+    // A plain polar pad pattern turns its source point, so it is skipped
+    // before its counts are read when that point is unknown. A board item's
+    // source (a circle, a line) has no point of its own and is not checked
+    // in the walk.
+    if at.is_none() && plain.is_some_and(|a| matches!(a.kind, ArrayKind::Polar { .. })) {
+        warnings.push(format!(
+            "polar array source {source}: position unknown — array skipped"
+        ));
+        return Ok(());
+    }
     let Some(expansion) = Walk::new(sketch, solve, params_ast, warnings).expand(id)? else {
         return Ok(());
     };
-    let Some(at) = point_xy(source, &solve.result.state, &solve.result.index, sketch) else {
+    let Some(at) = at else {
         if plain.is_none() {
             warnings.push(format!(
                 "pattern source {source}: position unknown — pattern skipped"
