@@ -41,6 +41,7 @@ mod matrix;
 mod part_commands;
 #[cfg(test)]
 mod part_commands_tests;
+mod parts_read_error;
 mod read;
 mod summary;
 mod tab;
@@ -54,9 +55,8 @@ pub(crate) use part_commands::{
     alternate_parameters, project_duplicate_variant, project_set_variant_alternate,
     project_set_variant_fit, project_set_variant_override, variant_parameters_command,
 };
+pub(super) use parts_read_error::PartsReadError;
 pub use view_state::VariantManagerUi;
-
-use crate::app::core::parts_read_error::PartsReadError;
 
 use iced::font::Weight;
 use iced::widget::{Column, column, container, row, svg};

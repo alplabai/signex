@@ -16,8 +16,4 @@ crates/signex-app/src/app/core/block_diagram_panes.rs UnlinkRow
 crates/signex-app/src/app/core/block_diagram_view.rs BlockDiagramViewState
 crates/signex-app/src/app/core/branch_switch.rs SwitchRequest
 crates/signex-app/src/app/core/branch_switch.rs SwitchSurface
-crates/signex-app/src/app/core/component_class.rs ComponentClassEntry
-crates/signex-app/src/app/core/new_library_defaults.rs NewLibraryDefaults
-crates/signex-app/src/app/core/parts_read_error.rs PartsReadError
-crates/signex-app/src/app/core/pin_selection_mode.rs PinSelectionMode
 crates/signex-app/src/app/core/rule_list_filter.rs RuleListFilter
