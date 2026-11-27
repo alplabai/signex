@@ -85,6 +85,10 @@ The **Version control** column says `git` for a library under git and `off`
 for one that is not; press **off** to turn version control on for it. A
 library whose repository has uncommitted changes, or that needs `git` or
 `git-lfs` and cannot find it on your `PATH`, says **needs attention** and why.
+The row's **⋯** menu has **Remove from Signex**, for global and installed
+libraries: after you confirm, Signex closes the library (asking about unsaved
+edits first) and stops loading it. Its files stay on disk, and **Add
+library…** adds it back.
 
 When a project is open but no document is shown, the centre says so and
 offers **New sheet**, **New PCB** and **Project Options…**. A project with no

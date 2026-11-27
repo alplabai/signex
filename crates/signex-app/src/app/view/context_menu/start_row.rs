@@ -2,6 +2,7 @@
 //! the project, and pin or unpin it; a pinned project missing on disk
 //! offers Remove instead. Every row has its glyph in the icon column (Open
 //! a folder, Pin and Unpin a pin, Remove a cross in the neutral ink).
+//! A Libraries page row's ⋯ menu (#2592) holds Remove from Signex.
 
 use super::*;
 
@@ -9,7 +10,7 @@ use std::path::Path;
 
 use super::items::dd_msg;
 use crate::pinned_projects::PinnedProjects;
-use crate::start_screen::{StartScreenMsg, message};
+use crate::start_screen::{StartRowKind, StartScreenMsg, message};
 use signex_i18n::{I18n, ids};
 use signex_types::theme::ThemeId;
 use signex_widgets::active_bar_dropdown::DropdownEntry;
@@ -61,6 +62,21 @@ pub(super) fn start_row_menu_entries(
     ]
 }
 
+/// Menu rows of the Libraries page row for the library file `path`: Remove
+/// from Signex, which asks first.
+pub(super) fn library_row_menu_entries(
+    i18n: &I18n,
+    tid: ThemeId,
+    path: &Path,
+) -> Vec<DropdownEntry<Message>> {
+    vec![dd_msg(
+        Some(crate::icons::icon_start_remove(tid)),
+        &i18n.message(ids::START_LIBRARY_REMOVE, &[]).into_string(),
+        "",
+        message(StartScreenMsg::LibraryRemoveRequested(path.to_path_buf())),
+    )]
+}
+
 impl Signex {
     /// The open row menu with its click-outside backdrop; empty when no
     /// menu is open. The Start screen shows in the main window only.
@@ -80,16 +96,14 @@ impl Signex {
             return Vec::new();
         }
         let panel_ctx = &self.document_view.panel_ctx;
-        let menu = super::placement::menu_card(
-            start_row_menu_entries(
-                &self.ui_state.i18n,
-                self.ui_state.effective_theme_id(),
-                &menu_ctx.path,
-                &self.ui_state.pinned_projects,
-            ),
-            &panel_ctx.tokens,
-            &panel_ctx.ui_font_name,
-        );
+        let (i18n, tid) = (&self.ui_state.i18n, self.ui_state.effective_theme_id());
+        let entries = match menu_ctx.kind {
+            StartRowKind::Project => {
+                start_row_menu_entries(i18n, tid, &menu_ctx.path, &self.ui_state.pinned_projects)
+            }
+            StartRowKind::Library => library_row_menu_entries(i18n, tid, &menu_ctx.path),
+        };
+        let menu = super::placement::menu_card(entries, &panel_ctx.tokens, &panel_ctx.ui_font_name);
         Self::menu_overlay(
             message(StartScreenMsg::RowMenuDismissed),
             menu.element,
@@ -131,6 +145,27 @@ mod tests {
 
     fn icons(rows: &[DropdownItemFacts]) -> Vec<Option<iced::widget::svg::Handle>> {
         rows.iter().map(|row| row.icon.clone()).collect()
+    }
+
+    #[test]
+    fn a_library_row_menu_offers_remove_from_signex() {
+        let path = PathBuf::from("passives.snxlib");
+        let rows: Vec<_> = library_row_menu_entries(&I18n::en_us(), TID, &path)
+            .into_iter()
+            .filter_map(|e| match e {
+                DropdownEntry::Item(item) => Some((item.label, item.icon, item.on_press?)),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].0, "Remove from Signex");
+        assert_eq!(rows[0].1, Some(crate::icons::icon_start_remove(TID)));
+        assert!(matches!(
+            &rows[0].2,
+            Message::Project(crate::app::ProjectMsg::StartScreen(
+                StartScreenMsg::LibraryRemoveRequested(p)
+            )) if *p == path
+        ));
     }
 
     #[test]

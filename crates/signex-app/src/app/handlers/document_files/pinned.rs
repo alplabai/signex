@@ -1,13 +1,13 @@
 //! Start screen project rows (#2305): pin and unpin a project, open a pinned
 //! one, and the row's right-click menu. The Libraries page's own actions
-//! (#2591) are in `app/dispatch/library/start_libraries.rs`.
+//! (#2591, #2592) are in `app/dispatch/library/start_libraries.rs`.
 
 use std::path::{Path, PathBuf};
 
 use signex_i18n::{ids, t};
 
 use super::super::super::*;
-use crate::start_screen::{StartPage, StartRowMenu, StartScreenMsg};
+use crate::start_screen::{StartPage, StartRowKind, StartRowMenu, StartScreenMsg};
 
 impl Signex {
     /// Route a Start screen row event. Exhaustive: a new event is a compile
@@ -44,7 +44,12 @@ impl Signex {
             StartScreenMsg::RowRightClicked(path) => {
                 self.close_all_context_menus();
                 let (x, y) = self.interaction_state.last_mouse_pos;
-                self.interaction_state.start_row_menu = Some(StartRowMenu { path, x, y });
+                self.interaction_state.start_row_menu = Some(StartRowMenu {
+                    path,
+                    kind: StartRowKind::Project,
+                    x,
+                    y,
+                });
                 iced::Task::none()
             }
             StartScreenMsg::RowMenuDismissed => {
@@ -96,6 +101,19 @@ impl Signex {
                 iced::Task::none()
             }
             StartScreenMsg::LibraryVcsEnableClicked(path) => self.enable_start_library_vcs(path),
+            StartScreenMsg::LibraryMenuOpened(path) => {
+                self.open_start_library_menu(path);
+                iced::Task::none()
+            }
+            StartScreenMsg::LibraryRemoveRequested(path) => {
+                self.request_library_removal(path);
+                iced::Task::none()
+            }
+            StartScreenMsg::LibraryRemoveConfirmed(path) => self.confirm_library_removal(path),
+            StartScreenMsg::GlobalLibraryUnregistered(result) => {
+                self.finish_global_library_unregister(result);
+                iced::Task::none()
+            }
             StartScreenMsg::FilterCleared => {
                 let state = &mut self.ui_state.start_screen;
                 match state.page {

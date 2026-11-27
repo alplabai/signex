@@ -387,6 +387,11 @@ start-libraries-vcs-unreadable = cannot read the repository: { $reason }
 # Messages line when the version control of the libraries could not be read.
 # $reason is the system's reason, in English.
 start-libraries-vcs-read-failed = Could not read the version control of the libraries: { $reason }
+# The button that opens a library row's menu (#2592).
+start-library-row-menu = ⋯
+# Row menu entry and the confirm's button: Signex stops loading the library;
+# its files stay on disk.
+start-library-remove = Remove from { -brand-name }
 # A project is open but no document is shown.
 start-hint-title = No document selected
 start-hint-body = Choose a schematic or PCB from the project tree, or open one here.

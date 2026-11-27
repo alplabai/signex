@@ -1,12 +1,16 @@
 //! The Start screen's Libraries page actions: the off-thread read of each
 //! library's version control and Enable Version Control from its row
-//! (#2591). Design:
+//! (#2591), and Remove from Signex (#2592). Design:
 //! `docs/architecture/start-screen-libraries.md`.
 
 use std::path::{Path, PathBuf};
 
 use super::*;
-use crate::start_screen::{StartPage, StartScreenMsg, library_folder, message};
+use crate::app::state::{ErrorNotice, NoticeAction};
+use crate::panels::components_panel::global_prefs::{self, GlobalLibraryEntry};
+use crate::start_screen::{
+    StartPage, StartRowKind, StartRowMenu, StartScreenMsg, is_removable, library_folder, message,
+};
 use signex_library::library_vcs::{LibraryVcsState, ToolsOnPath, read_library_vcs_state};
 
 impl Signex {
@@ -87,6 +91,106 @@ impl Signex {
             return Task::none();
         }
         self.open_library_vcs_dialog_at(path, dir)
+    }
+
+    /// The ⋯ button of the row of the library file `path` was pressed: its
+    /// menu opens at the pointer.
+    pub(crate) fn open_start_library_menu(&mut self, path: PathBuf) {
+        self.close_all_context_menus();
+        let (x, y) = self.interaction_state.last_mouse_pos;
+        self.interaction_state.start_row_menu = Some(StartRowMenu {
+            path,
+            kind: StartRowKind::Library,
+            x,
+            y,
+        });
+    }
+
+    /// Remove from Signex was picked: the confirm card asks first and says
+    /// the files stay on disk. Only a mounted Global or Installed library.
+    pub(crate) fn request_library_removal(&mut self, path: PathBuf) {
+        self.interaction_state.start_row_menu = None;
+        if !self.is_removable_library(&path) {
+            return;
+        }
+        let name = self.library.library_label(&path);
+        self.document_view.error_notice =
+            Some(ErrorNotice::remove_library_from_signex(&name, &path));
+    }
+
+    /// The confirm was accepted: the library closes through the existing
+    /// Close Library (at once, once its writes are done, or after its
+    /// unsaved-edits prompt), and leaves the registry once it is unmounted
+    /// (see [`Self::unregister_removed_library`]). A cancelled close removes
+    /// nothing.
+    pub(crate) fn confirm_library_removal(&mut self, path: PathBuf) -> Task<Message> {
+        let asked = self
+            .document_view
+            .error_notice
+            .as_ref()
+            .and_then(|n| n.action.as_ref())
+            .is_some_and(|a| matches!(a, NoticeAction::RemoveLibraryFromSignex { .. }));
+        if asked {
+            self.document_view.error_notice = None;
+        }
+        if !self.is_removable_library(&path) {
+            return Task::none();
+        }
+        self.ui_state.start_screen.removing_library = Some(path.clone());
+        self.handle_close_library(path)
+    }
+
+    /// Whether `path` is a mounted library Remove from Signex applies to.
+    fn is_removable_library(&self, path: &Path) -> bool {
+        self.library.library_at(path).is_some()
+            && is_removable(self.library.mount_source_for(path, &[]))
+    }
+
+    /// The Close Library of a library being removed stopped (Cancel in its
+    /// prompt, a failed Save All, a deferred close that found new edits):
+    /// the removal is dropped too, so a later plain close does not remove it.
+    pub(crate) fn drop_library_removal(&mut self, root: &Path) {
+        let removing = &mut self.ui_state.start_screen.removing_library;
+        if removing.as_deref() == Some(root) {
+            *removing = None;
+        }
+    }
+
+    /// Libraries were unmounted: the one being removed leaves the session's
+    /// Installed list, and its Global entry leaves `global_libraries.toml`
+    /// on a worker. Its files on disk are not touched.
+    pub(super) fn unregister_removed_library(&mut self, unmounted: &[PathBuf]) -> Task<Message> {
+        let Some(path) = self.ui_state.start_screen.removing_library.clone() else {
+            return Task::none();
+        };
+        if !unmounted.contains(&path) || self.library.library_at(&path).is_some() {
+            return Task::none();
+        }
+        self.ui_state.start_screen.removing_library = None;
+        self.library.installed_libraries.retain(|p| *p != path);
+        if !self.library.global_libraries.iter().any(|e| e.path == path) {
+            return Task::none();
+        }
+        Task::perform(
+            async move {
+                crate::app::path_op_jobs::run_blocking(move || global_prefs::remove_path(&path))
+                    .await
+                    .and_then(|saved| saved)
+            },
+            |result| message(StartScreenMsg::GlobalLibraryUnregistered(result)),
+        )
+    }
+
+    /// The Global entry's removal was written, or failed: a failure keeps the
+    /// entry (the library mounts again at the next start) and says so.
+    pub(crate) fn finish_global_library_unregister(
+        &mut self,
+        result: Result<Vec<GlobalLibraryEntry>, String>,
+    ) {
+        match result {
+            Ok(saved) => self.library.global_libraries = saved,
+            Err(e) => self.report_global_libraries_save_failure("remove library", &e),
+        }
     }
 }
 

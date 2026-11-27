@@ -260,6 +260,8 @@ define_ids! {
     START_LIBRARIES_VCS_UNCOMMITTED = "start-libraries-vcs-uncommitted";
     START_LIBRARIES_VCS_UNREADABLE = "start-libraries-vcs-unreadable";
     START_LIBRARIES_VCS_READ_FAILED = "start-libraries-vcs-read-failed";
+    START_LIBRARY_ROW_MENU = "start-library-row-menu";
+    START_LIBRARY_REMOVE = "start-library-remove";
     START_HINT_TITLE = "start-hint-title";
     START_HINT_BODY = "start-hint-body";
     START_HINT_EMPTY_TITLE = "start-hint-empty-title";

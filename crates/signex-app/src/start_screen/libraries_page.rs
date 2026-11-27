@@ -8,7 +8,8 @@
 //! Version control (#2591) reads `—` for Stock, `git`, `off` (a link that
 //! opens Enable Version Control) or "needs attention" with its reason
 //! inline; the state is read off the UI thread into
-//! [`StartScreenState::library_vcs`].
+//! [`StartScreenState::library_vcs`]. A Global or Installed row has a ⋯
+//! menu with Remove from Signex (#2592).
 
 use std::path::{Path, PathBuf};
 
@@ -38,8 +39,8 @@ const SCOPE_W: f32 = TS.body * 7.0;
 const COUNT_W: f32 = TS.body * 8.0;
 /// Width of the Version control column; a reason wraps inside it.
 const VCS_W: f32 = TS.body * 11.0;
-/// Width of the row actions column.
-const ACTIONS_W: f32 = TS.body * 5.0;
+/// Width of the row actions column (Open and the ⋯ button).
+const ACTIONS_W: f32 = TS.body * 7.0;
 
 /// A loaded library as the Start screen lists it.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -270,16 +271,36 @@ fn library_row<'a>(tokens: &ThemeTokens, i18n: &I18n, lib: &LoadedLibrary) -> El
             lib.path.clone(),
         ))),
     );
+    let mut actions = row![open].spacing(SP.xs).align_y(Alignment::Center);
+    if is_removable(lib.scope) {
+        actions = actions.push(action_button(
+            tokens,
+            (Look::Ghost, Size::Small),
+            None,
+            t!(i18n, ids::START_LIBRARY_ROW_MENU),
+            Some(message(StartScreenMsg::LibraryMenuOpened(lib.path.clone()))),
+        ));
+    }
     container(cells(
         name.boxed(),
         pill(tokens, t!(i18n, lib.scope.message()), tone),
         count.boxed(),
         vcs_cell(tokens, i18n, lib),
-        open,
+        actions.boxed(),
     ))
     .padding([SP.m, SP.l])
     .width(Length::Fill)
     .boxed()
+}
+
+/// Whether Remove from Signex applies to a library of `scope` (#2592):
+/// Global and Installed libraries are registered with Signex; Stock ships
+/// with it and a project's own come from its `.snxprj`.
+pub fn is_removable(scope: ComponentsMountSource) -> bool {
+    matches!(
+        scope,
+        ComponentsMountSource::Global | ComponentsMountSource::Installed
+    )
 }
 
 /// The Version control cell (#2591): `—` for Stock, a `git` pill, `off` as

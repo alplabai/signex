@@ -1,5 +1,5 @@
-//! The Libraries page's Version control column (#2591), on the fixture of
-//! `tests.rs`.
+//! The Libraries page's Version control column (#2591) and row ⋯ menu
+//! button (#2592), on the fixture of `tests.rs`.
 
 use std::path::PathBuf;
 
@@ -94,6 +94,40 @@ fn off_opens_enable_version_control_for_its_library() {
         ),
         "{sent_messages:?}"
     );
+}
+
+/// Decided 2026-11-27: Global and Installed rows have a ⋯ menu (Remove from
+/// Signex); Stock has none.
+#[test]
+fn global_and_installed_rows_have_a_menu_button_and_stock_has_none() {
+    let mut fx = Fixture::new(&[]).on(StartPage::Libraries);
+    fx.libraries = vec![libraries_page::sample(
+        "Stock",
+        ComponentsMountSource::Stock,
+        34,
+    )];
+    assert!(
+        fx.texts(MOCK_WINDOW).iter().all(|t| t.text != "⋯"),
+        "Stock is not removable"
+    );
+    for scope in [
+        ComponentsMountSource::Global,
+        ComponentsMountSource::Installed,
+    ] {
+        fx.libraries = vec![libraries_page::sample("mine", scope, 1)];
+        let pressed = fx.click(MOCK_WINDOW, "⋯");
+        assert!(
+            sent(
+                &pressed,
+                &StartScreenMsg::LibraryMenuOpened(PathBuf::from("mine.snxlib"))
+            ),
+            "{scope:?}: {pressed:?}"
+        );
+    }
+    assert!(!libraries_page::is_removable(ComponentsMountSource::Stock));
+    assert!(!libraries_page::is_removable(
+        ComponentsMountSource::Project
+    ));
 }
 
 /// The state is looked up by the folder holding the `.snxlib`, the folder

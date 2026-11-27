@@ -37,7 +37,7 @@ mod projects;
 mod projects_page;
 
 pub use hint::{HintFacts, hint_view};
-pub use libraries_page::{LoadedLibrary, library_folder, loaded_libraries};
+pub use libraries_page::{LoadedLibrary, is_removable, library_folder, loaded_libraries};
 pub use projects::opened_label;
 pub use projects_page::{ProjectListing, project_listing};
 
@@ -138,6 +138,9 @@ pub struct StartScreenState {
     /// Bumped by every read of [`Self::library_vcs`]; an older read's
     /// answer is dropped.
     pub library_vcs_generation: u64,
+    /// The library file whose Remove from Signex (#2592) waits for its
+    /// Close Library to unmount it; cleared when that close is cancelled.
+    pub removing_library: Option<PathBuf>,
 }
 
 impl StartScreenState {
@@ -267,6 +270,17 @@ pub enum StartScreenMsg {
     /// "off" was pressed in a library row's Version control cell: open
     /// Enable Version Control on that library file.
     LibraryVcsEnableClicked(PathBuf),
+    /// A library row's ⋯ button was pressed: open its menu at the pointer.
+    LibraryMenuOpened(PathBuf),
+    /// Remove from Signex was picked in a library row's menu: ask first.
+    LibraryRemoveRequested(PathBuf),
+    /// The Remove from Signex confirm was accepted for this library file.
+    LibraryRemoveConfirmed(PathBuf),
+    /// A removed library's entry left `global_libraries.toml` on a worker:
+    /// the list now saved, or why the write failed.
+    GlobalLibraryUnregistered(
+        Result<Vec<crate::panels::components_panel::global_prefs::GlobalLibraryEntry>, String>,
+    ),
 }
 
 /// How often the last-opened column ("today 14:05", "yesterday") is
@@ -283,12 +297,21 @@ pub fn clock_subscription(shown: bool) -> iced::Subscription<Message> {
     }
 }
 
-/// The open right-click menu of a Start screen project row.
+/// The open menu of a Start screen row: a project row's right-click menu,
+/// or a library row's ⋯ menu (#2592).
 #[derive(Debug, Clone, PartialEq)]
 pub struct StartRowMenu {
     pub path: PathBuf,
+    pub kind: StartRowKind,
     pub x: f32,
     pub y: f32,
+}
+
+/// Which list a [`StartRowMenu`] belongs to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StartRowKind {
+    Project,
+    Library,
 }
 
 fn recent_label(path: &Path) -> String {

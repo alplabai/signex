@@ -1,7 +1,8 @@
 # Start screen: the Libraries page
 
 The Libraries page lists the libraries Signex loads for every project. This
-note covers its Version control column (#2591). Code: `start_screen/libraries_page.rs` (view),
+note covers its Version control column (#2591) and Remove from Signex
+(#2592). Code: `start_screen/libraries_page.rs` (view),
 `app/dispatch/library/start_libraries.rs` (actions),
 `signex_library::library_vcs` (the state of one folder).
 
@@ -21,3 +22,28 @@ folder. It is read when the Libraries page opens and again after Enable
 Version Control finishes while the page shows. Each read carries a
 generation; an older read that lands late is dropped. A library added while
 the page shows has no state until the page opens again.
+
+## Remove from Signex (#2592)
+
+A Global or Installed row has a ⋯ button; its menu holds Remove from
+Signex. Stock and a project's own libraries have no ⋯ button.
+
+1. Remove from Signex opens a confirm card (the notice card with
+   `NoticeAction::RemoveLibraryFromSignex`). It says the files stay on disk
+   and shows the path. Cancel changes nothing.
+2. Remove from Signex on the card records `StartScreenState::removing_library`
+   and runs the existing Close Library: it closes at once, waits for the
+   library's writes, or first asks about unsaved edits (Save All / Discard
+   All / Cancel). Its open Library Browser and Component Preview tabs close
+   with it.
+3. Once the library is unmounted (`close_tabs_of_unmounted_libraries`), it
+   leaves the session's Installed list, and a Global library's entry leaves
+   `global_libraries.toml` on a worker (`global_prefs::remove_path`). A
+   failed write keeps the entry, so the library loads again at the next
+   start, and the save-failure notice says so.
+
+Cancel in the close prompt, a failed Save All, or a deferred close stopped by
+new edits drops the pending removal: nothing is removed, and a later plain
+Close Library does not remove it either. Nothing on disk is deleted. A
+project that lists the library keeps its own reference. There is no undo;
+Add library… adds it back.
