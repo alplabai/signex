@@ -6,15 +6,14 @@
 
 use std::collections::BTreeMap;
 
-use signex_expr::ExprNode;
-use signex_expr::parse;
+use signex_expr::{ExprNode, LiteralContext, parse};
 use signex_sketch::SketchError;
 use signex_sketch::array::{GridDepopulation, NumberingScheme};
 use signex_sketch::expr::eval::{EvalContext, eval};
 use signex_sketch::id::SketchEntityId;
 
 use super::numbering::{derive_pad_number, derive_swept_pad_number};
-use crate::eval_util::strip_eq_prefix;
+use crate::eval_util::{parse_in, strip_eq_prefix};
 
 /// One instance of an array.
 #[derive(Debug, Clone, PartialEq)]
@@ -79,9 +78,9 @@ impl Walk<'_> {
     ) -> Result<Walked, SketchError> {
         let source = self.source;
         // Parse once; only `array_index` changes between instances.
-        let count_ast = parse(strip_eq_prefix(count_expr)).map_err(SketchError::Expr)?;
-        let dx_ast = parse(strip_eq_prefix(dx_expr)).map_err(SketchError::Expr)?;
-        let dy_ast = parse(strip_eq_prefix(dy_expr)).map_err(SketchError::Expr)?;
+        let count_ast = parse_in(count_expr, LiteralContext::Count)?;
+        let dx_ast = parse_in(dx_expr, LiteralContext::Length)?;
+        let dy_ast = parse_in(dy_expr, LiteralContext::Length)?;
         let mut ctx = self.context();
         let Some(count) =
             super::eval_count("linear", "count_expr", source, &count_ast, &ctx, warnings)?
@@ -132,10 +131,10 @@ impl Walk<'_> {
         visit: &mut Visit<'_>,
     ) -> Result<Walked, SketchError> {
         let source = self.source;
-        let nx_ast = parse(strip_eq_prefix(nx_expr)).map_err(SketchError::Expr)?;
-        let ny_ast = parse(strip_eq_prefix(ny_expr)).map_err(SketchError::Expr)?;
-        let dx_ast = parse(strip_eq_prefix(dx_expr)).map_err(SketchError::Expr)?;
-        let dy_ast = parse(strip_eq_prefix(dy_expr)).map_err(SketchError::Expr)?;
+        let nx_ast = parse_in(nx_expr, LiteralContext::Count)?;
+        let ny_ast = parse_in(ny_expr, LiteralContext::Count)?;
+        let dx_ast = parse_in(dx_expr, LiteralContext::Length)?;
+        let dy_ast = parse_in(dy_expr, LiteralContext::Length)?;
         let mask_ast = mask_ast(depopulation)?;
         let mut ctx = self.context();
         let Some(nx) = super::eval_count("grid", "nx_expr", source, &nx_ast, &ctx, warnings)?
@@ -235,8 +234,8 @@ impl Walk<'_> {
     ) -> Result<Walked, SketchError> {
         let source = self.source;
         let ((sx, sy), (cx, cy)) = (source_mm, center_mm);
-        let count_ast = parse(strip_eq_prefix(count_expr)).map_err(SketchError::Expr)?;
-        let sweep_ast = parse(strip_eq_prefix(sweep_angle_expr)).map_err(SketchError::Expr)?;
+        let count_ast = parse_in(count_expr, LiteralContext::Count)?;
+        let sweep_ast = parse_in(sweep_angle_expr, LiteralContext::Angle)?;
         let mut ctx = self.context();
         let Some(count) =
             super::eval_count("polar", "count_expr", source, &count_ast, &ctx, warnings)?

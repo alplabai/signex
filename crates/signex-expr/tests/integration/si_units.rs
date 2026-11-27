@@ -142,3 +142,37 @@ fn geometry_context_refuses_prefix_only_literals() {
     );
     assert!(signex_expr::parse_with("1u + 1mm", LiteralContext::Geometry).is_err());
 }
+
+#[test]
+fn angle_context_refuses_si_multipliers() {
+    assert_eq!(bare_m_meaning(LiteralContext::Angle), BareM::Refused);
+    for literal in ["4k7", "10m", "1u", "5k", "2n2"] {
+        assert!(
+            parse_quantity_with(literal, LiteralContext::Angle).is_err(),
+            "{literal} must be refused as an angle"
+        );
+    }
+    let deg = parse_quantity_with("90deg", LiteralContext::Angle).unwrap();
+    assert_eq!(deg.unit, Unit::Deg);
+    assert_eq!(
+        parse_quantity_with("45", LiteralContext::Angle).unwrap(),
+        Quantity::count(45.0),
+        "a plain number stays a number; the host reads it as degrees"
+    );
+}
+
+#[test]
+fn count_context_refuses_si_multipliers() {
+    assert_eq!(bare_m_meaning(LiteralContext::Count), BareM::Refused);
+    for literal in ["4k7", "1k", "10m", "2n"] {
+        assert!(
+            parse_quantity_with(literal, LiteralContext::Count).is_err(),
+            "{literal} must be refused as a count"
+        );
+    }
+    assert_eq!(
+        parse_quantity_with("16", LiteralContext::Count).unwrap(),
+        Quantity::count(16.0)
+    );
+    assert!(signex_expr::parse_with("2 * 4k7", LiteralContext::Count).is_err());
+}

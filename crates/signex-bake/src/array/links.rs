@@ -10,7 +10,7 @@
 
 use std::collections::BTreeMap;
 
-use signex_expr::{ExprNode, parse};
+use signex_expr::{ExprNode, LiteralContext, parse};
 use signex_library::primitive::footprint::Pad as LibPad;
 use signex_sketch::SketchError;
 use signex_sketch::array::{Array, ArrayId, ArrayKind, GridDepopulation, NumberingScheme};
@@ -20,7 +20,7 @@ use signex_sketch::sketch::SketchData;
 use signex_sketch::solver::FullSolveOutput;
 use signex_sketch::solver::state::point_xy;
 
-use crate::eval_util::strip_eq_prefix;
+use crate::eval_util::{parse_in, strip_eq_prefix};
 
 /// An instance's placement: where the source point goes (`m · p + t`) and
 /// how a pad's rotation turns (`sign · deg + offset_deg`). Arrays move and
@@ -388,8 +388,9 @@ impl<'a, 'w> Walk<'a, 'w> {
                 dy_expr,
                 ..
             } => {
-                let count_ast = parse_expr(count_expr)?;
-                let (dx_ast, dy_ast) = (parse_expr(dx_expr)?, parse_expr(dy_expr)?);
+                let count_ast = parse_in(count_expr, LiteralContext::Count)?;
+                let dx_ast = parse_in(dx_expr, LiteralContext::Length)?;
+                let dy_ast = parse_in(dy_expr, LiteralContext::Length)?;
                 let Some(count) = self.count("linear", source, &count_ast, &ctx)? else {
                     return Ok(None);
                 };
@@ -416,8 +417,10 @@ impl<'a, 'w> Walk<'a, 'w> {
                 depopulation,
                 ..
             } => {
-                let (nx_ast, ny_ast) = (parse_expr(nx_expr)?, parse_expr(ny_expr)?);
-                let (dx_ast, dy_ast) = (parse_expr(dx_expr)?, parse_expr(dy_expr)?);
+                let nx_ast = parse_in(nx_expr, LiteralContext::Count)?;
+                let ny_ast = parse_in(ny_expr, LiteralContext::Count)?;
+                let dx_ast = parse_in(dx_expr, LiteralContext::Length)?;
+                let dy_ast = parse_in(dy_expr, LiteralContext::Length)?;
                 let mask = mask_ast(depopulation.as_ref())?;
                 let Some(nx) = self.count("grid", source, &nx_ast, &ctx)? else {
                     return Ok(None);
@@ -458,9 +461,9 @@ impl<'a, 'w> Walk<'a, 'w> {
                     ));
                     return Ok(None);
                 };
-                let count_ast = parse_expr(count_expr)?;
-                let sweep =
-                    eval(&parse_expr(sweep_angle_expr)?, &ctx).map_err(SketchError::Expr)?;
+                let count_ast = parse_in(count_expr, LiteralContext::Count)?;
+                let sweep = eval(&parse_in(sweep_angle_expr, LiteralContext::Angle)?, &ctx)
+                    .map_err(SketchError::Expr)?;
                 let mask = mask_ast(depopulation.as_ref())?;
                 let Some(count) = self.count("polar", source, &count_ast, &ctx)? else {
                     return Ok(None);
@@ -547,10 +550,6 @@ impl<'a, 'w> Walk<'a, 'w> {
             None => Some(false),
         }
     }
-}
-
-fn parse_expr(src: &str) -> Result<ExprNode, SketchError> {
-    parse(strip_eq_prefix(src)).map_err(SketchError::Expr)
 }
 
 fn mask_ast(depopulation: Option<&GridDepopulation>) -> Result<Option<ExprNode>, SketchError> {

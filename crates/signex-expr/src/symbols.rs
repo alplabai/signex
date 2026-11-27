@@ -10,7 +10,8 @@ use crate::dimension::Dimension;
 use crate::unit::{Quantity, Unit};
 
 /// Where a literal is read. The meaning of a bare `m` depends on it (see
-/// [`bare_m_meaning`]), and [`LiteralContext::Geometry`] refuses a literal
+/// [`bare_m_meaning`]), and [`LiteralContext::Geometry`],
+/// [`LiteralContext::Angle`] and [`LiteralContext::Count`] refuse a literal
 /// whose suffix is only an SI prefix.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum LiteralContext {
@@ -38,21 +39,25 @@ pub enum BareM {
 
 /// The one rule for a bare `m` after a number (maintainer decision
 /// 2026-11-18, #1984, `docs/DECISIONS.md`): metre where a length is
-/// expected, milli where any value is, refused in a sketch parameter. An
+/// expected, milli where any value is, refused in a sketch parameter, an
+/// angle or a count. An
 /// `m` followed by another unit symbol (`10mV`, `4.7mF`) is always milli
 /// and never reaches this function.
 pub fn bare_m_meaning(context: LiteralContext) -> BareM {
     match context {
         LiteralContext::Length => BareM::Metre,
         LiteralContext::General => BareM::Milli,
-        LiteralContext::Geometry => BareM::Refused,
+        LiteralContext::Geometry | LiteralContext::Angle | LiteralContext::Count => BareM::Refused,
     }
 }
 
 /// True when `context` refuses a literal whose suffix is only an SI prefix
 /// (`1u`, `2n`) or that is written in RKM notation (`4k7`).
 pub(crate) fn refuses_prefix_only(context: LiteralContext) -> bool {
-    context == LiteralContext::Geometry
+    matches!(
+        context,
+        LiteralContext::Geometry | LiteralContext::Angle | LiteralContext::Count
+    )
 }
 
 /// Millimetres in one metre.

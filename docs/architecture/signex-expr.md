@@ -46,6 +46,12 @@ millimetres. A parameter named after a reserved constant (`pi`,
 `RESERVED_CONSTANTS`) is refused with `ExprError::ReservedName`, because
 every expression would read the constant instead.
 
+A footprint field parses in the context its value must have (#2683): an
+array pitch in `LiteralContext::Length`, so `2.54m` is metres; an array
+count in `LiteralContext::Count` and a pad rotation or polar sweep in
+`LiteralContext::Angle`. Both refuse a prefix-only or RKM literal (`4k7`,
+`10m`), so a count or an angle is never read as an SI multiplier.
+
 ## Resolver
 
 ```rust

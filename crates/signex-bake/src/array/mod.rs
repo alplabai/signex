@@ -39,6 +39,8 @@ mod linear;
 mod links;
 #[cfg(test)]
 mod links_tests;
+#[cfg(test)]
+mod literal_context_tests;
 mod numbering;
 mod overrides;
 mod placements;
