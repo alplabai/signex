@@ -166,6 +166,22 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     // #2817: the Pin table's Paste rows text and its paste mode.
     ("paste", OperandKind::Text),
     ("mode", OperandKind::Text),
+    // #1114: a text note's format and a rich note's Frame, Size, source,
+    // editor cursor and link.
+    ("format", OperandKind::Text),
+    ("frame", OperandKind::Text),
+    ("border", OperandKind::Text),
+    ("padding", OperandKind::Text),
+    ("sizing", OperandKind::Text),
+    ("height", OperandKind::Text),
+    ("source", OperandKind::Text),
+    ("column", OperandKind::Text),
+    ("target", OperandKind::Text),
+    // #1178: a project font by family.
+    ("family", OperandKind::Text),
+    // #2836: a dimension's decimals and arrow style.
+    ("precision", OperandKind::Text),
+    ("arrows", OperandKind::Text),
 ];
 
 /// The commands whose `ids` is still text, not targets (#2326): a design
