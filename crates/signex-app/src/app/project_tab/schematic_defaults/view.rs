@@ -28,9 +28,6 @@ use crate::app::project_tab::preview_ui::{
 use crate::app::state::{LoadedProject, ProjectId};
 use crate::styles::{HAIRLINE, Radii, ti, tokens as ink};
 
-/// Width of a card's label column (about 156 px), in `body` units.
-const LABEL_COLUMN_EMS: f32 = 13.0;
-
 /// The fields of the Lines card, before its line style picker.
 const LINE_FIELDS: [SchematicDefaultField; 4] = [
     SchematicDefaultField::WireWidth,
@@ -123,21 +120,19 @@ fn form_card<'a>(
     card(Some(header), grid.boxed(), tokens)
 }
 
-/// One form grid row: the label in ink3 in a fixed column, then the
-/// control.
+/// One form grid row: the label in ink3, then the control at its own
+/// width. The label takes the room the control leaves and wraps in a
+/// narrow card, so the control and its reset button always fit (#2996).
 fn grid_row<'a>(
     label: Localized,
     control: Element<'a, Message>,
     tokens: &ThemeTokens,
 ) -> Element<'a, Message> {
     let words = text(label).size(TS.body).color(ink::resolve(tokens).ink3);
-    row![
-        container(words).width(Length::Fixed(TS.body * LABEL_COLUMN_EMS)),
-        control,
-    ]
-    .spacing(SP.l)
-    .align_y(Alignment::Center)
-    .boxed()
+    row![container(words).width(Length::Fill), control]
+        .spacing(SP.l)
+        .align_y(Alignment::Center)
+        .boxed()
 }
 
 /// A choice of a picker: a value and its words.
