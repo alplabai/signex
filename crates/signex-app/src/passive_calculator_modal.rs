@@ -140,4 +140,36 @@ mod tests {
             assert_eq!(look.palette.ok_soft, r.ok_soft, "{id:?}");
         }
     }
+
+    /// #2992 (mockup row 17): the RKM Value is a plain text input, as Target
+    /// is, showing what was typed through `Signex::update`.
+    #[test]
+    fn the_rkm_value_is_a_text_input_showing_the_typed_text() {
+        use crate::app::Signex;
+        use crate::layout_probe::lay_out_inputs;
+        use signex_widgets::passive_calculator::{
+            CalculatorMessage, CalculatorTab, RkmEncoderMessage,
+        };
+
+        const WINDOW: iced::Size = iced::Size::new(1400.0, 900.0);
+        let i18n = I18n::en_us_ref();
+        let (mut app, _startup) = Signex::new();
+        let _ = app.update(Message::PassiveCalculator(CalculatorMessage::TabChanged(
+            CalculatorTab::RkmEncoder,
+        )));
+        let _ = app.update(Message::PassiveCalculator(CalculatorMessage::RkmEncoder(
+            RkmEncoderMessage::ValueInputChanged("4.7".to_string()),
+        )));
+        for id in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
+            let tokens = theme_tokens(id);
+            let inputs: Vec<String> = lay_out_inputs(
+                view(i18n, &tokens, &app.ui_state.passive_calculator),
+                WINDOW,
+            )
+            .into_iter()
+            .map(|input| input.text)
+            .collect();
+            assert_eq!(inputs, ["4.7"], "{id:?}: the inputs on the RKM page");
+        }
+    }
 }

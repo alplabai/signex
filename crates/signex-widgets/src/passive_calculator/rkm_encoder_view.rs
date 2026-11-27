@@ -20,13 +20,13 @@ use super::production_date_code::{ProductionDateCycle, ProductionMonth};
 use super::rkm_code::{RatedPower, TemperatureCoefficient};
 use super::rkm_encoder::{RkmEncoder, RkmEncoderMessage};
 use super::widgets::{
-    CM, NARROW_WIDTH, SP, TS, bare_pick_style, composite_field, ghost_button, input_grid, labeled,
-    medium, metric_cell, metric_strip, metric_value, prefix_picker, unit_suffix, upper,
+    CM, NARROW_WIDTH, SP, TS, bare_input_style, composite_field, data, ghost_button, input_grid,
+    labeled, medium, metric_cell, metric_strip, metric_value, prefix_picker, unit_suffix, upper,
 };
 use crate::chevron::chevron;
-use crate::dropdown_style::{GraphiteDropdown, pick_list_menu_style};
+use crate::dropdown_style::GraphiteDropdown;
 use crate::enable_section::EnableSection;
-use crate::{PickListPlaceholder, button, text};
+use crate::{PickListPlaceholder, button, text, text_input};
 
 /// Shares of the input line: Component, Value, Tolerance (1fr 1.3fr 1fr).
 const COMPONENT_SHARE: u16 = 10;
@@ -120,14 +120,14 @@ impl RkmEncoder {
         .on_select(Msg::KindChanged)
         .width(Length::Fill)
         .boxed();
-        let value = pick_list(Some(self.value), self.value_options(), ToString::to_string)
-            .on_select(Msg::ValueChanged)
+        // A plain text input, the same as Target (mockup row 17, #2992).
+        let value = text_input(data("4.7"), &self.value_input)
+            .on_input(Msg::ValueInputChanged)
             .font(mono)
-            .text_size(TS.body)
+            .size(TS.body)
             .padding(0.0)
             .width(Length::Fill)
-            .style(bare_pick_style(palette, None))
-            .menu_style(pick_list_menu_style)
+            .style(bare_input_style(palette))
             .boxed();
         let value_field = composite_field(
             vec![

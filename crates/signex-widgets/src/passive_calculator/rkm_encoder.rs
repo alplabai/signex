@@ -14,7 +14,11 @@ use super::rkm_code::{RatedPower, RkmCode, TemperatureCoefficient};
 #[derive(Debug, Clone)]
 pub enum RkmEncoderMessage {
     KindChanged(ComponentKind),
+    /// A value was set directly (a preferred number); the field shows it.
     ValueChanged(PreferredNumber),
+    /// The Value field's text was edited. A readable positive decimal
+    /// becomes the value; anything else keeps the last readable one.
+    ValueInputChanged(String),
     PrefixChanged(SiPrefix),
     ToleranceChanged(Tolerance),
     TemperatureCoefficientChanged(TemperatureCoefficient),
@@ -33,6 +37,9 @@ pub enum RkmEncoderMessage {
 pub struct RkmEncoder {
     pub kind: ComponentKind,
     pub value: PreferredNumber,
+    /// The Value field's text, kept as typed (mid-edit states like `4.`
+    /// included); `value` is its last readable reading.
+    pub value_input: String,
     pub prefix: SiPrefix,
     pub tolerance: Tolerance,
     pub temperature_coefficient: Option<TemperatureCoefficient>,
@@ -63,6 +70,7 @@ impl Default for RkmEncoder {
         Self {
             kind: ComponentKind::Resistor,
             value,
+            value_input: value.to_string(),
             prefix: SiPrefix::Kilo,
             tolerance: Tolerance::Percent1,
             temperature_coefficient: None,
@@ -93,7 +101,16 @@ impl RkmEncoder {
                     self.rated_power = None;
                 }
             }
-            RkmEncoderMessage::ValueChanged(value) => self.value = value,
+            RkmEncoderMessage::ValueChanged(value) => {
+                self.value = value;
+                self.value_input = value.to_string();
+            }
+            RkmEncoderMessage::ValueInputChanged(input) => {
+                if let Some(value) = parse_value(&input) {
+                    self.value = value;
+                }
+                self.value_input = input;
+            }
             RkmEncoderMessage::PrefixChanged(prefix) => self.prefix = prefix,
             RkmEncoderMessage::ToleranceChanged(tolerance) => self.tolerance = tolerance,
             RkmEncoderMessage::TemperatureCoefficientChanged(temperature_coefficient) => {
@@ -181,6 +198,38 @@ impl RkmEncoder {
             decade: self.prefix.exponent(),
         }
     }
+}
+
+/// Most digits after the separator the Value field reads.
+const MAX_VALUE_DECIMAL_PLACES: usize = 12;
+
+/// Reads the Value field: a positive decimal number, `.` or `,` as the
+/// separator (`4.7`, `0,47`, `100`). The digits are kept as typed, so
+/// `4.70` keeps its trailing zero. `None` for an empty, partial (`4.`),
+/// zero or non-numeric text, or one too long for a `PreferredNumber`.
+pub fn parse_value(input: &str) -> Option<PreferredNumber> {
+    let normalized = input.trim().replace(',', ".");
+    let (whole, fraction) = match normalized.split_once('.') {
+        Some((whole, fraction)) => (whole, fraction),
+        None => (normalized.as_str(), ""),
+    };
+    let is_digits = |part: &str| part.bytes().all(|byte| byte.is_ascii_digit());
+    if !is_digits(whole) || !is_digits(fraction) {
+        return None;
+    }
+    if normalized.contains('.') && fraction.is_empty() {
+        return None;
+    }
+    if fraction.len() > MAX_VALUE_DECIMAL_PLACES {
+        return None;
+    }
+    let digits = format!("{whole}{fraction}");
+    let significand = digits.parse::<u16>().ok().filter(|value| *value > 0)?;
+    let decimal_places = u8::try_from(fraction.len()).ok()?;
+    Some(PreferredNumber {
+        significand,
+        decimal_places,
+    })
 }
 
 fn production_year_options(current_year: u16) -> Vec<u16> {
