@@ -121,7 +121,7 @@ fn a_headless_call_with_a_folder_answers_once_the_package_is_read() {
     assert_eq!(answer["reading"], false, "the read landed first");
     assert_eq!(texts(&answer["paths"]), [dir.path().display().to_string()]);
     assert_eq!(texts(&answer["layers"]), ["pkg-L1.gbr", "pkg-L2.gbr"]);
-    assert_eq!(texts(&answer["not_read"]), [not_read.clone()]);
+    assert_eq!(texts(&answer["not_read"]), std::slice::from_ref(&not_read));
     let problems = answer["problems"].as_array().expect("problems");
     assert_eq!(problems.len(), 1, "{problems:#?}");
     assert_eq!(problems[0]["severity"], "info");

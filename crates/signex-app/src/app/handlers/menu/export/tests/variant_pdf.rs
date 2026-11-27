@@ -86,7 +86,7 @@ fn token(token: &str) -> String {
 /// FNV-1a, 64 bit: the hash of the drawing lines.
 fn fnv1a(lines: &[String]) -> u64 {
     let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
-    for byte in lines.iter().flat_map(|line| line.bytes().chain([b'\n'])) {
+    for byte in lines.iter().flat_map(|line| line.bytes().chain(*b"\n")) {
         hash ^= u64::from(byte);
         hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
     }
