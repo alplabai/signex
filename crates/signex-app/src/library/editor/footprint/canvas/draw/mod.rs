@@ -54,5 +54,5 @@ pub(crate) use layers::{
 };
 pub(crate) use pad::PadLabels;
 pub(in crate::library::editor::footprint::canvas) use pad::draw_pads_tool_preview;
-pub(crate) use sketch::SketchInk;
 pub(in crate::library::editor::footprint::canvas) use sketch::{ClosedLoop, find_closed_loops};
+pub(crate) use sketch::{SketchInk, footprint_bake_layers};

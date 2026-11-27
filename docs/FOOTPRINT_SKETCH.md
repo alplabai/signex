@@ -299,7 +299,12 @@ control stays in reach:
   `board_layer_colour`), with the sketch faint on top. The pads, silk and
   courtyard are the editor's own (the footprint bakes on every solve); the
   other fields are baked from the same solve when the canvas redraws
-  (`canvas/draw/sketch/bake_overlay.rs`). The card is in Properties, not
+  (`canvas/draw/sketch/bake_overlay.rs`). A legend at the canvas's top
+  right names the layers the preview draws on, with their colours: Top,
+  Bottom, Paste, Bottom paste, Mask, Bottom mask, Silk, Bottom silk,
+  Courtyard and Bottom courtyard, each only when something is drawn on it,
+  so a layer hidden in the layer visibility is not listed (Caner,
+  2026-11-27, mockup row 190). The card is in Properties, not
   over the canvas: while the preview is open Properties shows the Bake
   panel, whatever is selected: the Roles section, the card, then Back to
   sketch and Bake (mockup row 190). The card also lists the last
@@ -351,8 +356,17 @@ Under the table's rows, a live bake preview (Caner, 2026-11-24) draws the
 edges that bake, a footprint's baked pads and the driving dimensions, from
 the current solve without solving again; it redraws on each keystroke.
 While an expression does not read, it keeps the last good bake, marked,
-and hides the pads, since their angles cannot be read, saying so. Live
-checks sits beside it, parameter errors first.
+and hides the pads, since their angles cannot be read, saying so. When a
+solve fails (the canvas then shows the sketch unsolved), the preview keeps
+the last solve that succeeded, dimmed, under "The sketch does not solve:
+this is the last good bake.", with its pads hidden until the sketch solves
+(Caner, 2026-11-27, #2856). The next successful solve replaces it; the
+copy lives in the editor tab and goes with it. Between an edit and the solve
+that lands for it (a drag solves off the UI thread), the preview hides
+the pads, saying "Pads are hidden until the sketch solves.": the last
+solve's numbers would be read with the table's new units (Caner,
+2026-11-27, #2859). Live checks sits beside it,
+parameter errors first.
 
 **The table** is a card over the canvas with one row per parameter:
 

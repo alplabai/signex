@@ -89,6 +89,8 @@ sketch-parameters-preview-last-good = An expression has an error: this is the la
 sketch-parameters-preview-none = Nothing is solved yet.
 sketch-parameters-preview-empty = Nothing to bake yet.
 sketch-parameters-preview-pads-hidden = Pads are hidden until the expression reads.
+sketch-parameters-preview-unsolved = The sketch does not solve: this is the last good bake.
+sketch-parameters-preview-pads-unsolved = Pads are hidden until the sketch solves.
 sketch-parameters-preview-dimension = { $value } { $unit }
 sketch-parameters-preview-dimension-named = { $name } = { $value } { $unit }
 

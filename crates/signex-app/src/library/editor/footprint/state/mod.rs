@@ -217,6 +217,10 @@ pub struct FootprintEditorState {
     pub sketch_solver: signex_sketch::solver::Solver,
     /// Output of the most recent solve.
     pub last_solve: Option<signex_sketch::solver::FullSolveOutput>,
+    /// The solve a failed one cleared from `last_solve`, kept for the
+    /// parameters preview to draw dimmed as the last good bake (#2856).
+    /// Nothing else reads it; a successful bake drops it.
+    pub last_good_solve: Option<signex_sketch::solver::FullSolveOutput>,
     /// Bookkeeping for the off-thread drag solve (#1047).
     pub sketch_solve: super::sketch_solve_task::SketchSolveSlot,
     /// Last solve's audit / over-constraint warnings.
@@ -437,6 +441,7 @@ impl FootprintEditorState {
             mode: EditorMode::Normal,
             sketch_solver: signex_sketch::solver::Solver::default(),
             last_solve: None,
+            last_good_solve: None,
             sketch_solve: super::sketch_solve_task::SketchSolveSlot::default(),
             solve_warnings: Vec::new(),
             logged_solve_warnings: Vec::new(),

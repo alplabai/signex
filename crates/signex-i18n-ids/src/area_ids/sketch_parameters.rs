@@ -67,6 +67,8 @@ define_ids! {
     SKETCH_PARAMETERS_PREVIEW_NONE = "sketch-parameters-preview-none";
     SKETCH_PARAMETERS_PREVIEW_EMPTY = "sketch-parameters-preview-empty";
     SKETCH_PARAMETERS_PREVIEW_PADS_HIDDEN = "sketch-parameters-preview-pads-hidden";
+    SKETCH_PARAMETERS_PREVIEW_UNSOLVED = "sketch-parameters-preview-unsolved";
+    SKETCH_PARAMETERS_PREVIEW_PADS_UNSOLVED = "sketch-parameters-preview-pads-unsolved";
     SKETCH_PARAMETERS_PREVIEW_DIMENSION = "sketch-parameters-preview-dimension";
     SKETCH_PARAMETERS_PREVIEW_DIMENSION_NAMED = "sketch-parameters-preview-dimension-named";
     // sketch-live-checks-card
