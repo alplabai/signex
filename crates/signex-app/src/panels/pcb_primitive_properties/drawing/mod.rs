@@ -132,8 +132,9 @@ pub(super) fn dashed(from: Point, to: Point, fields: &[FieldId]) -> Part {
     Part::new(Primitive::Line { from, to }, Style::dashed()).linked_all(fields.iter().cloned())
 }
 
-/// The note in the lower right corner: "{layer} · round ends".
-pub(super) fn layer_note(i18n: &I18n, layer: &Label<'_>) -> Part {
+/// The note in the lower right corner of a kind with an Ends row (a track,
+/// a track arc, a line): "{layer} · round ends".
+pub(super) fn layer_ends_note(i18n: &I18n, layer: &Label<'_>) -> Part {
     let note = t!(i18n, ids::PCB_PRIM_DRAWING_LAYER_ENDS, "layer" => layer.as_str().to_string());
     label(
         at(VIEW_W - 6.0, VIEW_H - 8.0),
@@ -141,6 +142,19 @@ pub(super) fn layer_note(i18n: &I18n, layer: &Label<'_>) -> Part {
         Anchor::End,
         TextRole::Note,
         &[keys::LAYER, keys::ENDS],
+    )
+}
+
+/// The note in the lower right corner of a kind with no Ends row (a
+/// drawn circle, arc, rectangle or text frame): the layer alone (mockup
+/// row 102).
+pub(super) fn layer_note(layer: Label<'static>) -> Part {
+    label(
+        at(VIEW_W - 6.0, VIEW_H - 8.0),
+        layer,
+        Anchor::End,
+        TextRole::Note,
+        &[keys::LAYER],
     )
 }
 

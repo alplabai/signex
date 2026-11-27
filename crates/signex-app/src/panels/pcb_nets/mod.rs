@@ -9,6 +9,8 @@
 //! Manager opens the board's Polygon Manager tab (`panels::polygons`).
 
 mod detail;
+#[cfg(test)]
+mod detail_tests;
 mod model;
 mod modes;
 mod table;

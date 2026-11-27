@@ -9,7 +9,7 @@ use signex_i18n::{I18n, ids, t};
 use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 use signex_widgets::property_illustration::{Anchor, FieldId, Illustration, TextRole};
 
-use super::{at, band, callout, canvas, cross, dashed, keys, label, layer_label, layer_note};
+use super::{at, band, callout, canvas, cross, dashed, keys, label, layer_ends_note, layer_label};
 use crate::panels::pcb_primitive_properties::{ArcFacts, AreaLayerChoice};
 
 /// The shape drawn for a value the selection does not share, as the
@@ -101,7 +101,10 @@ pub(in crate::panels::pcb_primitive_properties) fn illustration(
         ));
     let name = f.layer.as_ref().map_or("", |l| l.label.as_str());
     let place = copper_place(&f.layers, layer);
-    drawing.part(layer_note(i18n, &layer_label(i18n, layer, place, name)))
+    drawing.part(layer_ends_note(
+        i18n,
+        &layer_label(i18n, layer, place, name),
+    ))
 }
 
 /// Where `layer` sits among the copper layers of `layers`, top first.
