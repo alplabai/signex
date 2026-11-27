@@ -613,6 +613,9 @@ pub struct LibraryState {
     /// stock library that fails to open is never mounted, so only this
     /// field lets the open-failure recovery flows recognise it (#814).
     pub stock_library_root: Option<PathBuf>,
+    /// Bootstrap looked for the bundled stock library, so the Components
+    /// panel says so when it is not mounted (`is_stock_missing`).
+    pub stock_expected: bool,
     /// The stock library mounts writable so a maintainer edits what ships
     /// (#1892). Only a source checkout's `assets/stock-library` with
     /// `SIGNEX_EDIT_STOCK=1`; see `components_panel::stock`. Set once at

@@ -89,6 +89,7 @@ impl Default for LibraryState {
             global_libraries: Vec::new(),
             stock_library: None,
             stock_library_root: None,
+            stock_expected: false,
             stock_editable: false,
             stock_copies_refused: Vec::new(),
             id_clash_notices: Vec::new(),

@@ -434,9 +434,12 @@ from libraries.
 mounted part in one table, one category at a time. The **Stock** library ships
 with Signex and is mounted on every launch (34 component rows: resistors,
 capacitors, inductors, diodes, LEDs, transistors, connectors, 74HC logic and
-more); **File ▸ Library ▸ Open Library…** mounts a `.snxlib` library. With no
-library mounted the panel offers **Add Library…** (Project, Installed or
-Global) and **Open Project…**.
+more); **File ▸ Library ▸ Open Library…** mounts a `.snxlib` library. If the
+installer's copy of the Stock library cannot be found or does not open, the
+panel says "Stock library not found. Reinstall Signex to restore the bundled
+parts." over the table, or in the empty card. With no library mounted the
+panel offers **Add Library…** (Project, Installed or Global) and **Open
+Project…**.
 
 The tool line picks the category: **All parts**, **Recently placed** (the
 parts you placed from the panel this session, most recent first, up to five),

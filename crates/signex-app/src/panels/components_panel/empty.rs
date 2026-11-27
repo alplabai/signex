@@ -27,16 +27,18 @@ pub(super) fn nothing_mounted_actions(i18n: &I18n) -> Vec<EmptyStateAction<Libra
     ]
 }
 
-/// "No libraries mounted" as a card with its two buttons.
+/// "No libraries mounted" as a card with its two buttons; its caption says
+/// the bundled stock library is missing when `stock_missing`.
 pub(super) fn nothing_mounted<'a>(
     tokens: &ThemeTokens,
     i18n: &I18n,
+    stock_missing: bool,
 ) -> Element<'a, LibraryMessage> {
     container(crate::panels::empty_state::empty_state_card_with_actions(
         tokens,
         t!(i18n, ids::PANELS_COMPONENTS_NOTHING_MOUNTED),
         t!(i18n, ids::PANELS_COMPONENTS_NOTHING_MOUNTED_BODY),
-        None,
+        stock_missing.then(|| t!(i18n, ids::PANELS_COMPONENTS_EMPTY_STOCK)),
         nothing_mounted_actions(i18n),
     ))
     .padding([SP.l, look::EDGE])
@@ -68,5 +70,22 @@ mod tests {
             actions[1].on_press,
             LibraryMessage::ComponentsPanelOpenProjectClicked
         ));
+    }
+
+    /// With nothing mounted, the card's caption names a missing bundled
+    /// stock library, and says nothing of it otherwise.
+    #[test]
+    fn the_card_names_a_missing_stock_library_only_when_it_is_missing() {
+        use signex_types::theme::{ThemeId, theme_tokens};
+        let en = I18n::en_us();
+        let tokens = theme_tokens(ThemeId::GraphiteLight);
+        let size = iced::Size::new(600.0, 400.0);
+        let shows = |missing: bool| {
+            crate::layout_probe::lay_out_texts(nothing_mounted(&tokens, &en, missing), size)
+                .into_iter()
+                .any(|t| t.text.starts_with("Stock library not found."))
+        };
+        assert!(shows(true));
+        assert!(!shows(false));
     }
 }

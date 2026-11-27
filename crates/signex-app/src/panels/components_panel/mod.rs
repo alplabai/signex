@@ -68,7 +68,8 @@ pub(crate) fn view<'a>(
     let i18n = &*ctx.i18n;
     // Nothing mounted: the card, and the menu its Add Library… opens.
     if state.open_libraries.is_empty() {
-        let mut empty = column![empty::nothing_mounted(tokens, i18n)].spacing(0);
+        let stock_missing = state.is_stock_missing();
+        let mut empty = column![empty::nothing_mounted(tokens, i18n, stock_missing)].spacing(0);
         if panel.add_menu_open {
             empty = empty.push(look::add_menu(tokens, i18n));
         }

@@ -132,6 +132,8 @@ pub(crate) fn table_block<'a>(
         Some(popover) => popovers::view(table, popover, tokens, i18n),
         None => iced::widget::Space::new().height(0.0).boxed(),
     });
+    // Also one slot either way, for the same reason.
+    col = col.push(stock_notice(state, tokens, i18n));
     col = col.push(group_bar::view(table, tokens, i18n));
     if table.cache.lines.is_empty() {
         col = col.push(empty_table(
@@ -161,6 +163,26 @@ pub(crate) fn table_block<'a>(
     col.push(status_line(table, tokens, i18n))
         .height(Length::Fill)
         .boxed()
+}
+
+/// "Stock library not found…" while the bundled stock library is missing,
+/// in the status line's look; an empty slot otherwise.
+fn stock_notice<'a>(
+    state: &LibraryState,
+    tokens: &ThemeTokens,
+    i18n: &I18n,
+) -> Element<'a, LibraryMessage> {
+    if !state.is_stock_missing() {
+        return iced::widget::Space::new().height(0.0).boxed();
+    }
+    container(
+        text(t!(i18n, ids::PANELS_COMPONENTS_EMPTY_STOCK))
+            .size(HINT_TEXT_SIZE)
+            .color(resolve(tokens).ink3),
+    )
+    .padding([SP.xs, 10.0])
+    .width(Length::Fill)
+    .boxed()
 }
 
 /// "Results 120 of 340 · Sort: Voltage ↑, Value ↓".

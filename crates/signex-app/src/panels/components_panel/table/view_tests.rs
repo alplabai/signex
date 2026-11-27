@@ -205,3 +205,41 @@ fn the_selected_part_keeps_its_key_across_a_sort() {
     assert!(table.cache.base.iter().any(|r| r.key == key));
     assert_eq!(table.cache.details.key.as_ref(), Some(&key));
 }
+
+const STOCK_MISSING: &str =
+    "Stock library not found. Reinstall Signex to restore the bundled parts.";
+
+/// The bundled stock library was looked for and did not mount: the panel
+/// says so over the table, with another library open (#2785 kept the
+/// notice the source chips showed).
+#[test]
+fn a_missing_stock_library_is_named_over_the_table() {
+    let mut state = parts();
+    state.stock_expected = true;
+    state.stock_library_root = Some(std::path::PathBuf::from("Stock.snxlib"));
+    assert!(state.is_stock_missing());
+    for theme in THEMES {
+        let texts = texts_of(&state, theme);
+        assert!(texts.iter().any(|t| t == STOCK_MISSING), "{texts:#?}");
+    }
+}
+
+/// With the stock library mounted, or still mounting, no notice shows.
+#[test]
+fn a_mounted_or_mounting_stock_library_shows_no_notice() {
+    let stock = std::path::PathBuf::from("Stock.snxlib");
+    let mut state = parts();
+    state.stock_expected = true;
+    state.stock_library_root = Some(stock.clone());
+    state.stock_library = Some(stock.clone());
+    let texts = texts_of(&state, ThemeId::GraphiteLight);
+    assert!(!texts.iter().any(|t| t == STOCK_MISSING), "{texts:#?}");
+
+    state.stock_library = None;
+    state
+        .pending_mounts
+        .insert(stock, crate::library::mount::MountIntent::Silent);
+    assert!(!state.is_stock_missing(), "still mounting");
+    let texts = texts_of(&state, ThemeId::GraphiteLight);
+    assert!(!texts.iter().any(|t| t == STOCK_MISSING), "{texts:#?}");
+}
