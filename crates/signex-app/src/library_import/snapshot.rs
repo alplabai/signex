@@ -213,6 +213,7 @@ impl ImportJob {
             self.limits,
             cancel,
             &self.group,
+            &self.stage,
             on_event,
         )?;
         let discard = |error: ImportError, run: &RunOutcome| {

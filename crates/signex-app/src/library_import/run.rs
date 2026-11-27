@@ -270,7 +270,8 @@ pub fn run_library_in(
     stage: &JobStage,
     on_event: &mut dyn FnMut(&ProgressEvent),
 ) -> Result<RunOutcome, RunFailure> {
-    run_library_claimed(command, request, limits, cancel, group, on_event).map(|(run, _)| run)
+    run_library_claimed(command, request, limits, cancel, group, stage, on_event)
+        .map(|(run, _)| run)
 }
 
 /// [`run_library_in`], also returning how the run took its output folder,
@@ -281,6 +282,7 @@ pub fn run_library_claimed(
     limits: RunLimits,
     cancel: &AtomicBool,
     group: &ProcessGroup,
+    stage: &JobStage,
     on_event: &mut dyn FnMut(&ProgressEvent),
 ) -> Result<(RunOutcome, ClaimedOutput), RunFailure> {
     request.validate().map_err(RunFailure::refused)?;
