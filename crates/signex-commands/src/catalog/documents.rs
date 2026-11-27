@@ -5,14 +5,20 @@ use super::operands::{Operand, OperandKind, optional, required};
 use super::{CommandFlags, CommandGroup, CommandMetadata, DocumentKind, Enablement, operands};
 use signex_i18n_ids::{command_ids, menu_ids};
 
-/// A schematic printed to PDF (#1298, #2609): which sheet and the file; the
-/// rest defaults as Export PDF opens on the sheet. `watermark` is `draft`,
-/// `confidential` or the text to print; the other `watermark_*` operands
-/// style it (`watermark_pages` is `all` or `first`). `links=false` writes no
-/// link annotations.
+/// A schematic printed to PDF (#1298, #2609, #2610, #2787): which sheet and
+/// the file; the rest defaults as Export PDF opens on the sheet. `pages` is
+/// `all`, `current` or sheet numbers and ranges (`1-2, 4`), the Pages
+/// field's rule; `layers` is `all` or the ids of the PDF layers visible on
+/// open (`PdfLayer::id`), a flat PDF when left out; `variant` names the
+/// printed variant. `watermark` is `draft`, `confidential` or the text to
+/// print; the other `watermark_*` operands style it (`watermark_pages` is
+/// `all` or `first`). `links=false` writes no link annotations.
 const SCHEMATIC_PDF: &[Operand] = &[
     required("document", OperandKind::Document),
     required("path", OperandKind::Path),
+    optional("pages", OperandKind::Text),
+    optional("layers", OperandKind::Text),
+    optional("variant", OperandKind::Text),
     optional("watermark", OperandKind::Text),
     optional("watermark_color", OperandKind::Color),
     optional("watermark_opacity", OperandKind::Text),
@@ -277,8 +283,10 @@ pub(super) const DOCUMENTS: &[CommandMetadata] = &[
         operands: super::operands::BOARD_PDF,
         ..CommandMetadata::DEFAULT
     },
-    // #1298, #2609: Export PDF on a sheet (File > Export > PDF opens it too);
-    // headless it writes `document`'s pages to `path`. No default key.
+    // #1298, #2609, #2610, #2787: Export PDF on a sheet (File > Export > PDF
+    // opens it too); headless it writes `document`'s pages to `path`, with
+    // the pages, layers, variant, watermark and links the operands set. No
+    // default key.
     CommandMetadata {
         id: "export_schematic_pdf",
         category: "reports",
@@ -487,4 +495,17 @@ pub(super) const DOCUMENTS: &[CommandMetadata] = &[
         operands: operands::DOCUMENT,
         ..CommandMetadata::DEFAULT
     },
+];
+
+/// A schematic printed to PDF (#2610, #2787): which document and the file;
+/// the rest defaults as the Export PDF dialog opens. `pages` is `all`,
+/// `current` or a list of sheet numbers and ranges (`1-2, 4`); `layers` is
+/// `all` or the ids of the PDF layers visible on open (`PdfLayer::id`), and
+/// writes a flat PDF when left out; `variant` names the printed variant.
+const SCHEMATIC_PDF: &[Operand] = &[
+    operands::required("document", OperandKind::Document),
+    operands::required("path", OperandKind::Path),
+    operands::optional("pages", OperandKind::Text),
+    operands::optional("layers", OperandKind::Text),
+    operands::optional("variant", OperandKind::Text),
 ];

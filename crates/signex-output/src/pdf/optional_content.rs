@@ -19,17 +19,20 @@ pub enum PdfLayer {
     NetLabelsAndPorts,
     PowerPorts,
     TitleBlockAndBorder,
+    /// The parts not fitted in the printed variant (#2610).
+    NotFittedParts,
     Watermark,
 }
 
 impl PdfLayer {
-    /// Every group, in the order the reader lists them.
-    pub const ALL: [PdfLayer; 6] = [
+    /// Every group, in the order the reader lists them (mockup row 168).
+    pub const ALL: [PdfLayer; 7] = [
         PdfLayer::WiresAndBuses,
         PdfLayer::Parts,
         PdfLayer::NetLabelsAndPorts,
         PdfLayer::PowerPorts,
         PdfLayer::TitleBlockAndBorder,
+        PdfLayer::NotFittedParts,
         PdfLayer::Watermark,
     ];
 
@@ -42,8 +45,28 @@ impl PdfLayer {
             PdfLayer::NetLabelsAndPorts => "Net labels and ports",
             PdfLayer::PowerPorts => "Power ports",
             PdfLayer::TitleBlockAndBorder => "Title block and border",
+            PdfLayer::NotFittedParts => "Not-fitted parts",
             PdfLayer::Watermark => "Watermark",
         }
+    }
+
+    /// The group's id in a command operand (`export_schematic_pdf layers=`).
+    pub fn id(self) -> &'static str {
+        match self {
+            PdfLayer::WiresAndBuses => "wires",
+            PdfLayer::Parts => "parts",
+            PdfLayer::NetLabelsAndPorts => "net_labels",
+            PdfLayer::PowerPorts => "power_ports",
+            PdfLayer::TitleBlockAndBorder => "title_block",
+            PdfLayer::NotFittedParts => "not_fitted",
+            PdfLayer::Watermark => "watermark",
+        }
+    }
+
+    /// The group [`Self::id`] names, ignoring surrounding space.
+    pub fn from_id(id: &str) -> Option<PdfLayer> {
+        let id = id.trim();
+        PdfLayer::ALL.into_iter().find(|layer| layer.id() == id)
     }
 
     /// The `/Properties` resource name the page content refers to.
@@ -70,6 +93,17 @@ pub(super) fn written_layers(has_watermark: bool) -> Vec<PdfLayer> {
         .into_iter()
         .filter(|layer| has_watermark || *layer != PdfLayer::Watermark)
         .collect()
+}
+
+impl super::PdfOptions {
+    /// The groups an export with these options writes, in reader order;
+    /// none for a flat PDF.
+    pub fn written_layers(&self) -> Vec<PdfLayer> {
+        match self.layers {
+            Some(_) => written_layers(self.watermark.is_some()),
+            None => Vec::new(),
+        }
+    }
 }
 
 /// The `/OCG` object of each written group, numbered from `first_ref`.

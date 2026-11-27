@@ -20,6 +20,7 @@ mod loose_bom;
 mod omitted;
 pub(crate) mod page_list;
 mod page_setup;
+pub(crate) mod pdf_command;
 mod pdf_netlist;
 pub(crate) mod pdf_operands;
 pub(crate) mod placements;

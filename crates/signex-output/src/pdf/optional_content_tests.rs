@@ -7,7 +7,11 @@ use super::tests::sample_ctx;
 use super::*;
 use crate::ExportContext;
 
-/// One sheet with a wire, a part, a power port and a net label.
+/// The uuid of `layered_ctx`'s part marked DNP.
+const DNP_PART: uuid::Uuid = uuid::Uuid::from_u128(0x2610);
+
+/// One sheet with a wire, a part, a part marked DNP (#2610), a power port
+/// and a net label.
 pub(super) fn layered_ctx() -> ExportContext {
     let mut ctx = sample_ctx(1);
     let sheet = &mut ctx.sheets[0].schematic;
@@ -20,6 +24,13 @@ pub(super) fn layered_ctx() -> ExportContext {
     sheet.symbols.push(Symbol {
         reference: "R1".to_string(),
         position: Point::new(80.0, 60.0),
+        ..Default::default()
+    });
+    sheet.symbols.push(Symbol {
+        uuid: DNP_PART,
+        reference: "R2".to_string(),
+        position: Point::new(100.0, 60.0),
+        dnp: true,
         ..Default::default()
     });
     sheet.symbols.push(Symbol {
@@ -121,6 +132,7 @@ fn layers_write_one_named_group_each_in_list_order() {
             "Net labels and ports",
             "Power ports",
             "Title block and border",
+            "Not-fitted parts",
             "Watermark",
         ]
     );
@@ -154,9 +166,109 @@ fn layer_spans_merge_neighbours_of_one_group_and_skip_empty_runs() {
 #[test]
 fn group_names_match_the_layer_list() {
     let names: Vec<&str> = PdfLayer::ALL.iter().map(|l| l.group_name()).collect();
-    assert_eq!(names.len(), 6);
+    assert_eq!(names.len(), 7);
     assert_eq!(names[0], "Wires and buses");
-    assert_eq!(names[5], "Watermark");
+    assert_eq!(names[5], "Not-fitted parts");
+    assert_eq!(names[6], "Watermark");
+}
+
+/// Each group's operand id names it back (`export_schematic_pdf layers=`).
+#[test]
+fn every_group_id_names_its_group() {
+    for layer in PdfLayer::ALL {
+        assert_eq!(PdfLayer::from_id(layer.id()), Some(layer), "{layer:?}");
+    }
+    assert_eq!(
+        PdfLayer::from_id(" not_fitted "),
+        Some(PdfLayer::NotFittedParts)
+    );
+    assert_eq!(PdfLayer::from_id("Parts"), None, "ids, not group names");
+}
+
+/// The operators inside the first run of `layer`'s marked content; `None`
+/// when the page draws nothing in it.
+fn run_of(ops: &str, layer: PdfLayer) -> Option<String> {
+    let begin = optional_content::begin_operator(layer);
+    let at = ops.find(&begin)? + begin.len();
+    let end = ops[at..].find("EMC\n").expect("the run is closed");
+    Some(ops[at..at + end].to_string())
+}
+
+/// #2610: a part not fitted in the printed variant draws in the Not-fitted
+/// parts group, not in Parts; a fitted part stays in Parts.
+#[test]
+fn a_part_not_fitted_draws_in_its_own_group() {
+    let ctx = layered_ctx();
+    let ops = page_ops(&ctx, &layered(&[], false), 0);
+    let run = run_of(&ops, PdfLayer::NotFittedParts).expect("a not-fitted run");
+    assert!(run.contains(" l\n"), "the DNP part's drawing: {run}");
+    let flat = page_ops(&ctx, &PdfOptions::default(), 0);
+    assert!(flat.contains(&run), "the run is the part's own drawing");
+
+    // Fitted, the same part draws in Parts and the group holds nothing.
+    let mut fitted = layered_ctx();
+    for sym in &mut fitted.sheets[0].schematic.symbols {
+        if sym.uuid == DNP_PART {
+            sym.dnp = false;
+        }
+    }
+    let ops = page_ops(&fitted, &layered(&[], false), 0);
+    assert_eq!(run_of(&ops, PdfLayer::NotFittedParts), None);
+    assert!(run_of(&ops, PdfLayer::Parts).is_some_and(|parts| parts.contains(&run)));
+}
+
+/// #2610: the printed variant decides: a part not fitted in Lite only is in
+/// the group when Lite prints, and in Parts for Base.
+#[test]
+fn the_printed_variant_decides_which_parts_are_not_fitted() {
+    let mut ctx = layered_ctx();
+    for sym in &mut ctx.sheets[0].schematic.symbols {
+        if sym.uuid == DNP_PART {
+            sym.dnp = false;
+            sym.fields = [("Fitted@Lite".to_string(), "no".to_string())]
+                .into_iter()
+                .collect();
+        }
+    }
+    let base = page_ops(&ctx, &layered(&[], false), 0);
+    assert_eq!(
+        run_of(&base, PdfLayer::NotFittedParts),
+        None,
+        "Base fits it"
+    );
+    let lite = PdfOptions {
+        variant: Some("Lite".to_string()),
+        ..layered(&[], false)
+    };
+    let ops = page_ops(&ctx, &lite, 0);
+    assert!(
+        run_of(&ops, PdfLayer::NotFittedParts).is_some(),
+        "Lite does not"
+    );
+}
+
+/// #2610: hidden on open, the Not-fitted parts group is listed under `/OFF`
+/// like any other group.
+#[test]
+fn the_not_fitted_group_can_open_hidden() {
+    let hidden = [PdfLayer::NotFittedParts];
+    let text = export_text(&layered_ctx(), &layered(&hidden, false));
+    let groups = ocg_objects(&text);
+    let off: Vec<&str> = refs_after(&text, "/OFF")
+        .iter()
+        .map(|r| name_of(&groups, r))
+        .collect();
+    assert_eq!(off, ["Not-fitted parts"]);
+}
+
+/// The groups an export writes, as the options say.
+#[test]
+fn written_layers_follow_the_options() {
+    assert!(PdfOptions::default().written_layers().is_empty(), "flat");
+    let layers = layered(&[], false).written_layers();
+    assert_eq!(layers.len(), 6);
+    assert_eq!(layers.last(), Some(&PdfLayer::NotFittedParts));
+    assert_eq!(layered(&[], true).written_layers(), PdfLayer::ALL);
 }
 
 #[test]
@@ -189,7 +301,7 @@ fn the_watermark_group_always_prints() {
 fn no_watermark_writes_no_watermark_group() {
     let text = export_text(&layered_ctx(), &layered(&[], false));
     let names: Vec<String> = ocg_objects(&text).into_iter().map(|(_, n)| n).collect();
-    assert_eq!(names.len(), 5);
+    assert_eq!(names.len(), 6);
     assert!(!names.iter().any(|n| n == "Watermark"));
 }
 

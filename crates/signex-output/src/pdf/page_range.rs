@@ -40,6 +40,21 @@ pub fn check_page_range(range: &PageRange, sheets: &[SheetSnapshot]) -> Result<(
     resolve_page_range(range, sheets, 0).map(|_| ())
 }
 
+/// The sheet number of each page an export of `range` prints, in printed
+/// order (`current` is the index of the current page in `sheets`), else the
+/// error the export stops with. The preview shows these pages too (#2787).
+pub fn printed_sheet_numbers(
+    range: &PageRange,
+    sheets: &[SheetSnapshot],
+    current: usize,
+) -> Result<Vec<usize>, PdfError> {
+    let indices = resolve_page_range(range, sheets, current)?;
+    Ok(indices
+        .into_iter()
+        .filter_map(|index| sheets.get(index).map(|sheet| sheet.sheet_number))
+        .collect())
+}
+
 /// [`resolve_page_range`] for the preview, which never fails: an unprinted
 /// number in `Specific` selects nothing, an unprinted range endpoint empties
 /// the range.

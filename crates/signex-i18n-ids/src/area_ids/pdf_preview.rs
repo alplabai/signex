@@ -97,6 +97,7 @@ define_ids! {
     PDF_LAYER_NET_LABELS = "pdf-layer-net-labels";
     PDF_LAYER_POWER_PORTS = "pdf-layer-power-ports";
     PDF_LAYER_TITLE_BLOCK = "pdf-layer-title-block";
+    PDF_LAYER_NOT_FITTED = "pdf-layer-not-fitted";
     PDF_LAYER_WATERMARK = "pdf-layer-watermark";
     PDF_LAYER_WATERMARK_LOCKED = "pdf-layer-watermark-locked";
     PDF_LAYER_WATERMARK_OFF = "pdf-layer-watermark-off";

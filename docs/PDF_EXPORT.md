@@ -112,7 +112,15 @@ With `layers: Some(PdfLayerVisibility)` the export writes optional content:
 | `NetLabelsAndPorts` | Net labels and ports | Net, global and hierarchical labels (ports) |
 | `PowerPorts` | Power ports | Power port symbols and power labels |
 | `TitleBlockAndBorder` | Title block and border | The sheet border, the template frame and the title block |
+| `NotFittedParts` | Not-fitted parts | Parts not fitted in the printed variant or marked DNP: their bodies, pins, body fills and text (#2610) |
 | `Watermark` | Watermark | The watermark |
+
+A part goes in Not-fitted parts when `variant_fit::is_fitted` says it is not
+fitted in `PdfOptions::variant` (Base for `None`), read from its own sheet.
+Power ports never do. The group is written whenever layers are, like the
+other drawing groups, and it is visible on open unless the dialog's
+"Not-fitted parts (variant)" row is unticked; switched off in the reader it
+hides those parts and leaves every fitted part as it was.
 
 Not in any group, so always visible: the page's paper fill, free drawings
 (Bezier curves, dimensions and tables included), notes, no-connect and No-ERC
@@ -126,6 +134,30 @@ prints, even when the reader opened it hidden.
 
 With `layers: None` none of this is written: no `/OCProperties`, no
 `/Properties`, no marked content.
+
+## Pages
+
+The Pages field takes All, Current or Specific. Specific reads sheet numbers
+and ranges such as `1-2, 4` (mockup row 111); text it cannot read stays in
+the box, marked, and Export refuses it. The preview shows the pages the file
+prints: both resolve the range by the export's rule, whose sheet numbers
+`printed_sheet_numbers` names (#2787). Switching
+away from Specific and back keeps the list in the box and prints it.
+
+## From the command line
+
+`export_schematic_pdf document=<sheet> path=<file> [pages=..] [layers=..]
+[variant=..] [watermark=..] [links=..]` writes the PDF the dialog would,
+starting from the options the dialog opens with (the sheet's paper, the
+theme's colours, the project's active variant). `pages` is `all`, `current`
+or the Pages list; `layers` is `all` or the ids of the groups visible on open
+(`wires`, `parts`, `net_labels`, `power_ports`, `title_block`, `not_fitted`,
+`watermark`) and writes a flat PDF when left out; `variant` is Base or a
+variant the project defines. The watermark and link operands are under
+"Links" and in `docs/DECISIONS.md`. The answer names the sheet count, the
+sheet numbers printed, the variant, the groups written, the watermark and
+whether links are written. In a window the command opens the dialog, as
+File ▸ Export ▸ PDF does.
 
 ## Bookmarks
 

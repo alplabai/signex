@@ -16,7 +16,10 @@ use super::labels::{
     schematic_text_offset_hier, schematic_text_offset_net, spin_text_style, valign_to_svg,
 };
 use super::markers::{push_no_connect_x, push_no_erc_diamond};
-use super::symbols::{push_symbol_body_fills, push_symbol_lib_graphics, push_symbol_pins};
+use super::symbols::{
+    not_fitted_parts, push_symbol_body_fills, push_symbol_lib_graphics, push_symbol_pins,
+    symbol_layer,
+};
 use super::text::glyph_em_pt;
 use super::text::{TextStyle, draw_text_outline};
 use super::*;
@@ -122,10 +125,17 @@ impl SvgRenderContext {
             palette,
             &opts.schematic_defaults,
         );
+        // The parts that print in the Not-fitted parts layer (#2610).
+        let not_fitted = not_fitted_parts(&sheet.schematic, opts.variant.as_deref());
         // Body fills sit under the wires but belong to their parts.
-        let fills_start = elements.len();
-        push_symbol_body_fills(&mut elements, &sheet.schematic, &xform, palette);
-        layers.mark(PdfLayer::Parts, fills_start..elements.len());
+        push_symbol_body_fills(
+            &mut elements,
+            &sheet.schematic,
+            &xform,
+            palette,
+            &not_fitted,
+            &mut layers,
+        );
 
         // Base primitives
         let wires_start = elements.len();
@@ -506,12 +516,7 @@ impl SvgRenderContext {
                     text: crate::shown_value(&value_scope, sym).text,
                 });
             }
-            let symbol_layer = if sym.is_power {
-                PdfLayer::PowerPorts
-            } else {
-                PdfLayer::Parts
-            };
-            layers.mark(symbol_layer, symbol_start..elements.len());
+            layers.mark(symbol_layer(sym, &not_fitted), symbol_start..elements.len());
         }
 
         push_placed_drawings(
