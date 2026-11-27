@@ -285,6 +285,8 @@ impl LogRow {
 
     /// The text of the source filter's query: label, id and arguments.
     fn haystack(&self) -> String {
+        // A search key, never shown, so no language case rules apply.
+        // ast-grep-ignore: no-case-in-view
         format!("{} {} {}", self.label, self.command, self.arguments_text()).to_lowercase()
     }
 
@@ -591,6 +593,8 @@ impl CommandLog {
 
     /// The rows the filters leave, oldest first.
     pub fn visible(&self) -> Vec<&LogRow> {
+        // A search key, never shown, so no language case rules apply.
+        // ast-grep-ignore: no-case-in-view
         let query = self.filters.query.trim().to_lowercase();
         self.rows()
             .filter(|row| self.listed(row))
