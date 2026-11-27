@@ -2,9 +2,10 @@
 //! the sketch bakes, drawn from the editor's current solve, with its driving
 //! dimensions. It never solves. It reads `last_solve` and the parameters
 //! that solve ran with, so while a row is in error the last good bake stays
-//! on show, marked. Both hosts draw the baking edges; a footprint also
-//! draws its baked pads, except in a last-good preview. Drawing:
-//! `preview_canvas`.
+//! on show, marked. After a failed solve it reads `last_good_solve`, the
+//! last solve that succeeded, drawn dimmed (#2856). Both hosts draw the
+//! baking edges; a footprint also draws its baked pads, except in a
+//! last-good preview. Drawing: `preview_canvas`.
 
 use std::collections::{BTreeSet, HashMap};
 use std::f64::consts::TAU;
@@ -30,6 +31,25 @@ const CIRCLE_SEGMENTS: usize = 48;
 /// A point in sketch millimetres.
 pub(super) type Mm = (f64, f64);
 
+/// How the solve the preview draws stands to the sketch as it is now.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Freshness {
+    /// The solve of the sketch as it is.
+    Current,
+    /// The sketch failed to solve since: this is the last solve that did.
+    LastGood,
+}
+
+/// Why a footprint sketch's pads are not drawn.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum PadsHidden {
+    /// A parameter is in error, so their unit families cannot be read.
+    UntilExpressionReads,
+    /// The solve is not the sketch's as it is now, so its numbers need not
+    /// match the table's units.
+    UntilSketchSolves,
+}
+
 /// What the preview draws, sketch mm.
 #[derive(Debug, Clone, PartialEq)]
 pub(super) struct BakePreview {
@@ -38,12 +58,14 @@ pub(super) struct BakePreview {
     pub(super) edges: Vec<Vec<Mm>>,
     /// The baked pads; always empty on a board sketch.
     pub(super) pads: Vec<PreviewPad>,
-    /// The sketch bakes pads but they are not drawn: a parameter is in
-    /// error, so their unit families cannot be read.
-    pub(super) pads_hidden: bool,
+    /// The sketch bakes pads but they are not drawn, and why.
+    pub(super) pads_hidden: Option<PadsHidden>,
     pub(super) dimensions: Vec<DrivingDimension>,
     /// A parameter is in error, so this is the last good bake.
     pub(super) is_last_good: bool,
+    /// The sketch does not solve now: this is the last solve that did,
+    /// drawn dimmed with a caption (#2856).
+    pub(super) is_unsolved: bool,
 }
 
 /// A baked pad as drawn.
@@ -74,12 +96,18 @@ pub(super) struct DrivingDimension {
 /// is no sketch or no solve to draw.
 pub(super) fn of_editor(editor: &FootprintDocument) -> Option<BakePreview> {
     let sketch = editor.primitive().sketch.as_ref()?;
-    let solve = editor.state.last_solve.as_ref()?;
+    let state = &editor.state;
+    let (solve, freshness) = match (&state.last_solve, &state.last_good_solve) {
+        (Some(solve), _) => (solve, Freshness::Current),
+        (None, Some(solve)) => (solve, Freshness::LastGood),
+        (None, None) => return None,
+    };
     Some(BakePreview::of(
         sketch,
         solve,
-        editor.state.sketch_host(),
+        state.sketch_host(),
         &failing_parameters(sketch),
+        freshness,
     ))
 }
 
@@ -94,12 +122,14 @@ pub(super) fn failing_parameters(sketch: &SketchData) -> BTreeSet<String> {
 
 impl BakePreview {
     /// The bake of `sketch` at `solve`, with the parameters `solve` ran
-    /// with. `failing` names the parameters in error now.
+    /// with. `failing` names the parameters in error now; `freshness` says
+    /// whether `solve` is the sketch's as it is.
     pub(super) fn of(
         sketch: &SketchData,
         solve: &FullSolveOutput,
         host: SketchHost,
         failing: &BTreeSet<String>,
+        freshness: Freshness,
     ) -> Self {
         let at = Positions { sketch, solve };
         let edges = sketch
@@ -114,11 +144,21 @@ impl BakePreview {
         // each parameter's unit family from the sketch's table, which reads
         // none while a row fails: an angle would be read as a length. So a
         // last-good preview hides the pads rather than draw them wrong.
-        // Gate on the same resolver the bake takes the units from.
+        // Gate on the same resolver the bake takes the units from. A solve
+        // that is not the sketch's now pairs its numbers with today's units
+        // the same way, so it hides them too.
         let units_unread =
             signex_sketch::parameter::resolve_quantities(&sketch.parameters).is_err();
-        let pads_hidden = has_pads && (units_unread || !failing.is_empty());
-        let pads = if has_pads && !pads_hidden {
+        let pads_hidden = if !has_pads {
+            None
+        } else if units_unread || !failing.is_empty() {
+            Some(PadsHidden::UntilExpressionReads)
+        } else if freshness != Freshness::Current {
+            Some(PadsHidden::UntilSketchSolves)
+        } else {
+            None
+        };
+        let pads = if has_pads && pads_hidden.is_none() {
             baked_pads(sketch, solve)
                 .iter()
                 .map(PreviewPad::of)
@@ -132,6 +172,7 @@ impl BakePreview {
             pads_hidden,
             dimensions: driving_dimensions(sketch, solve, &at, failing),
             is_last_good: !failing.is_empty(),
+            is_unsolved: freshness == Freshness::LastGood,
         }
     }
 

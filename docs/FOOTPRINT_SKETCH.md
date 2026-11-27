@@ -298,8 +298,13 @@ Under the table's rows, a live bake preview (Caner, 2026-11-24) draws the
 edges that bake, a footprint's baked pads and the driving dimensions, from
 the current solve without solving again; it redraws on each keystroke.
 While an expression does not read, it keeps the last good bake, marked,
-and hides the pads, since their angles cannot be read, saying so. Live
-checks sits beside it, parameter errors first.
+and hides the pads, since their angles cannot be read, saying so. When a
+solve fails (the canvas then shows the sketch unsolved), the preview keeps
+the last solve that succeeded, dimmed, under "The sketch does not solve:
+this is the last good bake.", with its pads hidden until the sketch solves
+(Caner, 2026-11-27, #2856). The next successful solve replaces it; the
+copy lives in the editor tab and goes with it. Live checks sits beside it,
+parameter errors first.
 
 **The table** is a card over the canvas with one row per parameter:
 

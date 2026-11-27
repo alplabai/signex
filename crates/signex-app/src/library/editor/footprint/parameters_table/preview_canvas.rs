@@ -3,7 +3,9 @@
 //! unit` label, and beside it the narrower Live checks card. The row takes the
 //! panel's height left under the table. The preview is drawn fresh from
 //! the editor's state on every view, so each keystroke that re-solves
-//! redraws it; there is no cache to clear.
+//! redraws it; there is no cache to clear. After a failed solve it draws
+//! the last good bake dimmed, under a "last good" caption (Caner
+//! 2026-11-27, #2856).
 
 use iced::mouse;
 use iced::widget::canvas::{self, Frame, Geometry, Path, Stroke};
@@ -13,7 +15,7 @@ use signex_i18n::{Arg, I18n, Localized, ids, t};
 use signex_sketch::unit::Quantity;
 use signex_types::theme::ThemeTokens;
 
-use super::preview::{BakePreview, Mm, PreviewPad, of_editor};
+use super::preview::{BakePreview, Mm, PadsHidden, PreviewPad, of_editor};
 use super::state::display_value;
 use super::view::{Look, caption, unit_id};
 use crate::app::FootprintDocument;
@@ -34,6 +36,9 @@ pub(super) const CHECKS_PORTION: u16 = 1;
 const STROKE_EM: f32 = 0.1;
 /// How strongly a pad is filled.
 const PAD_FILL_ALPHA: f32 = 0.35;
+/// What is left of the drawing's colours while it shows the last good bake
+/// of a sketch that does not solve.
+const UNSOLVED_ALPHA: f32 = 0.4;
 /// Arrowhead length and half width of a dimension line, in caption heights.
 const ARROW_EM: f32 = 0.45;
 const ARROW_HALF_EM: f32 = 0.2;
@@ -118,14 +123,21 @@ fn preview_card<'a>(
             look.error,
         ));
     }
-    if preview.pads_hidden {
+    if preview.is_unsolved {
         card = card.push(caption(
-            t!(i18n, ids::SKETCH_PARAMETERS_PREVIEW_PADS_HIDDEN),
-            look.error,
+            t!(i18n, ids::SKETCH_PARAMETERS_PREVIEW_UNSOLVED),
+            look.muted,
         ));
     }
+    if let Some(reason) = preview.pads_hidden {
+        let id = match reason {
+            PadsHidden::UntilExpressionReads => ids::SKETCH_PARAMETERS_PREVIEW_PADS_HIDDEN,
+            PadsHidden::UntilSketchSolves => ids::SKETCH_PARAMETERS_PREVIEW_PADS_UNSOLVED,
+        };
+        card = card.push(caption(t!(i18n, id), look.error));
+    }
     if preview.extent().is_none() {
-        if !preview.pads_hidden {
+        if preview.pads_hidden.is_none() {
             card = card.push(caption(
                 t!(i18n, ids::SKETCH_PARAMETERS_PREVIEW_EMPTY),
                 look.muted,
@@ -138,16 +150,8 @@ fn preview_card<'a>(
         .iter()
         .map(|d| dimension_label(d, i18n))
         .collect();
-    let r = crate::styles::tokens::resolve(tokens);
-    let drawing = PreviewDrawing {
-        preview,
-        labels,
-        ground: r.field,
-        edge: look.ink,
-        pad: look.name,
-        label: look.muted,
-        last_good: look.error,
-    };
+    let ground = crate::styles::tokens::resolve(tokens).field;
+    let drawing = PreviewDrawing::of(preview, labels, ground, look);
     card.push(
         canvas::Canvas::new(drawing)
             .width(Length::Fill)
@@ -185,15 +189,39 @@ pub(super) fn dimension_label(d: &super::preview::DrivingDimension, i18n: &I18n)
 }
 
 /// The preview as a canvas program.
-struct PreviewDrawing {
+pub(super) struct PreviewDrawing {
     preview: BakePreview,
     /// One label per driving dimension, in order.
     labels: Vec<String>,
     ground: Color,
-    edge: Color,
-    pad: Color,
-    label: Color,
-    last_good: Color,
+    pub(super) edge: Color,
+    pub(super) pad: Color,
+    pub(super) label: Color,
+    pub(super) last_good: Color,
+}
+
+impl PreviewDrawing {
+    /// `preview` in `look`'s colours on `ground`; dimmed while it is the
+    /// last good bake of a sketch that does not solve.
+    pub(super) fn of(preview: BakePreview, labels: Vec<String>, ground: Color, look: Look) -> Self {
+        let dim = preview.is_unsolved;
+        let ink = |colour: Color| {
+            if dim {
+                colour.scale_alpha(UNSOLVED_ALPHA)
+            } else {
+                colour
+            }
+        };
+        Self {
+            edge: ink(look.ink),
+            pad: ink(look.name),
+            label: ink(look.muted),
+            last_good: ink(look.error),
+            preview,
+            labels,
+            ground,
+        }
+    }
 }
 
 impl canvas::Program<LibraryMessage> for PreviewDrawing {
@@ -243,10 +271,8 @@ impl canvas::Program<LibraryMessage> for PreviewDrawing {
                 .with_width(TS.caption * STROKE_EM)
                 .with_color(color)
         };
-        let fill = Color {
-            a: PAD_FILL_ALPHA,
-            ..self.pad
-        };
+        // Scaled, not set, so a dimmed pad stays dimmed.
+        let fill = self.pad.scale_alpha(PAD_FILL_ALPHA);
         for pad in &self.preview.pads {
             let path = match pad {
                 PreviewPad::Round { centre, radius } => {
