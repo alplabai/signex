@@ -107,8 +107,8 @@ mod opened;
 #[cfg(test)]
 mod operand_handler_tests;
 mod operand_handlers;
-mod operand_reasons;
 pub(crate) mod operand_mm;
+mod operand_reasons;
 mod operands;
 #[cfg(test)]
 mod parity;
