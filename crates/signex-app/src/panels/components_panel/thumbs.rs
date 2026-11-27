@@ -1,7 +1,10 @@
 //! Row symbol thumbnails of the Components panel (#2535): the cache, the
 //! off-thread read that fills it, and the small view-only line-art drawing
-//! (transparent, no paper or grid, like the Properties previews).
+//! (transparent, no paper or grid, like the Properties previews). A library
+//! re-read (a save, an external edit) marks its thumbnails stale; the old
+//! drawing stays up until the fresh read lands (#2631).
 
+use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
@@ -10,6 +13,7 @@ use iced::{Element, Length, Rectangle, Size, Theme, Widget, mouse};
 use signex_library::primitive::PrimitiveRef;
 use signex_types::schematic::{Aabb, LibSymbol};
 use signex_types::theme::CanvasColors;
+use uuid::Uuid;
 
 use super::details::load::MountedAdapters;
 use super::details::symbol_canvas::{preview_draw_options, preview_sheet};
@@ -30,6 +34,9 @@ pub struct SymbolThumbs {
     read: HashMap<PrimitiveRef, Option<Arc<LibSymbol>>>,
     /// Asked for and not landed yet.
     asked: HashSet<PrimitiveRef>,
+    /// Read (or being read) before their library was re-read: asked for
+    /// again, still drawn from `read` until the fresh copy lands.
+    stale: HashSet<PrimitiveRef>,
     /// Mounted library count the failed reads were made against.
     mounted: usize,
 }
@@ -49,8 +56,22 @@ impl SymbolThumbs {
         }
     }
 
-    /// Of `wanted`, the references neither read nor being read, at most
-    /// [`MAX_PER_READ`], each marked as asked.
+    /// The library `library_id` was re-read: its symbols may have changed
+    /// on disk, so every thumbnail of it is read again when next wanted.
+    pub fn mark_library_stale(&mut self, library_id: Uuid) {
+        let of_library = |reference: &&PrimitiveRef| reference.library_id == library_id;
+        let marked: Vec<PrimitiveRef> = self
+            .read
+            .keys()
+            .chain(self.asked.iter())
+            .filter(of_library)
+            .copied()
+            .collect();
+        self.stale.extend(marked);
+    }
+
+    /// Of `wanted`, the references not read (or read stale) and not being
+    /// read, at most [`MAX_PER_READ`], each marked as asked.
     pub fn take_missing(
         &mut self,
         wanted: impl IntoIterator<Item = PrimitiveRef>,
@@ -60,9 +81,12 @@ impl SymbolThumbs {
             if missing.len() >= MAX_PER_READ {
                 break;
             }
-            if self.read.contains_key(&reference) || !self.asked.insert(reference) {
+            let fresh = self.read.contains_key(&reference) && !self.stale.contains(&reference);
+            if fresh || !self.asked.insert(reference) {
                 continue;
             }
+            // Marked stale again while this read runs: asked once more after.
+            self.stale.remove(&reference);
             missing.push(reference);
         }
         missing
@@ -120,42 +144,97 @@ struct SymbolThumb {
     device_px_per_logical_px: f32,
 }
 
+/// What a cached thumbnail drawing was built from: the read copy (a fresh
+/// read is a new `Arc`), the theme colours and the scale. The box size is
+/// the cache's own check.
+#[derive(Debug, Clone)]
+struct ThumbShown {
+    lib: Arc<LibSymbol>,
+    colors: CanvasColors,
+    device_px_per_logical_px: f32,
+}
+
+impl ThumbShown {
+    fn of(thumb: &SymbolThumb) -> Self {
+        Self {
+            lib: Arc::clone(&thumb.lib),
+            colors: thumb.colors,
+            device_px_per_logical_px: thumb.device_px_per_logical_px,
+        }
+    }
+
+    fn same_as(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.lib, &other.lib)
+            && self.colors == other.colors
+            && self.device_px_per_logical_px == other.device_px_per_logical_px
+    }
+}
+
+/// The drawing kept between frames, so a hover or another row's redraw
+/// does not rebuild and tessellate every visible thumbnail.
+#[derive(Default)]
+struct ThumbCache {
+    cache: canvas::Cache,
+    shown: RefCell<Option<ThumbShown>>,
+}
+
+impl ThumbCache {
+    /// Drop the drawing when it was built from anything but `current`
+    /// (re-read symbol, theme switch, another row reusing this widget).
+    fn follow(&self, current: ThumbShown) {
+        let mut shown = self.shown.borrow_mut();
+        if !shown.as_ref().is_some_and(|s| s.same_as(&current)) {
+            self.cache.clear();
+            *shown = Some(current);
+        }
+    }
+}
+
 impl<M> canvas::Program<M> for SymbolThumb {
-    type State = ();
+    type State = ThumbCache;
 
     fn draw(
         &self,
-        _state: &(),
+        state: &ThumbCache,
         renderer: &iced::Renderer,
         _theme: &Theme,
         bounds: Rectangle,
         _cursor: mouse::Cursor,
     ) -> Vec<Geometry> {
-        let mut frame = canvas::Frame::new(renderer, bounds.size());
-        if bounds.width > 0.0 && bounds.height > 0.0 {
+        state.follow(ThumbShown::of(self));
+        let geometry = state.cache.draw(renderer, bounds.size(), |frame| {
+            self.paint(frame, bounds.size());
+        });
+        vec![geometry]
+    }
+}
+
+impl SymbolThumb {
+    /// The line art of the symbol, centred in `size`.
+    fn paint(&self, frame: &mut canvas::Frame, size: Size) {
+        if size.width > 0.0 && size.height > 0.0 {
             let (sheet, symbol) = preview_sheet(&self.lib);
             let transform = thumb_transform(
                 symbol_bounds(&sheet, &symbol),
-                bounds.size(),
+                size,
                 self.device_px_per_logical_px,
             );
             if let Some(scene) = build_schematic_scene(
                 &sheet,
                 &transform,
                 &self.colors,
-                Rectangle::with_size(bounds.size()),
+                Rectangle::with_size(size),
                 None,
                 SceneOverrides::default(),
             ) {
                 crate::renderer_scene_canvas::draw_scene_with_world_to_screen(
-                    &mut frame,
+                    frame,
                     &scene,
                     |point| transform.world_to_screen((point[0] as f64, point[1] as f64)),
                     preview_draw_options(&transform),
                 );
             }
         }
-        vec![frame.into_geometry()]
     }
 }
 
@@ -227,6 +306,94 @@ mod tests {
         let second = thumbs.take_missing(wanted.iter().copied());
         assert_eq!(second.len(), 10, "the asked ones are not asked again");
         assert!(thumbs.take_missing(wanted.iter().copied()).is_empty());
+    }
+
+    fn symbol(name: &str) -> Arc<LibSymbol> {
+        Arc::new(serde_json::from_value(serde_json::json!({ "id": name })).expect("a bare symbol"))
+    }
+
+    /// A re-read library's thumbnails are asked again, the old copy drawn
+    /// until the fresh one lands; another library's stay as they are.
+    #[test]
+    fn a_reread_library_rereads_its_thumbnails() {
+        let mut thumbs = SymbolThumbs::default();
+        let other = PrimitiveRef::new(uuid::Uuid::from_u128(2), uuid::Uuid::from_u128(1));
+        let asked = thumbs.take_missing([reference(1), other]);
+        let old = symbol("old");
+        thumbs.finish(asked.into_iter().map(|r| (r, Some(old.clone()))).collect());
+
+        thumbs.mark_library_stale(uuid::Uuid::from_u128(1));
+        assert_eq!(thumbs.take_missing([reference(1), other]), [reference(1)]);
+        assert!(
+            thumbs
+                .get(&reference(1))
+                .is_some_and(|s| Arc::ptr_eq(s, &old)),
+            "the old drawing stays up while the fresh read runs"
+        );
+        assert!(thumbs.take_missing([reference(1)]).is_empty(), "asked once");
+        let new = symbol("new");
+        thumbs.finish(vec![(reference(1), Some(new.clone()))]);
+        assert!(
+            thumbs
+                .get(&reference(1))
+                .is_some_and(|s| Arc::ptr_eq(s, &new))
+        );
+        assert!(thumbs.take_missing([reference(1), other]).is_empty());
+    }
+
+    /// A re-read that lands while an older read runs asks once more after
+    /// it: the running read may have seen the file before the change.
+    #[test]
+    fn a_reread_during_a_read_asks_again_after_it() {
+        let mut thumbs = SymbolThumbs::default();
+        let asked = thumbs.take_missing([reference(1)]);
+        thumbs.mark_library_stale(uuid::Uuid::from_u128(1));
+        thumbs.finish(
+            asked
+                .into_iter()
+                .map(|r| (r, Some(symbol("old"))))
+                .collect(),
+        );
+        assert_eq!(thumbs.take_missing([reference(1)]), [reference(1)]);
+    }
+
+    /// The cached drawing is kept for the same copy, colours and scale, and
+    /// dropped by a fresh read or a theme switch.
+    #[test]
+    fn the_drawing_is_kept_until_the_symbol_or_theme_changes() {
+        use signex_types::theme::{ThemeId, canvas_colors};
+        let shown = |lib: &Arc<LibSymbol>, theme| ThumbShown {
+            lib: Arc::clone(lib),
+            colors: canvas_colors(theme),
+            device_px_per_logical_px: 1.0,
+        };
+        let lib = symbol("R");
+        let light = shown(&lib, ThemeId::GraphiteLight);
+        assert!(light.same_as(&shown(&lib, ThemeId::GraphiteLight)));
+        assert!(!light.same_as(&shown(&symbol("R"), ThemeId::GraphiteLight)));
+        assert!(!light.same_as(&shown(&lib, ThemeId::GraphiteDark)));
+        let mut scaled = shown(&lib, ThemeId::GraphiteLight);
+        scaled.device_px_per_logical_px = 2.0;
+        assert!(!light.same_as(&scaled));
+
+        let cache = ThumbCache::default();
+        cache.follow(light.clone());
+        cache.follow(light.clone());
+        assert!(
+            cache
+                .shown
+                .borrow()
+                .as_ref()
+                .is_some_and(|s| s.same_as(&light))
+        );
+        cache.follow(shown(&lib, ThemeId::GraphiteDark));
+        assert!(
+            !cache
+                .shown
+                .borrow()
+                .as_ref()
+                .is_some_and(|s| s.same_as(&light))
+        );
     }
 
     #[test]

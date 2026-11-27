@@ -29,23 +29,22 @@ use crate::pcb_canvas::{CarryKind, PcbCarry, snap_point_on};
 
 impl Signex {
     /// Start placing the row on the board in view: read it off the update
-    /// thread, then put its footprint on the cursor.
+    /// thread, then put its footprint on the cursor. `None` when nothing
+    /// started: no board in view, or the library closed.
     pub(crate) fn start_board_part_placement(
         &mut self,
         library_path: PathBuf,
         table: String,
         row_id: RowId,
         footprint: Option<PrimitiveRef>,
-    ) -> Task<Message> {
-        let Some(board) = self.active_tab_path() else {
-            return Task::none();
-        };
+    ) -> Option<Task<Message>> {
+        let board = self.active_tab_path()?;
         if self.library.library_at(&library_path).is_none() {
             self.report_place_failure(crate::app::state::untranslated(format!(
                 "Library {} is no longer open.",
                 library_path.display()
             )));
-            return Task::none();
+            return None;
         }
         let arm_epoch = self.interaction_state.placement_epoch;
         let window = self.interaction_state.acting_window;
@@ -55,7 +54,7 @@ impl Signex {
             .iter()
             .map(|l| (l.library_id, l.root.clone()))
             .collect();
-        Task::perform(
+        Some(Task::perform(
             async move {
                 tokio::task::spawn_blocking(move || {
                     resolve_board_part(&library_path, &table, row_id, footprint, &open_libraries)
@@ -71,7 +70,7 @@ impl Signex {
                     result: result.map(Box::new),
                 })
             },
-        )
+        ))
     }
 
     /// Completion of [`Self::start_board_part_placement`]: put the part on

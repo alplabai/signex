@@ -319,6 +319,10 @@ impl LibraryState {
                 apply_primitive_listing(&mut lib.cached_sims, snapshot.sims, &name, "sims"),
             ];
             lib.dangling.listings_complete = listings_complete(ok, snapshot.symbols_partial);
+            let library_id = lib.library_id;
+            // The re-read listing follows a save or an external edit: the
+            // row thumbnails of this library are read again (#2631).
+            self.components_panel.thumbs.mark_library_stale(library_id);
         }
         self.sweep_dangling_refs();
         // The library's symbols may have changed on disk.

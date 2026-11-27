@@ -73,6 +73,19 @@ impl Signex {
         row_id: RowId,
         footprint: Option<signex_library::primitive::PrimitiveRef>,
     ) -> Task<Message> {
+        self.try_place_library_component_with(library_path, table, row_id, footprint)
+            .unwrap_or_else(Task::none)
+    }
+
+    /// [`Self::handle_place_library_component_with`], `None` when the place
+    /// was refused (no sheet or board, library closed) and nothing started.
+    pub(crate) fn try_place_library_component_with(
+        &mut self,
+        library_path: PathBuf,
+        table: String,
+        row_id: RowId,
+        footprint: Option<signex_library::primitive::PrimitiveRef>,
+    ) -> Option<Task<Message>> {
         self.library.picker = None;
         // A newer pick supersedes any read still in flight, even one that
         // fails the checks below.
@@ -83,14 +96,14 @@ impl Signex {
         }
         let Some(target_sheet) = self.document_state.active_path.clone() else {
             self.report_place_failure(signex_i18n::ids::NOTICE_PLACE_NO_SHEET.into());
-            return Task::none();
+            return None;
         };
         if self.library.library_at(&library_path).is_none() {
             self.report_place_failure(
                 signex_i18n::Translatable::new(signex_i18n::ids::NOTICE_PLACE_LIBRARY_CLOSED)
                     .arg("path", library_path.display().to_string()),
             );
-            return Task::none();
+            return None;
         }
         let arm_epoch = self.interaction_state.placement_epoch;
         let path = library_path.clone();
@@ -100,7 +113,7 @@ impl Signex {
             .iter()
             .map(|l| (l.library_id, l.root.clone()))
             .collect();
-        Task::perform(
+        Some(Task::perform(
             async move {
                 tokio::task::spawn_blocking(move || {
                     resolve_placement_with_footprint(
@@ -122,7 +135,7 @@ impl Signex {
                     result: result.map(Box::new),
                 })
             },
-        )
+        ))
     }
 
     /// Completion of [`resolve_placement_with_footprint`]: attach the part to the cursor.

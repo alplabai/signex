@@ -22,13 +22,18 @@ pub enum Unit {
     PpmPerKelvin,
     VoltPerMicrosecond,
     Awg,
+    /// Data rate, bits per second (`20 kbps`; components-cx decision 7).
+    BitsPerSecond,
+    /// Temperature in degrees Celsius (components-cx decision 8). Takes
+    /// no prefix and may be negative.
+    DegreeCelsius,
     /// A unit string this build does not know; kept as written, no prefix.
     Other(String),
 }
 
 impl Unit {
     /// Every known unit, for a unit picker.
-    pub const STANDARD: [Unit; 11] = [
+    pub const STANDARD: [Unit; 13] = [
         Unit::Ohm,
         Unit::Farad,
         Unit::Henry,
@@ -40,9 +45,12 @@ impl Unit {
         Unit::PpmPerKelvin,
         Unit::VoltPerMicrosecond,
         Unit::Awg,
+        Unit::BitsPerSecond,
+        Unit::DegreeCelsius,
     ];
 
-    /// Canonical on-disk spelling (`ohm`, `F`, `ppm/C`, `V/us`, ...).
+    /// Canonical on-disk spelling (`ohm`, `F`, `ppm/C`, `V/us`, `bps`,
+    /// `degC`, ...). Always ASCII.
     pub fn token(&self) -> &str {
         match self {
             Unit::Ohm => "ohm",
@@ -56,16 +64,19 @@ impl Unit {
             Unit::PpmPerKelvin => "ppm/C",
             Unit::VoltPerMicrosecond => "V/us",
             Unit::Awg => "AWG",
+            Unit::BitsPerSecond => "bps",
+            Unit::DegreeCelsius => "degC",
             Unit::Other(s) => s,
         }
     }
 
-    /// Display glyph: `Ω` (U+03A9), `ppm/°C`, `V/µs` (U+00B5).
+    /// Display glyph: `Ω` (U+03A9), `ppm/°C`, `V/µs` (U+00B5), `°C`.
     pub fn glyph(&self) -> &str {
         match self {
             Unit::Ohm => "Ω",
             Unit::PpmPerKelvin => "ppm/°C",
             Unit::VoltPerMicrosecond => "V/µs",
+            Unit::DegreeCelsius => "°C",
             other => other.token(),
         }
     }
@@ -86,20 +97,22 @@ impl Unit {
             Unit::Volt => &[Micro, Milli, One, Kilo],
             Unit::Ampere => &[Nano, Micro, Milli, One],
             Unit::Watt => &[Micro, Milli, One, Kilo, Mega],
-            Unit::Hertz => &[One, Kilo, Mega, Giga],
+            Unit::Hertz | Unit::BitsPerSecond => &[One, Kilo, Mega, Giga],
             _ => &[One],
         }
     }
 
-    /// `false` for `%`, `ppm/C`, `V/us`, `AWG` and unknown units.
+    /// `false` for `%`, `ppm/C`, `V/us`, `AWG`, `°C` and unknown units.
     pub fn takes_prefix(&self) -> bool {
         self.allowed_prefixes().len() > 1
     }
 
     /// Resolve a whole unit token (no prefix) to a known unit. Glyphs are
-    /// case-sensitive (`F` is farad); word spellings are not (`ohm`,
-    /// `Ohms`, `hz`, `ppm/C`, `V/us`). Accepts `Ω` as U+03A9 or U+2126
-    /// and `µ` as U+00B5 or U+03BC.
+    /// case-sensitive (`F` is farad, `bps` is bits where `Bps` would be
+    /// bytes); word spellings are not (`ohm`, `Ohms`, `hz`, `ppm/C`,
+    /// `V/us`, `bit/s`, `degC`). Accepts `Ω` as U+03A9 or U+2126, `µ` as
+    /// U+00B5 or U+03BC, and `°C` also as U+2103. A bare `C` is not
+    /// Celsius: it would read as coulomb.
     pub fn from_alias(token: &str) -> Option<Unit> {
         let unit = match token {
             "Ω" | "\u{2126}" => Unit::Ohm,
@@ -110,6 +123,9 @@ impl Unit {
             "W" => Unit::Watt,
             "Hz" => Unit::Hertz,
             "%" => Unit::Percent,
+            // Case-sensitive: `Bps` is bytes per second, not bits.
+            "bps" => Unit::BitsPerSecond,
+            "°C" | "\u{2103}" => Unit::DegreeCelsius,
             _ => return Unit::from_word(token),
         };
         Some(unit)
@@ -122,6 +138,8 @@ impl Unit {
             "ppm/c" | "ppm/°c" => Some(Unit::PpmPerKelvin),
             "v/us" | "v/µs" | "v/μs" => Some(Unit::VoltPerMicrosecond),
             "awg" => Some(Unit::Awg),
+            "bit/s" => Some(Unit::BitsPerSecond),
+            "degc" => Some(Unit::DegreeCelsius),
             _ => None,
         }
     }

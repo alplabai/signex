@@ -430,27 +430,70 @@ discards the changes.
 A symbol is a part on the sheet: a resistor, a connector, a chip. Symbols come
 from libraries.
 
-**Libraries.** The Components panel (**View ▸ Components**) lists every
-mounted library in one list. Each row has an expand chevron, the library name,
-a badge for where it comes from (**STOCK**, **PROJECT**, **INSTALLED** or
-**GLOBAL**) and its component count; expanding it lists its components. The
-list runs Stock first, then Project, Installed and Global. Chips under the
-search box (**All** and each source that has a library, with its library
-count) narrow the list to one source. The **Stock** library ships with
-Signex. It is mounted on every launch; you do not add it, and its parts can be
-placed (34 component rows: resistors, capacitors, inductors, diodes, LEDs,
-transistors, connectors, 74HC logic and more). If the installer's copy cannot
-be found, the list says "Stock library not found. Reinstall Signex to restore
-the bundled parts." when you pick the Stock chip. The **+ Add** button in the
-panel header asks where to add a library (**Project**, **Installed** or
-**Global**), and **File ▸ Library ▸ Open Library…** mounts a `.snxlib`
-library. Type in the search field to narrow the components; every word must
-match. The search reads values: `100n`, `0.1u` and `0.1 µF` all find a
-100 nF part, `4k7` a 4.7 kΩ one, and a unit limits the match (`16V`).
-Prefixes are case-sensitive, so `1m` is milli and `1M` mega. A bare number
-such as `100` finds every value that shows 100 (100 pF, 100 nF, 100 µF), and a
-line under the header counts what it matched. Clicking a part row opens its
-Component Preview tab.
+**Libraries.** The Components panel (**View ▸ Components**) shows every
+mounted part in one table, one category at a time. The **Stock** library ships
+with Signex and is mounted on every launch (34 component rows: resistors,
+capacitors, inductors, diodes, LEDs, transistors, connectors, 74HC logic and
+more); **File ▸ Library ▸ Open Library…** mounts a `.snxlib` library. With no
+library mounted the panel offers **Add Library…** (Project, Installed or
+Global) and **Open Project…**.
+
+The tool line picks the category: **All parts**, **Recently placed** (the
+parts you placed from the panel this session, most recent first, up to five),
+or a component class such as Capacitor, each with its part count. The panel
+opens on the category you showed last. A category opens with the columns, sort
+and grouping its class template sets (the bundled capacitor view groups by
+package, then value, and sorts by voltage). A library can carry its own
+template for a class; its parts then read that one, and a column only it
+adds is marked with the library's name in the Columns picker. Each class has its own parameter
+columns:
+
+- **Sort**: click a header to sort by it (again for descending, a third time
+  for no sort). **Shift**+click adds the column as a nested sort key; the
+  header shows its arrow and, with two or more keys, its order number.
+- **Group**: right-click a header for **Group by this**, or use **+ Group** in
+  the group bar. Each level is a chip, outermost first; its arrow flips the
+  order and its ✕ removes it. Click a group line to open or close it;
+  **Expand all** and **Collapse all** do every group.
+- **Columns**: right-click a header to hide it, reset its width or open
+  **Columns…**; the **Columns** button opens the same picker. It lists the
+  category's parameters and the shared fields, each with how many parts hold
+  it; tick to show, ↑ ↓ to move. Drag the handle at a header's right edge to
+  resize a column.
+- Your changes are saved for you, per category, and come back next time. The
+  Columns picker says whether the category uses its default or your saved
+  setup; **Reset to category default** returns to the default.
+
+**Filter** holds **In stock only** and range filters on measurement columns.
+**Add range filter…** picks a column; pick an operator (≥, ≤, =, between) and
+type a number. A new filter is on **Any prefix**: `100` keeps 100 pF, 100 nF
+and 100 µF. Pick a prefix to compare the true value. A min-to-max column such
+as supply voltage filters on **Covers** (`3.3` keeps the parts that run at
+3.3 V), **Min** or **Max**. A part without a value in the column is left out,
+and the filter says how many. **Clear filters** removes them all; the status
+line under the table counts the results.
+
+A value a part does not set shows as — in the table and **Not set** in a group
+line and in Details, and sorts last. A min-to-max value with one end set shows
+that end, as "≥ 2.7 V" or "≤ 5.5 V".
+
+**Previews** in the tool line adds a symbol preview column and taller rows;
+the choice is remembered. With a popover open (Columns, Filter, a header
+menu, + Group), `Esc` closes it first.
+
+Type in the search field to narrow the table; every word must match. The
+search reads values: `100n`, `0.1u` and `0.1 µF` all find a 100 nF part, `4k7`
+a 4.7 kΩ one, and a unit limits the match (`16V`). Prefixes are
+case-sensitive, so `1m` is milli and `1M` mega. A bare number such as `100`
+finds every value that shows 100 (100 pF, 100 nF, 100 µF), and a line under the
+header counts what it matched.
+
+Click a part to select it. **List** hides the details; **Details** shows them
+under the splitter: the part's symbol and footprint, the footprint the next
+placement uses, every parameter with its value, references and part choices
+(distributor, stock, price, SKU). Pinned parameters come first; the star
+beside a parameter pins it to the top for that category, and **Show all**
+lists the rest.
 
 **The Library panel.** One panel browses what the open libraries hold. Its
 chips switch between **Symbols** (the symbols of the `.snxsym` open in the
@@ -550,7 +593,11 @@ To place a part, open a schematic sheet, then either:
   `P` then `P` in the default profile (`A` in Classic), or the Active Bar's
   **Part** button, which all open the same picker), select a part and press
   **Place**, or press `Enter` in the search field; or
-- press **Place** at the end of a part's row in the Components panel.
+- press **Place** at the start of a part's row in the Components panel (it
+  shows while the pointer is over the row), double-click the row, press
+  **Place** in its details, or right-click the row and pick **Place**. The menu shows the key that places
+  from it, the one your shortcut profile binds to accepting a placement
+  (`Enter` in the default profile; Classic binds none).
 
 The picker's header counts the open libraries and their parts. Its search
 field and **Add range filter…** share the top row, and the list shows each

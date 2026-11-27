@@ -19,7 +19,9 @@ const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
 
 /// The parameter table's columns.
-const PARAMETER_COLUMNS: [TableColumn; 2] = [
+const PARAMETER_COLUMNS: [TableColumn; 3] = [
+    // The pin star (mockup row 52): no title.
+    (None, Length::Fixed(PIN_WIDTH)),
     (
         Some(ids::EDITORS_COMPONENT_COLUMN_NAME),
         Length::FillPortion(2),
@@ -29,7 +31,8 @@ const PARAMETER_COLUMNS: [TableColumn; 2] = [
         Length::FillPortion(3),
     ),
 ];
-/// A value longer than this may be cut, so it gets a tooltip.
+/// Width of the pin star column.
+const PIN_WIDTH: f32 = 14.0;
 const VALUE_TIP_CHARS: usize = 16;
 
 fn mono() -> Font {
@@ -121,9 +124,10 @@ pub(super) fn section_label<'a>(
 
 /// The parameters as a bordered table: a Name / Value header, then one
 /// separated row each, or the empty line. Long cells end in an ellipsis and
-/// a long value shows in full in a tooltip.
+/// a long value shows in full in a tooltip. Each row starts with its pin
+/// star; a value that is not set is drawn muted.
 pub(super) fn parameter_table<'a>(
-    parameters: &'a [(String, String)],
+    parameters: Vec<crate::panels::components_panel::table::DetailLine>,
     tokens: &ThemeTokens,
     i18n: &I18n,
 ) -> Element<'a, LibraryMessage> {
@@ -141,14 +145,41 @@ pub(super) fn parameter_table<'a>(
             .boxed(),
         );
     }
-    for (index, (name, value)) in parameters.iter().enumerate() {
-        let name_cell = one_line(name)
-            .color(resolve(tokens).ink3)
+    let r = resolve(tokens);
+    for (index, line) in parameters.into_iter().enumerate() {
+        let star = if line.pinned { "\u{2605}" } else { "\u{2606}" };
+        let star_ink = if line.pinned {
+            r.accent_soft_ink
+        } else {
+            r.ink4
+        };
+        let pin = signex_widgets::button(
+            text(signex_i18n::UserText::new(star))
+                .size(TS.caption)
+                .color(star_ink),
+        )
+        .padding(0)
+        .on_press(LibraryMessage::ComponentsTable(
+            crate::library::messages::ComponentsTableMsg::PinToggled(line.name.clone()),
+        ))
+        .style(crate::panels::form_look::ghost_button)
+        .boxed();
+        let name_cell = one_line(line.name)
+            .color(r.ink3)
             .width(Length::Fill)
             .boxed();
+        let value = if line.is_set {
+            value_cell(line.value, tokens)
+        } else {
+            one_line(line.value)
+                .color(r.ink4)
+                .width(Length::Fill)
+                .boxed()
+        };
         let cells = vec![
-            (name_cell, PARAMETER_COLUMNS[0].1),
-            (value_cell(value, tokens), PARAMETER_COLUMNS[1].1),
+            (pin, PARAMETER_COLUMNS[0].1),
+            (name_cell, PARAMETER_COLUMNS[1].1),
+            (value, PARAMETER_COLUMNS[2].1),
         ];
         table = table.push(table_row(cells, index, None, tokens));
     }
@@ -169,7 +200,7 @@ pub(super) fn parameter_table<'a>(
 }
 
 /// A caption-size cell text on one line, cut with an ellipsis.
-fn one_line(content: &str) -> iced::widget::Text<'_> {
+fn one_line<'a>(content: String) -> iced::widget::Text<'a> {
     text(signex_i18n::UserText::new(content))
         .size(TS.caption)
         .wrapping(iced::widget::text::Wrapping::None)
@@ -177,18 +208,20 @@ fn one_line(content: &str) -> iced::widget::Text<'_> {
 }
 
 /// The mono value cell, with a tooltip when it may not fit.
-fn value_cell<'a>(value: &'a str, tokens: &ThemeTokens) -> Element<'a, LibraryMessage> {
+fn value_cell<'a>(value: String, tokens: &ThemeTokens) -> Element<'a, LibraryMessage> {
+    let long = value.chars().count() > VALUE_TIP_CHARS;
+    let tip = long.then(|| value.clone());
     let cell: Element<'a, LibraryMessage> = one_line(value)
         .font(mono())
         .color(ti(tokens.text))
         .width(Length::Fill)
         .boxed();
-    if value.chars().count() <= VALUE_TIP_CHARS {
+    let Some(tip) = tip else {
         return cell;
-    }
+    };
     signex_widgets::tooltip(
         cell,
-        container(text(signex_i18n::UserText::new(value)).size(TS.caption))
+        container(text(signex_i18n::UserText::new(tip)).size(TS.caption))
             .padding([SP.xs, SP.s])
             .style(crate::styles::context_menu(tokens)),
         iced::widget::tooltip::Position::Bottom,
@@ -212,7 +245,18 @@ mod tests {
             ("value".to_string(), "74HC14".to_string()),
             ("tolerance".to_string(), "1%".to_string()),
         ];
-        let texts = lay_out_texts(parameter_table(&parameters, &tokens, &i18n), WINDOW);
+        let lines = parameters
+            .iter()
+            .map(
+                |(name, value)| crate::panels::components_panel::table::DetailLine {
+                    name: name.clone(),
+                    value: value.clone(),
+                    is_set: true,
+                    pinned: false,
+                },
+            )
+            .collect();
+        let texts = lay_out_texts(parameter_table(lines, &tokens, &i18n), WINDOW);
         let (name_head, value_head) = (find(&texts, "NAME"), find(&texts, "VALUE"));
         assert!((name_head.bounds.y - value_head.bounds.y).abs() < 1.0);
         let mut above = name_head.bounds.y;
@@ -231,7 +275,7 @@ mod tests {
     fn an_empty_table_keeps_its_header_and_says_so() {
         let tokens = theme_tokens(ThemeId::GraphiteDark);
         let i18n = I18n::en_us();
-        let texts = lay_out_texts(parameter_table(&[], &tokens, &i18n), WINDOW);
+        let texts = lay_out_texts(parameter_table(Vec::new(), &tokens, &i18n), WINDOW);
         let head = find(&texts, "NAME");
         assert!(find(&texts, "No parameters.").bounds.y > head.bounds.y);
     }

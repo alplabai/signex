@@ -1016,6 +1016,9 @@ pub struct ComponentsPanelState {
     pub recent: crate::panels::components_panel::recent::RecentlyPlaced,
     /// Row symbol thumbnails read so far, by symbol reference.
     pub thumbs: crate::panels::components_panel::thumbs::SymbolThumbs,
+    /// The table: category, saved setups, filters and the cache `update`
+    /// builds (mockup row 52).
+    pub table: crate::panels::components_panel::table::ComponentsTable,
 }
 
 impl Default for ComponentsPanelState {
@@ -1041,6 +1044,7 @@ impl Default for ComponentsPanelState {
             row_style: ComponentsRowStyle::default(),
             recent: Default::default(),
             thumbs: Default::default(),
+            table: Default::default(),
         }
     }
 }

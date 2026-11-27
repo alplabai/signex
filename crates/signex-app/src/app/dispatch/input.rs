@@ -291,6 +291,11 @@ impl Signex {
         if self.is_repeat_of_resuming_esc(&event) {
             return Task::none();
         }
+        // A Components panel header click reads Shift to add a nested sort
+        // key (mockup row 52); mouse events carry no modifiers.
+        if let keyboard::Event::ModifiersChanged(modifiers) = &event {
+            self.library.components_panel.table.shift_held = modifiers.shift();
+        }
         let (message, swallowed_by) = self.route_key_by(window, &event);
         // #1378 - a key press that is not a keymap stroke (Esc, F1, a
         // selection slot, a palette or recorder key) abandons the pending
@@ -616,8 +621,10 @@ impl Signex {
         }
     }
 
-    /// Enter picks Place, the menu's first row, while a Components row menu
-    /// is open in this window (#2535).
+    /// The key the row menu shows beside Place picks Place, the menu's first
+    /// row, while a Components row menu is open in this window (#2535). That
+    /// is the one-stroke binding of `placement_accept` the menu hint names;
+    /// a profile that binds none places from the menu by click only (#2631).
     fn claim_components_row_menu(
         &self,
         target: InputTarget,
@@ -631,14 +638,26 @@ impl Signex {
             None => target == InputTarget::Main,
             Some(owner) => owner == window,
         };
-        let keyboard::Event::KeyPressed { key, modifiers, .. } = event else {
+        let keyboard::Event::KeyPressed {
+            key,
+            physical_key,
+            modifiers,
+            ..
+        } = event
+        else {
             return Claim::Pass;
         };
-        let enter = matches!(
-            key.as_ref(),
-            keyboard::Key::Named(keyboard::key::Named::Enter)
-        );
-        if !here || !enter || !modifiers.is_empty() {
+        let Some([hinted]) = self
+            .ui_state
+            .active_keymap
+            .shown_sequence_for_id(crate::panels::components_panel::ROW_PLACE_COMMAND)
+        else {
+            return Claim::Pass;
+        };
+        let pressed = KeyStroke::from_iced(key, *modifiers).as_ref() == Some(hinted)
+            || KeyStroke::physical_fallback(key, *physical_key, *modifiers).as_ref()
+                == Some(hinted);
+        if !here || !pressed {
             return Claim::Pass;
         }
         let place = Message::Library(
@@ -953,6 +972,9 @@ fn selection_slot_from_key(key: &str) -> Option<usize> {
 }
 
 #[cfg(test)]
+mod components_row_menu_tests;
+
+#[cfg(test)]
 mod key_repeat_tests;
 
 #[cfg(test)]
@@ -1060,8 +1082,9 @@ mod tests {
         }
     }
 
-    /// Enter places the row while its menu is open, and is the keymap's
-    /// again once the menu has closed (#2535).
+    /// Enter (the default profile's place key) places the row while its
+    /// menu is open, and is the keymap's again once the menu has closed
+    /// (#2535). Other profiles: `components_row_menu_tests`.
     #[test]
     fn enter_places_the_row_whose_menu_is_open() {
         let mut app = quiet_app();

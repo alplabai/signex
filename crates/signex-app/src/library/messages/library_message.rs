@@ -673,6 +673,9 @@ pub enum LibraryMessage {
     ),
     /// The empty Components panel's "Open Project…" was pressed (#2535).
     ComponentsPanelOpenProjectClicked,
+    /// The Components panel table: category, columns, sort, grouping,
+    /// range filters and pins (mockup row 52).
+    ComponentsTable(super::ComponentsTableMsg),
     /// The off-thread read behind a Library Browser preview pane finished
     /// (mockup row 118). A result for a row that is no longer selected, or
     /// from an older read, is dropped.

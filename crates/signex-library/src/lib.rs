@@ -18,6 +18,7 @@ pub mod cascade;
 #[cfg(feature = "local-git")]
 pub mod check;
 pub mod component;
+pub mod components_view;
 pub mod dangling;
 pub mod datasheet_asset;
 pub mod diff;
@@ -153,14 +154,16 @@ pub use primitive::{
     textconv_footprint_text, unique_copy_name,
 };
 pub use range_filter::{
-    EQUALS_RELATIVE_TOLERANCE, RangeFilter, RangeOp, RangeVerdict, column_unit,
+    EQUALS_RELATIVE_TOLERANCE, FilterBound, RangeFilter, RangeOn, RangeOp, RangeVerdict,
+    approx_equal, column_unit,
 };
 pub use search::{Facet, FacetOp, SearchIndex, SearchQuery};
 #[cfg(feature = "search-tantivy")]
 pub use search_index::{TantivyIndexError, TantivySearchIndex};
 pub use tables::{ALTERNATE_SYMBOLS_COLUMN, TABLE_HEADER, TableSchema};
 pub use templates::{
-    ParamKind, ParamSlot, ParameterTemplate, TemplateRegistry, TemplateViolation, slot_violations,
+    CategoryView, ColumnKey, ParamKind, ParamSlot, ParameterTemplate, RangeSlot, SortKey,
+    TemplateRegistry, TemplateViolation, slot_violations,
 };
 pub use validate::validate_row_for_write;
 pub use where_used::{UseSite, WhereUsedIndex};

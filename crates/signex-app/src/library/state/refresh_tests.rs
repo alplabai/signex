@@ -291,3 +291,30 @@ fn a_refresh_whose_table_listing_fails_marks_the_tables_not_listed() {
     assert!(state.refresh_components(&root).is_err());
     assert!(tables_not_listed(&state, &root), "sync path");
 }
+
+/// A re-read library asks for its row thumbnails again (#2631): a saved or
+/// externally edited symbol must not keep its old drawing.
+#[test]
+fn a_reread_library_asks_for_its_thumbnails_again() {
+    let (mut state, root, symbols) = mounted();
+    set_symbols(&symbols, &["R_0805"]);
+    let library_id = state.library_at(&root).expect("open").library_id;
+    let symbol = signex_library::PrimitiveRef::new(library_id, Uuid::from_u128(1));
+    let thumbs = &mut state.components_panel.thumbs;
+    let asked = thumbs.take_missing([symbol]);
+    thumbs.finish(asked.into_iter().map(|r| (r, None)).collect());
+    assert!(
+        state
+            .components_panel
+            .thumbs
+            .take_missing([symbol])
+            .is_empty()
+    );
+
+    state.refresh_components(&root).expect("sync refresh");
+
+    assert_eq!(
+        state.components_panel.thumbs.take_missing([symbol]),
+        [symbol]
+    );
+}

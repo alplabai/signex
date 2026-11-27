@@ -29,3 +29,10 @@ unit = "V"
 [[optional_params]]
 name = "package"
 kind = "text"
+
+# The Components panel view the category opens with (mockup row 52).
+[view]
+columns = ["row:part_number", "value", "tolerance", "power", "package", "tcr", "row:stock", "row:price"]
+sort = [{ column = "tolerance" }]
+group = [{ column = "package" }, { column = "value" }]
+pinned = ["value", "tolerance", "power", "package"]
