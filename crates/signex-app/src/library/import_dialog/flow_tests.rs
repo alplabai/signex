@@ -172,10 +172,7 @@ fn an_import_into_an_imported_library_offers_an_update_and_runs_it() {
     let offer = state.update_offer.expect("an update is offered");
     assert!(!offer.accepted);
     assert_eq!(offer.local_commits, 0);
-    assert_eq!(
-        state.blocker(),
-        Some(super::source::Blocker::UpdateOffered)
-    );
+    assert_eq!(state.blocker(), Some(super::source::Blocker::UpdateOffered));
     assert!(app.library.import.running.is_none(), "nothing ran");
 
     // Taken: the preview, then the update.

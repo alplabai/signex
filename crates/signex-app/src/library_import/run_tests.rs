@@ -555,7 +555,10 @@ fn a_failed_run_into_an_empty_folder_removes_it_and_a_full_one_never_runs() {
     )
     .unwrap_err();
     assert!(matches!(*failure.error, ImportError::OutputNotEmpty { .. }));
-    assert!(failure.refused && !failure.removed_output, "nothing changed");
+    assert!(
+        failure.refused && !failure.removed_output,
+        "nothing changed"
+    );
     assert!(!ran.exists(), "not run");
     assert!(out.join("mine.txt").exists());
 }

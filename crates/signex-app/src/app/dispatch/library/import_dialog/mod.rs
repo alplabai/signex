@@ -167,10 +167,7 @@ impl Signex {
     /// Open the dialog on step 1 and look for converters; opened for a
     /// project, "This project" is preselected and means it. An open dialog
     /// stays as it is.
-    fn open_import_dialog(
-        &mut self,
-        project: Option<crate::app::state::ProjectId>,
-    ) -> Task<Message> {
+    fn open_import_dialog(&mut self, project: Option<crate::app::ProjectId>) -> Task<Message> {
         if self.library.import_dialog.is_some() {
             return Task::none();
         }

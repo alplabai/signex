@@ -150,7 +150,7 @@ pub struct ImportDialogState {
     pub mount_for_all: bool,
     /// The project the dialog was opened for (Project tab ▸ Libraries):
     /// "This project" means it rather than the active project.
-    pub project: Option<crate::app::state::ProjectId>,
+    pub project: Option<crate::app::ProjectId>,
     pub include_models: bool,
     /// Why the chosen folder cannot take the library (from the check Next
     /// runs); cleared by any edit.
@@ -245,7 +245,7 @@ pub enum ImportDialogMsg {
     Requested,
     /// Import library… in a project's Libraries section: "This project"
     /// is preselected, meaning that project.
-    RequestedForProject(crate::app::state::ProjectId),
+    RequestedForProject(crate::app::ProjectId),
     /// The converter search finished on its worker; `None` when the worker
     /// itself failed (shown as no converter found).
     DiscoveryFinished(Option<Box<DiscoveryCache>>),

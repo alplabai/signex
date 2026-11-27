@@ -97,7 +97,7 @@ pub fn view<'a>(
         card = card.push(stepper(state.step, tokens, i18n));
     }
     container(
-        card.push(content)
+        card.push(content.boxed())
             .push(footer)
             .width(crate::library::card_len(windowed, super::CARD_W))
             .height(height),

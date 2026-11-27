@@ -106,7 +106,10 @@ fn result_card<'a>(
     }
     col = col
         .push(result_tiles(result, facts, tokens, i18n))
-        .push(key_value_box(result_rows(result, facts, tokens, i18n), tokens));
+        .push(key_value_box(
+            result_rows(result, facts, tokens, i18n),
+            tokens,
+        ));
     if facts.mode == RunMode::Update && facts.local_commits > 0 {
         col = col.push(warn(t!(
             i18n,
@@ -131,7 +134,7 @@ fn result_card<'a>(
     ]
     .spacing(SP.m)
     .align_y(Alignment::Center);
-    col.push(view_report).boxed()
+    col.push(view_report.boxed()).boxed()
 }
 
 /// Imported parts, approximated and dropped items, skipped items.
@@ -177,9 +180,8 @@ fn result_rows<'a>(
     tokens: &ThemeTokens,
     i18n: &I18n,
 ) -> Vec<(Localized, Element<'a, LibraryMessage>)> {
-    let line = |words: Localized| -> Element<'a, LibraryMessage> {
-        text(words).size(TS.body).boxed()
-    };
+    let line =
+        |words: Localized| -> Element<'a, LibraryMessage> { text(words).size(TS.body).boxed() };
     let mut rows = vec![
         (
             t!(i18n, ids::LIBRARY_IMPORT_DIALOG_LOCATION),
@@ -289,14 +291,14 @@ fn loss_report<'a>(
         "converter" => report.converter.as_str(),
         "version" => report.converter_version.as_str()
     );
-    let mut col: Column<Element<'a, LibraryMessage>> = column![
-        caption(header, tokens),
-        filter_row(state, tokens, i18n)
-    ]
-    .spacing(SP.m);
+    let mut col: Column<Element<'a, LibraryMessage>> =
+        column![caption(header, tokens), filter_row(state, tokens, i18n)].spacing(SP.m);
     if state.report_items().is_empty() {
         return col
-            .push(caption(t!(i18n, ids::LIBRARY_IMPORT_DIALOG_LIST_EMPTY), tokens))
+            .push(caption(
+                t!(i18n, ids::LIBRARY_IMPORT_DIALOG_LIST_EMPTY),
+                tokens,
+            ))
             .boxed();
     }
     let groups = state.report_groups();

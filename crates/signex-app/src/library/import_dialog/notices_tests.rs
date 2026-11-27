@@ -111,7 +111,10 @@ fn a_crashed_import_says_so_with_the_end_of_its_error_output() {
     assert_eq!(reason.id(), Some(ids::LIBRARY_IMPORT_DIALOG_CRASHED));
     assert_eq!(folder, FolderAfter::Removed);
     assert_eq!(stderr_tail, "reading R1\nSegmentation fault");
-    assert!(app.document_view.error_notice.is_none(), "shown in the dialog");
+    assert!(
+        app.document_view.error_notice.is_none(),
+        "shown in the dialog"
+    );
 }
 
 #[test]

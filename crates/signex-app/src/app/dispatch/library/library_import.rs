@@ -463,7 +463,12 @@ impl Signex {
     /// ids of libraries that are not mounted.
     pub(crate) fn mount_required_libraries(&mut self, library_ids: &[uuid::Uuid]) -> Task<Message> {
         for id in library_ids {
-            if !self.library.open_libraries.iter().any(|lib| lib.library_id == *id) {
+            if !self
+                .library
+                .open_libraries
+                .iter()
+                .any(|lib| lib.library_id == *id)
+            {
                 log::info!("Library import: required library {id} is not open");
             }
         }

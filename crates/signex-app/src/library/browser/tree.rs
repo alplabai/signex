@@ -135,8 +135,7 @@ fn import_button<'a>(tokens: &ThemeTokens, i18n: &I18n) -> Element<'a, LibraryMe
         .padding([0.0, SP.s])
         .on_press(import_dialog::msg(ImportDialogMsg::Requested))
         .style(move |_: &Theme, status: Status| Style {
-            background: matches!(status, Status::Hovered)
-                .then_some(iced::Background::Color(hover)),
+            background: matches!(status, Status::Hovered).then_some(iced::Background::Color(hover)),
             text_color: accent_text,
             border: Border {
                 radius: crate::styles::Radii::GRAPHITE.small.into(),

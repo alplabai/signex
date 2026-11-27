@@ -91,7 +91,8 @@ fn update_offer<'a>(
                 ids::LIBRARY_IMPORT_LOCAL_COMMITS,
                 "count" => offer.local_commits
             ))
-            .size(TS.body),
+            .size(TS.body)
+            .boxed(),
         );
     }
     let (tone, actions) = if offer.accepted {
@@ -178,10 +179,9 @@ fn unreadable<'a>(
     tokens: &ThemeTokens,
     i18n: &I18n,
 ) -> Element<'a, LibraryMessage> {
-    let mut words = column![
-        text(t!(i18n, ids::LIBRARY_IMPORT_DIALOG_UNREADABLE_HINT)).size(TS.body)
-    ]
-    .spacing(SP.xs);
+    let mut words =
+        column![text(t!(i18n, ids::LIBRARY_IMPORT_DIALOG_UNREADABLE_HINT)).size(TS.body)]
+            .spacing(SP.xs);
     for line in set_aside(discovery, i18n) {
         words = words.push(line);
     }

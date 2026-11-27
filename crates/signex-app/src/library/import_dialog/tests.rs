@@ -572,7 +572,9 @@ fn next_waits_for_a_run_the_dialog_did_not_start_and_says_so_neutrally() {
     assert_eq!(state.blocker(), Some(Blocker::OtherRun));
     assert!(!state.run_stopping, "not a run of this dialog's");
     let i18n = I18n::en_us();
-    let line = super::view::blocker_line(state, &i18n).unwrap().into_string();
+    let line = super::view::blocker_line(state, &i18n)
+        .unwrap()
+        .into_string();
     assert_eq!(plain(&line), "Another library import is running.");
     drop(app.update(cancelled(false)));
     assert_eq!(dialog(&app).blocker(), None, "free again");
@@ -663,7 +665,7 @@ fn quitting_stops_a_running_import() {
 /// one; Mount for all projects still records it globally.
 #[test]
 fn a_dialog_opened_for_a_project_mounts_into_that_project() {
-    use crate::app::handlers::menu::export::tests::app_workspace;
+    use crate::app::app_workspace;
     for for_all in [false, true] {
         let mut app = app_workspace("/work/ProjectA", &["a.snxsch"]);
         let project = &app.document_state.projects[0];

@@ -15,7 +15,12 @@ use crate::library_import::report::{REPORT_MD, read_stored_report, save_stored_r
 impl Signex {
     /// Save report…: ask where; nothing is written until a file is picked.
     pub(super) fn pick_import_report_target(&mut self) -> Task<Message> {
-        let Some(result) = self.library.import_dialog.as_deref().and_then(|d| d.finished()) else {
+        let Some(result) = self
+            .library
+            .import_dialog
+            .as_deref()
+            .and_then(|d| d.finished())
+        else {
             return Task::none();
         };
         let name = format!("{}-{REPORT_MD}", result.library_name());
@@ -24,7 +29,10 @@ impl Signex {
             .io
             .picker
             .dialog()
-            .title_in(&self.ui_state.i18n, ids::LIBRARY_IMPORT_DIALOG_SAVE_REPORT_TITLE)
+            .title_in(
+                &self.ui_state.i18n,
+                ids::LIBRARY_IMPORT_DIALOG_SAVE_REPORT_TITLE,
+            )
             .set_file_name(name);
         Task::perform(picker.save_file(), |target| {
             dialog_message(ImportDialogMsg::ReportSavePicked(target))
@@ -67,7 +75,10 @@ impl Signex {
         let note = match saved {
             Ok(path) => ReportNote::Saved(path),
             Err((path, why)) => {
-                log::warn!("Library import: report not saved to {}: {why}", path.display());
+                log::warn!(
+                    "Library import: report not saved to {}: {why}",
+                    path.display()
+                );
                 ReportNote::Failed(
                     Translatable::new(ids::LIBRARY_IMPORT_DIALOG_REPORT_SAVE_FAILED)
                         .arg("path", path.display().to_string())

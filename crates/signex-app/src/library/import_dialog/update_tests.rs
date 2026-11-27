@@ -69,7 +69,12 @@ fn an_imported_library_is_offered_as_an_update_and_runs_none_until_taken() {
     assert!(state.checking_target);
     assert_eq!(state.pending_run, Some(RunMode::Preview));
     drop(app.update(checked(TargetCheck::Imported { local_commits: 2 })));
-    let run = app.library.import.running.as_ref().expect("the preview runs");
+    let run = app
+        .library
+        .import
+        .running
+        .as_ref()
+        .expect("the preview runs");
     assert_eq!(run.mode, RunMode::Preview);
     assert_eq!(dialog(&app).step, Step::Preview);
 }
@@ -77,7 +82,11 @@ fn an_imported_library_is_offered_as_an_update_and_runs_none_until_taken() {
 #[test]
 fn a_taken_offer_makes_the_import_an_update_of_the_folder() {
     let mut app = checking(RunMode::Import);
-    app.library.import_dialog.as_deref_mut().unwrap().update_offer = Some(UpdateOffer {
+    app.library
+        .import_dialog
+        .as_deref_mut()
+        .unwrap()
+        .update_offer = Some(UpdateOffer {
         local_commits: 0,
         accepted: true,
     });
@@ -91,7 +100,11 @@ fn a_taken_offer_makes_the_import_an_update_of_the_folder() {
 #[test]
 fn a_folder_that_became_free_is_a_new_import_and_an_edit_drops_the_offer() {
     let mut app = checking(RunMode::Import);
-    app.library.import_dialog.as_deref_mut().unwrap().update_offer = Some(UpdateOffer {
+    app.library
+        .import_dialog
+        .as_deref_mut()
+        .unwrap()
+        .update_offer = Some(UpdateOffer {
         local_commits: 0,
         accepted: true,
     });
@@ -185,13 +198,19 @@ fn a_failed_update_says_whether_the_library_was_put_back() {
         };
         assert_eq!(folder, &expected);
         let (_, first, second) = super::view::end_words(&end, OUT.into(), &i18n);
-        assert!(first.into_string().contains("R-10K"), "the converter's reason");
+        assert!(
+            first.into_string().contains("R-10K"),
+            "the converter's reason"
+        );
         let second = second.into_string();
         match expected {
             FolderAfter::Restored => assert!(second.contains("put back"), "{second}"),
             _ => assert!(second.contains("could not be put back"), "{second}"),
         }
-        assert!(app.document_view.error_notice.is_none(), "shown in the dialog");
+        assert!(
+            app.document_view.error_notice.is_none(),
+            "shown in the dialog"
+        );
     }
 }
 
@@ -234,5 +253,8 @@ fn the_result_says_where_the_library_was_mounted_and_what_it_requires() {
     assert_eq!(facts.commit.as_deref(), Some("0123456789abcdef"));
     assert_eq!(facts.required.len(), 1);
     assert_eq!(facts.required[0].id, required);
-    assert_eq!(facts.required[0].open_as, None, "no library with it is open");
+    assert_eq!(
+        facts.required[0].open_as, None,
+        "no library with it is open"
+    );
 }

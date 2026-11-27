@@ -86,12 +86,12 @@ fn importing() -> Signex {
 }
 
 fn finished(exit: ExitKind) -> Message {
-    Message::Library(LibraryMessage::Import(LibraryImportMsg::Finished(Box::new(
-        ImportFinished {
+    Message::Library(LibraryMessage::Import(LibraryImportMsg::Finished(
+        Box::new(ImportFinished {
             result: Ok(job_outcome(exit)),
             target: MountTarget::Global,
-        },
-    ))))
+        }),
+    )))
 }
 
 fn stored(dir: &std::path::Path) -> ImportResult {
@@ -110,7 +110,10 @@ fn a_finished_import_ends_on_its_result_card_and_the_report_is_a_tab_away() {
     let result = state.finished().expect("the result");
     assert_eq!(result.library_dir, PathBuf::from("/out/Passives"));
     assert_eq!(result.library_name(), "Passives");
-    assert_eq!(result.report_md(), PathBuf::from("/out/Passives").join(REPORT_MD));
+    assert_eq!(
+        result.report_md(),
+        PathBuf::from("/out/Passives").join(REPORT_MD)
+    );
     assert_eq!(
         result.run.as_ref().map(|r| (r.mode, r.exit)),
         Some((RunMode::Import, ExitKind::Partial))
@@ -177,7 +180,10 @@ fn the_library_menu_opens_the_stored_report_in_the_dialog() {
     drop(app.update(d(ImportDialogMsg::LibraryMenuToggled(file.clone()))));
     assert_eq!(app.library.import_menu.as_ref(), Some(&file));
     drop(app.update(d(ImportDialogMsg::LibraryMenuToggled(file.clone()))));
-    assert!(app.library.import_menu.is_none(), "a second right-click closes it");
+    assert!(
+        app.library.import_menu.is_none(),
+        "a second right-click closes it"
+    );
     drop(app.update(d(ImportDialogMsg::LibraryMenuToggled(file.clone()))));
     let task = app.update(d(ImportDialogMsg::StoredReportRequested(file.clone())));
     assert!(app.library.import_menu.is_none(), "the menu closes");
@@ -300,11 +306,17 @@ fn the_result_and_the_report_build_in_both_graphite_themes() {
         report_problem: Some("the summary names no report".into()),
         run: Some(facts),
     });
-    let stored_report =
-        ImportDialogState::for_stored_report(stored(std::path::Path::new("/l/P")));
+    let stored_report = ImportDialogState::for_stored_report(stored(std::path::Path::new("/l/P")));
     for id in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
         let tokens = theme_tokens(id);
-        for state in [&run, &report, &none_match, &unreadable, &empty, &stored_report] {
+        for state in [
+            &run,
+            &report,
+            &none_match,
+            &unreadable,
+            &empty,
+            &stored_report,
+        ] {
             for library_open in [false, true] {
                 let ctx = ImportDialogContext {
                     running: None,
