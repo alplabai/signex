@@ -182,6 +182,12 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("block", OperandKind::Text),
     ("interface", OperandKind::Text),
     ("label", OperandKind::Text),
+    // #2796: a block diagram PDF's page orientation, `landscape` or
+    // `portrait` (its `paper` is declared with mockup row 202 above).
+    ("orientation", OperandKind::Text),
+    // #2968, mockup row 210: what a regenerate does with a block whose sheet
+    // left the project, `apply` (unlink it) or `skip` (leave it, listed).
+    ("unlink", OperandKind::Text),
     // #3038: a part's fit in a variant, and an alternate part's part number
     // (its `footprint` is declared with #2937 below).
     ("fitted", OperandKind::Bool),

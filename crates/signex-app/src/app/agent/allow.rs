@@ -121,6 +121,9 @@ mod tests {
                 "assign_net_class",
                 "auto_place",
                 "autoplace_fields",
+                // #2470: Back Annotate and Re-Annotate Board on the named
+                // project or board.
+                "back_annotate_schematics",
                 // #2796: the block diagram edits, on the named diagram.
                 "block_add",
                 "block_group",
@@ -133,9 +136,6 @@ mod tests {
                 "block_set",
                 "block_ungroup",
                 "block_unlink",
-                // #2470: Back Annotate and Re-Annotate Board on the named
-                // project or board.
-                "back_annotate_schematics",
                 "board_assembly_drawing",
                 "board_panel",
                 "board_report_bom",
