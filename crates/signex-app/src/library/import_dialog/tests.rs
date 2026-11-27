@@ -32,7 +32,21 @@ const B: &str = r#"{"contract":"1.0","converter":"b-import","version":"2.0","inp
     {"label":"Footprint library","extensions":["fp1"],"kind":"library"}]}"#;
 pub(super) const REPORT: &str =
     include_str!("../../../../../docs/fixtures/library-converter/import-report.json");
-const ROOT: &str = "/home/u/Signex/Libraries";
+/// `path`, written Unix style from `/`, as an absolute path on this
+/// platform: on Windows a drive goes in front, or the dialog's absolute
+/// location check would refuse it.
+pub(super) fn abs(path: &str) -> String {
+    if cfg!(windows) {
+        format!("C:{path}")
+    } else {
+        path.to_string()
+    }
+}
+
+/// The libraries root the tests pick into.
+fn root() -> String {
+    abs("/home/u/Signex/Libraries")
+}
 
 pub(super) fn converter(path: &str, json: &str) -> DiscoveredConverter {
     DiscoveredConverter {
@@ -54,7 +68,7 @@ pub(super) fn found(converters: Vec<DiscoveredConverter>) -> ImportDialogState {
 
 pub(super) fn picked(state: &mut ImportDialogState, paths: &[&str]) {
     let paths = paths.iter().map(PathBuf::from).collect();
-    state.apply_sources(paths, Some(Path::new(ROOT)));
+    state.apply_sources(paths, Some(Path::new(&root())));
 }
 
 pub(super) fn d(m: ImportDialogMsg) -> Message {
@@ -125,14 +139,14 @@ fn a_pick_detects_its_kind_and_the_name_and_folder_follow() {
         "a-import"
     );
     assert_eq!(s.name, "Passives");
-    assert_eq!(s.location, format!("{ROOT}/Passives"));
+    assert_eq!(Path::new(&s.location), Path::new(&root()).join("Passives"));
     assert_eq!(s.blocker(), None);
     // The folder follows the name until it is changed by hand.
-    s.set_name("Caps".into(), Some(Path::new(ROOT)));
-    assert_eq!(s.location, format!("{ROOT}/Caps"));
-    s.set_location("/work/libs/caps".into());
-    s.set_name("Other".into(), Some(Path::new(ROOT)));
-    assert_eq!(s.location, "/work/libs/caps");
+    s.set_name("Caps".into(), Some(Path::new(&root())));
+    assert_eq!(Path::new(&s.location), Path::new(&root()).join("Caps"));
+    s.set_location(abs("/work/libs/caps"));
+    s.set_name("Other".into(), Some(Path::new(&root())));
+    assert_eq!(s.location, abs("/work/libs/caps"));
     // A typed name is kept by the next pick.
     s.name_edited = true;
     picked(&mut s, &["/in/Resistors.lib1"]);
@@ -166,9 +180,9 @@ fn an_unreadable_or_mixed_pick_and_a_bad_name_or_folder_keep_next_off() {
     assert_eq!(s.blocker(), Some(Blocker::NoCommonConverter));
     picked(&mut s, &["/in/P.lib1"]);
     s.name_edited = true;
-    s.set_name("a/b".into(), Some(Path::new(ROOT)));
+    s.set_name("a/b".into(), Some(Path::new(&root())));
     assert_eq!(s.blocker(), Some(Blocker::InvalidName));
-    s.set_name("Fine".into(), Some(Path::new(ROOT)));
+    s.set_name("Fine".into(), Some(Path::new(&root())));
     s.set_location("relative/dir".into());
     assert_eq!(s.blocker(), Some(Blocker::LocationNotAbsolute));
     s.set_location(String::new());
@@ -237,7 +251,7 @@ fn importing() -> (Signex, Arc<AtomicBool>) {
     let (mut app, _boot) = Signex::new();
     let cancel = Arc::new(AtomicBool::new(false));
     app.library.import.running = Some(ImportRun {
-        output: "/out/P".into(),
+        output: abs("/out/P").into(),
         mode: RunMode::Import,
         target: MountTarget::Global,
         cancel: cancel.clone(),
@@ -252,7 +266,7 @@ fn importing() -> (Signex, Arc<AtomicBool>) {
     app.library.import_dialog = Some(Box::new(ImportDialogState {
         step: Step::Import,
         awaiting: Some(RunMode::Import),
-        location: "/out/P".into(),
+        location: abs("/out/P"),
         ..ImportDialogState::new()
     }));
     (app, cancel)
@@ -701,7 +715,7 @@ fn a_dialog_opened_for_a_project_mounts_into_that_project() {
         app.document_state.active_project = None;
         let mut state = found(vec![converter("/bin/a", A)]);
         picked(&mut state, &["/in/P.lib1"]);
-        state.set_location("/out/P".into());
+        state.set_location(abs("/out/P"));
         state.project = Some(id);
         state.mount_for_all = for_all;
         state.step = Step::Preview;
@@ -709,7 +723,7 @@ fn a_dialog_opened_for_a_project_mounts_into_that_project() {
         state.checking_target = true;
         app.library.import_dialog = Some(Box::new(state));
         drop(app.update(d(ImportDialogMsg::TargetChecked {
-            location: "/out/P".into(),
+            location: abs("/out/P").into(),
             check: super::TargetCheck::Free,
         })));
         let run = app.library.import.running.as_ref().expect("started");

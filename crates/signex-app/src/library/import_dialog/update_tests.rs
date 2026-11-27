@@ -11,22 +11,25 @@ use signex_i18n::I18n;
 
 use super::result::{Mounted, ResultTab};
 use super::source::{Blocker, UpdateOffer};
-use super::tests::{A, converter, d, dialog, found, import, outcome, picked};
+use super::tests::{A, abs, converter, d, dialog, found, import, outcome, picked};
 use super::{FolderAfter, ImportDialogMsg, ImportDialogState, ImportEnd, Step, TargetCheck};
 use crate::app::Signex;
 use crate::library::messages::LibraryImportMsg;
 use crate::library_import::run_state::{ImportFinished, ImportRun, MountTarget};
 use crate::library_import::{ImportError, ImportJobOutcome, RunFailure, RunMode};
 
-const OUT: &str = "/out/Passives";
+/// The folder the update tests import into.
+fn out() -> String {
+    abs("/out/Passives")
+}
 
-/// The app with step 1 filled in for `OUT`, waiting for the folder check
+/// The app with step 1 filled in for [`out`], waiting for the folder check
 /// behind `mode`'s button.
 fn checking(mode: RunMode) -> Signex {
     let (mut app, _boot) = Signex::new();
     let mut state = found(vec![converter("/bin/a", A)]);
     picked(&mut state, &["/in/Passives.lib1"]);
-    state.set_location(OUT.into());
+    state.set_location(out());
     state.checking_target = true;
     state.pending_run = Some(mode);
     if mode != RunMode::Preview {
@@ -38,7 +41,7 @@ fn checking(mode: RunMode) -> Signex {
 
 fn checked(check: TargetCheck) -> crate::app::Message {
     d(ImportDialogMsg::TargetChecked {
-        location: OUT.into(),
+        location: out().into(),
         check,
     })
 }
@@ -93,7 +96,7 @@ fn a_taken_offer_makes_the_import_an_update_of_the_folder() {
     drop(app.update(checked(TargetCheck::Imported { local_commits: 0 })));
     let run = app.library.import.running.as_ref().expect("started");
     assert_eq!(run.mode, RunMode::Update);
-    assert_eq!(run.output, PathBuf::from(OUT));
+    assert_eq!(run.output, PathBuf::from(out()));
     assert_eq!(dialog(&app).step, Step::Import);
 }
 
@@ -120,7 +123,7 @@ fn a_folder_that_became_free_is_a_new_import_and_an_edit_drops_the_offer() {
             accepted: false,
         });
         match edit {
-            0 => state.set_location("/elsewhere".into()),
+            0 => state.set_location(abs("/elsewhere")),
             1 => state.set_name("Other".into(), None),
             _ => picked(&mut state, &["/in/Caps.lib1"]),
         }
@@ -145,11 +148,11 @@ fn a_refused_update_folder_goes_back_to_step_one_with_its_reason() {
     assert!(state.update_offer.is_none());
 }
 
-/// The app with the dialog on step 3 of an update of `OUT`.
+/// The app with the dialog on step 3 of an update of [`out`].
 fn updating() -> Signex {
     let (mut app, _boot) = Signex::new();
     app.library.import.running = Some(ImportRun {
-        output: OUT.into(),
+        output: out().into(),
         mode: RunMode::Update,
         target: MountTarget::Global,
         cancel: Arc::new(AtomicBool::new(false)),
@@ -160,7 +163,7 @@ fn updating() -> Signex {
     app.library.import_dialog = Some(Box::new(ImportDialogState {
         step: Step::Import,
         awaiting: Some(RunMode::Update),
-        location: OUT.into(),
+        location: out(),
         update_offer: Some(UpdateOffer {
             local_commits: 1,
             accepted: true,
@@ -198,7 +201,7 @@ fn a_failed_update_says_whether_the_library_was_put_back() {
             panic!("{end:?}");
         };
         assert_eq!(folder, &expected);
-        let (_, first, second) = super::view::end_words(&end, OUT.into(), &i18n);
+        let (_, first, second) = super::view::end_words(&end, out(), &i18n);
         assert!(
             first.into_string().contains("R-10K"),
             "the converter's reason"
@@ -219,7 +222,7 @@ fn a_failed_update_says_whether_the_library_was_put_back() {
 fn the_result_says_where_the_library_was_mounted_and_what_it_requires() {
     let (mut app, _boot) = Signex::new();
     app.library.import.running = Some(ImportRun {
-        output: OUT.into(),
+        output: out().into(),
         mode: RunMode::Import,
         target: MountTarget::Global,
         cancel: Arc::new(AtomicBool::new(false)),
@@ -230,13 +233,13 @@ fn the_result_says_where_the_library_was_mounted_and_what_it_requires() {
     app.library.import_dialog = Some(Box::new(ImportDialogState {
         step: Step::Import,
         awaiting: Some(RunMode::Import),
-        location: OUT.into(),
+        location: out(),
         ..ImportDialogState::new()
     }));
     let required = uuid::Uuid::from_u128(7);
     let done = ImportJobOutcome {
         run: outcome(),
-        library_file: Some(PathBuf::from(OUT).join("Passives.snxlib")),
+        library_file: Some(PathBuf::from(out()).join("Passives.snxlib")),
         commit: Some("0123456789abcdef".into()),
         local_commits: 0,
         library_id: Some(uuid::Uuid::from_u128(1)),

@@ -12,7 +12,7 @@ use signex_types::theme::{ThemeId, theme_tokens};
 use super::notices::{RunProblem, STDERR_LINES, failure_reason, last_lines};
 use super::result::ImportResult;
 use super::source::Blocker;
-use super::tests::{A, converter, dialog, found, import, picked};
+use super::tests::{A, abs, converter, dialog, found, import, picked};
 use super::{
     FolderAfter, ImportDialogContext, ImportDialogState, ImportEnd, PreviewState, Step, view,
 };
@@ -29,7 +29,7 @@ const REPORT: &str =
 fn waiting(mode: RunMode) -> Signex {
     let (mut app, _boot) = Signex::new();
     app.library.import.running = Some(ImportRun {
-        output: "/out/P".into(),
+        output: abs("/out/P").into(),
         mode,
         target: MountTarget::Global,
         cancel: Arc::new(AtomicBool::new(false)),
@@ -46,7 +46,7 @@ fn waiting(mode: RunMode) -> Signex {
         step,
         awaiting: Some(mode),
         preview: (mode == RunMode::Preview).then_some(PreviewState::Running),
-        location: "/out/P".into(),
+        location: abs("/out/P"),
         ..ImportDialogState::new()
     }));
     app

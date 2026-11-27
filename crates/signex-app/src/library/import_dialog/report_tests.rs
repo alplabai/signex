@@ -10,6 +10,7 @@ use signex_i18n::I18n;
 use signex_types::theme::{ThemeId, theme_tokens};
 
 use super::result::{ImportResult, Mounted, ReportNote, RequiredLibrary, ResultTab, RunFacts};
+use super::tests::abs;
 use super::{ImportDialogContext, ImportDialogMsg, ImportDialogState, Step, view};
 use crate::app::{Message, Signex};
 use crate::library::messages::{LibraryImportMsg, LibraryMessage};
@@ -55,8 +56,8 @@ fn run_outcome(exit: ExitKind, library: Option<PathBuf>) -> RunOutcome {
 
 fn job_outcome(exit: ExitKind) -> ImportJobOutcome {
     ImportJobOutcome {
-        run: run_outcome(exit, Some(PathBuf::from("/out/Passives"))),
-        library_file: Some(PathBuf::from("/out/Passives/Passives.snxlib")),
+        run: run_outcome(exit, Some(PathBuf::from(abs("/out/Passives")))),
+        library_file: Some(PathBuf::from(abs("/out/Passives/Passives.snxlib"))),
         commit: Some("0123456789abcdef".into()),
         local_commits: 0,
         library_id: None,
@@ -68,7 +69,7 @@ fn job_outcome(exit: ExitKind) -> ImportJobOutcome {
 fn importing() -> Signex {
     let (mut app, _boot) = Signex::new();
     app.library.import.running = Some(ImportRun {
-        output: "/out/Passives".into(),
+        output: abs("/out/Passives").into(),
         mode: RunMode::Import,
         target: MountTarget::Global,
         cancel: Arc::new(AtomicBool::new(false)),
@@ -79,7 +80,7 @@ fn importing() -> Signex {
     app.library.import_dialog = Some(Box::new(ImportDialogState {
         step: Step::Import,
         awaiting: Some(RunMode::Import),
-        location: "/out/Passives".into(),
+        location: abs("/out/Passives"),
         filter: "left over".into(),
         ..ImportDialogState::new()
     }));
@@ -109,11 +110,11 @@ fn a_finished_import_ends_on_its_result_card_and_the_report_is_a_tab_away() {
     assert_eq!(state.result_tab, ResultTab::Result);
     assert!(state.filter.is_empty(), "a fresh filter for the new report");
     let result = state.finished().expect("the result");
-    assert_eq!(result.library_dir, PathBuf::from("/out/Passives"));
+    assert_eq!(result.library_dir, PathBuf::from(abs("/out/Passives")));
     assert_eq!(result.library_name(), "Passives");
     assert_eq!(
         result.report_md(),
-        PathBuf::from("/out/Passives").join(REPORT_MD)
+        PathBuf::from(abs("/out/Passives")).join(REPORT_MD)
     );
     assert_eq!(
         result.run.as_ref().map(|r| (r.mode, r.exit)),
@@ -276,7 +277,7 @@ fn the_result_and_the_report_build_in_both_graphite_themes() {
     run.show_result(ImportResult::of_run(
         RunMode::Update,
         &job_outcome(ExitKind::Partial),
-        std::path::Path::new("/out/Passives"),
+        std::path::Path::new(&abs("/out/Passives")),
     ));
     let mut report = run.clone();
     report.result_tab = ResultTab::Report;

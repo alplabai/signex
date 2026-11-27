@@ -240,7 +240,10 @@ fn quit_waits_for_a_failed_new_imports_cleanup() {
     use super::run_state::JobStage;
     let dir = tempfile::tempdir().unwrap();
     let out = dir.path().join("Passives");
-    let body = format!("echo x > \"$out/half.snxsym\"\n{}\nexit 1\n", summary("failed", false));
+    let body = format!(
+        "echo x > \"$out/half.snxsym\"\n{}\nexit 1\n",
+        summary("failed", false)
+    );
     let stage = JobStage::default();
     let failure = run_library_in(
         &sh(dir.path(), &body),
