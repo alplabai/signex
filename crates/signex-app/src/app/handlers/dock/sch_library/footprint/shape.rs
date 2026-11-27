@@ -366,7 +366,8 @@ impl Signex {
                         *sweep_angle_expr = value;
                     }
                     (
-                        ArrayKind::Grid { depopulation, .. }
+                        ArrayKind::Linear { depopulation, .. }
+                        | ArrayKind::Grid { depopulation, .. }
                         | ArrayKind::Polar { depopulation, .. },
                         ArrayParamField::MaskExpr,
                     ) => {
@@ -602,7 +603,8 @@ impl Signex {
 
     /// v0.23 — Toggle a single `(i, j)` instance in an array's
     /// per-instance suppression list. `value=true` enables the
-    /// instance; `value=false` suppresses it. Polar arrays set `j = 0`.
+    /// instance; `value=false` suppresses it. Linear and polar arrays set
+    /// `j = 0`.
     /// The list itself is kept by `ArrayKind::set_instance_suppressed`,
     /// the one helper the canvas instance click uses too.
     pub(crate) fn fp_editor_toggle_array_instance(
@@ -617,10 +619,9 @@ impl Signex {
                 let Some(array) = sketch_array_mut(editor, array_id) else {
                     return false;
                 };
-                if !array.kind.has_suppression_model() {
+                if !array.kind.set_instance_suppressed(i, j, !value) {
                     return false;
                 }
-                array.kind.set_instance_suppressed(i, j, !value);
                 rebuild_sketch(editor);
                 true
             });

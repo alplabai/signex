@@ -376,6 +376,14 @@ pub enum ArrayKindSummary {
         count_expr: String,
         dx_expr: String,
         dy_expr: String,
+        /// Empty string when the array has no `GridDepopulation`.
+        mask_expr: String,
+        /// Per-instance suppression; entries are `(i, 0)`, stored as `i`
+        /// (#2688).
+        suppressed_instances: Vec<u32>,
+        /// Snapshot of the evaluated `count` — drives the checkbox row
+        /// length. `None` when the expression isn't numeric.
+        count_value: Option<u32>,
     },
     Grid {
         nx_expr: String,
@@ -452,8 +460,7 @@ pub enum ArrayParamField {
     GridDyExpr,
     PolarCountExpr,
     PolarSweepAngleExpr,
-    /// Maps to `GridDepopulation.mask_expr` for both Grid and Polar
-    /// arrays. Empty string clears the depopulation entirely (set
+    /// Maps to `GridDepopulation.mask_expr` for every pattern kind. Empty string clears the depopulation entirely (set
     /// `Option::None` on the array).
     MaskExpr,
     /// The Numbering Mask (mockup row 126): the pad numbers a Grid or Polar

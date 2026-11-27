@@ -109,6 +109,7 @@ fn row(source: SketchEntityId, count: &str, dx: &str, dy: &str) -> ArrayKind {
         count_expr: count.into(),
         dx_expr: dx.into(),
         dy_expr: dy.into(),
+        depopulation: None,
     }
 }
 

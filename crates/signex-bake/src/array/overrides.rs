@@ -1,6 +1,7 @@
-//! Baking the instances of a linked pattern or mirror, each with its own
-//! per-instance pad override (mockup row 192, item D1) applied to the source pad before the
-//! pad bake, so only that instance changes.
+//! Baking the instances of a pattern or mirror, each with its own
+//! per-instance pad override (mockup row 192, item D1), if it has one,
+//! applied to the source pad before the pad bake, so only that instance
+//! changes.
 
 use std::borrow::Cow;
 use std::collections::BTreeMap;
@@ -13,7 +14,6 @@ use signex_sketch::expr::eval::EvalContext;
 use signex_sketch::id::SketchEntityId;
 use signex_sketch::sketch::SketchData;
 use signex_sketch::solver::FullSolveOutput;
-use signex_sketch::solver::state::point_xy;
 
 use super::links::{Basis, Expansion, Instance};
 use super::numbering::{derive_pad_number, derive_swept_pad_number};
@@ -61,10 +61,18 @@ fn number_at(
     }
 }
 
+/// The pad a pattern repeats: its entity, its attributes and where the
+/// solve puts it.
+pub(crate) struct SourcePad<'p> {
+    pub id: SketchEntityId,
+    pub pad: &'p PadAttr,
+    pub at: (f64, f64),
+}
+
 /// Bake every instance `expansion` places itself (its `own` ones) from the
-/// pad on `source`, into `out`.
+/// pad `source`, into `out`.
 pub(crate) fn bake_instances(
-    source: SketchEntityId,
+    source: &SourcePad<'_>,
     expansion: &Expansion<'_>,
     sketch: &SketchData,
     solve: &FullSolveOutput,
@@ -72,42 +80,33 @@ pub(crate) fn bake_instances(
     out: &mut Vec<LibPad>,
     warnings: &mut Vec<String>,
 ) -> Result<(), SketchError> {
-    let Some(pad) = sketch
-        .entities
-        .iter()
-        .find(|e| e.id == source)
-        .and_then(|e| e.pad.as_ref())
-    else {
-        warnings.push(super::not_a_pad("pattern", sketch, solve, source));
-        return Ok(());
-    };
-    let Some(at) = point_xy(source, &solve.result.state, &solve.result.index, sketch) else {
-        warnings.push(format!(
-            "pattern source {source}: position unknown — pattern skipped"
-        ));
-        return Ok(());
-    };
     let mut ctx = EvalContext {
         params: params_ast.clone(),
         array_index: Some((0, 0)),
     };
     for instance in expansion.instances.iter().filter(|x| x.own) {
-        let attr = attr_for(sketch, instance, pad);
+        let attr = attr_for(sketch, instance, source.pad);
         let number = match sketch
             .override_for(instance.key.0, instance.key.1, instance.key.2)
             .and_then(|o| o.number.clone())
         {
             Some(number) => number,
-            None => number_at(&expansion.basis, instance.flat, &mut ctx, warnings, source),
+            None => number_at(
+                &expansion.basis,
+                instance.flat,
+                &mut ctx,
+                warnings,
+                source.id,
+            ),
         };
         ctx.array_index = Some(instance.index);
-        let (x, y) = instance.place.apply(at);
+        let (dx, dy) = instance.place.offset_from(source.at);
         let mut baked = bake_one_pad(
-            source,
+            source.id,
             &attr,
             &ctx,
-            x - at.0,
-            y - at.1,
+            dx,
+            dy,
             Some(number),
             sketch,
             solve,

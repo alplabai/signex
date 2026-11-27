@@ -41,6 +41,13 @@ pub enum ArrayKind {
         count_expr: String,
         dx_expr: String,
         dy_expr: String,
+        /// Per-instance suppression, as a polar array keeps it: entries are
+        /// `(i, 0)` (#2688, DECISIONS 2026-11-27). `None` keeps every
+        /// instance and writes nothing; while set the footprint file and the
+        /// board need their tokens for it (`SNXFPT_FORMAT_V1_5`,
+        /// `SNXPCB_FORMAT_V1_13`).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        depopulation: Option<GridDepopulation>,
     },
 
     /// Two-dimensional grid with optional depopulation. v0.14 bakes.
@@ -91,14 +98,9 @@ impl ArrayKind {
         }
     }
 
-    /// Whether single instances of this array can be suppressed. A grid
-    /// and a polar array keep a suppression list; a linear array has none.
-    pub fn has_suppression_model(&self) -> bool {
-        !matches!(self, Self::Linear { .. })
-    }
-
     /// Whether instance `(i, j)` is on the suppression list (`j` is 0 for
-    /// a polar array). The mask expression is not evaluated here.
+    /// a linear or a polar array). The mask expression is not evaluated
+    /// here.
     pub fn is_instance_suppressed(&self, i: u32, j: u32) -> bool {
         self.depopulation()
             .is_some_and(|d| d.suppressed_instances.contains(&(i, j)))
@@ -107,12 +109,9 @@ impl ArrayKind {
     /// Put instance `(i, j)` on the suppression list or take it off.
     /// The list gains a depopulation with an empty mask when it first
     /// needs one, and drops it again when the list empties and the mask is
-    /// blank. Returns whether the array changed; a linear array never does.
+    /// blank. Returns whether the array changed.
     pub fn set_instance_suppressed(&mut self, i: u32, j: u32, suppressed: bool) -> bool {
-        let slot = match self {
-            Self::Grid { depopulation, .. } | Self::Polar { depopulation, .. } => depopulation,
-            Self::Linear { .. } => return false,
-        };
+        let slot = self.depopulation_mut();
         if suppressed {
             let d = slot.get_or_insert_with(|| GridDepopulation {
                 mask_expr: String::new(),
@@ -138,13 +137,9 @@ impl ArrayKind {
 
     /// Replace the suppression list with `cells` (the Numbering Mask, mockup
     /// row 126), keeping the mask expression. The depopulation goes when
-    /// both end up empty. Returns whether the array changed; a linear array
-    /// never does.
+    /// both end up empty. Returns whether the array changed.
     pub fn set_suppressed_instances(&mut self, cells: Vec<(u32, u32)>) -> bool {
-        let slot = match self {
-            Self::Grid { depopulation, .. } | Self::Polar { depopulation, .. } => depopulation,
-            Self::Linear { .. } => return false,
-        };
+        let slot = self.depopulation_mut();
         let before = slot.clone();
         let mask_expr = slot.take().map(|d| d.mask_expr).unwrap_or_default();
         if !(mask_expr.trim().is_empty() && cells.is_empty()) {
@@ -163,12 +158,20 @@ impl ArrayKind {
         self.set_instance_suppressed(i, j, !suppressed)
     }
 
-    fn depopulation(&self) -> Option<&GridDepopulation> {
+    /// The array's depopulation: its mask and suppression list.
+    pub fn depopulation(&self) -> Option<&GridDepopulation> {
         match self {
-            Self::Grid { depopulation, .. } | Self::Polar { depopulation, .. } => {
-                depopulation.as_ref()
-            }
-            Self::Linear { .. } => None,
+            Self::Linear { depopulation, .. }
+            | Self::Grid { depopulation, .. }
+            | Self::Polar { depopulation, .. } => depopulation.as_ref(),
+        }
+    }
+
+    fn depopulation_mut(&mut self) -> &mut Option<GridDepopulation> {
+        match self {
+            Self::Linear { depopulation, .. }
+            | Self::Grid { depopulation, .. }
+            | Self::Polar { depopulation, .. } => depopulation,
         }
     }
 }
@@ -183,7 +186,7 @@ impl ArrayKind {
 /// false OR the index is in the list). This lets the Properties
 /// panel's per-instance checkbox grid (Phase B5 UI) toggle individual
 /// pads without needing to round-trip through an expression parser.
-/// Polar arrays use `j = 0` for every entry.
+/// Linear and polar arrays use `j = 0` for every entry.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct GridDepopulation {
     pub mask_expr: String,
@@ -367,14 +370,27 @@ mod suppression_tests {
         ));
     }
 
+    /// #2688: a linear pattern keeps `(i, 0)` entries as a polar one does,
+    /// and an emptied list leaves no depopulation behind.
     #[test]
-    fn a_linear_pattern_has_no_suppressed_list() {
-        let mut kind = ArrayKind::Linear {
+    fn a_linear_pattern_keeps_a_suppressed_list() {
+        let start = ArrayKind::Linear {
             source: SketchEntityId::new(),
             count_expr: "4".into(),
             dx_expr: "1".into(),
             dy_expr: "0".into(),
+            depopulation: None,
         };
-        assert!(!kind.set_suppressed_instances(vec![(0, 0)]));
+        let mut kind = start.clone();
+        assert!(kind.set_suppressed_instances(vec![(2, 0)]));
+        assert!(kind.is_instance_suppressed(2, 0));
+        assert!(kind.toggle_instance_suppressed(3, 0));
+        assert_eq!(
+            kind.depopulation().map(|d| d.suppressed_instances.clone()),
+            Some(vec![(2, 0), (3, 0)])
+        );
+        assert!(kind.toggle_instance_suppressed(3, 0));
+        assert!(kind.set_instance_suppressed(2, 0, false));
+        assert_eq!(kind, start, "an empty list with a blank mask is gone");
     }
 }

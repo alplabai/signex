@@ -809,6 +809,7 @@ mod tests {
                 count_expr: "2".into(),
                 dx_expr: "10mm".into(),
                 dy_expr: "0mm".into(),
+                depopulation: None,
             },
             numbering: NumberingScheme::default(),
         });

@@ -909,6 +909,9 @@ mod sketch_parameters;
 // mockup row 187 / mockup row 191: the sketch canvas's pattern values and instance suppression.
 #[path = "regression/sketch_canvas_values.rs"]
 mod sketch_canvas_values;
+// #2688: a linear pattern's Mask field, as a polar pattern's.
+#[path = "regression/sketch_linear_mask.rs"]
+mod sketch_linear_mask;
 // #2518 / Graphite mockup row 179: a board sketch snaps to the board under it; Snap ▾
 // board rows turn that off without an undo step.
 #[path = "regression/sketch_snap_board.rs"]

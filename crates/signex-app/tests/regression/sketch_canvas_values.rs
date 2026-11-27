@@ -1,7 +1,8 @@
 //! mockup row 187 / mockup row 191 - the sketch canvas's values and pattern instances:
 //! one suppression helper on the array type, used by the canvas instance
-//! click and the Properties pattern form, round-trips a grid and a polar
-//! array and leaves a linear one alone; the canvas's instance slots sit
+//! click and the Properties pattern form, round-trips a grid, a polar and a
+//! linear array (#2688); a linear suppression survives a save and reload and
+//! the bake leaves it out; the canvas's instance slots sit
 //! where the bake puts the pads; a pattern value written on the drawing
 //! lands in the right expression; the conflict badge counts.
 
@@ -44,12 +45,13 @@ fn linear() -> ArrayKind {
         count_expr: "4".into(),
         dx_expr: "0.65mm".into(),
         dy_expr: "0mm".into(),
+        depopulation: None,
     }
 }
 
 #[test]
-fn suppressing_and_restoring_an_instance_round_trips_a_grid_and_a_polar_array() {
-    for start in [grid(), polar()] {
+fn suppressing_and_restoring_an_instance_round_trips_every_pattern_kind() {
+    for start in [grid(), polar(), linear()] {
         let mut kind = start.clone();
         assert!(kind.has_suppression_model());
 
@@ -88,15 +90,56 @@ fn restoring_keeps_a_mask_the_user_wrote() {
     assert!(d.suppressed_instances.is_empty());
 }
 
+/// #2688: a suppressed linear instance is saved with the footprint, read
+/// back, and baked as no pad.
 #[test]
-fn a_linear_pattern_has_no_suppression_and_never_changes() {
+fn a_linear_suppression_survives_save_and_reload_and_bakes_no_pad() {
+    let plane = PlaneId::new();
+    let source = SketchEntityId::new();
+    let mut point = Entity::new(source, plane, EntityKind::Point { x: 0.0, y: 0.0 });
+    point.pad = Some(PadAttr {
+        number: "1".into(),
+        kind: PadKind::Smd,
+        side: PadSide::Top,
+        shape: PadShape::Rect,
+        size_x_expr: "0.3mm".into(),
+        size_y_expr: "0.3mm".into(),
+        ..PadAttr::default()
+    });
     let mut kind = linear();
-    let before = kind.clone();
-    assert!(!kind.has_suppression_model());
-    assert!(!kind.toggle_instance_suppressed(1, 0));
-    assert!(!kind.set_instance_suppressed(1, 0, true));
-    assert!(!kind.is_instance_suppressed(1, 0));
-    assert_eq!(kind, before);
+    if let ArrayKind::Linear { source: s, .. } = &mut kind {
+        *s = source;
+    }
+    assert!(kind.toggle_instance_suppressed(2, 0));
+    let mut fp = signex_library::Footprint::empty("LINEAR");
+    fp.sketch = Some(SketchData {
+        planes: vec![Plane {
+            id: plane,
+            kind: PlaneKind::BoardTop,
+        }],
+        entities: vec![point],
+        arrays: vec![Array {
+            id: ArrayId::new(),
+            kind,
+            numbering: NumberingScheme::default(),
+        }],
+        ..SketchData::default()
+    });
+    let text = signex_library::FootprintFile::from_footprint(fp)
+        .to_toml_string()
+        .expect("save");
+    let back = signex_library::FootprintFile::from_toml_str(&text).expect("reload");
+    let sketch = back.footprints[0].sketch.clone().expect("the sketch");
+    assert!(sketch.arrays[0].kind.is_instance_suppressed(2, 0), "{text}");
+
+    let solved = Solver::default()
+        .solve(&sketch, &HashMap::new())
+        .expect("the pattern solves");
+    let (mut pads, mut warnings) = (Vec::new(), Vec::new());
+    signex_bake::bake_pads(&sketch, &solved, &HashMap::new(), &mut pads, &mut warnings).unwrap();
+    signex_bake::bake_arrays(&sketch, &solved, &HashMap::new(), &mut pads, &mut warnings).unwrap();
+    let numbers: Vec<&str> = pads.iter().map(|p| p.number.as_str()).collect();
+    assert_eq!(numbers, ["1", "2", "4"], "{warnings:?}");
 }
 
 /// A pad source at (10, 20) and a 3 × 2 grid of it whose x pitch grows

@@ -122,6 +122,7 @@ fn layout_rows<'a>(
             count_expr,
             dx_expr,
             dy_expr,
+            ..
         } => vec![
             field_row(
                 t!(i18n, ids::BOARD_PATTERN_COUNT),

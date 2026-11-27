@@ -2,131 +2,23 @@
 //! innermost source entity, so a pattern of a pattern repeats each instance
 //! of its source, and a live mirror reflects each instance of its pattern.
 //!
-//! A plain array without links or overrides still bakes through
-//! `bake_one_array`; this walk serves the arrays that have them, the
-//! mirrors and the canvas's instance slots (`slots.rs`). Folding the plain
-//! bake into one walk is a follow-up (#2689); see docs/FOOTPRINT_SKETCH.md,
-//! "Pattern links".
+//! Every pattern bakes through this one walk, plain or linked, and the
+//! canvas's instance rings (`slots.rs`) read it too; an array's own layout
+//! is laid out in `layout.rs`.
 
 use std::collections::BTreeMap;
 
-use signex_expr::{ExprNode, parse};
+use signex_expr::ExprNode;
 use signex_library::primitive::footprint::Pad as LibPad;
 use signex_sketch::SketchError;
-use signex_sketch::array::{Array, ArrayId, ArrayKind, GridDepopulation, NumberingScheme};
-use signex_sketch::expr::eval::{EvalContext, eval};
+use signex_sketch::array::{Array, ArrayId, ArrayKind, NumberingScheme};
 use signex_sketch::id::SketchEntityId;
 use signex_sketch::sketch::SketchData;
 use signex_sketch::solver::FullSolveOutput;
 use signex_sketch::solver::state::point_xy;
 
-use crate::eval_util::strip_eq_prefix;
-
-/// An instance's placement: where the source point goes (`m · p + t`) and
-/// how a pad's rotation turns (`sign · deg + offset_deg`). Arrays move and
-/// turn positions but keep pads unrotated, as the plain bake does; a mirror
-/// reflects the rotation too.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub(crate) struct Place {
-    m: [f64; 4],
-    t: [f64; 2],
-    sign: f64,
-    offset_deg: f64,
-}
-
-impl Place {
-    const IDENTITY: Self = Self {
-        m: [1.0, 0.0, 0.0, 1.0],
-        t: [0.0, 0.0],
-        sign: 1.0,
-        offset_deg: 0.0,
-    };
-
-    fn translation(dx: f64, dy: f64) -> Self {
-        Self {
-            t: [dx, dy],
-            ..Self::IDENTITY
-        }
-    }
-
-    fn rotation_about(centre: (f64, f64), theta: f64) -> Self {
-        let (sin, cos) = theta.sin_cos();
-        let m = [cos, -sin, sin, cos];
-        Self {
-            m,
-            t: [
-                centre.0 - (m[0] * centre.0 + m[1] * centre.1),
-                centre.1 - (m[2] * centre.0 + m[3] * centre.1),
-            ],
-            ..Self::IDENTITY
-        }
-    }
-
-    /// The reflection about the line through `a` and `b`; `None` when
-    /// they coincide.
-    fn reflection(a: (f64, f64), b: (f64, f64)) -> Option<Self> {
-        let (vx, vy) = (b.0 - a.0, b.1 - a.1);
-        let len2 = vx * vx + vy * vy;
-        if len2 <= 1e-12 {
-            return None;
-        }
-        let (ux, uy) = (vx / len2.sqrt(), vy / len2.sqrt());
-        let m = [
-            2.0 * ux * ux - 1.0,
-            2.0 * ux * uy,
-            2.0 * ux * uy,
-            2.0 * uy * uy - 1.0,
-        ];
-        Some(Self {
-            m,
-            t: [
-                a.0 - (m[0] * a.0 + m[1] * a.1),
-                a.1 - (m[2] * a.0 + m[3] * a.1),
-            ],
-            sign: -1.0,
-            offset_deg: 2.0 * vy.atan2(vx).to_degrees(),
-        })
-    }
-
-    /// `self` after `inner`: place by `inner`, then by `self`.
-    fn after(&self, inner: &Self) -> Self {
-        let (a, b) = (self.m, inner.m);
-        Self {
-            m: [
-                a[0] * b[0] + a[1] * b[2],
-                a[0] * b[1] + a[1] * b[3],
-                a[2] * b[0] + a[3] * b[2],
-                a[2] * b[1] + a[3] * b[3],
-            ],
-            t: [
-                a[0] * inner.t[0] + a[1] * inner.t[1] + self.t[0],
-                a[2] * inner.t[0] + a[3] * inner.t[1] + self.t[1],
-            ],
-            sign: self.sign * inner.sign,
-            offset_deg: self.sign * inner.offset_deg + self.offset_deg,
-        }
-    }
-
-    pub(crate) fn apply(&self, p: (f64, f64)) -> (f64, f64) {
-        (
-            self.m[0] * p.0 + self.m[1] * p.1 + self.t[0],
-            self.m[2] * p.0 + self.m[3] * p.1 + self.t[1],
-        )
-    }
-
-    /// Whether this placement reflects what it places.
-    pub(crate) fn mirrors(&self) -> bool {
-        self.sign < 0.0
-    }
-
-    /// A pad rotation (degrees) as this placement leaves it.
-    pub(crate) fn turn_deg(&self, deg: f64) -> f64 {
-        if self.sign > 0.0 && self.offset_deg == 0.0 {
-            return deg;
-        }
-        (self.sign * deg + self.offset_deg).rem_euclid(360.0)
-    }
-}
+use super::overrides::SourcePad;
+use super::place::Place;
 
 /// How a pattern numbers its instances: its scheme, and the row width when
 /// it numbers row-major like a grid.
@@ -176,7 +68,7 @@ pub(crate) struct Walk<'a, 'w> {
     stack: Vec<ArrayId>,
     /// Keep the slots the suppression list holds back, marked `listed`
     /// ([`super::slots`]); the bake drops them.
-    keep_listed: bool,
+    pub(super) keep_listed: bool,
     /// A pattern was skipped for going over [`super::MAX_ARRAY_INSTANCES`].
     over_cap: bool,
 }
@@ -212,13 +104,18 @@ impl<'a, 'w> Walk<'a, 'w> {
     }
 
     /// [`super::within_instance_cap`], remembering a refusal.
-    fn within_cap(&mut self, label: &str, source: SketchEntityId, n: Option<usize>) -> bool {
+    pub(super) fn within_cap(
+        &mut self,
+        label: &str,
+        source: SketchEntityId,
+        n: Option<usize>,
+    ) -> bool {
         let within = super::within_instance_cap(label, source, n, self.warnings);
         self.over_cap |= !within;
         within
     }
 
-    fn xy(&self, id: SketchEntityId) -> Option<(f64, f64)> {
+    pub(super) fn xy(&self, id: SketchEntityId) -> Option<(f64, f64)> {
         point_xy(
             id,
             &self.solve.result.state,
@@ -372,238 +269,21 @@ impl<'a, 'w> Walk<'a, 'w> {
             instances,
         }))
     }
+}
 
-    /// The kept slots of one array's own layout, as its plain bake walks
-    /// them (same counts, steps, suppression and mask).
-    pub(crate) fn walk_slots(&mut self, array: &Array) -> Result<Option<Walked>, SketchError> {
-        let source = array.kind.source();
-        let mut ctx = EvalContext {
-            params: self.params_ast.clone(),
-            array_index: Some((0, 0)),
-        };
-        match &array.kind {
-            ArrayKind::Linear {
-                count_expr,
-                dx_expr,
-                dy_expr,
-                ..
-            } => {
-                let count_ast = parse_expr(count_expr)?;
-                let (dx_ast, dy_ast) = (parse_expr(dx_expr)?, parse_expr(dy_expr)?);
-                let Some(count) = self.count("linear", source, &count_ast, &ctx)? else {
-                    return Ok(None);
-                };
-                let mut slots = Vec::with_capacity(count);
-                for i in 0..count {
-                    ctx.array_index = Some((i, 0));
-                    let dx = crate::params::eval_length_mm(&dx_ast, &ctx)?;
-                    let dy = crate::params::eval_length_mm(&dy_ast, &ctx)?;
-                    slots.push(Slot::new(
-                        i,
-                        0,
-                        i as u64,
-                        Place::translation(i as f64 * dx, i as f64 * dy),
-                        false,
-                    ));
-                }
-                Ok(Some(Walked::new(slots, count as u64, None)))
-            }
-            ArrayKind::Grid {
-                nx_expr,
-                ny_expr,
-                dx_expr,
-                dy_expr,
-                depopulation,
-                ..
-            } => {
-                let (nx_ast, ny_ast) = (parse_expr(nx_expr)?, parse_expr(ny_expr)?);
-                let (dx_ast, dy_ast) = (parse_expr(dx_expr)?, parse_expr(dy_expr)?);
-                let mask = mask_ast(depopulation.as_ref())?;
-                let Some(nx) = self.count("grid", source, &nx_ast, &ctx)? else {
-                    return Ok(None);
-                };
-                let Some(ny) = self.count("grid", source, &ny_ast, &ctx)? else {
-                    return Ok(None);
-                };
-                if !self.within_cap("grid", source, nx.checked_mul(ny)) {
-                    return Ok(None);
-                }
-                let mut slots = Vec::new();
-                for j in 0..ny {
-                    for i in 0..nx {
-                        ctx.array_index = Some((i, j));
-                        let Some(listed) =
-                            self.visits(depopulation.as_ref(), mask.as_ref(), &ctx, source)
-                        else {
-                            continue;
-                        };
-                        let dx = crate::params::eval_length_mm(&dx_ast, &ctx)?;
-                        let dy = crate::params::eval_length_mm(&dy_ast, &ctx)?;
-                        let place = Place::translation(i as f64 * dx, j as f64 * dy);
-                        slots.push(Slot::new(i, j, (j * nx + i) as u64, place, listed));
-                    }
-                }
-                Ok(Some(Walked::new(slots, (nx * ny) as u64, Some(nx))))
-            }
-            ArrayKind::Polar {
-                center,
-                count_expr,
-                sweep_angle_expr,
-                depopulation,
-                ..
-            } => {
-                let Some(centre) = self.xy(*center) else {
-                    self.warnings.push(format!(
-                        "polar array center {center}: position unknown — array skipped"
-                    ));
-                    return Ok(None);
-                };
-                let count_ast = parse_expr(count_expr)?;
-                let sweep =
-                    eval(&parse_expr(sweep_angle_expr)?, &ctx).map_err(SketchError::Expr)?;
-                let mask = mask_ast(depopulation.as_ref())?;
-                let Some(count) = self.count("polar", source, &count_ast, &ctx)? else {
-                    return Ok(None);
-                };
-                let Ok(sweep_rad) = sweep.as_rad() else {
-                    self.warnings.push(format!(
-                        "polar array source {source}: sweep_angle_expr did not resolve to an angle — array skipped"
-                    ));
-                    return Ok(None);
-                };
-                let mut slots = Vec::new();
-                for i in 0..count {
-                    ctx.array_index = Some((i, 0));
-                    let Some(listed) =
-                        self.visits(depopulation.as_ref(), mask.as_ref(), &ctx, source)
-                    else {
-                        continue;
-                    };
-                    let theta = i as f64 * sweep_rad / count as f64;
-                    slots.push(Slot::new(
-                        i,
-                        0,
-                        i as u64,
-                        Place::rotation_about(centre, theta),
-                        listed,
-                    ));
-                }
-                Ok(Some(Walked::new(slots, count as u64, None)))
-            }
-        }
-    }
-
-    /// A positive count within the instance cap, else `None` with a warning.
-    fn count(
-        &mut self,
-        label: &str,
-        source: SketchEntityId,
-        ast: &ExprNode,
-        ctx: &EvalContext,
-    ) -> Result<Option<usize>, SketchError> {
-        let Some(n) = super::eval_count(label, "count", source, ast, ctx, self.warnings)? else {
-            return Ok(None);
-        };
-        if n <= 0 {
-            self.warnings.push(format!(
-                "{label} array source {source}: count resolved to {n} — array skipped"
-            ));
-            return Ok(None);
-        }
-        let n = n as usize;
-        Ok(self.within_cap(label, source, Some(n)).then_some(n))
-    }
-
-    /// Whether the walk visits the slot at `ctx`'s index: `Some(false)`
-    /// when it survives the suppression list and the mask (a mask that
-    /// fails to evaluate keeps it, warned), `Some(true)` when the list
-    /// holds it back and the walk keeps listed slots, else `None`.
-    fn visits(
-        &mut self,
-        depopulation: Option<&GridDepopulation>,
-        mask: Option<&ExprNode>,
-        ctx: &EvalContext,
-        source: SketchEntityId,
-    ) -> Option<bool> {
-        let Some((i, j)) = ctx.array_index else {
-            return Some(false);
-        };
-        let listed = depopulation.is_some_and(|d| {
-            d.suppressed_instances
-                .iter()
-                .any(|&(si, sj)| (si as usize, sj as usize) == (i, j))
-        });
-        if listed {
-            return self.keep_listed.then_some(true);
-        }
-        match mask.map(|ast| eval(ast, ctx)) {
-            Some(Ok(q)) => (q.value.abs() >= 1e-9).then_some(false),
-            Some(Err(e)) => {
-                self.warnings.push(format!(
-                    "array source {source}: depopulation eval failed at ({i}, {j}): {e:?} — keeping instance"
-                ));
-                Some(false)
-            }
-            None => Some(false),
-        }
+/// How a bake warning names a plain array: by its kind.
+fn kind_label(kind: &ArrayKind) -> &'static str {
+    match kind {
+        ArrayKind::Linear { .. } => "linear array",
+        ArrayKind::Grid { .. } => "grid array",
+        ArrayKind::Polar { .. } => "polar array",
     }
 }
 
-fn parse_expr(src: &str) -> Result<ExprNode, SketchError> {
-    parse(strip_eq_prefix(src)).map_err(SketchError::Expr)
-}
-
-fn mask_ast(depopulation: Option<&GridDepopulation>) -> Result<Option<ExprNode>, SketchError> {
-    depopulation
-        .filter(|d| !d.mask_expr.trim().is_empty())
-        .map(|d| parse(strip_eq_prefix(&d.mask_expr)))
-        .transpose()
-        .map_err(SketchError::Expr)
-}
-
-pub(crate) struct Slot {
-    pub i: usize,
-    pub j: usize,
-    flat: u64,
-    pub place: Place,
-    /// Held back by the suppression list (only kept by a walk
-    /// [`Walk::keeping_listed`]).
-    pub listed: bool,
-}
-
-impl Slot {
-    fn new(i: usize, j: usize, flat: u64, place: Place, listed: bool) -> Self {
-        Self {
-            i,
-            j,
-            flat,
-            place,
-            listed,
-        }
-    }
-}
-
-pub(crate) struct Walked {
-    pub slots: Vec<Slot>,
-    /// Every slot of the layout, suppressed ones included.
-    pub count: u64,
-    nx: Option<usize>,
-}
-
-impl Walked {
-    fn new(slots: Vec<Slot>, count: u64, nx: Option<usize>) -> Self {
-        Self { slots, count, nx }
-    }
-}
-
-/// Whether `array` bakes through this walk rather than `bake_one_array`:
-/// it repeats another pattern, or one of its instances has an override.
-pub(crate) fn bakes_through_links(sketch: &SketchData, array: ArrayId) -> bool {
-    sketch.pattern_source_of(array).is_some()
-        || sketch.pad_overrides.iter().any(|o| o.array == array)
-}
-
-/// Bake the instances pattern `id` places itself into `out`.
+/// Bake the instances pattern `id` places itself into `out`. A plain array
+/// (one that repeats no other pattern) warns by its kind and, as a lone pad
+/// does, refuses a source with no position; a linked pattern or a mirror
+/// warns and is skipped.
 pub(crate) fn bake_pattern(
     id: ArrayId,
     sketch: &SketchData,
@@ -619,11 +299,46 @@ pub(crate) fn bake_pattern(
         ));
         return Ok(());
     };
-    let expansion = Walk::new(sketch, solve, params_ast, warnings).expand(id)?;
-    let Some(expansion) = expansion else {
+    let plain = sketch
+        .pattern_input(id)
+        .is_none()
+        .then(|| sketch.arrays.iter().find(|a| a.id == id))
+        .flatten();
+    let label = plain.map_or("pattern", |a| kind_label(&a.kind));
+    let Some(entity) = sketch.entities.iter().find(|e| e.id == source) else {
+        warnings.push(match plain {
+            Some(_) => format!("{label} source {source}: entity not found — array skipped"),
+            None => super::not_a_pad(label, sketch, solve, source),
+        });
         return Ok(());
     };
-    super::overrides::bake_instances(source, &expansion, sketch, solve, params_ast, out, warnings)
+    let Some(pad) = entity.pad.as_ref() else {
+        warnings.push(super::not_a_pad(label, sketch, solve, source));
+        return Ok(());
+    };
+    let Some(expansion) = Walk::new(sketch, solve, params_ast, warnings).expand(id)? else {
+        return Ok(());
+    };
+    let Some(at) = point_xy(source, &solve.result.state, &solve.result.index, sketch) else {
+        if plain.is_none() {
+            warnings.push(format!(
+                "pattern source {source}: position unknown — pattern skipped"
+            ));
+            return Ok(());
+        }
+        if expansion.instances.iter().any(|x| x.own) {
+            return Err(SketchError::EntityNotFound(source));
+        }
+        return Ok(());
+    };
+    let source = SourcePad {
+        id: source,
+        pad,
+        at,
+    };
+    super::overrides::bake_instances(
+        &source, &expansion, sketch, solve, params_ast, out, warnings,
+    )
 }
 
 /// Bake every live mirror's instances into `out`.

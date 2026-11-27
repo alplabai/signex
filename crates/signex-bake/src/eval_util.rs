@@ -24,6 +24,17 @@ fn parse_length(src: &str) -> Result<signex_expr::ExprNode, signex_expr::ExprErr
     parse_with(strip_eq_prefix(src), LiteralContext::Length)
 }
 
+/// Parse an authored field in the context its value must have: a pitch in
+/// [`LiteralContext::Length`], a count in [`LiteralContext::Count`], a
+/// rotation or a sweep in [`LiteralContext::Angle`], so `2.54m` is metres
+/// and `4k7` is never a multiplier (#2683).
+pub(crate) fn parse_in(
+    src: &str,
+    context: LiteralContext,
+) -> Result<signex_expr::ExprNode, SketchError> {
+    parse_with(strip_eq_prefix(src), context).map_err(SketchError::Expr)
+}
+
 /// Build an [`EvalContext`] whose parameters are the canonical values in the
 /// unit family the sketch's parameter table declares for each.
 pub(crate) fn build_ctx(

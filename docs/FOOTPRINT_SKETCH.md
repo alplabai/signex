@@ -400,18 +400,22 @@ A selected pattern shows its values under its glyph (`count = rows · 4`,
 `spacing X · 0.65 mm`); they edit on the drawing like a dimension and
 write the pattern's expression as typed.
 
-While a rectangular or circular pattern is selected, each of its instance
-slots draws a ring; a click suppresses that instance (one undo step) and a
-second click brings it back. The suppression list is the one the
-Properties pattern form ticks, kept by one helper on the array type
-(`ArrayKind::set_instance_suppressed`). A linear pattern has no
-suppression list, so its instances do not toggle. The pattern form's
+While a pattern is selected, each of its instance slots draws a ring; a
+click suppresses that instance (one undo step) and a second click brings it
+back. The suppression list is the one the Properties pattern form ticks,
+kept by one helper on the array type (`ArrayKind::set_instance_suppressed`).
+A linear pattern keeps its list as a circular one does, as `(i, 0)` entries
+(#2688); its form has the Mask field and per-instance checkboxes of a
+circular one, and a masked instance keeps its number (numbering follows the
+index). A
+footprint with a linear suppression is saved as `snxfpt/1.5` and a board
+sketch with one as `snxpcb/1.13` (`docs/FORMAT_VERSIONS.md`). The pattern form's
 Numbering Mask (mockup row 126, #2845) edits the same list by pad number
 (`4,5`, `A2,B4`; commas or spaces): it shows the numbers of the suppressed
 instances, and a typed list replaces the list in one undo step
 (`signex_bake::array::instances_numbered`, `ArrayKind::set_suppressed_instances`).
-A number the pattern does not have is refused and the text stays in the field;
-on a linear pattern the field is greyed. The source's own slot is
+A number the pattern does not have is refused and the text stays in the field.
+The source's own slot is
 not offered: it is the source pad. The canvas draws no ring on it, and the
 Mask refuses the source pad's number the same way.
 
@@ -643,13 +647,13 @@ another pattern, and a mirror of a pattern stays a pattern.
   onto a removed pattern are dropped; the array that named it stays and
   repeats its own source again.
 
-The bake expands links in `signex_bake::array::links`; a plain array with
-no link and no override still bakes through `bake_one_array`. The canvas's
-instance rings of a selected grid or polar pattern come from the same walk
+Every pattern bakes through one instance walk, `signex_bake::array::links`:
+a plain array, a linked one, one with overrides and a mirror alike (#2689).
+The canvas's instance rings of a selected pattern come from the same walk
 (`signex_bake::pattern_slots`): each ring sits where the bake puts the pad,
 with the per-instance spacing and the sweep's written unit; a slot the
 suppression list holds back draws as suppressed, and a slot the mask drops
-has no ring. One walk for the plain bake as well is a follow-up (#2689).
+has no ring.
 
 ## Per-pad overrides {#per-pad-overrides}
 

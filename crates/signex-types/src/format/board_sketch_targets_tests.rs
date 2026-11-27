@@ -185,7 +185,7 @@ fn removing_the_last_target_lowers_the_token_again() {
 #[test]
 fn the_targets_token_is_read_and_current() {
     assert!(SNXPCB_VERSION.readable.contains(&"snxpcb/1.7"));
-    assert_eq!(SNXPCB_VERSION.current, SNXPCB_FORMAT_V1_12);
+    assert_eq!(SNXPCB_VERSION.current, SNXPCB_FORMAT_V1_13);
 }
 
 /// The rooms token (`snxpcb/1.6`) is this build's own: a board with rooms

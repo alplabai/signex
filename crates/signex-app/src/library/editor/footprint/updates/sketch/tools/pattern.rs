@@ -87,6 +87,7 @@ fn linear_pattern(editor: &mut crate::app::FootprintDocument, ctx: &ToolClickCtx
             count_expr: LINEAR_PATTERN_DEFAULT_COUNT.to_string(),
             dx_expr: format!("{spacing_mm}mm"),
             dy_expr: "0mm".into(),
+            depopulation: None,
         },
     );
 }

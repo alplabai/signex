@@ -27,7 +27,7 @@ const NUMBERING_SECTION: &str = "fp_role_pattern_numbering";
 
 // Most per-instance checkboxes drawn (the shipped caps).
 const MAX_GRID_CHECKBOX_DIM: u32 = 32;
-const MAX_POLAR_CHECKBOX_COUNT: u32 = 64;
+const MAX_ROW_CHECKBOX_COUNT: u32 = 64;
 
 /// The kind of a pattern, for the kind segment.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -185,6 +185,7 @@ fn layout_rows<'a>(
             count_expr,
             dx_expr,
             dy_expr,
+            ..
         } => {
             rows.push(field_row(
                 t!(i18n, ids::EDITORS_ROLE_PATTERN_COUNT_DX),
@@ -274,8 +275,8 @@ pub(super) fn count_sweep_row<'a>(
     )
 }
 
-/// The Mask field and the per-instance checkboxes of a grid or polar
-/// pattern; a linear pattern has neither.
+/// The Mask field and the per-instance checkboxes of a pattern. A linear
+/// pattern's row is a polar one's (#2688).
 pub(super) fn mask_rows<'a>(
     pattern: &'a ArraySummary,
     tokens: &ThemeTokens,
@@ -284,7 +285,32 @@ pub(super) fn mask_rows<'a>(
     use ArrayParamField as F;
     let mut rows = Vec::new();
     match &pattern.kind {
-        ArrayKindSummary::Linear { .. } => {}
+        ArrayKindSummary::Linear {
+            mask_expr,
+            suppressed_instances,
+            count_value,
+            ..
+        }
+        | ArrayKindSummary::Polar {
+            mask_expr,
+            suppressed_instances,
+            count_value,
+            ..
+        } => {
+            rows.push(field_row(
+                t!(i18n, ids::EDITORS_PATTERN_MASK),
+                param(pattern, F::MaskExpr, "i != 0", mask_expr),
+                tokens,
+            ));
+            instance_row(
+                pattern,
+                *count_value,
+                suppressed_instances,
+                &mut rows,
+                tokens,
+                i18n,
+            );
+        }
         ArrayKindSummary::Grid {
             mask_expr,
             suppressed_instances,
@@ -309,30 +335,31 @@ pub(super) fn mask_rows<'a>(
                 }));
             }
         }
-        ArrayKindSummary::Polar {
-            mask_expr,
-            suppressed_instances,
-            count_value,
-            ..
-        } => {
-            rows.push(field_row(
-                t!(i18n, ids::EDITORS_PATTERN_MASK),
-                param(pattern, F::MaskExpr, "i != 0", mask_expr),
-                tokens,
-            ));
-            if let Some(count) = count_value {
-                rows.push(note(
-                    t!(i18n, ids::EDITORS_ROLE_PATTERN_INSTANCE_GRID),
-                    tokens,
-                ));
-                let count = (*count).min(MAX_POLAR_CHECKBOX_COUNT);
-                rows.push(instance_grid(pattern, count, 1, |i, _| {
-                    suppressed_instances.contains(&i)
-                }));
-            }
-        }
     }
     rows
+}
+
+/// The one row of per-instance checkboxes of a linear or polar pattern,
+/// once its count is known.
+fn instance_row<'a>(
+    pattern: &ArraySummary,
+    count: Option<u32>,
+    suppressed: &[u32],
+    rows: &mut Vec<Element<'a, PanelMsg>>,
+    tokens: &ThemeTokens,
+    i18n: &I18n,
+) {
+    let Some(count) = count else {
+        return;
+    };
+    rows.push(note(
+        t!(i18n, ids::EDITORS_ROLE_PATTERN_INSTANCE_GRID),
+        tokens,
+    ));
+    let count = count.min(MAX_ROW_CHECKBOX_COUNT);
+    rows.push(instance_grid(pattern, count, 1, |i, _| {
+        suppressed.contains(&i)
+    }));
 }
 
 /// "Spacing 53.00 × 33.00 mm" under spacing fields that name a parameter,
@@ -493,18 +520,21 @@ fn sweep_row<'a>(
 }
 
 /// The instances on a pattern's suppressed list, as `(i, j)` (`j` is 0 on
-/// a polar pattern).
+/// a linear or a polar pattern).
 fn suppressed_cells(pattern: &ArraySummary) -> Vec<(u32, u32)> {
     match &pattern.kind {
         ArrayKindSummary::Grid {
             suppressed_instances,
             ..
         } => suppressed_instances.clone(),
-        ArrayKindSummary::Polar {
+        ArrayKindSummary::Linear {
+            suppressed_instances,
+            ..
+        }
+        | ArrayKindSummary::Polar {
             suppressed_instances,
             ..
         } => suppressed_instances.iter().map(|&i| (i, 0)).collect(),
-        ArrayKindSummary::Linear { .. } => Vec::new(),
     }
 }
 
@@ -533,8 +563,7 @@ pub(super) fn shown_number_mask(
     }
 }
 
-/// Numbering Mask (mockup row 126): the pad numbers the pattern skips; a
-/// linear pattern has no suppressed list and greys it.
+/// Numbering Mask (mockup row 126): the pad numbers the pattern skips.
 fn number_mask_row<'a>(
     pattern: &ArraySummary,
     typed: Option<&String>,
@@ -585,8 +614,7 @@ fn number_mask_row<'a>(
                 .boxed(),
         );
     }
-    let enabled = kind_of(pattern) != PatternKind::Linear;
-    gated(rows.boxed(), enabled, tokens)
+    rows.boxed()
 }
 
 fn numbering_rows<'a>(

@@ -433,7 +433,9 @@ sketch holding any of them, or a reference dimension, is saved as
 `snxpcb/1.7`, so an older build opens it read-only instead of dropping them.
 A pattern that repeats a baked target, or a numbering sweep other than row by
 row, writes `snxpcb/1.8`: a build before the expansion would lose the
-instances on its next bake (`docs/FORMAT_VERSIONS.md`).
+instances on its next bake. A linear pattern with a suppression list writes
+`snxpcb/1.13` (#2688): a 1.12 build would bake the suppressed instances and
+drop the list on save (`docs/FORMAT_VERSIONS.md`).
 
 ## Patterned board items {#patterned-board-items}
 

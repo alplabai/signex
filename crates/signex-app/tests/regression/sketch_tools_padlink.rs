@@ -312,6 +312,7 @@ fn linear_pattern_repeats_the_clicked_source_along_x() {
         count_expr,
         dx_expr,
         dy_expr,
+        depopulation: None,
     } = &arrays[0].kind
     else {
         panic!("a linear array: {:?}", arrays[0].kind);

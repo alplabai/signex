@@ -186,6 +186,7 @@ fn pads_mode_delete_of_an_array_source_drops_the_array_and_the_sketch_still_solv
             count_expr: "3".into(),
             dx_expr: "1mm".into(),
             dy_expr: "0mm".into(),
+            depopulation: None,
         },
         numbering: NumberingScheme::default(),
     });

@@ -345,8 +345,8 @@ fn delete_pattern(editor: &mut FootprintDocument, array: ArrayId) {
     });
 }
 
-/// A click on an instance slot of the selected pattern. A linear pattern
-/// has no suppression list, so its slots never toggle.
+/// A click on an instance slot of the selected pattern suppresses it or
+/// brings it back, as one undo step.
 fn toggle_instance(editor: &mut FootprintDocument, array: ArrayId, i: u32, j: u32) {
     record_sketch_change(editor, |state, fp| {
         mutate_solve_or_revert(state, fp, |fp| {
@@ -442,6 +442,7 @@ mod tests {
                         count_expr: "4".into(),
                         dx_expr: "1mm".into(),
                         dy_expr: "0mm".into(),
+                        depopulation: None,
                     },
                     numbering: NumberingScheme::default(),
                 },
@@ -679,8 +680,10 @@ mod tests {
         assert_eq!(editor.history.undo_len(), undo_before + 2);
     }
 
+    /// #2688: a linear pattern's instance toggles as a grid's does, one undo
+    /// step each way, and an undo brings it back.
     #[test]
-    fn a_linear_pattern_instance_does_not_toggle() {
+    fn a_linear_instance_click_suppresses_it_and_undo_brings_it_back() {
         let Fixture {
             mut editor, linear, ..
         } = fixture();
@@ -696,8 +699,10 @@ mod tests {
             },
         );
 
+        assert!(array_kind(&editor, linear).is_instance_suppressed(1, 0));
+        assert_eq!(editor.history.undo_len(), undo_before + 1);
+        assert!(editor.undo(), "the step undoes");
         assert_eq!(array_kind(&editor, linear), before);
-        assert_eq!(editor.history.undo_len(), undo_before);
     }
 
     #[test]

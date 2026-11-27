@@ -470,6 +470,7 @@ fn linear_array_round_trip() {
             count_expr: "= pin_count / 4".into(),
             dx_expr: "= pad_pitch".into(),
             dy_expr: "0mm".into(),
+            depopulation: None,
         },
         numbering: NumberingScheme::LinearIncrement {
             start_expr: "1".into(),
@@ -670,6 +671,7 @@ fn explicit_numbering_round_trip() {
             count_expr: "5".into(),
             dx_expr: "= pad_pitch".into(),
             dy_expr: "0mm".into(),
+            depopulation: None,
         },
         numbering: NumberingScheme::Explicit {
             names: vec![

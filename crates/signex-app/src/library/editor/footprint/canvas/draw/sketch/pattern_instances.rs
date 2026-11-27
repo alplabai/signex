@@ -440,6 +440,7 @@ mod tests {
                 count_expr: count.into(),
                 dx_expr: dx.into(),
                 dy_expr: dy.into(),
+                depopulation: None,
             },
             numbering: NumberingScheme::default(),
         };
