@@ -412,6 +412,10 @@ pub struct SymbolEditorView {
     /// Pin text the last edit was refused for (#3129); the Properties panel
     /// shows why under the pin's fields until the next edit.
     pub pin_text_refusal: Option<signex_library::UnstorablePinText>,
+    /// The last edit was refused because the file opened repaired and is
+    /// read-only until saved (#3129); the status line says so, in the
+    /// language the app shows, until the next edit.
+    pub read_only_refused: bool,
 }
 
 impl SymbolDocument {
@@ -517,6 +521,7 @@ impl SymbolEditorView {
             status_message: None,
             context_menu: None,
             pin_text_refusal: None,
+            read_only_refused: false,
         }
     }
 }

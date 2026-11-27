@@ -97,6 +97,7 @@ fn clear_stale_status_message(editor: &mut SymEditor, msg: &SymbolEditorMsg) {
     ) {
         editor.gui.status_message = None;
         editor.gui.pin_text_refusal = None;
+        editor.gui.read_only_refused = false;
     }
 }
 

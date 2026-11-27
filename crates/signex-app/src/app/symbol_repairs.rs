@@ -30,7 +30,7 @@ impl Signex {
             .draft
             .open_repaired(crate::app::SymbolDocument::HISTORY_DEPTH);
         self.document_state.mark_document_dirty(path);
-        for line in repair_lines(path, repairs, I18n::en_us_ref()) {
+        for line in repair_lines(path, repairs, &self.ui_state.i18n) {
             crate::diagnostics::log_warning_at(line, path.to_path_buf(), None);
         }
     }
@@ -47,7 +47,7 @@ impl Signex {
         }
         let file = path.file_name().unwrap_or_default().to_string_lossy();
         let line = t!(
-            I18n::en_us_ref(),
+            &self.ui_state.i18n,
             ids::EDITORS_SYMBOL_REPAIRED_WRITE_REFUSED,
             "file" => file.as_ref()
         );

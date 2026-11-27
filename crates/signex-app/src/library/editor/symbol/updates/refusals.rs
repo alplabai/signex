@@ -26,10 +26,10 @@ pub(super) fn apply_read_only(
     }
 }
 
-/// Say in the status line why the edit was not applied.
+/// Say in the status line why the edit was not applied. The status line
+/// words it in the app's language when it is drawn.
 pub(crate) fn refuse_read_only(editor: &mut SymEditor) {
-    let line = t!(I18n::en_us_ref(), ids::EDITORS_SYMBOL_READ_ONLY_REPAIRED);
-    editor.gui.status_message = Some(line.into_string());
+    editor.gui.read_only_refused = true;
 }
 
 /// The pin text the change from `before` to `after` brought in that a save
@@ -47,14 +47,8 @@ pub(crate) fn new_unstorable_pin_text(
 
 /// Keep the refusal for the Properties panel and the status line.
 pub(crate) fn refuse_pin_text(editor: &mut SymEditor, refusal: UnstorablePinText) {
-    let pin = editor
-        .primitive()
-        .pins
-        .get(refusal.pin_index)
-        .map(|p| p.number.clone())
-        .unwrap_or_default();
-    let line = pin_text_refused(&refusal, &pin, I18n::en_us_ref());
-    editor.gui.status_message = Some(line.into_string());
+    // The status line and the Properties panel word it in the app's
+    // language when they are drawn.
     editor.gui.pin_text_refusal = Some(refusal);
 }
 

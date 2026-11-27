@@ -17,11 +17,8 @@ fn editor_with_pin() -> SymEditor {
 }
 
 fn status(editor: &SymEditor) -> String {
-    editor
-        .gui
-        .status_message
-        .clone()
-        .unwrap_or_default()
+    crate::library::editor::symbol::status::segment(editor, signex_i18n::I18n::en_us_ref())
+        .text
         .replace(['\u{2068}', '\u{2069}'], "")
 }
 
