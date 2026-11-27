@@ -90,6 +90,20 @@ pub(super) const DOCUMENTS: &[CommandMetadata] = &[
         operands: operands::OPEN_PATH,
         ..CommandMetadata::DEFAULT
     },
+    // #2896: the Gerber Viewer tab, empty or on the package `path` names (a
+    // folder, a zip or one file). Palette only for now, no menu row; it
+    // answers with what the tab shows.
+    CommandMetadata {
+        id: "open_gerber_viewer",
+        category: "file",
+        label: command_ids::CMD_OPEN_GERBER_VIEWER,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: operands::OPTIONAL_PATH,
+        ..CommandMetadata::DEFAULT
+    },
     CommandMetadata {
         id: "save_document",
         category: "file",

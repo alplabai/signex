@@ -331,6 +331,16 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "open_parameter_manager" => Message::ParameterManager(ParameterManagerMsg::Open),
         "print" => Message::PrintPreview(PrintPreviewMsg::Requested),
         "redo" => Message::Edit(EditMsg::Redo),
+        // #2896: the Gerber Viewer tab, as it holds; a path is the operand
+        // handler's.
+        "open_gerber_viewer" => Message::from(crate::app::GerberViewerMsg::ViewerRequested),
+        // Mockup row 193: the viewer's toolbar and Esc, as the tab sends
+        // them; operands are the operand handlers'.
+        "select_gerber_object" => Message::from(crate::app::GerberViewerMsg::SelectionCleared),
+        "flip_gerber_view" => Message::from(crate::app::GerberViewerMsg::FlipToggled),
+        "show_gerber_drills_on_top" => Message::from(crate::app::GerberViewerMsg::DrillsToggled),
+        "highlight_gerber_net" => Message::from(crate::app::GerberViewerMsg::NetHighlightToggled),
+        "show_gerber_open_menu" => Message::from(crate::app::GerberViewerMsg::OpenMenuToggled),
         // Tools ▸ Assign Footprints (#2248) and View ▸ Net Inspector (#1269).
         "assign_footprints" => Message::from(crate::app::AssignFootprintsMsg::Requested),
         "open_net_inspector" => Message::Overlay(OverlayMsg::OpenPanel(

@@ -40,6 +40,39 @@ and the sheet bookmarks carry no tag (Caner, 2026-11-20). The helper hands
 the renderer `variant: None` for Base, after it has taken the project's
 active variant out of the title-block fields.
 
+### Per-variant PDF goldens
+
+The Advanced Schematic exit criterion "a 4-channel design with two variants
+exports a correct per-variant BOM and PDF" is pinned by
+`handlers::menu::export::tests::variant_pdf`. It exports the variant-BOM
+fixture (a top sheet placing a channel sheet as `Repeat(CH, 1, 4)`, the
+variants Full and Lite) through the Export PDF dialog once per variant, Base
+included, with Use Physical Structure on and a note that prints
+`${VARIANT}`, and compares each file with
+`src/app/handlers/menu/export/tests/testdata/variant_pdf/<variant>.pdf.txt`.
+
+The golden is the PDF as text, so a review can read what changed:
+
+- `pages N`, the page count;
+- one `outline <title>` line per bookmark, as the file writes the title;
+- one `text …` line per text-showing operator (`Tj`, `TJ`), in order;
+- `drawing N lines, fnv1a <hash>`: the count and the 64-bit FNV-1a hash of
+  every other drawing operator line.
+
+Numbers are written to two decimals; font programs, object numbers and
+anything that is not printable ASCII are left out. Each variant is
+exported twice from two fixtures built the same way and must match before
+the golden is read, so an export that depends on a hash order fails as
+such. Regenerate with `UPDATE_GOLDEN=1 cargo test -p signex-app
+variant_pdf`; a diff is a behaviour change of the PDF.
+
+What differs between the variants today is the variant name: the
+`${VARIANT}` text and the " [Full]" or " [Lite]" sheet bookmark tag. The
+not-fitted drawing styles and a variant's changed values are not drawn on
+the PDF yet (the not-fitted parts layer is its own issue, see the
+2026-11-19 Export PDF row in docs/DECISIONS.md); when they are, the goldens
+change with them.
+
 ## Watermark
 
 `Watermark` holds the text (`Draft` prints "DRAFT", `Confidential` prints

@@ -807,3 +807,13 @@ cmd-menu-polygon-manager = Polygon Manager...
 cmd-flip-board-3d = Turn the board over in the 3D view
 cmd-cycle-board-3d-lighting = Next lighting preset in the 3D view
 cmd-copy-board-3d-screenshot = Copy a screenshot of the 3D view
+# gerber-viewer-command
+# #2896: the Gerber Viewer tab, empty or on a fabrication package.
+cmd-open-gerber-viewer = Open the Gerber Viewer
+# gerber-viewer-view-command
+# The Gerber Viewer's states of mockup row 193, set by id.
+cmd-select-gerber-object = Select an object in the Gerber Viewer
+cmd-flip-gerber-view = Show the Gerber board from the bottom
+cmd-show-gerber-drills-on-top = Draw the Gerber holes over everything
+cmd-highlight-gerber-net = Highlight a net in the Gerber Viewer
+cmd-show-gerber-open-menu = Show the Gerber Viewer's Open menu

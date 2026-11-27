@@ -241,6 +241,22 @@ pub(super) const WRITES: &[(&[&str], Surface, Writes)] = &[
         Operand,
         Session,
     ),
+    // #2896: the Gerber Viewer tab and the package it reads are session
+    // state; the files are never written.
+    (&["open_gerber_viewer"], Operand, Session),
+    // Mockup row 193: the viewer's selection, switches, highlighted net and
+    // Open menu, all session state.
+    (
+        &[
+            "select_gerber_object",
+            "flip_gerber_view",
+            "show_gerber_drills_on_top",
+            "highlight_gerber_net",
+            "show_gerber_open_menu",
+        ],
+        Operand,
+        Session,
+    ),
     // The Design Checklist tab's list of saved templates, and the link's
     // Open: a tab, a section, a panel, a sheet shown and its object
     // selected (#1291).
@@ -410,11 +426,13 @@ const MENU_SESSION: &[&str] = &[
     "find_text",
     "flip_board_3d",
     "flip_board_view",
+    "flip_gerber_view",
     "footprint_mode_pads",
     "footprint_mode_sketch",
     "footprint_mode_view_3d",
     "go_to_net_partner",
     "highlight_board_net",
+    "highlight_gerber_net",
     "highlight_net_under_cursor",
     "highlight_related_net_objects",
     "home_view",
@@ -451,6 +469,7 @@ const MENU_SESSION: &[&str] = &[
     "open_document",
     "open_drc_panel",
     "open_erc_dialog",
+    "open_gerber_viewer",
     "open_grid_picker",
     "open_grid_properties",
     "open_harness_definitions",
@@ -526,6 +545,7 @@ const MENU_SESSION: &[&str] = &[
     "select_board_net",
     "select_connection",
     "select_expand_connection",
+    "select_gerber_object",
     "select_node_or_connection_item",
     "send_to_back_of",
     "set_board_origin",
@@ -535,6 +555,8 @@ const MENU_SESSION: &[&str] = &[
     "show_all_layers",
     "show_current_command_hotkeys",
     "show_current_command_shortcuts",
+    "show_gerber_drills_on_top",
+    "show_gerber_open_menu",
     "split_pane_down",
     "split_pane_right",
     "switch_segment_posture",

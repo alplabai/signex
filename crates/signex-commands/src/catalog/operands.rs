@@ -315,6 +315,8 @@ pub const PLACE_FILE: &[Operand] = &[
 ];
 /// An open dialog's answer.
 pub const OPEN_PATH: &[Operand] = &[required("path", OperandKind::Path)];
+/// A folder, zip or file to read, or none (#2896: the Gerber Viewer).
+pub const OPTIONAL_PATH: &[Operand] = &[optional("path", OperandKind::Path)];
 /// A save dialog's answer; `overwrite` lets it replace an existing file.
 pub const SAVE_PATH: &[Operand] = &[
     required("path", OperandKind::Path),

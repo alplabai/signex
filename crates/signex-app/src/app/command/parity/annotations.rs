@@ -16,6 +16,8 @@ use super::forms::Form::{AgentWindowLayout, Check, CloseInWindow, HeadlessNewDoc
 use super::forms::Form::{Operand, Query, SplitCore, StillRunsRefusal, StillRunsUnavailable};
 use super::inputs::Input::{self, *};
 
+mod gerber_viewer;
+
 /// `(ids, form, inputs)`: each id's row of `form` reads `inputs` too.
 pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
     // Core edits and runs that read past their gate.
@@ -922,10 +924,16 @@ const PLANNED: &[&str] = &[
     "place_reuse_block",
 ];
 
+pub(super) type Annotation = (&'static [&'static str], Form, &'static [Input]);
+
+/// Every annotation: [`ANNOTATIONS`], then the tables split out by area.
+pub(super) fn all() -> impl Iterator<Item = &'static Annotation> {
+    ANNOTATIONS.iter().chain(gerber_viewer::GERBER_VIEWER)
+}
+
 /// The hand annotation of `(id, form)`, if any.
 pub(super) fn of(id: &str, form: Form) -> Option<&'static [Input]> {
-    ANNOTATIONS
-        .iter()
+    all()
         .find(|(ids, annotated, _)| *annotated == form && ids.contains(&id))
         .map(|(_, _, inputs)| *inputs)
 }

@@ -179,6 +179,38 @@ fn a_level_chip_source_and_text_filter_narrow_the_rows() {
     assert_eq!(ids, [3], "the filter text matches any case");
 }
 
+/// #2612: the Gerber Viewer's rows are a Source of their own, named in
+/// the Source cell and kept apart by the Source filter.
+#[test]
+fn the_source_filter_keeps_the_gerber_viewer_rows_apart() {
+    let mut entries = log();
+    let code = crate::diagnostics::diagnostic_code_from_target(crate::app::gerber_read::TARGET);
+    entries.push(entry(
+        7,
+        DiagnosticLevel::Error,
+        &code,
+        "Gerber Viewer: fab.zip: the package could not be read (gone).",
+    ));
+    let i18n = I18n::en_us();
+    assert_eq!(
+        t!(i18n, MessageSource::of_code(&code).id()).into_string(),
+        "Gerber Viewer"
+    );
+    let mut view = MessagesView::default();
+    view.apply(
+        MessagesPanelMsg::SourcePicked(Some(MessageSource::GerberViewer)),
+        None,
+    );
+    let ids: Vec<u64> = shown(&entries, &view, false, &i18n)
+        .iter()
+        .map(|e| e.id)
+        .collect();
+    assert_eq!(ids, [7]);
+    view.apply(MessagesPanelMsg::SourcePicked(None), None);
+    // The four other rows a quiet panel shows, and this one.
+    assert_eq!(shown(&entries, &view, false, &i18n).len(), 5);
+}
+
 #[test]
 fn clear_hides_what_was_logged_so_far_and_keeps_new_lines() {
     let mut entries = log();
