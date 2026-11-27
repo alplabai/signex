@@ -97,6 +97,7 @@ pub use state::{
 };
 pub use state::{InstanceOverrides, PadAttribute, PadThermalField};
 pub(crate) use updates::hold_patterned_pad_edit;
+pub(crate) use updates::pattern_kind_picked;
 
 #[cfg(test)]
 mod tests;

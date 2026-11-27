@@ -139,8 +139,8 @@ fn corner_rows<'a>(
     );
     let label = t!(i18n, ids::EDITORS_ROLE_POUR_CORNER_SIZE);
     if pour.corners == PourCorners::Sharp {
-        // raw: a number, the same in every language.
-        let zero = value_box(signex_widgets::raw("0"));
+        // A number, written as the size field writes one.
+        let zero = value_box(UserText::new(0.0_f64.to_string()));
         return [shapes, field_row(label, zero, tokens)];
     }
     let buffer = fp.numeric_buffers.get(&pour_corner_size_buffer_key(id));

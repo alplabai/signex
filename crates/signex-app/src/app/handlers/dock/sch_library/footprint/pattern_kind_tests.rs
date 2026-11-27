@@ -15,7 +15,7 @@ use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
 use signex_sketch::sketch::SketchData;
 
 use crate::app::{FootprintDocument, Message, Signex, TabInfo, TabKind};
-use crate::library::editor::footprint::state::ToolPending;
+use crate::library::editor::footprint::ToolPending;
 use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
 
 /// An app on a footprint whose sketch repeats pad 1 four times along X,
