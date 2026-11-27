@@ -671,6 +671,13 @@ pub enum PrimitivePickerMsg {
         pick: crate::library::state::CopyTarget,
         result: Result<PrimitiveRef, String>,
     },
+    /// The picked symbol's current version was read on a worker (#2572):
+    /// bind it to the rows of `target`, pinned at it, or say why not.
+    SymbolVersionRead {
+        target: crate::library::state::PrimitivePickerTarget,
+        symbol: PrimitiveRef,
+        version: Result<String, String>,
+    },
 }
 
 /// Settings → Library → Distributor APIs panel messages.

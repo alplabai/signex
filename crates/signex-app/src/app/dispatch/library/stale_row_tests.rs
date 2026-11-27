@@ -526,6 +526,7 @@ fn a_refused_browser_row_bind_refreshes_the_cache_so_a_retry_is_not_refused_agai
         address.clone(),
         signex_library::PrimitiveKind::Symbol,
         PrimitiveRef::new(Uuid::now_v7(), Uuid::now_v7()),
+        None,
     );
 
     run_write(&mut app, task);

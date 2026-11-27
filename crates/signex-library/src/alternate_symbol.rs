@@ -79,17 +79,19 @@ impl ComponentRow {
         self.symbol_ref = symbol;
     }
 
-    /// Bind `new` wherever the row binds `old`: as its default (as
+    /// Bind `new` wherever the row binds `old`, pinned at `version` (the
+    /// new symbol's current version): as its default (as
     /// [`Self::bind_default_symbol`] does) and in its alternates, each
     /// keeping its label. An alternate that would then repeat the default or
     /// another alternate is dropped; other alternates are left as they are.
     /// Returns whether the row changed.
-    pub fn replace_symbol(&mut self, old: &PrimitiveRef, new: PrimitiveRef) -> bool {
+    pub fn replace_symbol(&mut self, old: &PrimitiveRef, new: PrimitiveRef, version: &str) -> bool {
         if *old == new || !self.binds_symbol(old) {
             return false;
         }
         if self.symbol_ref == *old {
             self.bind_default_symbol(new);
+            self.symbol_version = version.to_string();
         }
         let mut new_bound =
             self.symbol_ref == new || self.alternate_symbols.iter().any(|a| a.symbol_ref == new);
@@ -101,6 +103,7 @@ impl ComponentRow {
                 return false;
             }
             a.symbol_ref = new;
+            a.symbol_version = version.to_string();
             new_bound = true;
             true
         });
@@ -262,19 +265,27 @@ mod tests {
         let old = r.symbol_ref;
         r.alternate_symbols = vec![AlternateSymbol::new(iec, "", "IEC")];
         let before = r.clone();
-        assert!(!r.replace_symbol(&new, iec), "the row does not bind it");
-        assert!(!r.replace_symbol(&old, old), "the same symbol");
+        assert!(
+            !r.replace_symbol(&new, iec, "0.0.2"),
+            "the row does not bind it"
+        );
+        assert!(!r.replace_symbol(&old, old, "0.0.2"), "the same symbol");
         assert_eq!(r, before);
 
-        assert!(r.replace_symbol(&old, new));
-        assert_eq!(r.symbol_ref, new);
+        assert!(r.replace_symbol(&old, new, "0.0.2"));
+        assert_eq!((r.symbol_ref, r.symbol_version.as_str()), (new, "0.0.2"));
         assert_eq!(r.alternate_symbols, before.alternate_symbols);
 
-        // An alternate keeps its label and its place.
+        // An alternate keeps its label and its place, and takes the pin.
         let mut r = before.clone();
-        assert!(r.replace_symbol(&iec, new));
+        assert!(r.replace_symbol(&iec, new, "0.0.3"));
         assert_eq!((r.symbol_ref, r.alternate_symbols.len()), (old, 1));
+        assert_eq!(
+            r.symbol_version, before.symbol_version,
+            "the default keeps its pin"
+        );
         assert_eq!(r.alternate_symbols[0].symbol_ref, new);
+        assert_eq!(r.alternate_symbols[0].symbol_version, "0.0.3");
         assert_eq!(r.alternate_symbols[0].label, "IEC");
         assert!(!r.binds_symbol(&iec));
     }
@@ -292,7 +303,7 @@ mod tests {
             AlternateSymbol::new(iec, "", "IEC"),
             AlternateSymbol::new(ansi, "", "ANSI"),
         ];
-        assert!(r.replace_symbol(&iec, default));
+        assert!(r.replace_symbol(&iec, default, "0.0.2"));
         assert_eq!(
             r.alternate_symbols,
             vec![AlternateSymbol::new(ansi, "", "ANSI")]

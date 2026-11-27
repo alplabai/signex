@@ -178,6 +178,7 @@ define_ids! {
     LIBRARY_PRIMITIVE_PICKER_GROUP_NO_LIBRARY = "library-primitive-picker-group-no-library";    LIBRARY_PRIMITIVE_PICKER_NO_LIBRARIES = "library-primitive-picker-no-libraries";
     LIBRARY_PRIMITIVE_PICKER_NO_MATCH = "library-primitive-picker-no-match";
     LIBRARY_PRIMITIVE_PICKER_THIS_LIBRARY = "library-primitive-picker-this-library";
+    LIBRARY_PRIMITIVE_PICKER_SEVERAL_LIBRARIES = "library-primitive-picker-several-libraries";
     LIBRARY_PRIMITIVE_PICKER_COPY_TITLE = "library-primitive-picker-copy-title";
     LIBRARY_PRIMITIVE_PICKER_COPY_LOOSE = "library-primitive-picker-copy-loose";
     LIBRARY_PRIMITIVE_PICKER_COPY_LOOSE_DETAIL = "library-primitive-picker-copy-loose-detail";

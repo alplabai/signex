@@ -598,6 +598,8 @@ library-primitive-picker-no-libraries = No libraries open. Use Browse filesystem
 library-primitive-picker-no-match = No primitives match. Only primitives saved inside an open `.snxlib` are listed: save the symbol into `<lib>.snxlib/symbols/`, or use Browse filesystem…
 # The library the row belongs to, when its name is not known.
 library-primitive-picker-this-library = this library
+# The rows a Re-bind is for are in several libraries, so a symbol from outside every library has no one library to be copied into (#2572).
+library-primitive-picker-several-libraries = These rows are in several libraries, so a symbol from outside every library cannot be copied into them. Pick a symbol from a library.
 # Title of the confirm shown before a symbol is copied or linked.
 library-primitive-picker-copy-title = Copy into library?
 # The symbol is in no library. $name is the symbol, $library the row's library.

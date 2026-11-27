@@ -483,7 +483,10 @@ binds the picked symbol to every listed row; a row's own **Re-bind…** does it
 for that row. A re-bound row takes the new symbol wherever it used the old one,
 as its default symbol or as an alternate, and keeps everything else. The
 dialog then comes back with the new count; once nothing uses the symbol its
-button reads **Delete**. Cancelling the picker writes nothing.
+button reads **Delete**. Cancelling the picker writes nothing. A picked symbol
+is pinned at its current version, here and for a Pick Symbol in the Library
+Browser. When the listed rows are in several libraries, pick a symbol from a
+library: one from outside every library cannot be copied into them.
 
 **Typed values and the range filter.** A measurement such as a resistance or a
 capacitance is a number, an SI prefix and a unit, each chosen separately: you

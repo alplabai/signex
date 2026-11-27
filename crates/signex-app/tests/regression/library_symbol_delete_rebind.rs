@@ -109,6 +109,12 @@ fn re_bind_all_moves_the_rows_and_the_confirm_counts_them_down() {
     assert_eq!(symbol_count(&app, &path), 2, "no delete without the answer");
     let after = the_row(&app, &f);
     assert_eq!(after.symbol_ref, sibling);
+    assert_ne!(before.symbol_version, sibling_version(&app, &path));
+    assert_eq!(
+        after.symbol_version,
+        sibling_version(&app, &path),
+        "pinned at the picked symbol's current version"
+    );
     assert_eq!(after.internal_pn, before.internal_pn);
     assert_eq!(after.primary_mpn, before.primary_mpn);
     assert_eq!(after.class, before.class);
@@ -122,6 +128,46 @@ fn re_bind_all_moves_the_rows_and_the_confirm_counts_them_down() {
         sibling,
         "the row keeps its new symbol"
     );
+}
+
+/// The SIBLING symbol's current version, as its container file holds it.
+fn sibling_version(app: &Signex, path: &PathBuf) -> String {
+    app.document_state.symbol_editors[path].draft.file.symbols[1]
+        .version
+        .clone()
+}
+
+/// A Library Browser symbol pick pins the row at the picked symbol's
+/// current version too (Caner, 2026-11-27); before, the old pin was kept.
+#[test]
+fn a_browser_row_symbol_pick_pins_the_symbols_current_version() {
+    let f = fixture();
+    let mut app = app_with_library(&f);
+    let path = open_container_editor(&mut app, &f);
+    let sibling = PrimitiveRef::new(
+        f.library_id,
+        app.document_state.symbol_editors[&path].draft.file.symbols[1].uuid,
+    );
+    let before = the_row(&app, &f);
+    settle(
+        &mut app,
+        Message::Library(LibraryMessage::OpenPrimitivePicker {
+            kind: signex_library::PrimitiveKind::Symbol,
+            target: PrimitivePickerTarget::BrowserRow(
+                signex_app::library::state::EditorAddress::new(
+                    f.snxlib.clone(),
+                    "ICs".into(),
+                    signex_library::RowId::from_uuid(f.row_id),
+                ),
+            ),
+        }),
+    );
+    pick(&mut app, sibling);
+
+    let after = the_row(&app, &f);
+    assert_eq!(after.symbol_ref, sibling);
+    assert_ne!(before.symbol_version, sibling_version(&app, &path));
+    assert_eq!(after.symbol_version, sibling_version(&app, &path));
 }
 
 #[test]

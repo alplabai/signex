@@ -79,6 +79,9 @@ impl Signex {
                 PrimitivePickerMsg::Pick(reference),
             )));
         }
+        let refused = from_browse
+            && matches!(read.symbols.as_slice(), [one] if one.library.is_none())
+            && self.refuse_copy_into_several_libraries();
         let Some(picker) = self.library.primitive_picker.as_mut() else {
             return Task::none();
         };
@@ -89,6 +92,8 @@ impl Signex {
         }
         if from_browse {
             match read.symbols.as_slice() {
+                // The refusal already said to pick a symbol from a library.
+                [_] if refused => {}
                 [one] => picker.copy_confirm = Some(one.clone()),
                 [] => {
                     picker.error = Some("That file holds no symbol.".into());
@@ -103,6 +108,9 @@ impl Signex {
     }
 
     pub(super) fn handle_loose_chosen(&mut self, symbol: LooseSymbol) -> Task<Message> {
+        if symbol.library.is_none() && self.refuse_copy_into_several_libraries() {
+            return Task::none();
+        }
         if let Some(picker) = self.library.primitive_picker.as_mut() {
             picker.copy_confirm = Some(symbol);
             picker.opening_library = None;
@@ -235,6 +243,30 @@ impl Signex {
         }
     }
 
+    /// A copy goes into the one library of the rows the pick is for; the
+    /// in-use symbol Delete's Re-bind all can list rows of several (#2572).
+    /// Then a symbol from outside every library is refused, with a message
+    /// saying to pick one from a library. Returns whether it refused.
+    fn refuse_copy_into_several_libraries(&mut self) -> bool {
+        let several = self
+            .library
+            .primitive_picker
+            .as_ref()
+            .is_some_and(|p| !p.target.rows().is_empty() && p.target.library_path().is_none());
+        if !several {
+            return false;
+        }
+        let why = self.ui_state.i18n.message_plain(
+            signex_i18n::ids::LIBRARY_PRIMITIVE_PICKER_SEVERAL_LIBRARIES,
+            &[],
+        );
+        if let Some(picker) = self.library.primitive_picker.as_mut() {
+            picker.copy_confirm = None;
+            picker.error = Some(why);
+        }
+        true
+    }
+
     pub(super) fn handle_copy_declined(&mut self) -> Task<Message> {
         if let Some(picker) = self.library.primitive_picker.as_mut() {
             picker.copy_confirm = None;
@@ -246,6 +278,9 @@ impl Signex {
 
     /// Copy the confirmed symbol into the target row's library on a worker.
     pub(super) fn handle_copy_confirmed(&mut self) -> Task<Message> {
+        if self.refuse_copy_into_several_libraries() {
+            return Task::none();
+        }
         let Some(picker) = self.library.primitive_picker.as_ref() else {
             return Task::none();
         };

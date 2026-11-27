@@ -811,6 +811,83 @@ mod tests {
         ));
     }
 
+    /// Caner (2026-11-27, #2572): rows of several libraries have no one
+    /// library to copy a symbol from outside every library into, so such a
+    /// pick is refused with a message; rows of one library still copy.
+    #[test]
+    fn a_symbol_from_outside_every_library_is_refused_for_rows_of_several_libraries() {
+        use crate::library::loose_symbols::LooseSymbol;
+        use crate::library::messages::PrimitivePickerMsg;
+        use crate::library::state::PrimitivePickerTarget;
+        let (mut app, _path, mut rows) = app_with_rows();
+        rows[1].library_path = PathBuf::from("other.snxlib");
+        let loose = LooseSymbol {
+            file: PathBuf::from("SymbolLibrary.snxsym"),
+            uuid: uuid::Uuid::now_v7(),
+            name: "GATE".into(),
+            library: None,
+        };
+        let open = |app: &mut Signex, rows: Vec<crate::library::state::EditorAddress>| {
+            send(
+                app,
+                Message::Library(LibraryMessage::OpenPrimitivePicker {
+                    kind: signex_library::PrimitiveKind::Symbol,
+                    target: PrimitivePickerTarget::BrowserRows {
+                        rows,
+                        replacing: signex_library::PrimitiveRef::new(
+                            uuid::Uuid::now_v7(),
+                            uuid::Uuid::now_v7(),
+                        ),
+                    },
+                }),
+            );
+        };
+        let choose = |app: &mut Signex, msg: PrimitivePickerMsg| {
+            send(app, Message::Library(LibraryMessage::PrimitivePicker(msg)));
+        };
+        let refusal = signex_i18n::I18n::en_us().message_plain(
+            signex_i18n::ids::LIBRARY_PRIMITIVE_PICKER_SEVERAL_LIBRARIES,
+            &[],
+        );
+
+        open(&mut app, rows.clone());
+        choose(&mut app, PrimitivePickerMsg::PickLoose(loose.clone()));
+        let picker = app.library.primitive_picker.as_ref().expect("still open");
+        assert!(picker.copy_confirm.is_none(), "no copy is offered");
+        assert_eq!(picker.error.as_deref(), Some(refusal.as_str()));
+        assert!(
+            refusal.contains("Pick a symbol from a library"),
+            "{refusal}"
+        );
+
+        // A copy question reached another way is refused at Copy too.
+        let linked = LooseSymbol {
+            library: Some(PathBuf::from("closed.snxlib")),
+            ..loose.clone()
+        };
+        app.library.primitive_picker.as_mut().unwrap().error = None;
+        choose(&mut app, PrimitivePickerMsg::PickLoose(linked));
+        assert!(
+            app.library
+                .primitive_picker
+                .as_ref()
+                .unwrap()
+                .copy_confirm
+                .is_some()
+        );
+        choose(&mut app, PrimitivePickerMsg::CopyConfirmed);
+        let picker = app.library.primitive_picker.as_ref().expect("still open");
+        assert!(picker.copy_confirm.is_none() && !picker.copying);
+        assert_eq!(picker.error.as_deref(), Some(refusal.as_str()));
+
+        // Rows of one library: the copy is offered as before.
+        choose(&mut app, PrimitivePickerMsg::Cancel);
+        open(&mut app, vec![rows[0].clone()]);
+        choose(&mut app, PrimitivePickerMsg::PickLoose(loose));
+        let picker = app.library.primitive_picker.as_ref().expect("still open");
+        assert!(picker.copy_confirm.is_some() && picker.error.is_none());
+    }
+
     #[test]
     fn show_all_lists_every_row() {
         let (mut app, _path, _rows) = app_with_rows();
