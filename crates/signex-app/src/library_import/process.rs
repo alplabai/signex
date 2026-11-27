@@ -2,9 +2,10 @@
 //! a stop kills everything it started, with stdout read line by line into a
 //! bounded queue and stderr's tail kept, neither ever waited on forever.
 //!
-//! On Windows only the converter itself is killed; a Job object that takes
-//! its children with it is a follow-up (`docs/LIBRARY_CONVERTER_CONTRACT.md`
-//! §6).
+//! On Windows only the converter itself is killed, and quitting the app
+//! during a run leaves the converter running ([`ProcessGroup::kill`] is a
+//! no-op there); a Job object that takes its children with it is #3134
+//! (`docs/LIBRARY_CONVERTER_CONTRACT.md` §6).
 
 use std::ffi::OsString;
 use std::io::Read;
@@ -29,7 +30,8 @@ pub const PIPE_GRACE: Duration = Duration::from_secs(2);
 
 /// The process group of the converter a run has started, `0` while none
 /// runs; the app holds a clone so quitting can kill it
-/// ([`ProcessGroup::kill`]).
+/// ([`ProcessGroup::kill`]). It is cleared before the converter is reaped,
+/// so a quit never signals a group id the system has handed out again.
 #[derive(Debug, Clone, Default)]
 pub struct ProcessGroup(Arc<std::sync::atomic::AtomicU32>);
 
@@ -67,6 +69,7 @@ fn kill_group_id(group: u32) {
     }
 }
 
+// Quitting during an import leaves the converter running on Windows: #3134.
 #[cfg(not(unix))]
 fn kill_group_id(_group: u32) {}
 
@@ -77,6 +80,8 @@ pub struct Running {
     stdout_open: bool,
     stderr: Arc<Mutex<Vec<u8>>>,
     stderr_done: Arc<AtomicBool>,
+    /// Where the converter's group id is published while it is unreaped.
+    published: Option<ProcessGroup>,
 }
 
 /// What one poll of stdout gave.
@@ -127,7 +132,23 @@ impl Running {
             stdout_open: true,
             stderr,
             stderr_done,
+            published: None,
         })
+    }
+
+    /// Publish the converter's group id in `group` until it is reaped
+    /// ([`Self::try_wait`] seeing it exit, or [`Self::stop`]).
+    pub fn publish(&mut self, group: &ProcessGroup) {
+        group.set(self.child.id());
+        self.published = Some(group.clone());
+    }
+
+    /// Clear the published group id: the converter is about to be, or has
+    /// been, reaped, after which its id may be reused.
+    fn unpublish(&mut self) {
+        if let Some(group) = self.published.take() {
+            group.set(0);
+        }
     }
 
     pub fn stdout_open(&self) -> bool {
@@ -150,8 +171,14 @@ impl Running {
         }
     }
 
+    /// The exit status once the converter has ended; seeing it reaps the
+    /// converter, so the published group id is cleared first thing.
     pub fn try_wait(&mut self) -> std::io::Result<Option<ExitStatus>> {
-        self.child.try_wait()
+        let status = self.child.try_wait();
+        if matches!(status, Ok(Some(_))) {
+            self.unpublish();
+        }
+        status
     }
 
     /// After the converter exited: hand over the lines still in its pipe for
@@ -188,6 +215,8 @@ impl Running {
         if let Err(e) = self.child.kill() {
             log::debug!("library import: kill: {e}");
         }
+        // Killed but not yet reaped: the id is still ours until `wait`.
+        self.unpublish();
         if let Err(e) = self.child.wait() {
             log::debug!("library import: reap: {e}");
         }
@@ -198,11 +227,6 @@ impl Running {
     /// a member lives, so this only reaches what it started.
     pub fn kill_group(&self) {
         kill_group_id(self.child.id());
-    }
-
-    /// The converter's process id, which is also its group id on Unix.
-    pub fn id(&self) -> u32 {
-        self.child.id()
     }
 }
 

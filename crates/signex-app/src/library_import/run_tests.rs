@@ -574,3 +574,44 @@ fn the_published_group_kills_a_converter_that_never_exits() {
     assert!(started.elapsed() < Duration::from_secs(10));
     assert!(group.current().is_none(), "cleared once it ended");
 }
+
+/// The published group id is cleared as soon as the converter is reaped,
+/// not after the pipe drain that may follow for `PIPE_GRACE`: a quit in
+/// that window must not signal a group id the system handed out again.
+#[test]
+fn the_published_group_is_cleared_once_the_converter_is_reaped() {
+    use super::process::{PIPE_GRACE, ProcessGroup};
+    let dir = tempfile::tempdir().unwrap();
+    // The shell exits after a moment; the sleep it leaves holds stdout
+    // open, so the run drains for the whole grace period.
+    let command = sh(dir.path(), "sleep 5 &\nsleep 0.3\nexit 0\n");
+    let group = ProcessGroup::default();
+    let started = Instant::now();
+    let (cleared_at, ended_at) = std::thread::scope(|scope| {
+        let handle = scope.spawn(|| {
+            let result = super::run::run_library_in(
+                &command,
+                &request(dir.path().join("P"), RunMode::Import),
+                FAST,
+                &AtomicBool::new(false),
+                &group,
+                &mut |_| {},
+            );
+            (result, Instant::now())
+        });
+        while group.current().is_none() && started.elapsed() < Duration::from_secs(5) {
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        while group.current().is_some() && started.elapsed() < Duration::from_secs(10) {
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        let cleared_at = Instant::now();
+        let (result, ended_at) = handle.join().unwrap();
+        assert!(result.is_err(), "no summary, so no library");
+        (cleared_at, ended_at)
+    });
+    assert!(
+        ended_at.saturating_duration_since(cleared_at) >= PIPE_GRACE / 2,
+        "the id was published until the drain ended"
+    );
+}

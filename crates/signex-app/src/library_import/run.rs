@@ -326,7 +326,9 @@ fn stream_run(
 ) -> Result<Finished, RunFailure> {
     let mut running =
         Running::spawn(command, args, cwd, RUN_STDOUT_CAP).map_err(RunFailure::new)?;
-    group.set(running.id());
+    // Cleared by `Running` itself as the converter is reaped, before the
+    // pipe drain that may follow for up to `PIPE_GRACE`.
+    running.publish(group);
     let result = stream_loop(&mut running, limits, cancel, on_event);
     group.set(0);
     result
