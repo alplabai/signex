@@ -94,9 +94,16 @@ impl SymbolDraft {
         self.repaired_read_only = true;
     }
 
-    /// Are edits refused until a save writes the load repair?
+    /// Are edits refused until a save writes the load repair? Only an
+    /// explicit Save of this document writes it; every other write of the
+    /// file is refused meanwhile (`docs/DECISIONS.md`, #3129).
     pub fn is_read_only(&self) -> bool {
         self.repaired_read_only
+    }
+
+    /// An explicit Save wrote the repair to disk: edits are taken again.
+    pub fn repair_written(&mut self) {
+        self.repaired_read_only = false;
     }
 
     /// Is a drag's undo step open, so a movement tick records nothing?
@@ -137,7 +144,6 @@ impl SymbolDraft {
     pub fn mark_saved(&mut self) {
         self.history.mark_saved();
         self.dirty = false;
-        self.repaired_read_only = false;
     }
 
     /// Borrow the symbol currently being edited. Falls back to the

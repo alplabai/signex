@@ -203,7 +203,7 @@ impl Signex {
                         path,
                     );
                 }
-                match self.save_primitive_tab_at(&path) {
+                match self.save_primitive_tab_explicitly(&path) {
                     Ok(task) => task,
                     Err(e) => {
                         self.report_save_failure("Save failed", &e);

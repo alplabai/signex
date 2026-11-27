@@ -36,6 +36,25 @@ impl Signex {
     }
 }
 
+impl Signex {
+    /// Why a write of the `.snxsym` at `path` other than the person's Save is
+    /// refused: its editor opened it repaired and the repair is not on disk
+    /// yet. `None` when no such editor holds it.
+    pub(crate) fn repaired_symbol_write_refusal(&self, path: &Path) -> Option<String> {
+        let editor = self.document_state.symbol_editors.get(path)?;
+        if !editor.draft.is_read_only() {
+            return None;
+        }
+        let file = path.file_name().unwrap_or_default().to_string_lossy();
+        let line = t!(
+            I18n::en_us_ref(),
+            ids::EDITORS_SYMBOL_REPAIRED_WRITE_REFUSED,
+            "file" => file.as_ref()
+        );
+        Some(line.into_string())
+    }
+}
+
 /// The Messages lines for `repairs` of the file at `path`.
 pub(crate) fn repair_lines(path: &Path, repairs: &[SymbolLoadRepair], i18n: &I18n) -> Vec<String> {
     let file = path.file_name().unwrap_or_default().to_string_lossy();

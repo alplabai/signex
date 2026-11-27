@@ -1004,7 +1004,8 @@ Things the code does not pin, or where it surprises:
    (`RepairableControlChars`); `SymbolFile::from_bytes_repairing`, which the
    Symbol Editor uses, removes the characters from the pin tables, says in
    Messages which symbol, pin and character, and opens the file read-only
-   until the user saves it. Pads refuse every control character. Converters
+   until the user saves it: only that Save writes the file (Save All,
+   autosave, commands and agents are refused for it). Pads refuse every control character. Converters
    must not write them.
 4. **`[users]` default.** A `.snxlib` without a `[users]` table reads
    `default_role` as `""`; one with `[users]` but no `default_role` reads

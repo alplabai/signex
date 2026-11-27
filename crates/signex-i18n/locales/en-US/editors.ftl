@@ -1259,3 +1259,7 @@ editors-symbol-read-only-repaired = This file was repaired when it opened. Save 
 # names it (name, number, description, function), $pin the pin number,
 # $character the character as a code point such as U+000D.
 editors-symbol-pin-text-refused = The { $column } of pin { $pin } cannot hold the control character { $character }; the edit was not applied.
+# Messages panel (#3129): a write of a symbol file that opened repaired, other
+# than the person's own Save of it (Save All, a close, a command or an agent),
+# is refused so the file is never rewritten unasked. $file is the file name.
+editors-symbol-repaired-write-refused = { $file } was repaired when it opened and is written only when you save it yourself (Save on its tab); this write was refused.

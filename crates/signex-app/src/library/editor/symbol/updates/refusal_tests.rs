@@ -87,7 +87,13 @@ fn a_repaired_draft_refuses_edits_but_still_pans_until_saved() {
     apply_symbol_primitive_edit(&mut editor, SymbolEditorMsg::Pan { dx: 5.0, dy: 0.0 });
     assert_ne!(editor.gui.camera.offset, camera, "the view still moves");
 
+    // A save taking its snapshot is not yet the repair on disk.
     editor.mark_saved();
+    assert!(
+        editor.draft.is_read_only(),
+        "read-only until the write lands"
+    );
+    editor.draft.repair_written();
     apply_symbol_primitive_edit(&mut editor, SymbolEditorMsg::AddPin { x: 0.0, y: 0.0 });
     assert_eq!(editor.primitive().pins.len(), 2, "editable once saved");
 }

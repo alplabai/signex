@@ -490,6 +490,12 @@ impl Signex {
             );
             return true;
         };
+        // A file that opened repaired takes no edit until it is saved (#3129).
+        if editor.draft.is_read_only() {
+            crate::library::editor::symbol::updates::refuse_read_only(editor);
+            self.refresh_panel_ctx();
+            return true;
+        }
         // Pick a fresh name that doesn't collide with any existing
         // symbol in the file. `NewSymbol`, then `NewSymbol-2`, etc.
         let used: std::collections::HashSet<&str> = editor

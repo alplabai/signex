@@ -28,6 +28,9 @@ pub(super) struct SaveOptions {
     /// Patch-bump the version of each primitive the save changed, in the
     /// same write (#832).
     pub bump_versions: bool,
+    /// Read a `.snxsym` on disk leniently and write the repair: only the
+    /// person's Save of a draft that opened repaired (#3129).
+    pub write_repair: bool,
 }
 
 /// Outcome of a container save.
@@ -81,9 +84,15 @@ pub(super) fn save_symbol_container(
         let (mut file, m) = match current {
             Some(bytes) if options.mode == ContainerWrite::Merge && !holds_nothing(bytes) => {
                 // A file an older build wrote with a control character in a
-                // pin table reads repaired (#3129); the save writes the repair.
-                let (disk, repairs) =
-                    SymbolFile::from_bytes_repairing(bytes).map_err(|e| unreadable_on_disk(&e))?;
+                // pin table reads repaired only for the person's Save of a
+                // draft that opened repaired (#3129); that save writes the
+                // repair. Any other save reads strictly and is refused.
+                let (disk, repairs) = if options.write_repair {
+                    SymbolFile::from_bytes_repairing(bytes)
+                } else {
+                    SymbolFile::from_bytes(bytes).map(|file| (file, Vec::new()))
+                }
+                .map_err(|e| unreadable_on_disk(&e))?;
                 repaired = repairs;
                 editor
                     .merge_into(baseline, disk, now)
