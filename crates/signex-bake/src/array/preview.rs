@@ -1,6 +1,5 @@
 //! The instances of one array as the footprint Properties pattern drawing
-//! shows them: the offset, number and dropped flag of each, from the same
-//! walk the bake runs ([`super::walk`]).
+//! shows them: the offset, number and dropped flag of each ([`super::walk`]).
 
 use std::collections::BTreeMap;
 
@@ -151,6 +150,5 @@ fn walk<'a>(
         numbering: &array.numbering,
         params_ast,
         limit,
-        visit_skipped: true,
     }
 }

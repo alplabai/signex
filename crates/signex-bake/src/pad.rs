@@ -124,11 +124,11 @@ fn claimed_array_sources(
         .filter(|array| {
             let mut placed = Vec::new();
             let mut skipped = Vec::new();
-            let baked = crate::array::bake_one_array(
-                array,
-                params_ast,
+            let baked = crate::array::bake_pattern(
+                array.id,
                 sketch,
                 solve,
+                params_ast,
                 &mut placed,
                 &mut skipped,
             );

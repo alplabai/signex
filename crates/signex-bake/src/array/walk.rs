@@ -1,8 +1,8 @@
-//! The instances of one array: where each sits relative to the source,
-//! which number it gets and whether depopulation drops it. The bake
-//! ([`super::bake_one_array`]) and the Properties preview
-//! ([`super::preview`]) both walk an array through here, so the preview
-//! shows the numbers and positions the bake produces.
+//! The instances of one array for the Properties preview
+//! ([`super::preview`]): where each sits relative to the source, which
+//! number it gets and whether depopulation drops it. The preview has no
+//! solve, so it walks the counts, steps and masks here, by the rules the
+//! bake's walk (`super::layout`) lays them out with.
 
 use std::collections::BTreeMap;
 
@@ -47,11 +47,9 @@ pub(super) struct Walk<'a> {
     pub source: SketchEntityId,
     pub numbering: &'a NumberingScheme,
     pub params_ast: &'a BTreeMap<String, ExprNode>,
-    /// Most instances the walk visits.
+    /// Most instances the walk visits. Dropped instances are visited too:
+    /// the preview draws them.
     pub limit: usize,
-    /// Visit dropped instances too (the preview draws them). The bake
-    /// passes `false` and never evaluates anything for a dropped cell.
-    pub visit_skipped: bool,
 }
 
 /// The visitor gets each instance, the context bound to its index and the
@@ -172,9 +170,6 @@ impl Walk<'_> {
                         },
                         "keeping cell",
                     );
-                if is_skipped && !self.visit_skipped {
-                    continue;
-                }
                 let offset_mm = if is_skipped {
                     let dx = crate::params::eval_length_mm(&dx_ast, &ctx).ok();
                     let dy = crate::params::eval_length_mm(&dy_ast, &ctx).ok();
@@ -282,9 +277,6 @@ impl Walk<'_> {
                         "keeping instance",
                     )
                 });
-            if is_skipped && !self.visit_skipped {
-                continue;
-            }
             let theta = (i as f64) * sweep_rad / denom;
             let (sin_t, cos_t) = theta.sin_cos();
             let rx = cx + dx_src * cos_t - dy_src * sin_t;

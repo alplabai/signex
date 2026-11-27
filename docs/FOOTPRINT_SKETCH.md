@@ -643,13 +643,13 @@ another pattern, and a mirror of a pattern stays a pattern.
   onto a removed pattern are dropped; the array that named it stays and
   repeats its own source again.
 
-The bake expands links in `signex_bake::array::links`; a plain array with
-no link and no override still bakes through `bake_one_array`. The canvas's
-instance rings of a selected grid or polar pattern come from the same walk
+Every pattern bakes through one instance walk, `signex_bake::array::links`:
+a plain array, a linked one, one with overrides and a mirror alike (#2689).
+The canvas's instance rings of a selected pattern come from the same walk
 (`signex_bake::pattern_slots`): each ring sits where the bake puts the pad,
 with the per-instance spacing and the sweep's written unit; a slot the
 suppression list holds back draws as suppressed, and a slot the mask drops
-has no ring. One walk for the plain bake as well is a follow-up (#2689).
+has no ring.
 
 ## Per-pad overrides {#per-pad-overrides}
 
