@@ -186,5 +186,10 @@ See `docs/architecture/pcb-drc.md`, "Waivers".
 
 The panel (#2410) is `[board_options.panel]`, written only when the board has one; the panel edits run its own `SetBoardPanel` command, and the options edits here carry it unchanged. See [PANELISATION.md](PANELISATION.md).
 
+The layout plan (#2942) is `[board_options.layout_plan]`, written only when it
+sets anything (the board then writes `snxpcb/1.12`); `layout_plan_set` changes
+it as one `SetBoardOptions` undo step, and the options edits here carry it
+unchanged. See [CLI.md](CLI.md), "Layout plan".
+
 A colour that is not `#rrggbb` or `#rrggbbaa` refuses the load; a length that
 is not finite refuses the save.

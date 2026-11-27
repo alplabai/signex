@@ -52,10 +52,10 @@ impl Signex {
     /// The Gerber Viewer tab's content.
     pub(crate) fn view_gerber_viewer_tab(&self) -> Element<'_, Message> {
         let look = Look {
-            tokens: &self.document_state.panel_ctx.tokens,
+            tokens: &self.document_view.panel_ctx.tokens,
             i18n: &self.ui_state.i18n,
         };
-        tab(look, &self.document_state.gerber_viewer)
+        tab(look, &self.document_view.gerber_viewer)
             .map(Message::GerberViewer)
             .boxed()
     }

@@ -43,7 +43,7 @@ impl Signex {
         }
         // On a board, Net Classes is a mode of the PCB panel (mockup row 106).
         if kind == PanelKind::NetClasses && self.has_active_pcb() {
-            self.document_state.panel_ctx.pcb_panel.mode = crate::panels::PcbPanelMode::NetClasses;
+            self.document_view.panel_ctx.pcb_panel.mode = crate::panels::PcbPanelMode::NetClasses;
             return self.show_panel(PanelKind::PcbNets);
         }
         if let Some(window_id) = self.detached_panel_window(kind) {
@@ -51,7 +51,7 @@ impl Signex {
             // would render the same panel twice on two screens.
             return iced::window::gain_focus(window_id);
         }
-        self.document_state.dock.show_panel(kind);
+        self.document_view.dock.show_panel(kind);
         // Opening from the View menu used to skip this while opening
         // from the panel list persisted — so which entry point you
         // used decided whether the layout survived a restart.
@@ -68,8 +68,7 @@ impl Signex {
             return self.is_panel_open(PanelKind::Library)
                 && self.library_panel_kind() == alias_kind;
         }
-        self.document_state.dock.locate(kind).is_some()
-            || self.detached_panel_window(kind).is_some()
+        self.document_view.dock.locate(kind).is_some() || self.detached_panel_window(kind).is_some()
     }
 
     /// Every panel kind that is open somewhere, in `ALL_PANELS` order.
@@ -96,17 +95,17 @@ impl Signex {
             return self.toggle_panel(PanelKind::Library);
         }
         let in_front = self.detached_panel_window(kind).is_none()
-            && self.document_state.dock.is_frontmost(kind);
+            && self.document_view.dock.is_frontmost(kind);
         if !in_front {
             return self.show_panel(kind);
         }
-        self.document_state.dock.close_panel(kind);
+        self.document_view.dock.close_panel(kind);
         self.persist_dock_layout_soon()
     }
 
     /// The kind the Library panel shows for the main window's active tab.
     pub(crate) fn library_panel_kind(&self) -> crate::library::state::LibraryPanelKind {
-        crate::library::panel::shown_kind(&self.library, &self.document_state.panel_ctx)
+        crate::library::panel::shown_kind(&self.library, &self.document_view.panel_ctx)
     }
 
     /// Show `kind` in the Library panel while the active tab stays active
@@ -115,7 +114,7 @@ impl Signex {
         &mut self,
         kind: crate::library::state::LibraryPanelKind,
     ) {
-        let tab = crate::library::panel::panel_tab(&self.document_state.panel_ctx);
+        let tab = crate::library::panel::panel_tab(&self.document_view.panel_ctx);
         self.library.library_panel.pick(kind, tab);
     }
 

@@ -236,7 +236,7 @@ fn rename_repoints_the_entry_marks_it_unsaved_and_keeps_the_library_mounted() {
     assert!(f.app.document_state.is_document_dirty(&f.prj));
     assert!(
         f.app
-            .document_state
+            .document_view
             .panel_ctx
             .diagnostics
             .iter()
@@ -347,7 +347,7 @@ fn a_symbol_edit_during_a_library_rename_survives_the_rename() {
         "the draft is still dirty at the new path"
     );
     assert_eq!(
-        editor.file.symbols[0].pins.len(),
+        editor.draft.file.symbols[0].pins.len(),
         1,
         "the edit survived the rename"
     );
@@ -580,7 +580,7 @@ fn a_library_open_without_its_history_is_not_deleted() {
     open_alpha_without_history(&mut f);
     let folder = f.alpha.parent().expect("library folder").to_path_buf();
     let before = files_under(&folder);
-    f.app.document_state.error_notice = None;
+    f.app.document_view.error_notice = None;
 
     f.app.ui_state.remove_dialog = Some(RemoveDialogState {
         project_id: Some(f.project_id),
@@ -599,7 +599,7 @@ fn a_library_open_without_its_history_is_not_deleted() {
 
     let notice = f
         .app
-        .document_state
+        .document_view
         .error_notice
         .as_ref()
         .expect("the refusal says why");
@@ -719,7 +719,7 @@ fn a_failed_file_rename_changes_nothing_and_is_logged() {
     );
     assert!(
         f.app
-            .document_state
+            .document_view
             .panel_ctx
             .diagnostics
             .iter()
@@ -784,7 +784,7 @@ fn a_library_rename_while_the_project_file_is_being_written_is_refused_before_mo
     assert!(!f.alpha.with_file_name("gamma.snxlib").exists());
     assert!(
         !f.app
-            .document_state
+            .document_view
             .panel_ctx
             .diagnostics
             .iter()
@@ -1192,7 +1192,7 @@ fn a_never_saved_project_is_not_created_by_the_rename() {
     assert!(f.app.document_state.is_document_dirty(&f.prj));
     assert!(
         f.app
-            .document_state
+            .document_view
             .panel_ctx
             .diagnostics
             .iter()
@@ -1223,7 +1223,7 @@ fn a_failed_project_patch_rolls_the_rename_back() {
     );
     assert!(f.app.library.library_at(&f.alpha).is_some());
     assert!(!f.app.library.set.contains_path(&renamed));
-    assert!(f.app.document_state.error_notice.is_some());
+    assert!(f.app.document_view.error_notice.is_some());
 }
 
 /// With project-scoped git on, the patched `.snxprj` is queued for a
@@ -1289,7 +1289,7 @@ fn a_shared_disk_entry_gets_an_explicit_warning_and_a_dirty_project() {
     assert!(f.app.document_state.is_document_dirty(&f.prj));
     assert!(
         f.app
-            .document_state
+            .document_view
             .panel_ctx
             .diagnostics
             .iter()
@@ -1600,7 +1600,7 @@ fn quit_is_held_while_a_rename_runs() {
         .update(Message::Window(signex_app::app::WindowMsg::CloseMainWindow));
     assert!(run_task_messages(quit).is_empty(), "no close was started");
     assert!(
-        f.app.document_state.error_notice.is_some(),
+        f.app.document_view.error_notice.is_some(),
         "the user sees why the quit did nothing, not only the Messages panel"
     );
     assert!(diagnostics::recent_entries().iter().any(|e| {

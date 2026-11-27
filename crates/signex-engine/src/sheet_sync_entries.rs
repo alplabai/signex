@@ -2,7 +2,9 @@
 //! lists it (mockup row 79): each name with its I/O type and what Apply
 //! does to it. Read-only: Apply works from `SheetSyncPreview` alone.
 
-use signex_types::schematic::{ChildSheet, SchematicSheet, normalize_port_name};
+use signex_types::schematic::{
+    ChildSheet, SchematicSheet, normalize_port_name, sheet_entry_port, sheet_entry_renamed,
+};
 
 use crate::sheet::{exposed_sheet_ports, normalize_sheet_pin_direction};
 use crate::sheet_sync::SheetSyncPreview;
@@ -57,8 +59,12 @@ fn sheet_side(child: &SchematicSheet) -> Vec<(String, &'static str)> {
 }
 
 /// `written` with `preview` applied: every current name with its change,
-/// then the added names, which take their direction from `source`.
+/// then the added names, which take their direction from the `source` name
+/// that meets them (on a repeated sheet symbol named `symbol`, `Repeat(VOUT)`
+/// meets `VOUT`). A renamed `Repeat(…)` entry of a repeated symbol is listed
+/// as the repeat it becomes.
 fn merged(
+    symbol: &str,
     written: Vec<(String, &'static str)>,
     source: &[(String, &'static str)],
     preview: &SheetSyncPreview,
@@ -69,7 +75,7 @@ fn merged(
             let rename = preview.renamed.iter().find(|r| r.from == name);
             match rename {
                 Some(rename) => SheetSyncEntry {
-                    name: rename.to.clone(),
+                    name: sheet_entry_renamed(symbol, &name, &rename.to),
                     direction,
                     change: SheetEntryChange::Renamed { from: name },
                 },
@@ -93,7 +99,7 @@ fn merged(
             name: name.clone(),
             direction: source
                 .iter()
-                .find(|(seen, _)| seen == name)
+                .find(|(seen, _)| sheet_entry_port(symbol, seen) == Some(name.as_str()))
                 .map_or("bidirectional", |(_, direction)| *direction),
             change: SheetEntryChange::Added,
         }
@@ -107,7 +113,12 @@ pub fn symbol_entries_after_sync(
     child: &SchematicSheet,
     preview: &SheetSyncPreview,
 ) -> Vec<SheetSyncEntry> {
-    merged(symbol_side(symbol), &sheet_side(child), preview)
+    merged(
+        &symbol.name,
+        symbol_side(symbol),
+        &sheet_side(child),
+        preview,
+    )
 }
 
 /// The sheet's ports under Symbol to Sheet's `preview`.
@@ -116,7 +127,12 @@ pub fn sheet_ports_after_sync(
     child: &SchematicSheet,
     preview: &SheetSyncPreview,
 ) -> Vec<SheetSyncEntry> {
-    merged(sheet_side(child), &symbol_side(symbol), preview)
+    merged(
+        &symbol.name,
+        sheet_side(child),
+        &symbol_side(symbol),
+        preview,
+    )
 }
 
 #[cfg(test)]

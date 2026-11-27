@@ -31,7 +31,7 @@ impl Signex {
         paths: Vec<PathBuf>,
         origin: RunOrigin,
     ) -> Task<Message> {
-        let viewer = &self.document_state.gerber_viewer;
+        let viewer = &self.document_view.gerber_viewer;
         let shown = viewer.from_run.as_ref() == Some(&origin)
             && (viewer.open.is_some() || viewer.reading.is_some());
         if shown && self.gerber_viewer_tab().is_some() {
@@ -39,7 +39,7 @@ impl Signex {
             return Task::none();
         }
         let task = self.open_gerber_paths(paths);
-        let viewer = &mut self.document_state.gerber_viewer;
+        let viewer = &mut self.document_view.gerber_viewer;
         viewer.from_run = Some(origin);
         viewer.run_missing = false;
         task
@@ -47,7 +47,7 @@ impl Signex {
 
     /// The banner's close: the tab stays open with its files.
     pub(super) fn close_gerber_run_banner(&mut self) -> Task<Message> {
-        let viewer = &mut self.document_state.gerber_viewer;
+        let viewer = &mut self.document_view.gerber_viewer;
         viewer.from_run = None;
         viewer.run_missing = false;
         Task::none()
@@ -55,7 +55,7 @@ impl Signex {
 
     /// Back to run summary: the run's Export Job tab, on its summary.
     pub(super) fn back_to_gerber_run(&mut self) -> Task<Message> {
-        let Some(origin) = self.document_state.gerber_viewer.from_run.clone() else {
+        let Some(origin) = self.document_view.gerber_viewer.from_run.clone() else {
             return Task::none();
         };
         let task = self.open_output_job_tab(origin.job.clone());

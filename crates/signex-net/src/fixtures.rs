@@ -269,7 +269,13 @@ pub(crate) mod multi_channel {
         }
     }
 
-    fn place(s: &mut SchematicSheet, id: u128, reference: &str, lib_id: &str, at: Point) {
+    pub(crate) fn place(
+        s: &mut SchematicSheet,
+        id: u128,
+        reference: &str,
+        lib_id: &str,
+        at: Point,
+    ) {
         s.symbols.push(Symbol {
             uuid: Uuid::from_u128(id),
             lib_id: lib_id.to_string(),
@@ -280,7 +286,7 @@ pub(crate) mod multi_channel {
     }
 
     /// A one-pin library symbol whose pin sits at local `(0, 0)`.
-    fn add_lib(s: &mut SchematicSheet, lib_id: &str) {
+    pub(crate) fn add_lib(s: &mut SchematicSheet, lib_id: &str) {
         let pin = Pin {
             direction: PinDirection::Passive,
             shape_style: PinShapeStyle::Plain,

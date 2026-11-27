@@ -57,7 +57,11 @@ pub struct HarnessPanel {
     /// The project's settings section is unreadable: definitions cannot be
     /// edited.
     pub are_definitions_locked: bool,
-    /// Per definition: how many connectors of the open sheets use it.
+    /// Types the open sheets use that the project does not define (#3043),
+    /// each as its first connector shows it. Listed, never edited.
+    pub undefined_types: Vec<HarnessDefinition>,
+    /// Per definition, then per undefined type: how many connectors and
+    /// sheet entries of the open sheets use it.
     pub uses: Vec<usize>,
     /// The selected connector (or the one owning the selected entry).
     pub connector: Option<HarnessConnector>,
@@ -178,9 +182,15 @@ pub(super) fn push_harness_connector_sections<'a>(
         col = col.push(entries_list(ctx, c, st));
     }
     let swatch = ctx.canvas_colors.harness_color();
-    let colour = Color::from_rgb8(swatch.r, swatch.g, swatch.b);
+    let expects = entry_expectations(c, &facts.mismatches);
+    let art = super::illustrations::HarnessArt {
+        nets: &facts.entry_nets,
+        expects: &expects,
+        colour: Color::from_rgb8(swatch.r, swatch.g, swatch.b),
+        warn: crate::styles::ti(ctx.tokens.warning),
+    };
     col = col.push(super::illustrations::show(
-        super::illustrations::harness_connector(c, &facts.entry_nets, colour, i18n),
+        super::illustrations::harness_connector(c, art, i18n),
         ctx,
     ));
     let uuid = c.uuid;
@@ -292,6 +302,23 @@ pub(super) fn push_harness_connector_sections<'a>(
         .padding([SP.s, SP.m])
         .boxed(),
     )
+}
+
+/// Per entry of `c`: the entry the far side expects in its place, from the
+/// first mismatch naming it.
+fn entry_expectations(
+    c: &HarnessConnector,
+    mismatches: &[HarnessMismatchRow],
+) -> Vec<Option<String>> {
+    c.entries
+        .iter()
+        .map(|e| {
+            mismatches
+                .iter()
+                .find(|m| m.entry == e.uuid)
+                .map(|m| m.expects.clone())
+        })
+        .collect()
 }
 
 fn field_label(field: HarnessField) -> signex_i18n::MessageId {
@@ -478,7 +505,7 @@ mod definition_link_tests {
         let window = iced::Size::new(320.0, 60.0);
         let en = signex_i18n::I18n::en_us();
         let (app, _boot) = crate::app::Signex::new();
-        let tokens = app.document_state.panel_ctx.tokens;
+        let tokens = app.document_view.panel_ctx.tokens;
         let row = || {
             super::super::part_panel::link_row(
                 t!(en, ids::PANELS_HARNESS_DEFINITION),
@@ -622,7 +649,7 @@ mod add_entry_tests {
     #[test]
     fn the_entries_header_carries_a_plus_that_adds_an_entry() {
         let (app, _boot) = Signex::new();
-        let ctx = &app.document_state.panel_ctx;
+        let ctx = &app.document_view.panel_ctx;
         let c = connector(&["SCK", "MOSI"]);
         let title = ctx
             .i18n
@@ -646,6 +673,43 @@ mod add_entry_tests {
             matches!(folded.as_slice(), [PanelMsg::ToggleSection(key)] if key == "sel_harness_entries"),
             "{folded:?}"
         );
+    }
+}
+
+#[cfg(test)]
+mod expectation_tests {
+    use super::*;
+    use signex_types::schematic::{HarnessEntry, Point};
+
+    /// Mockup row 152, Entry mismatch: the drawing learns, per entry, the
+    /// name the far side expects in its place; other entries expect nothing.
+    #[test]
+    fn each_mismatched_entry_carries_what_the_far_side_expects() {
+        let entry = |n: u128, name: &str| HarnessEntry {
+            uuid: Uuid::from_u128(n),
+            name: name.into(),
+        };
+        let c = HarnessConnector {
+            uuid: Uuid::from_u128(1),
+            harness_type: "SPI_BUS".into(),
+            position: Point::new(0.0, 0.0),
+            width: 10.16,
+            entry_pitch: 2.54,
+            rotation: 0.0,
+            entries: vec![entry(10, "SCK"), entry(11, "CS")],
+            locked: false,
+        };
+        let mismatch = HarnessMismatchRow {
+            entry: Uuid::from_u128(11),
+            has: "CS".into(),
+            expects: "CS_ADC".into(),
+            far: "sensor".into(),
+        };
+        assert_eq!(
+            entry_expectations(&c, &[mismatch]),
+            [None, Some("CS_ADC".to_string())]
+        );
+        assert_eq!(entry_expectations(&c, &[]), [None, None]);
     }
 }
 

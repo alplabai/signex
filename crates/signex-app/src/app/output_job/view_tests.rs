@@ -136,7 +136,7 @@ fn the_flow_of_a_stopped_run_and_the_summary_of_a_complete_one() {
 fn the_viewer_names_the_run_it_was_opened_from() {
     let dir = tempfile::tempdir().unwrap();
     let mut app = project_app(dir.path());
-    app.document_state.gerber_viewer.from_run = Some(crate::app::gerber_viewer::RunOrigin {
+    app.document_view.gerber_viewer.from_run = Some(crate::app::gerber_viewer::RunOrigin {
         job: dir.path().join("fab.snxout"),
         profile: Some("Release".into()),
         variant: "Base".into(),

@@ -32,8 +32,8 @@ impl Signex {
             feed(&mut hasher, &colours);
         }
         if let Some(editor) = ds.symbol_editors.get(path) {
-            feed(&mut hasher, &editor.file);
-            editor.history.undo_len().hash(&mut hasher);
+            feed(&mut hasher, &editor.draft.file);
+            editor.draft.history.undo_len().hash(&mut hasher);
         }
         if let Some(editor) = ds.footprint_editors.get(path) {
             feed(&mut hasher, &editor.file);

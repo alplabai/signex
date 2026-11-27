@@ -287,10 +287,10 @@ fn a_failed_pcb_write_stays_dirty_queues_no_commit_and_reports() {
             .is_document_dirty(&app.document_state.tabs[0].path)
     );
     assert!(no_commit_requested(&app));
-    assert!(app.document_state.error_notice.is_some());
+    assert!(app.document_view.error_notice.is_some());
     let path_text = path.display().to_string();
     assert!(
-        app.document_state
+        app.document_view
             .panel_ctx
             .diagnostics
             .iter()
@@ -310,7 +310,7 @@ fn ctrl_s_on_a_clean_pcb_leaves_the_file_another_tool_changed() {
         "changed by git pull"
     );
     assert!(no_commit_requested(&app));
-    assert!(app.document_state.error_notice.is_none());
+    assert!(app.document_view.error_notice.is_none());
 }
 
 #[test]
@@ -320,7 +320,7 @@ fn ctrl_s_after_a_restore_that_cannot_be_re_read_refuses_to_undo_it() {
     std::fs::write(&path, "restored but unparsable").expect("restore");
     app.document_state.mark_document_dirty(&path);
     app.reload_active_tab_from_disk();
-    assert!(app.document_state.error_notice.is_some(), "restore card");
+    assert!(app.document_view.error_notice.is_some(), "restore card");
     assert!(
         matches!(app.begin_pcb_save(path.clone()), Ok(None)),
         "clean tab: nothing to write"
@@ -340,13 +340,13 @@ fn ctrl_s_on_a_newer_minor_board_writes_nothing() {
     app.document_state.projects[0].data.enable_git = true;
     let path = dir.path().join("board.snxpcb");
     let mut board = empty_board();
-    board.unknown.newer_minor_source = Some("snxpcb/1.12".into());
+    board.unknown.newer_minor_source = Some("snxpcb/1.13".into());
     app.open_pcb_tab(path.clone(), "board".into(), board);
     mark_dirty(&mut app, &path);
     press_save(&mut app);
     assert!(!path.exists());
     assert!(no_commit_requested(&app));
-    let notice = app.document_state.error_notice.as_ref().expect("notice");
+    let notice = app.document_view.error_notice.as_ref().expect("notice");
     // The sentence names the operation; the reason is the error chain, shown
     // in the card's system block (mockup row 11).
     assert_eq!(notice.detail.render_en_us(), "Failed to save PCB");
@@ -396,7 +396,7 @@ fn a_restore_that_reads_as_non_utf8_refuses_to_undo_it() {
     let old = commit_revision(dir.path(), &path, &[0xff, 0xfe, 0x00, 0x80]);
     commit_revision(dir.path(), &path, &encoded(&empty_board()));
     restore(&mut app, &old);
-    assert!(app.document_state.error_notice.is_some(), "restore card");
+    assert!(app.document_view.error_notice.is_some(), "restore card");
     assert!(no_commit_requested(&app));
     assert!(
         app.interaction_state
@@ -523,7 +523,7 @@ fn ctrl_s_after_a_successful_restore_keeps_the_restored_bytes() {
     let old = commit_revision(dir.path(), &path, &restored);
     commit_revision(dir.path(), &path, &encoded(&empty_board()));
     restore(&mut app, &old);
-    assert!(app.document_state.error_notice.is_none());
+    assert!(app.document_view.error_notice.is_none());
     assert!(!app.document_state.is_document_dirty(&path));
     assert_eq!(app.document_state.pending_git_commits.len(), 1);
     assert!(

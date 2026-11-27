@@ -137,7 +137,7 @@ fn a_vanished_recent_entry_is_handled_like_open_recent() {
     let _ = app.update(start_screen::recent_message(&gone));
 
     assert!(app.ui_state.recent_projects.entries().is_empty());
-    assert!(app.document_state.error_notice.is_some());
+    assert!(app.document_view.error_notice.is_some());
     assert!(app.document_state.projects.is_empty());
 }
 

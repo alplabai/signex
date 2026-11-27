@@ -1,7 +1,7 @@
-//! The operands a command takes besides its id (#1934): what a CLI or an agent
-//! can pass in place of a pointer click or a dialog answer. One naming
-//! convention, kept by a test over every catalog row (the app's
-//! `OPERAND_CONVENTION`).
+//! A command's operands besides its id (#1934), for a CLI or an agent, in one
+//! naming convention (`OPERAND_CONVENTION`); the notebook's are in `notebook`.
+mod notebook;
+pub use notebook::*;
 
 /// The shape of one operand's value, as written in text.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -292,12 +292,27 @@ pub const SYMBOL_PARAMETER: &[Operand] = &[
     optional("value", OperandKind::Text),
     optional("document", OperandKind::Document),
 ];
+/// `set_object_text` (#2953): `field` is `designator` or `value` of a placed
+/// part, or `text` of a label or a text note; a left-out `value` is empty.
+pub const OBJECT_TEXT: &[Operand] = &[
+    required("id", OperandKind::Text),
+    required("field", OperandKind::Text),
+    optional("value", OperandKind::Text),
+    optional("document", OperandKind::Document),
+];
 /// One sheet variable: its `name` and `value` (left out or empty: the
 /// variable stays, with no value), or `remove=true` to delete it.
 pub const SHEET_VARIABLE: &[Operand] = &[
     required("name", OperandKind::Text),
     optional("value", OperandKind::Text),
     optional("remove", OperandKind::Bool),
+    optional("document", OperandKind::Document),
+];
+/// The placed part `id` made a net tie (`on=true`) or an ordinary part
+/// (`on=false`, #1277).
+pub const NET_TIE: &[Operand] = &[
+    required("id", OperandKind::Text),
+    required("on", OperandKind::Bool),
     optional("document", OperandKind::Document),
 ];
 /// The placed part `id` on the sheet `document` (#1667): named, since an
@@ -324,28 +339,25 @@ pub const SAVE_PATH: &[Operand] = &[
 ];
 
 /// A new project from the dialog's choices (#2232): where, which profile
-/// and `key=value` overrides.
+/// and `key=value` overrides, and a project `template` of the library
+/// (#1283).
 pub const NEW_PROJECT: &[Operand] = &[
     required("name", OperandKind::Text),
     required("location", OperandKind::Path),
     optional("make_folder", OperandKind::Bool),
     optional("profile", OperandKind::Text),
     optional("overrides", OperandKind::Text),
+    optional("template", OperandKind::Text),
 ];
 
-/// Update PCB without the dialog (#1312): `apply=true` executes the rows
-/// ticked by default.
-pub const APPLY: &[Operand] = &[required("apply", OperandKind::Bool)];
-
-/// New PCB without the dialog (#2232): `profile` is `project` (the default,
-/// the project's own setup), a built-in token or a saved user profile.
-pub const NEW_PCB: &[Operand] = &[optional("profile", OperandKind::Text)];
-
 /// New Schematic without the dialog (#2232): `profile` as for `NEW_PCB`;
-/// `name` is the file stem in the project folder (default `Sheet<n>`).
+/// `name` is the file stem in the project folder (default `Sheet<n>`);
+/// `template` a sheet template kept in `scope` (#1283).
 pub const NEW_SCHEMATIC: &[Operand] = &[
     optional("profile", OperandKind::Text),
     optional("name", OperandKind::Text),
+    optional("template", OperandKind::Text),
+    optional("scope", OperandKind::Text),
 ];
 
 /// Turn the board view by `degrees` (90 when left out), clockwise positive
@@ -459,20 +471,30 @@ pub const DOCUMENT: &[Operand] = &[required("document", OperandKind::Document)];
 /// A sheet edit that takes nothing but the sheet: the one in view, or the one
 /// `document` names (a CLI or an agent's edit list).
 pub const OPTIONAL_DOCUMENT: &[Operand] = &[optional("document", OperandKind::Document)];
+/// A dock panel by its layout key (`messages`, `properties`, ...) and what
+/// to do with it: `open`, `close`, `collapse` or `expand` (#2470).
+pub const DOCK_PANEL: &[Operand] = &[
+    required("panel", OperandKind::Text),
+    required("state", OperandKind::Text),
+];
 /// A board report written as CSV (#2404): which board, which report
-/// (`bom`, `netlist`, `net_length`, `components`) and the file.
+/// (`bom`, `netlist`, `net_length`, `components`) and the file, replaced
+/// only with `overwrite=true` (#2470).
 pub const BOARD_REPORT_EXPORT: &[Operand] = &[
     required("document", OperandKind::Document),
     required("kind", OperandKind::Text),
     required("path", OperandKind::Path),
+    optional("overwrite", OperandKind::Bool),
 ];
-/// A board printed to PDF (#2402): which board and the file; the rest
+/// A board printed to PDF (#2402): which board and the file (replaced only
+/// with `overwrite=true`, #2470); the rest
 /// defaults as the dialog opens. `layers` lists sets by id (`top`,
 /// `bottom`, `inner`, `mechanical`, `assembly_top`, `assembly_bottom`),
 /// `pages` is `per_set` or `composite`, `scale` is `fit` or `one_to_one`.
 pub const BOARD_PDF: &[Operand] = &[
     required("document", OperandKind::Document),
     required("path", OperandKind::Path),
+    optional("overwrite", OperandKind::Bool),
     optional("layers", OperandKind::Text),
     optional("pages", OperandKind::Text),
     optional("scale", OperandKind::Text),
@@ -552,7 +574,8 @@ pub const FOOTPRINT_TEXT_SET: &[Operand] = &[
 ];
 /// `swap_pins` (#2410): two pins of one component on the board `document`,
 /// as `pins` = `a,b` (pad numbers). The component is named by `ids` (its
-/// uuid) or by `designator`, exactly one of them (#2326).
+/// uuid) or by `designator`, exactly one of them (#2326). `swap_schematic_pins`
+/// (#1261) reads the same on a sheet: `ids` is a placed unit of the part.
 pub const SWAP_PINS: &[Operand] = &[
     required("document", OperandKind::Document),
     optional("ids", OperandKind::Targets),
@@ -628,12 +651,31 @@ pub const QUERY_PINS: &[Operand] = &[
     required("document", OperandKind::Document),
     required("designator", OperandKind::Text),
 ];
+/// `query_power_tree` (#1313): the power tree of the project the document
+/// belongs to, with the parts fitted in `variant` (a variant's name, or
+/// Base); without it, in the project's active variant.
+pub const QUERY_POWER_TREE: &[Operand] = &[
+    required("document", OperandKind::Document),
+    optional("variant", OperandKind::Text),
+];
+/// `bom_lines` (#1988): the BOM of the named sheet's project; `template` is
+/// a BOM template's text (`snxbomt/1`), `variant` a variant of the project
+/// or `Base`, `grouping` one of `grouped`, `ungrouped` and `flat`.
+pub const BOM_LINES: &[Operand] = &[
+    required("document", OperandKind::Document),
+    optional("template", OperandKind::Text),
+    optional("variant", OperandKind::Text),
+    optional("grouping", OperandKind::Text),
+];
 /// `check_erc` (#2199): ERC on the project of the named sheet, answered as a
 /// check report; `baseline` is an earlier answer's `run`.
 pub const CHECK_ERC: &[Operand] = &[
     required("document", OperandKind::Document),
     optional("baseline", OperandKind::Text),
 ];
+/// `toggle_live_erc` (#1288): the live ERC preference; without `enabled` it
+/// flips.
+pub const TOGGLE_LIVE_ERC: &[Operand] = &[optional("enabled", OperandKind::Bool)];
 /// `check_drc` (#2199): DRC on the named board, answered as a check report;
 /// `baseline` is an earlier answer's `run` on the same board.
 pub const CHECK_DRC: &[Operand] = &[
@@ -682,6 +724,24 @@ pub const ASSIGN_NET_CLASS: &[Operand] = &[
 pub const SELECTION_FILTER_KINDS: &[Operand] = &[required("kinds", OperandKind::Text)];
 /// `apply_selection_filter_preset` (#2417): a saved preset, by its name.
 pub const SELECTION_FILTER_PRESET: &[Operand] = &[required("name", OperandKind::Text)];
+
+/// `keymap_assign` (#2495): give the command `command` (a catalog or an
+/// installed extension id) the key sequence `keys` in the custom keyboard
+/// profile `profile`; `context` is where it applies, by default the one
+/// editor the command acts in, else `global`.
+pub const KEYMAP_ASSIGN: &[Operand] = &[
+    required("command", OperandKind::Text),
+    required("keys", OperandKind::Text),
+    required("profile", OperandKind::Text),
+    optional("context", OperandKind::Text),
+];
+/// `keymap_clear` (#2495): take the key sequence `keys`, or every key, from
+/// `command` in the custom keyboard profile `profile`.
+pub const KEYMAP_CLEAR: &[Operand] = &[
+    required("command", OperandKind::Text),
+    required("profile", OperandKind::Text),
+    optional("keys", OperandKind::Text),
+];
 
 /// One finding of the named board's last DRC run, by its waiver key `id`
 /// (#2399).
@@ -780,7 +840,7 @@ pub const RULES_ONE: &[Operand] = &[
     required("id", OperandKind::Text),
 ];
 /// `rules_add`: a rule of `kind` (a rule target: clearance, track, via, hole,
-/// edge, silk, mask, paste, courtyard) with its limits.
+/// edge, silk, mask, paste, courtyard, component) with its limits.
 pub const RULES_ADD: &[Operand] = &[
     required("document", OperandKind::Document),
     required("kind", OperandKind::Text),
@@ -881,7 +941,6 @@ pub const SET_BOARD_PANEL: &[Operand] = &[
     required("field", OperandKind::Text),
     required("value", OperandKind::Text),
 ];
-
 // The `project_*` commands (#1689-#1693): `document` is the project or any
 // of its documents.
 
@@ -907,6 +966,25 @@ pub const PROJECT_ACTIVE_VARIANT: &[Operand] = &[
     required("document", OperandKind::Document),
     optional("name", OperandKind::Text),
 ];
+/// `project_set_default_variant` (#2949): a variant name; none, or `Base`,
+/// is Base.
+pub const PROJECT_DEFAULT_VARIANT: &[Operand] = &[
+    required("document", OperandKind::Document),
+    optional("name", OperandKind::Text),
+];
+/// `compare_variants` (#2949): the two sides, `from` (none is Base) and
+/// `to` (none is the active variant, or the first one while Base is).
+pub const COMPARE_VARIANTS: &[Operand] = &[
+    required("document", OperandKind::Document),
+    optional("from", OperandKind::Text),
+    optional("to", OperandKind::Text),
+];
+/// `variant_bom` (#2949): a variant name; none is the active variant,
+/// `Base` is Base.
+pub const VARIANT_BOM: &[Operand] = &[
+    required("document", OperandKind::Document),
+    optional("name", OperandKind::Text),
+];
 /// `project_move_library`: a library as the project stores its path, `up`
 /// or `down`.
 pub const PROJECT_MOVE_LIBRARY: &[Operand] = &[
@@ -917,6 +995,12 @@ pub const PROJECT_MOVE_LIBRARY: &[Operand] = &[
 /// `project_set_annotate_undo`: `project` or `per_sheet`; none follows
 /// Preferences.
 pub const PROJECT_ANNOTATE_UNDO: &[Operand] = &[
+    required("document", OperandKind::Document),
+    optional("value", OperandKind::Text),
+];
+/// `project_set_annotate_numbering` (#1292): `continuous`, `page_hundreds`
+/// or `page_thousands`; none is continuous.
+pub const PROJECT_ANNOTATE_NUMBERING: &[Operand] = &[
     required("document", OperandKind::Document),
     optional("value", OperandKind::Text),
 ];
@@ -951,7 +1035,6 @@ pub const PROJECT_ENABLE_REQUIREMENT: &[Operand] = &[
     required("requirement", OperandKind::Text),
     required("on", OperandKind::Bool),
 ];
-
 /// `set_layer_stack` (#2401): the named board's whole stack, top to bottom,
 /// as JSON rows (`{"layers": [...]}` or the list); a copper row names the
 /// board layer it was, or none for a new layer.
@@ -1001,3 +1084,32 @@ pub const SET_PAD_SHAPE: &[Operand] = &[
     optional("delta", OperandKind::Text),
     optional("corners", OperandKind::Text),
 ];
+/// `generate_block_diagram` (#2968): a block diagram of the project
+/// `document` names (the project, or one of its documents), written to
+/// `path`, the project's `<name>.snxblk` when left out; an existing file is
+/// replaced only with `overwrite=true`.
+pub const GENERATE_BLOCK_DIAGRAM: &[Operand] = &[
+    required("document", OperandKind::Document),
+    optional("path", OperandKind::Path),
+    optional("overwrite", OperandKind::Bool),
+];
+/// `regenerate_block_diagram` (#2968): the changes the project's hierarchy
+/// makes to the diagram at `path` (the project's `<name>.snxblk` when left
+/// out), listed; with `apply=true` also written. `unlink=skip` leaves a
+/// block whose sheet left the project as it is and lists it as skipped
+/// (mockup row 210); `unlink=apply` is the default.
+pub const REGENERATE_BLOCK_DIAGRAM: &[Operand] = &[
+    required("document", OperandKind::Document),
+    optional("path", OperandKind::Path),
+    optional("apply", OperandKind::Bool),
+    optional("unlink", OperandKind::Text),
+];
+
+mod board;
+mod pcb_sync;
+mod project;
+mod rooms;
+pub use board::*;
+pub use pcb_sync::*;
+pub use project::PROJECT_SET_RAIL;
+pub use rooms::{ARRANGE_ROOM, AUTO_PLACE, CREATE_ROOMS, PLACE_ROOM};

@@ -175,6 +175,8 @@ impl Signex {
             orientation,
             palette,
             variant: Some(variant),
+            // The user's "Cross out not-fitted parts" preference (#1294).
+            draw_not_fitted: self.ui_state.cross_out_not_fitted,
             ..PdfOptions::default()
         }
     }
@@ -219,7 +221,7 @@ pub(crate) fn export_schematic_pdf(app: &mut Signex, args: &CommandArgs) -> Ran 
         return refused("needs the operand `path`");
     };
     let path = PathBuf::from(path);
-    let Some((ctx, issues)) = super::build_page_scope_for_source(&app.document_state, &source)
+    let Some((ctx, issues)) = super::build_export_scope_for_source(&app.document_state, &source)
     else {
         return refused("the sheet is not open");
     };
@@ -263,7 +265,7 @@ pub(crate) fn export_schematic_pdf(app: &mut Signex, args: &CommandArgs) -> Ran 
     });
     // The tab's descended placement picks the page `pages=current` prints.
     let request = Box::new(PdfExportRequest {
-        descended_placement: app.document_state.tab_placements.get(&source).cloned(),
+        descended_placement: app.document_view.tab_placements.get(&source).cloned(),
         source,
         options,
         files,

@@ -230,12 +230,33 @@ pub fn build_renderer_snapshot(
         } else {
             (&colors.body, &colors.pin, &colors.value)
         };
+        // A part that is not fitted draws greyed, under a cross (#1294); its
+        // designator and value keep their colours.
+        let not_fitted = overrides
+            .not_fitted
+            .is_some_and(|set| set.contains(&symbol.uuid));
+        let paper = to_iced(&colors.paper);
+        let ink = |color: Color| {
+            if not_fitted {
+                symbol::not_fitted_ink(color, paper)
+            } else {
+                color
+            }
+        };
         let style = symbol::SymbolStyle {
             id: renderer_id(symbol.uuid),
-            stroke: focus_color(to_iced(body_rgb), focus_set, symbol.uuid),
-            fill: focus_color(to_iced(&colors.body_fill), focus_set, symbol.uuid),
-            pin: focus_color(to_iced(pin_rgb), focus_set, symbol.uuid),
-            missing: focus_color(to_iced(&colors.no_connect), focus_set, symbol.uuid),
+            stroke: ink(focus_color(to_iced(body_rgb), focus_set, symbol.uuid)),
+            fill: ink(focus_color(
+                to_iced(&colors.body_fill),
+                focus_set,
+                symbol.uuid,
+            )),
+            pin: ink(focus_color(to_iced(pin_rgb), focus_set, symbol.uuid)),
+            missing: ink(focus_color(
+                to_iced(&colors.no_connect),
+                focus_set,
+                symbol.uuid,
+            )),
             scale: transform.scale,
             family: resolve_family(None, document_family),
             defaults: overrides.defaults,
@@ -248,7 +269,7 @@ pub fn build_renderer_snapshot(
                     snapshot.body_of(symbol),
                     symbol,
                 ),
-                focus_color(to_iced(&tint), focus_set, symbol.uuid),
+                ink(focus_color(to_iced(&tint), focus_set, symbol.uuid)),
                 &mut polygons,
             );
         }
@@ -262,17 +283,39 @@ pub fn build_renderer_snapshot(
             symbol::push_fallback_box(&bbox, &symbol.lib_id, &style, &mut sink);
         } else {
             symbol::push_primitives(&primitives, &style, &mut sink);
+            if not_fitted {
+                // The cross is in the theme's error ink (decision of
+                // 2026-11-25), as SVG and PDF draw it.
+                symbol::push_not_fitted_cross(
+                    snapshot.body_of(symbol),
+                    symbol,
+                    focus_color(to_iced(&colors.erc_error), focus_set, symbol.uuid),
+                    &style,
+                    &mut sink,
+                );
+            }
         }
         pin_texts.extend(symbol::pin_text_inputs(
             snapshot.body_of(symbol),
             symbol,
             &symbol::PinTextStyle {
                 name: style.pin,
-                number: focus_color(to_iced(&colors.reference), focus_set, symbol.uuid),
+                number: ink(focus_color(
+                    to_iced(&colors.reference),
+                    focus_set,
+                    symbol.uuid,
+                )),
                 family: style.family.clone(),
             },
         ));
 
+        // A value the active variant gives the part draws in the accent
+        // (mockup row 209), on the CPU replay and the GPU path alike.
+        let value_rgb = if super::drawn_value::is_variant_value(symbol, overrides.variant_values) {
+            &colors.selection
+        } else {
+            value_rgb
+        };
         let value_color = focus_color(to_iced(value_rgb), focus_set, symbol.uuid);
         let reference = overrides
             .designators
@@ -300,6 +343,7 @@ pub fn build_renderer_snapshot(
             symbol,
             overrides.special_strings,
             overrides.designator_standard,
+            overrides.variant_values,
         );
         if !symbol.value.is_empty()
             && let Some(text) = field_text_input(

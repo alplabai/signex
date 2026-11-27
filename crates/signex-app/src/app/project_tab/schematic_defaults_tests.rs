@@ -212,8 +212,8 @@ fn the_pre_placement_position_reads_y_from_the_page_origin() {
     let (mut app, _sheet, _window) = app();
     // Positions in mm: the unit is pinned, not read from the shared prefs.
     app.ui_state.unit = signex_types::coord::Unit::Mm;
-    app.document_state.panel_ctx.unit = signex_types::coord::Unit::Mm;
-    app.document_state.panel_ctx.pre_placement = Some(app.document_state.new_pre_placement(
+    app.document_view.panel_ctx.unit = signex_types::coord::Unit::Mm;
+    app.document_view.panel_ctx.pre_placement = Some(app.document_state.new_pre_placement(
         String::new(),
         crate::panels::PrePlacementKind::Other,
         String::new(),
@@ -221,13 +221,13 @@ fn the_pre_placement_position_reads_y_from_the_page_origin() {
     ));
     let readout = |app: &Signex| {
         let pre = app
-            .document_state
+            .document_view
             .panel_ctx
             .pre_placement
             .as_ref()
             .expect("armed");
         let ([x, y, ..], _) =
-            crate::panels::pre_placement::location_texts(pre, &app.document_state.panel_ctx);
+            crate::panels::pre_placement::location_texts(pre, &app.document_view.panel_ctx);
         (x, y)
     };
     app.refresh_panel_ctx();
@@ -252,7 +252,7 @@ fn the_pre_placement_position_reads_y_from_the_page_origin() {
         )),
     )));
     let typed = app
-        .document_state
+        .document_view
         .panel_ctx
         .pre_placement
         .as_ref()
@@ -321,7 +321,7 @@ fn an_out_of_range_default_is_refused_and_names_the_range() {
                 .schematic_defaults
                 .get(field);
             assert_eq!(stored, Some(low), "{field:?} refuses {bad}");
-            let draft = app.document_state.project_tabs[&project_id]
+            let draft = app.document_view.project_tabs[&project_id]
                 .default_drafts
                 .get(&field);
             assert_eq!(draft, Some(&bad), "{field:?} keeps the text");
@@ -362,7 +362,7 @@ fn unusable_input_keeps_the_default_and_only_empty_text_clears() {
         assert_eq!(wire(&app), Some(0.3), "{text:?} keeps the default");
     }
     let project_id = app.document_state.projects[0].id;
-    let draft = app.document_state.project_tabs[&project_id]
+    let draft = app.document_view.project_tabs[&project_id]
         .default_drafts
         .get(&SchematicDefaultField::WireWidth)
         .cloned();
@@ -398,7 +398,7 @@ fn a_junction_default_outside_the_range_is_refused_with_the_text_kept() {
     for bad in ["0.19", "2.01", "5"] {
         edit(&mut app, field, bad);
         assert_eq!(stored(&app), Some(2.0), "{bad} changes nothing");
-        let draft = app.document_state.project_tabs[&project_id]
+        let draft = app.document_view.project_tabs[&project_id]
             .default_drafts
             .get(&field);
         assert_eq!(draft.map(String::as_str), Some(bad), "the text stays");
@@ -460,7 +460,7 @@ fn a_late_edit_for_a_closed_project_leaves_no_tab_state() {
             text: "0.3".into(),
         },
     );
-    assert!(!app.document_state.project_tabs.contains_key(&gone));
+    assert!(!app.document_view.project_tabs.contains_key(&gone));
 }
 
 /// Review of #2026: a shape placed on a project sheet with Width untouched
@@ -540,7 +540,7 @@ fn the_reset_button_clears_the_override_like_an_empty_field() {
     edit(&mut app, bus, "50");
     let project_id = app.document_state.projects[0].id;
     let state = |app: &Signex| {
-        let draft = app.document_state.project_tabs[&project_id]
+        let draft = app.document_view.project_tabs[&project_id]
             .default_drafts
             .get(&bus);
         let stored = app.document_state.projects[0]

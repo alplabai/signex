@@ -83,7 +83,7 @@ impl Signex {
     /// The Export Job tab of `job`.
     pub(crate) fn view_output_job_tab(&self, job: PathBuf) -> Element<'_, Message> {
         let look = Look {
-            tokens: &self.document_state.panel_ctx.tokens,
+            tokens: &self.document_view.panel_ctx.tokens,
             i18n: &self.ui_state.i18n,
         };
         let ui = self.output_jobs().tabs.get(&job);

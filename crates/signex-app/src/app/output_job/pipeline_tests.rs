@@ -353,7 +353,7 @@ fn view_in_gerber_viewer_opens_the_runs_files_with_its_banner() {
         job: job.clone(),
     }));
     settle(&mut app, task);
-    let viewer = &app.document_state.gerber_viewer;
+    let viewer = &app.document_view.gerber_viewer;
     let origin = viewer.from_run.as_ref().expect("the run banner");
     assert_eq!(origin.job, job);
     let open = viewer.open.as_ref().expect("the run's files are open");

@@ -154,11 +154,7 @@ pub(super) fn fixture() -> Signex {
 fn exported(app: &mut Signex, variant: Option<&str>) -> String {
     let _ = app.handle_bom_preview_open();
     app.handle_bom_preview_set_variant(variant.map(str::to_string));
-    let preview = app
-        .document_state
-        .bom_preview
-        .as_ref()
-        .expect("dialog open");
+    let preview = app.document_view.bom_preview.as_ref().expect("dialog open");
     let (source, options) = (preview.source.clone(), preview.options.clone());
     let dir = tempfile::tempdir().expect("a temp dir");
     let out = dir.path().join("bom.csv");

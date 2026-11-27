@@ -9,12 +9,13 @@ use serde_json::Value;
 
 use super::journal::AccessEntry;
 use super::journal::record::rights_within;
-use super::reply::{Status, changed_between, messages_since, outcome_verdict};
+use super::reply::{Status, changed_between, messages_since};
 use super::wire::{self, Request};
 use super::{AgentCall, AgentMsg, Input, allow, listener, registry};
-use crate::app::command::queries::is_query;
-use crate::app::command::{CommandArgs, CommandOutcome, OperandValue};
-use crate::app::{DocumentKey, Message, Signex};
+use crate::app::command::{
+    AgentGatePassed, CommandArgs, CommandRequest, RequestOutcome, RequestSurface,
+};
+use crate::app::{Message, Signex};
 use crate::keymap::AppCommandId;
 
 /// What running one request came to: the status, its reason and its data.
@@ -70,6 +71,9 @@ impl Signex {
             AgentMsg::Request(call) => self.handle_agent_request(call),
             AgentMsg::EditReadsLoaded(loaded) => self.handle_edit_reads_loaded(*loaded),
             AgentMsg::CheckFinished(finished) => self.handle_check_finished(&finished),
+            AgentMsg::AnnotationsListed(listed) => self.handle_annotations_listed(*listed),
+            AgentMsg::NotebookRead(read) => self.handle_notebook_read(*read),
+            AgentMsg::QueryAnswered(answered) => self.handle_query_answered(*answered),
             AgentMsg::PeerRefused { pid, reason } => {
                 let reason = printable(&reason);
                 crate::diagnostics::log_warning(format!(
@@ -498,15 +502,16 @@ impl Signex {
         );
         // A command waiting for its reads answers when they land (#2199), with
         // what its run then changed and logged.
-        if let Some(ticket) = self.agent.deferred.take() {
+        if let Some(deferred) = self.agent.deferred.take() {
             // The token matched: the request was let in with this one.
             let waiting = super::deferred::WaitingReply {
                 id,
                 pid: call.pid,
                 reply: call.reply,
                 token: self.agent.token().map(|t| t.as_str().to_string()),
+                if_revision: deferred.if_revision,
             };
-            self.agent.waiting.insert(ticket, waiting);
+            self.agent.waiting.insert(deferred.ticket, waiting);
             return Task::batch([task, turned_away]);
         }
         self.answer_agent(id.as_deref(), call.pid, mark, &before, verdict, &call.reply);
@@ -681,89 +686,27 @@ impl Signex {
             Ok(args) => args,
             Err(error) => return (refused(error.to_string()), none()),
         };
-        // The window layout names no document (#2249).
-        if allow::is_window_layout(&command) {
-            return self.run_agent_window_layout(&command);
+        // The window layout names no document (#2249): the request path
+        // refuses its `if_revision`, and its runner marks the handler reached.
+        if !allow::is_window_layout(&command) {
+            if let Err(why) = self.check_agent_document(&command, &args) {
+                return (refused(why), none());
+            }
+            self.agent.reached_handler = true;
         }
-        if let Err(why) = self.check_agent_document(&command, &args) {
-            return (refused(why), none());
-        }
-        self.agent.serving = true;
-        self.agent.reached_handler = true;
-        let ran = if is_query(&command) {
-            self.run_query_headless(&command, &args)
-        } else {
-            Some(self.journaled(&command, &args, |app| app.run_operands(&command, &args)))
-        };
-        self.agent.serving = false;
-        match ran {
-            Some((CommandOutcome::Deferred { ticket }, task)) => {
-                self.agent.deferred = Some(ticket);
+        let if_revision = request.if_revision;
+        let request = CommandRequest::new(command, args).with_if_revision(if_revision);
+        let surface = RequestSurface::Agent(AgentGatePassed::after_gate());
+        match self.run_command_request(surface, request) {
+            (RequestOutcome::Waiting { ticket }, task) => {
+                self.agent.deferred = Some(super::deferred::DeferredRequest {
+                    ticket,
+                    if_revision,
+                });
                 (refused("waiting for its reads"), task)
             }
-            Some((outcome, task)) => (outcome_verdict(command.as_str(), outcome, None), task),
-            None => (refused("not a query"), none()),
+            (outcome, task) => (outcome.into_verdict(), task),
         }
-    }
-
-    /// A command that is not a query acts on the document it names, one of an
-    /// open project's, and never on the person's active one. Closing it must
-    /// not move the person's tab either.
-    pub(super) fn check_agent_document(
-        &mut self,
-        command: &AppCommandId,
-        args: &CommandArgs,
-    ) -> Result<(), String> {
-        let id = command.as_str();
-        self.reconcile_document_ids();
-        let target = match args.operand("document") {
-            Some(OperandValue::Document(target)) => target,
-            None if is_query(command) => return Ok(()),
-            _ => {
-                return Err(format!(
-                    "`{id}` needs an explicit `document`: an agent never acts on the person's active one"
-                ));
-            }
-        };
-        let entry = self.resolve_document_target(target)?;
-        if entry.project.is_none() {
-            return Err(format!(
-                "{} is not part of a project open in this app",
-                entry.name
-            ));
-        }
-        if id == "close_active_document" {
-            let active = self
-                .document_state
-                .tabs
-                .get(self.document_state.active_tab)
-                .and_then(DocumentKey::of);
-            if entry.key.is_some() && entry.key == active {
-                return Err(format!(
-                    "{} is the person's active document; closing it would move their tab",
-                    entry.name
-                ));
-            }
-            if entry.open_in_window {
-                return Err(format!(
-                    "{} is open in a window of its own; closing it would close that window",
-                    entry.name
-                ));
-            }
-            // Closing drops a sheet's drafts of every kind (title block,
-            // paper edge): the person's unconfirmed typing is not the agent's
-            // to finish or lose.
-            if entry
-                .path
-                .as_ref()
-                .is_some_and(|path| self.document_state.drafts.has_sheet(path))
-            {
-                return Err(
-                    "the person is editing this sheet's title block or page settings".to_string(),
-                );
-            }
-        }
-        Ok(())
     }
 }
 

@@ -288,7 +288,7 @@ fn a_change_of_ticks_or_of_the_board_drops_the_typed_text() {
 fn builds_on_both_themes_with_and_without_a_board() {
     let (app, _boot) = crate::app::Signex::new();
     for id in ThemeId::BUILTINS {
-        let mut ctx = app.document_state.panel_ctx.clone();
+        let mut ctx = app.document_view.panel_ctx.clone();
         ctx.tokens = theme_tokens(*id);
         let _ = view(&ctx);
         let _ = panel_view(&ctx);

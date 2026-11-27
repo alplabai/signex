@@ -123,7 +123,7 @@ impl Signex {
         drawn: usize,
         focused: bool,
     ) -> Element<'_, Message> {
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let line = if focused {
             ti(tokens.accent)
         } else {
@@ -239,7 +239,7 @@ impl Signex {
         let tile = *self
             .pane_cells(&view, (area.width, area.height))
             .get(pane)?;
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let context = self.command_context(None);
         let rows = PANE_MENU_ROWS.iter().filter_map(|id| {
             let command = AppCommandId::new(*id).ok()?;

@@ -372,7 +372,7 @@ impl Signex {
 
     pub(super) fn checklist_tab(&mut self, project_id: ProjectId) -> &mut ChecklistTabState {
         &mut self
-            .document_state
+            .document_view
             .project_tabs
             .entry(project_id)
             .or_default()
@@ -381,7 +381,7 @@ impl Signex {
 
     /// The tab's state of `project_id`, when it has any.
     pub(super) fn checklist_tab_ref(&self, project_id: ProjectId) -> Option<&ChecklistTabState> {
-        self.document_state
+        self.document_view
             .project_tabs
             .get(&project_id)
             .map(|tab| &tab.checklist)
@@ -534,11 +534,8 @@ impl Signex {
             );
             return Ok(false);
         };
-        let tab = document.project_tabs.entry(project_id).or_default();
-        if !tab
-            .general_history
-            .apply_checklist(&mut project.data, command)?
-        {
+        let history = document.general_history.entry(project_id).or_default();
+        if !history.apply_checklist(&mut project.data, command)? {
             return Ok(false);
         }
         document.sync_project_history_dirty(project_id, false);

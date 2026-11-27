@@ -109,7 +109,7 @@ impl Signex {
     /// drag (and no drop preview) is in flight.
     pub(super) fn dock_drag_zones(&self) -> Option<[DropZone; 3]> {
         let ui = &self.ui_state;
-        let dock = &self.document_state.dock;
+        let dock = &self.document_view.dock;
         let dragging = dock.floating.iter().any(|fp| fp.dragging);
         if !dragging && dock.drop_preview.is_none() {
             return None;
@@ -118,7 +118,7 @@ impl Signex {
             ui.window_size,
             (ui.left_width, ui.right_width, ui.bottom_height),
         );
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let top = super::canvas_region::chrome_top(tokens);
         let bottom = ui.window_size.1 - crate::status_bar::status_bar_height(tokens);
         Some(drop_zones(&geometry, top, bottom, dock.drop_preview))
@@ -129,7 +129,7 @@ impl Signex {
     /// layer, [`Self::dock_drop_target_label_overlay`].
     pub(in crate::app::view) fn dock_drag_zone_overlay(&self) -> Option<Element<'_, Message>> {
         let zones = self.dock_drag_zones()?;
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let r = crate::styles::tokens::resolve(tokens);
         let outline = crate::styles::dock_zone_outline(tokens);
         let cards = zones.into_iter().map(|zone| {
@@ -162,7 +162,7 @@ impl Signex {
         &self,
     ) -> Option<Element<'_, Message>> {
         let zone = self.dock_drag_zones()?.into_iter().find(|z| z.is_target)?;
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let r = crate::styles::tokens::resolve(tokens);
         let name = zone_name(&self.ui_state.i18n, &r, zone.position, true);
         let (under, soft) = label_chip_fills(tokens);
@@ -323,7 +323,7 @@ mod tests {
         assert!(app.dock_drag_zones().is_none());
         assert!(app.dock_drag_zone_overlay().is_none());
         assert!(app.dock_drop_target_label_overlay().is_none());
-        app.document_state.dock.drop_preview = Some(PanelPosition::Left);
+        app.document_view.dock.drop_preview = Some(PanelPosition::Left);
         let zones = app.dock_drag_zones().expect("zones while previewing");
         assert!(zones[0].is_target && !zones[1].is_target && !zones[2].is_target);
         assert!(app.dock_drag_zone_overlay().is_some());
@@ -352,7 +352,7 @@ mod tests {
         const WINDOW: iced::Size = iced::Size::new(1400.0, 900.0);
         let (mut app, main) = crate::canvas::overlay_camera_tests::graphite_app_showing(|_| {});
         app.ui_state.window_size = (WINDOW.width, WINDOW.height);
-        app.document_state.dock.drop_preview = Some(PanelPosition::Right);
+        app.document_view.dock.drop_preview = Some(PanelPosition::Right);
         let target = app.dock_drag_zones().expect("zones")[1];
         assert!(target.is_target && target.position == PanelPosition::Right);
         let centre = target.bounds.center();
@@ -368,7 +368,7 @@ mod tests {
             Point::new(panel.x, panel.y),
             Size::new(panel.width, panel.height),
         );
-        app.document_state.dock.floating.push(panel);
+        app.document_view.dock.floating.push(panel);
 
         let name = signex_i18n::t!(app.ui_state.i18n, menu_ids::CTX_DOCK_RIGHT).into_string();
         let texts = lay_out_texts(app.view(main), WINDOW);

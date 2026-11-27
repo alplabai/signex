@@ -14,17 +14,17 @@ use super::super::super::*;
 
 impl Signex {
     pub(super) fn type_child_sheet_name(&mut self, id: uuid::Uuid, text: &str) {
-        self.document_state.panel_ctx.child_sheet_name_buf = Some((id, text.to_string()));
+        self.document_view.panel_ctx.child_sheet_name_buf = Some((id, text.to_string()));
     }
 
     pub(super) fn type_child_sheet_file(&mut self, id: uuid::Uuid, text: &str) {
-        self.document_state.panel_ctx.child_sheet_file_buf = Some((id, text.to_string()));
+        self.document_view.panel_ctx.child_sheet_file_buf = Some((id, text.to_string()));
     }
 
     /// Commit the buffered Name for sheet `id`. Nothing typed, nothing done.
     /// The Repeat rows of a sheet symbol write through here too (#1279).
     pub(crate) fn commit_child_sheet_name(&mut self, id: uuid::Uuid) {
-        let Some(name) = take_buffer(&mut self.document_state.panel_ctx.child_sheet_name_buf, id)
+        let Some(name) = take_buffer(&mut self.document_view.panel_ctx.child_sheet_name_buf, id)
         else {
             return;
         };
@@ -40,7 +40,7 @@ impl Signex {
     /// Commit the buffered File reference for sheet `id`.
     pub(super) fn commit_child_sheet_file(&mut self, id: uuid::Uuid) {
         let Some(filename) =
-            take_buffer(&mut self.document_state.panel_ctx.child_sheet_file_buf, id)
+            take_buffer(&mut self.document_view.panel_ctx.child_sheet_file_buf, id)
         else {
             return;
         };
@@ -145,7 +145,7 @@ impl Signex {
     }
 
     fn refuse_child_sheet_edit(&mut self, detail: Translatable) {
-        self.document_state.error_notice = Some(ErrorNotice::sheet_edit(detail));
+        self.document_view.error_notice = Some(ErrorNotice::sheet_edit(detail));
     }
 
     /// The existing name that `name` would collide with in another open

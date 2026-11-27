@@ -24,10 +24,10 @@ impl Signex {
     pub(super) fn warm_net_index_for_cross_refs(&mut self) -> Task<Message> {
         let active = self.document_state.active_path.clone();
         let stamp = (self.net_nav_stamp(), active.clone());
-        if self.document_state.net_nav.cross_ref_stamp.as_ref() == Some(&stamp) {
+        if self.document_view.net_nav.cross_ref_stamp.as_ref() == Some(&stamp) {
             return Task::none();
         }
-        self.document_state.net_nav.cross_ref_stamp = Some(stamp);
+        self.document_view.net_nav.cross_ref_stamp = Some(stamp);
         let Some(path) = active else {
             return Task::none();
         };
@@ -69,7 +69,7 @@ impl Signex {
             IndexLookup::Building(build) => {
                 let waiting = self.wait_for_command(command, args);
                 let ticket = waiting.ticket;
-                self.document_state
+                self.document_view
                     .net_nav
                     .cross_ref_queries
                     .push(WaitingCrossRefs {
@@ -101,7 +101,7 @@ impl Signex {
             Stored::Failed(reason) => Err(reason.clone()),
             Stored::Stale => return Task::none(),
         };
-        let queries = &mut self.document_state.net_nav.cross_ref_queries;
+        let queries = &mut self.document_view.net_nav.cross_ref_queries;
         let (mine, others): (Vec<_>, Vec<_>) = std::mem::take(queries)
             .into_iter()
             .partition(|q| q.project == project);

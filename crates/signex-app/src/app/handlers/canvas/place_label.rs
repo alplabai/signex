@@ -38,7 +38,7 @@ impl Signex {
             }
             None => (LabelType::Net, String::new(), "NET"),
         };
-        let pre = self.document_state.panel_ctx.pre_placement.as_ref();
+        let pre = self.document_view.panel_ctx.pre_placement.as_ref();
         let text = pre
             .map(|pp| pp.label_text.trim().to_string())
             .filter(|s| !s.is_empty())

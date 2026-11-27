@@ -7,6 +7,11 @@ use signex_output::{BomColumn, BomExporter, BomFormat, BomGrouping, BomOptions, 
 
 use super::super::super::super::*;
 
+#[cfg(test)]
+#[path = "bom_computed_tests.rs"]
+mod computed_tests;
+#[path = "bom_lines.rs"]
+mod lines;
 #[path = "bom_rows.rs"]
 mod rows;
 #[cfg(test)]
@@ -21,39 +26,50 @@ impl Signex {
     /// in the modal and clicks Export to drive the file dialog.
     pub(crate) fn handle_bom_preview_open(&mut self) -> Task<Message> {
         let anchor = self.document_state.active_path.clone();
-        self.commit_drafts_in_scope_of(anchor.as_deref());
-        if let Some(anchor) = anchor.as_deref() {
-            self.report_part_field_issues_in_scope_of(anchor);
-        }
         if !self.document_state.has_active_engine() {
+            self.commit_drafts_in_scope_of(anchor.as_deref());
+            if let Some(anchor) = anchor.as_deref() {
+                self.report_part_field_issues_in_scope_of(anchor);
+            }
             log::warn!("BOM preview: no active schematic");
             return Task::none();
         }
         // Pin the preview to the document it is built for; Export writes
         // this one even after a tab switch (#852).
-        let Some(source) = self.document_state.active_path.clone() else {
+        let Some(source) = anchor else {
             crate::diagnostics::log_warning("BOM preview: no active document to export");
             return Task::none();
         };
         let active_variant = self
             .document_state
-            .active_document_project()
-            .and_then(|p| p.data.active_variant.clone())
-            .unwrap_or_else(|| "Base".to_string());
+            .document_project(&source)
+            .and_then(|p| p.data.active_variant.clone());
+        self.open_bom_preview_in(source, active_variant)
+    }
+
+    /// The BOM preview of the sheets `source` (an open sheet) belongs to,
+    /// with `variant` picked in its variant select (`None` or Base's name is
+    /// Base): the dialog Open in BOM Studio opens from the Variant Manager
+    /// (#2949) and File ▸ Reports ▸ BOM opens on the active variant.
+    pub(crate) fn open_bom_preview_in(
+        &mut self,
+        source: PathBuf,
+        variant: Option<String>,
+    ) -> Task<Message> {
+        self.commit_drafts_in_scope_of(Some(&source));
+        self.report_part_field_issues_in_scope_of(&source);
         let variants = self
             .document_state
-            .active_document_project()
+            .document_project(&source)
             .map(|p| p.data.variant_definitions.clone())
             .unwrap_or_default();
         let opts = BomOptions {
-            active_variant: if active_variant.eq_ignore_ascii_case("Base") {
-                None
-            } else {
-                Some(active_variant)
-            },
+            active_variant: variant.filter(|name| !signex_types::project::is_base_variant(name)),
             ..BomOptions::default()
         };
-        let Some((ctx, issues)) = super::build_bom_export_scope(&self.document_state) else {
+        let Some((ctx, issues)) =
+            super::build_bom_export_scope_for_source(&self.document_state, &source)
+        else {
             self.refuse_export(signex_i18n::ids::NOTICE_BOM_NO_SHEET);
             return Task::none();
         };
@@ -91,19 +107,19 @@ impl Signex {
             export_pending: false,
         };
         preview.refresh_rows();
-        self.document_state.bom_preview = Some(preview);
+        self.document_view.bom_preview = Some(preview);
         self.handle_detach_modal(crate::app::state::ModalId::BomPreview)
     }
 
     pub(crate) fn handle_bom_preview_set_grouping(&mut self, grouping: BomGrouping) {
-        if let Some(preview) = self.document_state.bom_preview.as_mut() {
+        if let Some(preview) = self.document_view.bom_preview.as_mut() {
             preview.options.grouping = grouping;
         }
         self.rerollup_bom_preview();
     }
 
     pub(crate) fn handle_bom_preview_set_format(&mut self, format: BomFormat) {
-        if let Some(preview) = self.document_state.bom_preview.as_mut() {
+        if let Some(preview) = self.document_view.bom_preview.as_mut() {
             preview.options.format = format;
         }
     }
@@ -111,7 +127,7 @@ impl Signex {
     /// The one not-fitted option over the two domain flags, which it always
     /// sets together (docs/DECISIONS.md, 2026-11-19).
     pub(crate) fn handle_bom_preview_include_not_fitted(&mut self, include: bool) {
-        if let Some(preview) = self.document_state.bom_preview.as_mut() {
+        if let Some(preview) = self.document_view.bom_preview.as_mut() {
             preview.options.include_dnp = include;
             preview.options.include_not_fitted = include;
         }
@@ -121,7 +137,7 @@ impl Signex {
     /// Select the line an issue points at and scroll it into view. A filter
     /// that hides the line is cleared, so the selection is never off screen.
     pub(crate) fn handle_bom_preview_issue_selected(&mut self, issue: usize) -> Task<Message> {
-        let Some(preview) = self.document_state.bom_preview.as_mut() else {
+        let Some(preview) = self.document_view.bom_preview.as_mut() else {
             return Task::none();
         };
         let Some(Some(at)) = preview.issue_lines.get(issue).copied() else {
@@ -150,7 +166,7 @@ impl Signex {
     /// The table body scrolled: move the sticky header to the same
     /// horizontal offset.
     pub(crate) fn handle_bom_preview_body_scrolled(&mut self, x: f32) -> Task<Message> {
-        let Some(preview) = self.document_state.bom_preview.as_mut() else {
+        let Some(preview) = self.document_view.bom_preview.as_mut() else {
             return Task::none();
         };
         if preview.scroll_x == x {
@@ -174,7 +190,7 @@ impl Signex {
         rule: signex_output::BomRule,
         enabled: bool,
     ) {
-        let Some(preview) = self.document_state.bom_preview.as_mut() else {
+        let Some(preview) = self.document_view.bom_preview.as_mut() else {
             return;
         };
         preview.options.rule_options.set_enabled(rule, enabled);
@@ -183,7 +199,7 @@ impl Signex {
         let Some(ctx) = super::build_bom_export_context(&self.document_state) else {
             return;
         };
-        if let Some(preview) = self.document_state.bom_preview.as_mut() {
+        if let Some(preview) = self.document_view.bom_preview.as_mut() {
             preview.validation_report = signex_output::bom::validate(&ctx, &opts, &preview.table);
         }
     }
@@ -195,22 +211,40 @@ impl Signex {
     /// preserving the original slot would require a separate
     /// "available columns" Vec).
     pub(crate) fn handle_bom_preview_toggle_column(&mut self, col: BomColumn) {
-        if let Some(preview) = self.document_state.bom_preview.as_mut() {
+        let is_computed = matches!(col, BomColumn::Computed(_));
+        let mut added = false;
+        if let Some(preview) = self.document_view.bom_preview.as_mut() {
             if let Some(idx) = preview.options.columns.iter().position(|c| c == &col) {
                 preview.options.columns.remove(idx);
             } else {
                 preview.options.columns.push(col);
+                added = true;
             }
         }
-        // Column toggles don't change the rolled-up table, only the
-        // displayed columns + the export columns. No rerollup needed.
+        // A column toggle changes only the shown and exported columns, except
+        // that a computed column's cells are evaluated in the rollup (#1988).
+        if added && is_computed {
+            self.rerollup_bom_preview();
+            self.report_computed_bom_issues();
+        }
+    }
+
+    /// One Messages line per computed cell of the preview that failed
+    /// (#1988), naming its line and the error.
+    pub(crate) fn report_computed_bom_issues(&self) {
+        let Some(preview) = self.document_view.bom_preview.as_ref() else {
+            return;
+        };
+        for issue in signex_output::bom::computed_issues(&preview.table, &preview.options.columns) {
+            crate::diagnostics::log_warning(issue.to_string());
+        }
     }
 
     /// Switch the active variant in the BOM preview. `None` is the
     /// "Base" view (no variant override). Triggers a rerollup since
     /// variant_fitted resolution can flip qty totals.
     pub(crate) fn handle_bom_preview_set_variant(&mut self, variant: Option<String>) {
-        if let Some(preview) = self.document_state.bom_preview.as_mut() {
+        if let Some(preview) = self.document_view.bom_preview.as_mut() {
             preview.options.active_variant = variant;
         }
         self.rerollup_bom_preview();
@@ -223,7 +257,7 @@ impl Signex {
     /// final exported file should mirror the user's chosen sort, not
     /// the rollup default.
     pub(crate) fn handle_bom_preview_sort_column(&mut self, idx: usize) {
-        if let Some(preview) = self.document_state.bom_preview.as_mut() {
+        if let Some(preview) = self.document_view.bom_preview.as_mut() {
             // Click-no-move: arrived here via the on_release
             // sort branch. Clear the drag state so the highlight
             // doesn't linger.
@@ -239,14 +273,14 @@ impl Signex {
 
     pub(crate) fn handle_bom_preview_column_drag_start(&mut self, idx: usize) {
         let press_x = self.interaction_state.last_mouse_pos.0;
-        if let Some(preview) = self.document_state.bom_preview.as_mut() {
+        if let Some(preview) = self.document_view.bom_preview.as_mut() {
             preview.column_drag = Some(idx);
             preview.column_drag_press_x = Some(press_x);
         }
     }
 
     pub(crate) fn handle_bom_preview_column_drag_drop(&mut self, dest: usize) {
-        if let Some(preview) = self.document_state.bom_preview.as_mut() {
+        if let Some(preview) = self.document_view.bom_preview.as_mut() {
             preview.column_drag_press_x = None;
             if let Some(src) = preview.column_drag.take()
                 && src != dest
@@ -292,7 +326,7 @@ impl Signex {
     /// and finish in `handle_export_bom_finished`. Mirrors the
     /// PrintPreview → Export PDF pattern.
     pub(crate) fn handle_bom_preview_export(&mut self) -> Option<Task<Message>> {
-        let Some(preview) = self.document_state.bom_preview.as_mut() else {
+        let Some(preview) = self.document_view.bom_preview.as_mut() else {
             return Some(Task::none());
         };
         preview.export_pending = true;
@@ -343,7 +377,7 @@ impl Signex {
     /// the table, and Cancel, still work.
     pub(crate) fn bom_edit_waits_for_save(&self, msg: &BomPreviewMsg) -> bool {
         let pending = self
-            .document_state
+            .document_view
             .bom_preview
             .as_ref()
             .is_some_and(|preview| preview.export_pending);
@@ -365,7 +399,7 @@ impl Signex {
     /// The Export of `source` ended without closing its dialog: it takes
     /// edits again.
     fn end_bom_export(&mut self, source: &std::path::Path) {
-        if let Some(preview) = self.document_state.bom_preview.as_mut()
+        if let Some(preview) = self.document_view.bom_preview.as_mut()
             && preview.source == source
         {
             preview.export_pending = false;
@@ -383,7 +417,7 @@ impl Signex {
         let is_written = outcome.result.is_ok();
         let reported = self.handle_export_written(outcome);
         let is_open_for_source = self
-            .document_state
+            .document_view
             .bom_preview
             .as_ref()
             .is_some_and(|preview| preview.source == source);
@@ -395,7 +429,7 @@ impl Signex {
     }
 
     pub(crate) fn handle_bom_preview_close(&mut self) -> Task<Message> {
-        self.document_state.bom_preview = None;
+        self.document_view.bom_preview = None;
         self.ui_state
             .modal_offsets
             .remove(&crate::app::state::ModalId::BomPreview);
@@ -415,7 +449,7 @@ impl Signex {
     }
 
     /// The rolled-up table and its validation of an assembled scope.
-    fn bom_table_of(
+    pub(crate) fn bom_table_of(
         &self,
         mut ctx: signex_output::ExportContext,
         opts: &BomOptions,
@@ -424,6 +458,12 @@ impl Signex {
         let opts = BomOptions {
             price_book: crate::library::bom_prices::price_book(&self.library),
             board_left_out: self.active_board_left_out_of_bom(),
+            alternates: self
+                .document_state
+                .active_path
+                .as_deref()
+                .map(|source| self.bom_alternates_of(source))
+                .unwrap_or_default(),
             ..opts.clone()
         };
         signex_output::bom::rollup_with_validation(&ctx, &opts)
@@ -431,7 +471,7 @@ impl Signex {
 
     fn rerollup_bom_preview(&mut self) {
         let Some(opts) = self
-            .document_state
+            .document_view
             .bom_preview
             .as_ref()
             .map(|p| p.options.clone())
@@ -439,7 +479,7 @@ impl Signex {
             return;
         };
         if let Some((table, report)) = self.rebuild_bom_table(&opts)
-            && let Some(preview) = self.document_state.bom_preview.as_mut()
+            && let Some(preview) = self.document_view.bom_preview.as_mut()
         {
             preview.table = table;
             preview.validation_report = report;
@@ -504,6 +544,7 @@ impl Signex {
         opts.format = BomFormat::from_output_path(&save_path);
         opts.price_book = crate::library::bom_prices::price_book(&self.library);
         opts.board_left_out = self.board_left_out_of_bom(&source);
+        opts.alternates = self.bom_alternates_of(&source);
 
         match BomExporter.export(&ctx, &opts) {
             Ok(output) => {
@@ -515,6 +556,10 @@ impl Signex {
                 // Advisory, not a gate: the file is written; tell the
                 // user what validation found instead of dropping it.
                 let advisory = bom_validation_notice(&output.validation_report, &save_path);
+                // A computed cell that failed is written empty (#1988).
+                for issue in &output.computed_issues {
+                    crate::diagnostics::log_warning(issue.to_string());
+                }
                 let write = self.write_export(
                     save_path,
                     output.bytes,
@@ -546,6 +591,18 @@ impl Signex {
     }
 
     /// [`Self::board_left_out_of_bom`] for the document in view.
+    /// The alternates per line of `source`'s project (#2938), for the
+    /// Alternates column; none for a sheet outside a project.
+    pub(super) fn bom_alternates_of(
+        &self,
+        source: &std::path::Path,
+    ) -> Vec<signex_types::project::BomLineAlternates> {
+        self.document_state
+            .document_project(source)
+            .map(|project| project.data.bom_alternates.clone())
+            .unwrap_or_default()
+    }
+
     fn active_board_left_out_of_bom(&self) -> Vec<signex_types::pcb::SymbolLink> {
         self.document_state
             .active_path

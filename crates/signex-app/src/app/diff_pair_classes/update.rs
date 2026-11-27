@@ -72,6 +72,15 @@ impl Signex {
                     class.pair_by_suffix = on;
                 }
             }),
+            M::PreviewActed(msg) => {
+                let Some(state) = self.ui_state.diff_pair_classes.as_mut() else {
+                    return Task::none();
+                };
+                state.menu = None;
+                return state
+                    .act_on_preview(msg)
+                    .map(|msg| crate::app::Message::from(M::PreviewActed(msg)));
+            }
             M::RulesLinkClicked => {
                 let id = crate::keymap::AppCommandId::new("open_rules").expect("a catalog id");
                 return self.dispatch_command(&id, crate::app::command::CommandArgs::none(), None);
@@ -118,12 +127,16 @@ impl Signex {
             members,
             drafts: Vec::new(),
             problem: None,
+            preview: super::PairPreview::default(),
         }));
     }
 
     /// Whether a page of `project` has no open tab, so the pairs on it are
     /// not counted.
-    fn project_has_closed_sheets(&self, project: &crate::app::state::LoadedProject) -> bool {
+    pub(super) fn project_has_closed_sheets(
+        &self,
+        project: &crate::app::state::LoadedProject,
+    ) -> bool {
         use crate::app::sheet_hierarchy::normalised_key;
         let fold = crate::app::state::project_case::fold_of(Some(project));
         let open: std::collections::HashSet<String> = self
@@ -144,25 +157,7 @@ impl Signex {
         id: crate::app::state::ProjectId,
         classes: &[signex_types::diff_pair_class::DiffPairClass],
     ) -> Vec<PairMemberRow> {
-        let mut sheets: Vec<(String, &signex_types::schematic::SchematicSheet)> = self
-            .document_state
-            .engines
-            .iter()
-            .filter(|(path, _)| {
-                self.document_state
-                    .document_project(path)
-                    .is_some_and(|p| p.id == id)
-            })
-            .map(|(path, engine)| {
-                let name = path
-                    .file_name()
-                    .map(|n| n.to_string_lossy().into_owned())
-                    .unwrap_or_default();
-                (name, engine.document())
-            })
-            .collect();
-        sheets.sort_by(|a, b| a.0.cmp(&b.0));
-        signex_net::class_members(&sheets, classes)
+        signex_net::class_members(&self.project_open_sheets(id), classes)
             .into_iter()
             .map(|m| PairMemberRow {
                 class: m.pair.class.clone().unwrap_or_default(),
@@ -202,9 +197,9 @@ impl Signex {
             crate::diagnostics::log_warning(closed.into_string());
             return;
         };
-        let tab = document.project_tabs.entry(project_id).or_default();
+        let history = document.general_history.entry(project_id).or_default();
         let command = ProjectGeneralCommand::SetDiffPairClasses(classes);
-        if tab.general_history.apply(&mut project.data, command) {
+        if history.apply(&mut project.data, command) {
             // Classes feed the board, not ERC.
             document.sync_project_history_dirty(project_id, false);
             self.refresh_panel_ctx();
@@ -212,15 +207,17 @@ impl Signex {
     }
 }
 
-/// Select class `index`; its drafts start empty.
+/// Select class `index`; its drafts start empty and a value open on the
+/// preview closes.
 fn select(state: &mut DiffPairClassesState, index: usize) {
     state.selected = index;
     state.drafts.clear();
+    state.preview.close_labels();
 }
 
 /// A typed value: kept as the draft, stored when it reads as a number of 0
-/// or more (blank clears it).
-fn edit_field(state: &mut DiffPairClassesState, field: PairClassField, text: String) {
+/// or more (blank clears it). A value set on the preview comes here too.
+pub(super) fn edit_field(state: &mut DiffPairClassesState, field: PairClassField, text: String) {
     if let Ok(value) = parse_value(&text)
         && let Some(class) = state.classes.get_mut(state.selected)
     {

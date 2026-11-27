@@ -28,12 +28,14 @@ pub(crate) fn page_name(kind: &TabKind) -> Option<MessageId> {
         TabKind::PinTable => Some(ids::EDITORS_PIN_TABLE_PAGE),
         TabKind::VariantManager(_) => Some(ids::VARIANT_MANAGER_TAB_TITLE),
         TabKind::DesignChecklist(_) => Some(ids::CHECKLIST_TAB_TITLE),
+        TabKind::Notebook(_) => Some(ids::NOTEBOOK_TAB_TITLE),
         TabKind::Schematic
         | TabKind::Pcb
         | TabKind::ComponentEditor(_)
         | TabKind::SymbolEditor(_)
         | TabKind::FootprintEditor(_)
-        | TabKind::LibraryBrowser(_) => None,
+        | TabKind::LibraryBrowser(_)
+        | TabKind::BlockDiagram(_) => None,
         // Titled by its package, not a project (`app/gerber_viewer/tab`);
         // an Export Job by its file (`app/output_job/document`).
         TabKind::GerberViewer | TabKind::OutputJob => None,
@@ -48,6 +50,7 @@ pub(crate) fn page_project(kind: &TabKind) -> Option<ProjectId> {
         .or_else(|| kind.as_rules())
         .or_else(|| kind.as_variant_manager())
         .or_else(|| kind.as_design_checklist())
+        .or_else(|| kind.as_notebook())
 }
 
 /// `<project> — <page>` in the language of `i18n`, without bidi marks so

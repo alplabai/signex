@@ -40,7 +40,7 @@ fn new_project_creates_a_folder_named_after_the_project() {
         ["Fresh"],
         "nothing lands beside the folder in the chosen location"
     );
-    assert!(app.document_state.error_notice.is_none());
+    assert!(app.document_view.error_notice.is_none());
     let project = app.document_state.projects.last().expect("project opened");
     assert_eq!(project.path, folder.join("Fresh.snxprj"));
 }
@@ -58,7 +58,7 @@ fn an_empty_folder_already_named_after_the_project_is_used_directly() {
     assert!(folder.join("Foo.snxprj").is_file());
     assert!(folder.join("Foo.snxsch").is_file());
     assert!(!folder.join("Foo").exists(), "no Foo/Foo/ nesting");
-    assert!(app.document_state.error_notice.is_none());
+    assert!(app.document_view.error_notice.is_none());
 }
 
 #[test]
@@ -73,7 +73,7 @@ fn a_non_empty_target_folder_is_refused_and_nothing_is_written() {
 
     assert_eq!(names_in(&folder), ["notes.txt"]);
     assert_eq!(fs::read(folder.join("notes.txt")).unwrap(), b"mine");
-    let notice = app.document_state.error_notice.as_ref().expect("refused");
+    let notice = app.document_view.error_notice.as_ref().expect("refused");
     assert!(
         notice.detail.render_en_us().contains("not empty"),
         "{notice:?}"
@@ -93,7 +93,7 @@ fn a_target_folder_that_holds_a_project_is_refused_untouched() {
 
     assert_eq!(names_in(&folder), ["Other.snxprj"]);
     assert_eq!(fs::read(folder.join("Other.snxprj")).unwrap(), b"precious");
-    let notice = app.document_state.error_notice.as_ref().expect("refused");
+    let notice = app.document_view.error_notice.as_ref().expect("refused");
     assert!(
         notice.detail.render_en_us().contains("already"),
         "{notice:?}"
@@ -112,7 +112,7 @@ fn choosing_the_existing_project_inside_its_own_folder_is_refused() {
 
     assert_eq!(names_in(&folder), ["Keep.snxprj"]);
     assert!(!folder.join("Keep").exists(), "no nested project folder");
-    assert!(app.document_state.error_notice.is_some());
+    assert!(app.document_view.error_notice.is_some());
 }
 
 #[test]
@@ -127,7 +127,7 @@ fn an_existing_project_in_a_shared_folder_still_opens() {
         Message::File(FileMsg::Opened(Some(tmp.path().join("Shared.snxprj")))),
     );
 
-    assert!(app.document_state.error_notice.is_none());
+    assert!(app.document_view.error_notice.is_none());
     assert_eq!(app.document_state.projects.len(), 1);
 }
 
@@ -142,7 +142,7 @@ fn a_project_inside_an_existing_project_is_refused() {
     new_project(&mut app, &alpha.join("Beta.snxprj"));
 
     assert!(!alpha.join("Beta").exists(), "nothing was created");
-    let notice = app.document_state.error_notice.as_ref().expect("refused");
+    let notice = app.document_view.error_notice.as_ref().expect("refused");
     assert!(
         notice.detail.render_en_us().contains("inside the project"),
         "{notice:?}"

@@ -70,6 +70,11 @@
     "category": "design"
   },
   {
+    "id": "apply_board_schematic_differences",
+    "group": "General",
+    "category": "pcb_sync"
+  },
+  {
     "id": "apply_edits",
     "group": "General",
     "category": "edit"
@@ -105,8 +110,18 @@
     "category": "modify"
   },
   {
+    "id": "arrange_in_room",
+    "group": "Pcb",
+    "category": "design"
+  },
+  {
     "id": "assign_board_net_class",
     "group": "Pcb",
+    "category": "design"
+  },
+  {
+    "id": "assign_footprint",
+    "group": "Schematic",
     "category": "design"
   },
   {
@@ -120,6 +135,16 @@
     "category": "design"
   },
   {
+    "id": "attach_notebook_file",
+    "group": "General",
+    "category": "design"
+  },
+  {
+    "id": "auto_place",
+    "group": "Pcb",
+    "category": "design"
+  },
+  {
     "id": "autoplace_fields",
     "group": "General",
     "category": "edit"
@@ -128,6 +153,61 @@
     "id": "back_annotate_schematics",
     "group": "Schematic",
     "category": "pcb_sync"
+  },
+  {
+    "id": "block_add",
+    "group": "General",
+    "category": "edit"
+  },
+  {
+    "id": "block_group",
+    "group": "General",
+    "category": "edit"
+  },
+  {
+    "id": "block_group_set",
+    "group": "General",
+    "category": "edit"
+  },
+  {
+    "id": "block_link",
+    "group": "General",
+    "category": "edit"
+  },
+  {
+    "id": "block_link_set",
+    "group": "General",
+    "category": "edit"
+  },
+  {
+    "id": "block_port_add",
+    "group": "General",
+    "category": "edit"
+  },
+  {
+    "id": "block_port_remove",
+    "group": "General",
+    "category": "edit"
+  },
+  {
+    "id": "block_remove",
+    "group": "General",
+    "category": "edit"
+  },
+  {
+    "id": "block_set",
+    "group": "General",
+    "category": "edit"
+  },
+  {
+    "id": "block_ungroup",
+    "group": "General",
+    "category": "edit"
+  },
+  {
+    "id": "block_unlink",
+    "group": "General",
+    "category": "edit"
   },
   {
     "id": "board_assembly_drawing",
@@ -172,6 +252,31 @@
   {
     "id": "board_sketch",
     "group": "Pcb",
+    "category": "design"
+  },
+  {
+    "id": "board_status",
+    "group": "General",
+    "category": "validation"
+  },
+  {
+    "id": "bom_add_alternate",
+    "group": "General",
+    "category": "design"
+  },
+  {
+    "id": "bom_lines",
+    "group": "General",
+    "category": "file"
+  },
+  {
+    "id": "bom_remove_alternate",
+    "group": "General",
+    "category": "design"
+  },
+  {
+    "id": "bom_set_alternate_order",
+    "group": "General",
     "category": "design"
   },
   {
@@ -230,6 +335,11 @@
     "category": "modify"
   },
   {
+    "id": "check_board_against_schematic",
+    "group": "General",
+    "category": "pcb_sync"
+  },
+  {
     "id": "check_drc",
     "group": "General",
     "category": "validation"
@@ -278,6 +388,11 @@
     "id": "compare_board_with_schematic",
     "group": "Schematic",
     "category": "pcb_sync"
+  },
+  {
+    "id": "compare_variants",
+    "group": "General",
+    "category": "design"
   },
   {
     "id": "compile_project",
@@ -560,6 +675,11 @@
     "category": "reports"
   },
   {
+    "id": "export_block_diagram",
+    "group": "General",
+    "category": "reports"
+  },
+  {
     "id": "export_board_pdf",
     "group": "Pcb",
     "category": "reports"
@@ -573,6 +693,21 @@
     "id": "export_board_step",
     "group": "Pcb",
     "category": "reports"
+  },
+  {
+    "id": "export_notebook_pdf",
+    "group": "General",
+    "category": "file"
+  },
+  {
+    "id": "export_notebook_timeline",
+    "group": "General",
+    "category": "reports"
+  },
+  {
+    "id": "export_parameters",
+    "group": "Schematic",
+    "category": "design"
   },
   {
     "id": "fabrication_outputs",
@@ -635,6 +770,16 @@
     "category": "search"
   },
   {
+    "id": "fix_drc",
+    "group": "Pcb",
+    "category": "pcb"
+  },
+  {
+    "id": "fix_drc_violation",
+    "group": "Pcb",
+    "category": "pcb"
+  },
+  {
     "id": "flip_board_3d",
     "group": "Pcb",
     "category": "view"
@@ -682,6 +827,16 @@
   {
     "id": "force_annotate_all_schematics",
     "group": "Schematic",
+    "category": "design"
+  },
+  {
+    "id": "generate_block_diagram",
+    "group": "Schematic",
+    "category": "design"
+  },
+  {
+    "id": "generate_design_notebook",
+    "group": "General",
     "category": "design"
   },
   {
@@ -745,9 +900,24 @@
     "category": "place"
   },
   {
+    "id": "import_parameters",
+    "group": "Schematic",
+    "category": "design"
+  },
+  {
     "id": "keepout_from_selection",
     "group": "Pcb",
     "category": "design"
+  },
+  {
+    "id": "keymap_assign",
+    "group": "General",
+    "category": "preferences"
+  },
+  {
+    "id": "keymap_clear",
+    "group": "General",
+    "category": "preferences"
   },
   {
     "id": "lasso_select",
@@ -755,12 +925,47 @@
     "category": "select"
   },
   {
+    "id": "layout_plan_get",
+    "group": "Pcb",
+    "category": "pcb"
+  },
+  {
+    "id": "layout_plan_set",
+    "group": "Pcb",
+    "category": "pcb"
+  },
+  {
+    "id": "layout_plan_status",
+    "group": "Pcb",
+    "category": "pcb"
+  },
+  {
     "id": "leave_sheet",
     "group": "Schematic",
     "category": "navigation"
   },
   {
+    "id": "list_annotations",
+    "group": "General",
+    "category": "design"
+  },
+  {
+    "id": "list_diff_pairs",
+    "group": "Schematic",
+    "category": "design"
+  },
+  {
     "id": "list_documents",
+    "group": "General",
+    "category": "file"
+  },
+  {
+    "id": "list_snippets",
+    "group": "General",
+    "category": "file"
+  },
+  {
+    "id": "list_templates",
     "group": "General",
     "category": "file"
   },
@@ -773,6 +978,11 @@
     "id": "manage_workspace_layouts",
     "group": "General",
     "category": "window"
+  },
+  {
+    "id": "mark_notebook_attachment_valid",
+    "group": "General",
+    "category": "design"
   },
   {
     "id": "measure_board",
@@ -818,6 +1028,11 @@
     "id": "navigate_up_hierarchy",
     "group": "Schematic",
     "category": "navigation"
+  },
+  {
+    "id": "new_block_diagram",
+    "group": "General",
+    "category": "file"
   },
   {
     "id": "new_document",
@@ -870,6 +1085,61 @@
     "category": "view"
   },
   {
+    "id": "notebook_attachments",
+    "group": "General",
+    "category": "design"
+  },
+  {
+    "id": "notebook_badges",
+    "group": "General",
+    "category": "design"
+  },
+  {
+    "id": "notebook_compile",
+    "group": "General",
+    "category": "reports"
+  },
+  {
+    "id": "notebook_fix_reference",
+    "group": "General",
+    "category": "design"
+  },
+  {
+    "id": "notebook_insert",
+    "group": "General",
+    "category": "edit"
+  },
+  {
+    "id": "notebook_measurements",
+    "group": "General",
+    "category": "design"
+  },
+  {
+    "id": "notebook_reference_card",
+    "group": "General",
+    "category": "design"
+  },
+  {
+    "id": "notebook_reference_picker",
+    "group": "General",
+    "category": "design"
+  },
+  {
+    "id": "notebook_references",
+    "group": "General",
+    "category": "design"
+  },
+  {
+    "id": "notebook_timeline",
+    "group": "General",
+    "category": "design"
+  },
+  {
+    "id": "notebook_view",
+    "group": "General",
+    "category": "view"
+  },
+  {
     "id": "number_schematic_sheets",
     "group": "Schematic",
     "category": "design"
@@ -898,6 +1168,11 @@
     "id": "open_datasheet",
     "group": "General",
     "category": "edit"
+  },
+  {
+    "id": "open_design_notebook",
+    "group": "General",
+    "category": "design"
   },
   {
     "id": "open_diff_pair_classes",
@@ -1290,6 +1565,11 @@
     "category": "place"
   },
   {
+    "id": "place_snippet",
+    "group": "Schematic",
+    "category": "place"
+  },
+  {
     "id": "place_symbol",
     "group": "Schematic",
     "category": "place"
@@ -1380,6 +1660,11 @@
     "category": "design"
   },
   {
+    "id": "project_duplicate_variant",
+    "group": "General",
+    "category": "design"
+  },
+  {
     "id": "project_enable_requirement",
     "group": "General",
     "category": "design"
@@ -1420,12 +1705,42 @@
     "category": "design"
   },
   {
+    "id": "project_set_annotate_numbering",
+    "group": "General",
+    "category": "design"
+  },
+  {
     "id": "project_set_annotate_undo",
     "group": "General",
     "category": "design"
   },
   {
+    "id": "project_set_default_variant",
+    "group": "General",
+    "category": "design"
+  },
+  {
+    "id": "project_set_rail",
+    "group": "General",
+    "category": "design"
+  },
+  {
     "id": "project_set_requirement",
+    "group": "General",
+    "category": "design"
+  },
+  {
+    "id": "project_set_variant_alternate",
+    "group": "General",
+    "category": "design"
+  },
+  {
+    "id": "project_set_variant_fit",
+    "group": "General",
+    "category": "design"
+  },
+  {
+    "id": "project_set_variant_override",
     "group": "General",
     "category": "design"
   },
@@ -1440,14 +1755,54 @@
     "category": "design"
   },
   {
+    "id": "query_block_diagram",
+    "group": "General",
+    "category": "search"
+  },
+  {
     "id": "query_board_nets",
     "group": "Pcb",
     "category": "search"
   },
   {
+    "id": "query_bom",
+    "group": "General",
+    "category": "design"
+  },
+  {
+    "id": "query_footprint_assignments",
+    "group": "Schematic",
+    "category": "design"
+  },
+  {
+    "id": "query_library",
+    "group": "General",
+    "category": "library"
+  },
+  {
+    "id": "query_net_ties",
+    "group": "General",
+    "category": "file"
+  },
+  {
+    "id": "query_part_heights",
+    "group": "Pcb",
+    "category": "validation"
+  },
+  {
     "id": "query_pins",
     "group": "General",
     "category": "file"
+  },
+  {
+    "id": "query_power_tree",
+    "group": "General",
+    "category": "design"
+  },
+  {
+    "id": "query_rail_budget",
+    "group": "General",
+    "category": "validation"
   },
   {
     "id": "read_document",
@@ -1468,6 +1823,11 @@
     "id": "refresh_view",
     "group": "General",
     "category": "view"
+  },
+  {
+    "id": "regenerate_block_diagram",
+    "group": "Schematic",
+    "category": "design"
   },
   {
     "id": "remove_board_panel",
@@ -1700,9 +2060,19 @@
     "category": "file"
   },
   {
+    "id": "save_snippet",
+    "group": "Schematic",
+    "category": "design"
+  },
+  {
     "id": "save_workspace_layout",
     "group": "General",
     "category": "window"
+  },
+  {
+    "id": "search_parts",
+    "group": "General",
+    "category": "library"
   },
   {
     "id": "select_all",
@@ -1770,6 +2140,26 @@
     "category": "pcb"
   },
   {
+    "id": "set_dock_panel",
+    "group": "General",
+    "category": "panels"
+  },
+  {
+    "id": "set_footprint_position",
+    "group": "Pcb",
+    "category": "edit"
+  },
+  {
+    "id": "set_footprint_rotation",
+    "group": "Pcb",
+    "category": "edit"
+  },
+  {
+    "id": "set_footprint_side",
+    "group": "Pcb",
+    "category": "edit"
+  },
+  {
     "id": "set_footprint_text",
     "group": "Pcb",
     "category": "edit"
@@ -1805,12 +2195,22 @@
     "category": "design"
   },
   {
+    "id": "set_net_tie",
+    "group": "Schematic",
+    "category": "edit"
+  },
+  {
     "id": "set_object_position",
     "group": "Schematic",
     "category": "edit"
   },
   {
     "id": "set_object_rotation",
+    "group": "Schematic",
+    "category": "edit"
+  },
+  {
+    "id": "set_object_text",
     "group": "Schematic",
     "category": "edit"
   },
@@ -1930,6 +2330,16 @@
     "category": "modify"
   },
   {
+    "id": "swap_schematic_gates",
+    "group": "Schematic",
+    "category": "modify"
+  },
+  {
+    "id": "swap_schematic_pins",
+    "group": "Schematic",
+    "category": "modify"
+  },
+  {
     "id": "switch_segment_posture",
     "group": "General",
     "category": "interactive"
@@ -1987,6 +2397,16 @@
   {
     "id": "toggle_layers_panel",
     "group": "Pcb",
+    "category": "view"
+  },
+  {
+    "id": "toggle_live_erc",
+    "group": "General",
+    "category": "validation"
+  },
+  {
+    "id": "toggle_notebook_badges",
+    "group": "Schematic",
     "category": "view"
   },
   {
@@ -2088,6 +2508,11 @@
     "id": "update_pcb_from_schematic",
     "group": "Schematic",
     "category": "pcb_sync"
+  },
+  {
+    "id": "variant_bom",
+    "group": "General",
+    "category": "design"
   },
   {
     "id": "view_board_3d",

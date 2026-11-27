@@ -42,7 +42,19 @@ pub fn replace_commands(
 }
 
 fn live_text(sheet: &SchematicSheet, hit: &FindHit) -> Option<String> {
-    match hit.target {
+    stored_text(sheet, hit.target, hit.placement.as_ref())
+}
+
+/// The text `target` holds on `sheet` now: a designator as `placement`
+/// shows it (`Symbol::designator_in`), the part's own `reference` with no
+/// placement. `None` when the object is gone. The Object List's cell editor
+/// opens with it (#2953).
+pub fn stored_text(
+    sheet: &SchematicSheet,
+    target: TextTarget,
+    placement: Option<&InstancePath>,
+) -> Option<String> {
+    match target {
         TextTarget::Label(id) => sheet
             .labels
             .iter()
@@ -60,7 +72,7 @@ fn live_text(sheet: &SchematicSheet, hit: &FindHit) -> Option<String> {
             .map(|s| s.value.clone()),
         TextTarget::SymbolReference(id) => {
             let symbol = sheet.symbols.iter().find(|s| s.uuid == id)?;
-            Some(match &hit.placement {
+            Some(match placement {
                 Some(placement) => symbol.designator_in(placement).to_string(),
                 None => symbol.reference.clone(),
             })

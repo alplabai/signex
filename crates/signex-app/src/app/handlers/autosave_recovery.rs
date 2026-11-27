@@ -366,7 +366,7 @@ impl Signex {
     fn report_recovery_failure(&mut self, text: Translatable) {
         let line = text.render_en_us().replace('\n', " ");
         crate::diagnostics::log_warning(format!("Recovery: {line}"));
-        self.document_state.error_notice = Some(ErrorNotice::recovery(text));
+        self.document_view.error_notice = Some(ErrorNotice::recovery(text));
     }
 }
 
@@ -472,7 +472,7 @@ mod tests {
             ))),
         });
 
-        assert!(app.document_state.error_notice.is_some());
+        assert!(app.document_view.error_notice.is_some());
         assert_eq!(crate::diagnostics::logged_count(needle), before + 1);
     }
 

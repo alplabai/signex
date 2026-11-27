@@ -93,6 +93,7 @@ define_ids! {
     PDF_LAYERS_HELP = "pdf-layers-help";
     PDF_LAYERS_OFF = "pdf-layers-off";
     PDF_LAYER_WIRES = "pdf-layer-wires";
+    PDF_LAYER_HARNESSES = "pdf-layer-harnesses";
     PDF_LAYER_PARTS = "pdf-layer-parts";
     PDF_LAYER_NET_LABELS = "pdf-layer-net-labels";
     PDF_LAYER_POWER_PORTS = "pdf-layer-power-ports";
@@ -118,9 +119,11 @@ define_ids! {
     PDF_GLOBAL_BOOKMARKS = "pdf-global-bookmarks";
     PDF_NO_ERC_MARKERS = "pdf-no-erc-markers";
     PDF_NO_CONNECT_MARKERS = "pdf-no-connect-markers";
-    PDF_PARAMETER_SETS = "pdf-parameter-sets";
+    PDF_NET_PARAMETERS = "pdf-net-parameters";
     PDF_PROBES = "pdf-probes";
-    PDF_BLANKETS = "pdf-blankets";
+    PDF_NET_BLANKETS = "pdf-net-blankets";
+    PDF_COMPILE_MASKS = "pdf-compile-masks";
+    PDF_DIFF_PAIRS = "pdf-diff-pairs";
     PDF_NOTES = "pdf-notes";
     PDF_COLLAPSED_NOTES = "pdf-collapsed-notes";
     PDF_PAGE_SIZE_ISO_A0 = "pdf-page-size-iso-a0";

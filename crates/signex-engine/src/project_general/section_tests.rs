@@ -399,3 +399,62 @@ fn a_checklist_import_and_a_reset_are_one_undo_step_each() {
     assert!(history.undo(&mut data));
     assert_eq!(data.design_checklist_value(), None);
 }
+
+/// #1292: the numbering scheme is one General step; Continuous over an
+/// unreadable section records nothing and keeps it.
+#[test]
+fn the_numbering_scheme_is_one_step_and_keeps_an_unreadable_section() {
+    use signex_types::designator::NumberingScheme;
+    let mut data = project();
+    let mut history = ProjectGeneralHistory::default();
+    let pick = ProjectSectionCommand::SetAnnotateNumbering {
+        scheme: NumberingScheme::PageHundreds,
+    };
+    assert_eq!(apply(&mut history, &mut data, pick.clone()), Ok(true));
+    assert_eq!(data.annotate_numbering(), NumberingScheme::PageHundreds);
+    assert_eq!(apply(&mut history, &mut data, pick), Ok(false), "no change");
+    assert!(history.undo(&mut data));
+    assert_eq!(data.annotate_numbering(), NumberingScheme::Continuous);
+    assert!(data.annotation.is_none());
+
+    let text = br#"{"name":"P","dir":"","schematic_root":null,"pcb_file":null,"annotation":{"numbering":"per_sheet_start"}}"#;
+    let mut data = signex_types::project::parse_project_bytes(Path::new("P.snxprj"), text).unwrap();
+    let mut history = ProjectGeneralHistory::default();
+    let continuous = ProjectSectionCommand::SetAnnotateNumbering {
+        scheme: NumberingScheme::Continuous,
+    };
+    assert_eq!(apply(&mut history, &mut data, continuous), Ok(false));
+    assert!(data.has_unreadable_annotation());
+    assert!(!history.can_undo());
+}
+
+/// #2943: a rails edit is one undo step, a refused one records nothing, and
+/// the undo puts the stored rails back.
+#[test]
+fn a_rail_edit_is_one_undo_step_and_a_refused_one_records_nothing() {
+    use signex_types::project::{RailEdit, RailProblem};
+    let mut data = project();
+    let mut history = ProjectGeneralHistory::default();
+    let set = |voltage: &str| ProjectRailCommand {
+        net: "+3V3".into(),
+        edit: RailEdit {
+            voltage: Some(voltage.into()),
+            ..RailEdit::default()
+        },
+    };
+    assert_eq!(history.apply_rail(&mut data, &set("3.3")), Ok(true));
+    assert_eq!(history.apply_rail(&mut data, &set("3.3")), Ok(false));
+    assert_eq!(
+        history.apply_rail(&mut data, &set("0")),
+        Err(RailProblem::NotAVoltage("0".into()))
+    );
+    assert_eq!(data.rails().unwrap()["+3V3"].voltage, 3.3);
+    assert!(history.undo(&mut data), "one step for the one change");
+    assert_eq!(data.rails_value(), None);
+    assert!(
+        !history.undo(&mut data),
+        "the no-op and the refusal recorded none"
+    );
+    assert!(history.redo(&mut data));
+    assert_eq!(data.rails().unwrap()["+3V3"].voltage, 3.3);
+}

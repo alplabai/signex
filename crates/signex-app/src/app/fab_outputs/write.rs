@@ -3,7 +3,8 @@
 
 use std::path::{Path, PathBuf};
 
-use signex_output::fab::{FabExtras, FabNote, FabOptions, check_job, generate};
+use sha2::{Digest, Sha256};
+use signex_output::fab::{FabExtras, FabFileKind, FabNote, FabOptions, check_job, generate};
 use signex_types::pcb::PcbBoard;
 
 use super::documents::{DocumentsJob, MadeFile, make_documents};
@@ -46,11 +47,45 @@ pub(crate) struct GenerateJob {
     pub designator_standard: Option<signex_types::designator::DesignatorStandard>,
 }
 
+/// One written file as the `fabrication_outputs` answer lists it (#2470):
+/// its name in the output folder, its kind, its size and the SHA-256 of its
+/// bytes in lowercase hex.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FileFacts {
+    pub name: String,
+    pub kind: &'static str,
+    pub bytes: usize,
+    pub sha256: String,
+}
+
+impl FileFacts {
+    fn of(file: &MadeFile) -> Self {
+        Self {
+            name: file.name.clone(),
+            kind: file.kind,
+            bytes: file.bytes.len(),
+            sha256: Sha256::digest(&file.bytes)
+                .iter()
+                .map(|b| format!("{b:02x}"))
+                .collect(),
+        }
+    }
+}
+
+/// What a Generate wrote, with each file's facts in the same order.
+pub type Listed = (FabWritten, Vec<FileFacts>);
+
 /// Run `job`: make every file first, then write them all; when one cannot
 /// be made, nothing is written.
 pub(crate) fn run_generate(job: GenerateJob) -> Result<FabWritten, FabProblem> {
+    run_generate_listed(job).map(|(written, _)| written)
+}
+
+/// [`run_generate`], with the facts of every file it wrote.
+pub(crate) fn run_generate_listed(job: GenerateJob) -> Result<Listed, FabProblem> {
     let folder = job.folder.clone();
     let made = make_generate(job)?;
+    let facts = made.files.iter().map(FileFacts::of).collect();
     write_made(
         made.files,
         &folder,
@@ -58,6 +93,7 @@ pub(crate) fn run_generate(job: GenerateJob) -> Result<FabWritten, FabProblem> {
         made.notes,
         made.board_notes,
     )
+    .map(|written| (written, facts))
 }
 
 /// The files one Generate makes, not written yet: an Export Job run (#1299)
@@ -125,10 +161,25 @@ fn fab_files(
     let extras = FabExtras::of_board(board);
     let set = generate(board, &extras, options).map_err(FabProblem::Refused)?;
     made.extend(set.files.into_iter().map(|file| MadeFile {
+        kind: kind_id(&file.kind),
         name: file.name,
         bytes: file.contents.into_bytes(),
     }));
     Ok(set.notes)
+}
+
+/// The answer's word for a fabrication file's kind.
+fn kind_id(kind: &FabFileKind) -> &'static str {
+    match kind {
+        FabFileKind::Gerber { .. } => "gerber",
+        FabFileKind::Drill { .. } => "drill",
+        FabFileKind::DrillTable => "drill_table",
+        FabFileKind::Centroid => "centroid",
+        FabFileKind::TestNetlist => "test_netlist",
+        FabFileKind::Ipc2581 => "ipc2581",
+        FabFileKind::Odb => "odb",
+        FabFileKind::Job => "job",
+    }
 }
 
 /// Write `made` into `folder`, creating it, each file crash-safely, and
@@ -176,7 +227,9 @@ fn write_made(
 
 /// Where the file named `name` (`/`-separated, as the writers name the
 /// ODB++ folder's files) goes under `folder`. A name that is empty, absolute
-/// or steps out of the folder is refused.
+/// or steps out of the folder is refused, and so is one with a link on its
+/// way below the folder (#2983): a committed `<name>-odb` link would carry
+/// the files out of it.
 fn file_path(folder: &Path, name: &str) -> Result<PathBuf, FabProblem> {
     let mut path = folder.to_path_buf();
     for part in name.split('/') {
@@ -189,6 +242,12 @@ fn file_path(folder: &Path, name: &str) -> Result<PathBuf, FabProblem> {
             )));
         }
         path.push(part);
+        if std::fs::symlink_metadata(&path).is_ok_and(|meta| meta.file_type().is_symlink()) {
+            return Err(FabProblem::WriteFailed(format!(
+                "{} is a symbolic link; writing through a link is refused",
+                path.display()
+            )));
+        }
     }
     Ok(path)
 }
@@ -235,6 +294,7 @@ mod path_tests {
     fn made(name: &str) -> MadeFile {
         MadeFile {
             name: name.to_string(),
+            kind: "odb",
             bytes: b"x".to_vec(),
         }
     }

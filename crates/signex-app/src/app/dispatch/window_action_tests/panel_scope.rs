@@ -33,7 +33,7 @@ fn tab_of(path: &Path, kind: TabKind) -> TabInfo {
     }
 }
 
-fn app_with_main() -> Signex {
+pub(super) fn app_with_main() -> Signex {
     let (mut app, _boot) = Signex::new();
     app.ui_state.first_run_tour_open = false;
     app.ui_state.main_window_id = Some(iced::window::Id::unique());
@@ -100,9 +100,13 @@ fn a_symbol_panel_edit_changes_only_the_windows_symbol() {
     );
 
     let editors = &app.document_state.symbol_editors;
-    assert_eq!(editors[&b].file.symbols[0].description, "edited");
-    assert_eq!(editors[&a].file.symbols[0].description, "");
-    assert_eq!(editors[&a].history.undo_len(), 0, "A has no undo step");
+    assert_eq!(editors[&b].draft.file.symbols[0].description, "edited");
+    assert_eq!(editors[&a].draft.file.symbols[0].description, "");
+    assert_eq!(
+        editors[&a].draft.history.undo_len(),
+        0,
+        "A has no undo step"
+    );
     assert!(!app.document_state.is_document_dirty(&a), "A stays clean");
     assert!(app.document_state.is_document_dirty(&b));
 }
@@ -149,7 +153,7 @@ fn three_sheets() -> (Signex, [PathBuf; 3]) {
     (app, paths)
 }
 
-fn undock(app: &mut Signex, path: &Path) -> iced::window::Id {
+pub(super) fn undock(app: &mut Signex, path: &Path) -> iced::window::Id {
     let index = app
         .document_state
         .tabs
@@ -411,7 +415,7 @@ fn footprint_window_over_a_sheet() -> (Signex, PathBuf, PathBuf, iced::window::I
     (app, a, b, window)
 }
 
-fn run_in(app: &mut Signex, id: &str, window: iced::window::Id) {
+pub(super) fn run_in(app: &mut Signex, id: &str, window: iced::window::Id) {
     let command = crate::keymap::AppCommandId::new(id).expect("a catalog id");
     let args = crate::app::command::CommandArgs::none();
     let _ = app.dispatch_command(&command, args, Some(window));

@@ -38,7 +38,7 @@ pub(crate) fn select_gerber_object(app: &mut Signex, args: &CommandArgs) -> Ran 
         Some(_) => return refused(Translatable::new(ids::GERBER_VIEWER_COMMAND_AT_NOT_A_POINT)),
     };
     let file = text_operand(args, "layer");
-    let Some(open) = app.document_state.gerber_viewer.open.as_mut() else {
+    let Some(open) = app.document_view.gerber_viewer.open.as_mut() else {
         return no_package();
     };
     let layer = match file {
@@ -85,7 +85,7 @@ pub(crate) fn show_gerber_drills_on_top(app: &mut Signex, args: &CommandArgs) ->
 pub(crate) fn highlight_gerber_net(app: &mut Signex, args: &CommandArgs) -> Ran {
     let on = bool_operand(args, "on");
     let named = text_operand(args, "net");
-    let Some(open) = app.document_state.gerber_viewer.open.as_mut() else {
+    let Some(open) = app.document_view.gerber_viewer.open.as_mut() else {
         return no_package();
     };
     let net = match (on, named) {
@@ -110,7 +110,7 @@ pub(crate) fn highlight_gerber_net(app: &mut Signex, args: &CommandArgs) -> Ran 
 /// without `on` it toggles, as the Open button does. Showing it checks the
 /// recent packages it lists. It needs no package.
 pub(crate) fn show_gerber_open_menu(app: &mut Signex, args: &CommandArgs) -> Ran {
-    let viewer = &mut app.document_state.gerber_viewer;
+    let viewer = &mut app.document_view.gerber_viewer;
     let on = bool_operand(args, "on").unwrap_or(!viewer.open_menu);
     viewer.open_menu = on;
     let task = if on {
@@ -123,7 +123,7 @@ pub(crate) fn show_gerber_open_menu(app: &mut Signex, args: &CommandArgs) -> Ran
 
 /// A change to the open package, answered; refused with nothing open.
 fn on_package(app: &mut Signex, change: impl FnOnce(&mut OpenPackage)) -> Ran {
-    let Some(open) = app.document_state.gerber_viewer.open.as_mut() else {
+    let Some(open) = app.document_view.gerber_viewer.open.as_mut() else {
         return no_package();
     };
     change(open);

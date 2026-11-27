@@ -1,0 +1,177 @@
+format = "snxsch/1.1"
+schematic_id = "00000000-0000-a5c4-0000-000000000001"
+version = 0
+generator = ""
+generator_version = ""
+paper_size = "A4"
+root_sheet_page = "1"
+
+
+[sheets.components]
+content = """
+uuid                                  ref  library     pos_x     pos_y     rotation  value  mpn
+00000000-0000-a5c4-0000-000000000002  U1   Fixture:U4  20000000  20000000  0         MCU    ""
+"""
+
+[sheets.wires]
+content = """
+uuid                                  start_x   start_y   end_x     end_y     stroke_width
+00000000-0000-a5c4-0000-000000000003  20000000  22540000  40000000  22540000  0
+00000000-0000-a5c4-0000-000000000005  20000000  25080000  40000000  25080000  0
+"""
+
+[sheets.junctions]
+content = """
+uuid  pos_x  pos_y  diameter
+"""
+
+[sheets.labels]
+content = """
+uuid                                  text  pos_x     pos_y     rotation  kind    shape  font_size  justify  justify_v
+00000000-0000-a5c4-0000-000000000004  VIN   40000000  22540000  0         global  ""     1.27       left     bottom
+00000000-0000-a5c4-0000-000000000006  GND   40000000  25080000  0         global  ""     1.27       left     bottom
+"""
+
+[extras.symbols.00000000-0000-a5c4-0000-000000000002]
+footprint = "Fixture:QFN-16"
+datasheet = ""
+mirror_x = false
+mirror_y = false
+unit = 1
+is_power = false
+fields_autoplaced = false
+fields_user_placed = false
+dnp = false
+in_bom = true
+on_board = true
+exclude_from_sim = false
+locked = false
+custom_properties = []
+instances = []
+body_ref = "Fixture:U4#ae05fb98"
+
+[extras.symbols.00000000-0000-a5c4-0000-000000000002.fields]
+
+[extras.symbols.00000000-0000-a5c4-0000-000000000002.pin_uuids]
+
+[extras.sheet]
+no_connects = []
+text_notes = []
+buses = []
+bus_entries = []
+drawings = []
+no_erc_directives = []
+
+[[extras.sheet.child_sheets]]
+uuid = "00000000-0000-a5c4-0000-000000000007"
+name = "Repeat(CH, 1, 4)"
+filename = "channel.snxsch"
+size = [
+    30.0,
+    20.0,
+]
+stroke_width = 0.0
+fill = "none"
+fields_autoplaced = false
+pins = []
+instances = []
+
+[extras.sheet.child_sheets.position]
+x = 80.0
+y = 20.0
+
+[extras.sheet.title_block]
+
+[extras.sheet.lib_symbols."Fixture:U4#ae05fb98"]
+id = "Fixture:U4"
+reference = ""
+value = ""
+footprint = ""
+datasheet = ""
+description = ""
+keywords = ""
+fp_filters = ""
+in_bom = true
+on_board = true
+in_pos_files = true
+duplicate_pin_numbers_are_jumpers = false
+graphics = []
+show_pin_numbers = true
+show_pin_names = true
+pin_name_offset = 0.0
+
+[[extras.sheet.lib_symbols."Fixture:U4#ae05fb98".pins]]
+unit = 0
+body_style = 1
+
+[extras.sheet.lib_symbols."Fixture:U4#ae05fb98".pins.pin]
+direction = "passive"
+shape_style = "plain"
+rotation = 0.0
+length = 0.0
+name = ""
+number = "1"
+visible = true
+name_visible = true
+number_visible = true
+
+[extras.sheet.lib_symbols."Fixture:U4#ae05fb98".pins.pin.position]
+x = 0.0
+y = -2.54
+
+[[extras.sheet.lib_symbols."Fixture:U4#ae05fb98".pins]]
+unit = 0
+body_style = 1
+
+[extras.sheet.lib_symbols."Fixture:U4#ae05fb98".pins.pin]
+direction = "passive"
+shape_style = "plain"
+rotation = 0.0
+length = 0.0
+name = ""
+number = "2"
+visible = true
+name_visible = true
+number_visible = true
+
+[extras.sheet.lib_symbols."Fixture:U4#ae05fb98".pins.pin.position]
+x = 0.0
+y = -5.08
+
+[[extras.sheet.lib_symbols."Fixture:U4#ae05fb98".pins]]
+unit = 0
+body_style = 1
+
+[extras.sheet.lib_symbols."Fixture:U4#ae05fb98".pins.pin]
+direction = "passive"
+shape_style = "plain"
+rotation = 0.0
+length = 0.0
+name = ""
+number = "3"
+visible = true
+name_visible = true
+number_visible = true
+
+[extras.sheet.lib_symbols."Fixture:U4#ae05fb98".pins.pin.position]
+x = 0.0
+y = -7.62
+
+[[extras.sheet.lib_symbols."Fixture:U4#ae05fb98".pins]]
+unit = 0
+body_style = 1
+
+[extras.sheet.lib_symbols."Fixture:U4#ae05fb98".pins.pin]
+direction = "passive"
+shape_style = "plain"
+rotation = 0.0
+length = 0.0
+name = ""
+number = "4"
+visible = true
+name_visible = true
+number_visible = true
+
+[extras.sheet.lib_symbols."Fixture:U4#ae05fb98".pins.pin.position]
+x = 0.0
+y = -10.16

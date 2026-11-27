@@ -179,8 +179,8 @@ fn a_history_step_to_an_unopened_sheet_keeps_the_forward_list() {
         sheet_with_net("R2", "NET_B", &[]),
     );
     app.open_or_focus_sheet_path(b.clone());
-    app.document_state.net_nav.history = Default::default();
-    let history = &mut app.document_state.net_nav.history;
+    app.document_view.net_nav.history = Default::default();
+    let history = &mut app.document_view.net_nav.history;
     history.visit(&a);
     history.visit(&b);
     assert_eq!(history.peek(false), Some(a.as_path()));
@@ -190,7 +190,7 @@ fn a_history_step_to_an_unopened_sheet_keeps_the_forward_list() {
     settle_task(&mut app, task);
 
     assert_eq!(app.document_state.active_path.as_deref(), Some(a.as_path()));
-    let history = &app.document_state.net_nav.history;
+    let history = &app.document_view.net_nav.history;
     assert_eq!(history.current(), Some(a.as_path()));
     assert_eq!(history.peek(true), Some(b.as_path()), "forward kept");
     assert_eq!(history.peek(false), None);
@@ -204,8 +204,8 @@ fn a_history_step_to_a_sheet_that_cannot_be_read_drops_the_entry() {
     let b = write_sheet(dir.path(), "b.snxsch", "NET_B");
     let (mut app, _task) = Signex::new();
     assert!(app.open_or_focus_sheet_path(b.clone()));
-    app.document_state.net_nav.history = Default::default();
-    let history = &mut app.document_state.net_nav.history;
+    app.document_view.net_nav.history = Default::default();
+    let history = &mut app.document_view.net_nav.history;
     history.visit(&gone);
     history.visit(&b);
     let since = crate::diagnostics::newest_entry_id();
@@ -213,7 +213,7 @@ fn a_history_step_to_a_sheet_that_cannot_be_read_drops_the_entry() {
     let task = app.step_sheet_history(false);
     settle_task(&mut app, task);
 
-    assert_eq!(app.document_state.net_nav.history.peek(false), None);
+    assert_eq!(app.document_view.net_nav.history.peek(false), None);
     assert_eq!(app.document_state.active_path.as_deref(), Some(b.as_path()));
     assert!(
         crate::diagnostics::recent_entries()

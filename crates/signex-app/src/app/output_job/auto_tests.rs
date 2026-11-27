@@ -139,7 +139,7 @@ fn before_close_runs_or_names_the_out_of_date_profiles() {
     let task = app.auto_runs_before_close(project);
     settle(&mut app, task);
     assert!(!other.path().join("out").exists());
-    let notice = app.document_state.error_notice.as_ref().expect("a notice");
+    let notice = app.document_view.error_notice.as_ref().expect("a notice");
     use signex_i18n::RenderTranslatable as _;
     assert!(notice.detail.render_en_us().contains("out of date"));
 }

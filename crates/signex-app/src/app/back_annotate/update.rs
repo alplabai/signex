@@ -94,6 +94,7 @@ impl Signex {
                 self.ui_state.back_annotate = None;
                 Task::none()
             }
+            M::OperandRead(read) => self.back_annotate_operand_read(*read),
         }
     }
 
@@ -161,36 +162,12 @@ impl Signex {
         };
         // A Refresh after the project or its board closed says why there
         // is no list, rather than keep the old one.
-        let Some(project) = self.document_state.project_by_id(project_id) else {
-            let why = t!(self.ui_state.i18n, ids::BACK_ANNOTATE_PROJECT_CLOSED).into_string();
-            self.fail_back_annotate(why);
-            return Task::none();
-        };
-        let Some(engine) = self.document_state.board_engine(&board_path) else {
-            let why = self.back_annotate_board_missing(&file_name(&board_path));
-            self.fail_back_annotate(why);
-            return Task::none();
-        };
-        let (board, revision) = (engine.board().clone(), engine.revision());
-        let Some(root) = project_root_sheet_path(project) else {
-            let why = t!(self.ui_state.i18n, ids::UPDATE_PCB_NO_SCHEMATIC).into_string();
-            self.fail_back_annotate(why);
-            return Task::none();
-        };
-        let request = BackRequest {
-            naming: crate::app::saved_channel_naming::SavedChannelNaming::of(&project.data),
-            plan: plan_project_sheets_for(&self.document_state, &root),
-            project_dir: project.dir().to_path_buf(),
-            board,
-            revision,
-            libraries: self.library_rows(),
-            open_revisions: self
-                .document_state
-                .engines
-                .iter()
-                .map(|(path, engine)| (path.clone(), engine.revision()))
-                .collect(),
-            previous,
+        let request = match self.back_annotate_request(project_id, &board_path, previous) {
+            Ok(request) => request,
+            Err(why) => {
+                self.fail_back_annotate(why);
+                return Task::none();
+            }
         };
         let Some(state) = self.ui_state.back_annotate.as_mut() else {
             return Task::none();
@@ -214,6 +191,42 @@ impl Signex {
                 })
             },
         )
+    }
+
+    /// What the worker reads to diff `project`'s design against the open
+    /// board `board_path`, or why there is no list. The dialog and the
+    /// operand form (#2470) share it.
+    pub(super) fn back_annotate_request(
+        &self,
+        project_id: crate::app::state::ProjectId,
+        board_path: &std::path::Path,
+        previous: Option<BackChangeList>,
+    ) -> Result<BackRequest, String> {
+        let Some(project) = self.document_state.project_by_id(project_id) else {
+            return Err(t!(self.ui_state.i18n, ids::BACK_ANNOTATE_PROJECT_CLOSED).into_string());
+        };
+        let Some(engine) = self.document_state.board_engine(board_path) else {
+            return Err(self.back_annotate_board_missing(&file_name(board_path)));
+        };
+        let (board, revision) = (engine.board().clone(), engine.revision());
+        let Some(root) = project_root_sheet_path(project) else {
+            return Err(t!(self.ui_state.i18n, ids::UPDATE_PCB_NO_SCHEMATIC).into_string());
+        };
+        Ok(BackRequest {
+            naming: crate::app::saved_channel_naming::SavedChannelNaming::of(&project.data),
+            plan: plan_project_sheets_for(&self.document_state, &root),
+            project_dir: project.dir().to_path_buf(),
+            board,
+            revision,
+            libraries: self.library_rows(),
+            open_revisions: self
+                .document_state
+                .engines
+                .iter()
+                .map(|(path, engine)| (path.clone(), engine.revision()))
+                .collect(),
+            previous,
+        })
     }
 
     fn back_annotate_read(&mut self, job: u64, result: Result<Arc<super::BackRead>, String>) {
@@ -279,7 +292,7 @@ impl Signex {
         // Messages stays en-US whatever the UI language.
         let why = signex_i18n::I18n::en_us().message_plain(id, &[]);
         crate::diagnostics::log_warning(format!("Back Annotate: {why}"));
-        self.document_state.error_notice = Some(ErrorNotice::new(ids::BACK_ANNOTATE_TITLE, id));
+        self.document_view.error_notice = Some(ErrorNotice::new(ids::BACK_ANNOTATE_TITLE, id));
         Task::none()
     }
 

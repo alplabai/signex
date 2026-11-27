@@ -9,8 +9,10 @@
 //!
 //! A Fill is the rectangle between two clicks. A Solid Region, Polygon Pour or Keepout
 //! takes a corner per click and is closed by a click on its first corner or
-//! a right-click once it has three; Esc drops it.
+//! a right-click once it has three; Esc drops it. The zone is built by
+//! `signex_engine::pcb::area`, as the operand form builds it (#2470).
 
+use signex_engine::pcb::area::new_area;
 use signex_engine::pcb::draw;
 use signex_engine::pcb::placement::grid_step_mm;
 use signex_i18n::{ids, t};
@@ -50,11 +52,7 @@ fn area_zone(
     outline: Vec<Point>,
     active: PcbLayer,
 ) -> Option<Zone> {
-    let zone = match tool {
-        BoardPlaceTool::Keepout => draw::new_keepout(id, outline, active),
-        BoardPlaceTool::PolygonPour => draw::new_pour(board, id, outline, active.copper()?),
-        _ => draw::new_copper_area(board, id, outline, active.copper()?),
-    }?;
+    let zone = new_area(board, tool.area_kind()?, id, outline, active)?;
     Some(defaults.area(board, zone))
 }
 

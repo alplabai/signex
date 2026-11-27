@@ -53,7 +53,7 @@ impl Signex {
         };
         let command = signex_engine::ProjectSectionCommand::AddVariant { name: name.clone() };
         let outcome = self.apply_project_section(project_id, &command);
-        if let Some(tab) = self.document_state.project_tabs.get_mut(&project_id) {
+        if let Some(tab) = self.document_view.project_tabs.get_mut(&project_id) {
             match outcome {
                 Ok(true) => {
                     tab.variant_selected = Some(name.clone());
@@ -76,7 +76,7 @@ impl Signex {
         name: Option<String>,
     ) {
         let base = signex_types::project::BASE_VARIANT.to_string();
-        if let Some(tab) = self.document_state.project_tabs.get_mut(&project_id) {
+        if let Some(tab) = self.document_view.project_tabs.get_mut(&project_id) {
             // A half-typed rename of another variant is dropped with it.
             if tab
                 .variant_rename
@@ -95,7 +95,7 @@ impl Signex {
         project_id: ProjectId,
         name: String,
     ) {
-        if let Some(tab) = self.document_state.project_tabs.get_mut(&project_id) {
+        if let Some(tab) = self.document_view.project_tabs.get_mut(&project_id) {
             tab.variant_selected = Some(name.clone());
             tab.variant_rename = Some(VariantRenameDraft {
                 from: name.clone(),
@@ -111,7 +111,7 @@ impl Signex {
         from: String,
         text: String,
     ) {
-        if let Some(tab) = self.document_state.project_tabs.get_mut(&project_id) {
+        if let Some(tab) = self.document_view.project_tabs.get_mut(&project_id) {
             tab.variant_rename = Some(VariantRenameDraft { from, text });
             tab.variant_problem = None;
         }
@@ -121,7 +121,7 @@ impl Signex {
     /// name stays in the box with its reason; the selection follows a rename.
     pub(in crate::app::project_tab) fn submit_variant_rename(&mut self, project_id: ProjectId) {
         let Some(draft) = self
-            .document_state
+            .document_view
             .project_tabs
             .get_mut(&project_id)
             .and_then(|tab| tab.variant_rename.take())
@@ -136,7 +136,7 @@ impl Signex {
             to: draft.text.clone(),
         };
         let outcome = self.apply_project_section(project_id, &command);
-        let Some(tab) = self.document_state.project_tabs.get_mut(&project_id) else {
+        let Some(tab) = self.document_view.project_tabs.get_mut(&project_id) else {
             return;
         };
         match outcome {
@@ -163,7 +163,7 @@ impl Signex {
     ) {
         let command = signex_engine::ProjectSectionCommand::RemoveVariant { name: name.clone() };
         let outcome = self.apply_project_section(project_id, &command);
-        if let Some(tab) = self.document_state.project_tabs.get_mut(&project_id) {
+        if let Some(tab) = self.document_view.project_tabs.get_mut(&project_id) {
             // A half-typed rename of the removed variant goes with it.
             if tab.variant_rename.as_ref().is_some_and(|d| d.from == name) {
                 tab.variant_rename = None;
@@ -189,7 +189,7 @@ impl Signex {
     ) {
         let command = signex_engine::ProjectSectionCommand::SetActiveVariant { name };
         let outcome = self.apply_project_section(project_id, &command);
-        if let Some(tab) = self.document_state.project_tabs.get_mut(&project_id) {
+        if let Some(tab) = self.document_view.project_tabs.get_mut(&project_id) {
             tab.variant_problem = outcome.err();
         }
     }

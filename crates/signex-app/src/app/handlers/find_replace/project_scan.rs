@@ -154,6 +154,7 @@ impl Signex {
         query: signex_engine::FindQuery,
     ) -> Option<ScanInputs> {
         let ds = &self.document_state;
+        let document_view = &self.document_view;
         Some(ScanInputs {
             query,
             open: project_sheets::open_sheets_snapshot(ds),
@@ -161,7 +162,7 @@ impl Signex {
             root: project_sheets::resolve_netlist_root(ds)?,
             active: ds.active_path.clone(),
             fold: crate::app::state::project_case::fold_of(ds.active_document_project()),
-            hierarchy: ds.panel_ctx.navigator.hierarchy.clone(),
+            hierarchy: document_view.panel_ctx.navigator.hierarchy.clone(),
             hierarchy_settled: self.navigator_is_settled(),
         })
     }

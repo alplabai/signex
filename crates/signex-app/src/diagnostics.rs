@@ -538,7 +538,7 @@ pub(crate) fn diagnostic_code_from_target(target: &str) -> String {
     }
 }
 
-fn compact_message(rendered: &str) -> String {
+pub(crate) fn compact_message(rendered: &str) -> String {
     let compact = rendered.split_whitespace().collect::<Vec<_>>().join(" ");
     if compact.len() <= 160 {
         compact

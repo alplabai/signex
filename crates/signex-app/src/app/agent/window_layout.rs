@@ -1,18 +1,18 @@
-//! The window-layout commands on the agent channel (#2249): Tile
-//! Horizontally, Tile Vertically and Untile, and the panes of mockup row 207
-//! (Tile Grid, Split Right, Split Down, Open Second View, Move Tab to Other
-//! Pane, Close Pane, Sync Zoom with Other Pane, Equal Pane Sizes), open to
-//! agents by the maintainer's rule that everything is AI-controllable. They
-//! name no document, run the same handler as the menu row and answer with
-//! the layout they left. See `docs/AGENT_SOCKET.md`, "Allowlist".
+//! The window-layout commands on the agent channel (#2249, #2470): Tile
+//! Horizontally, Tile Vertically, Untile, Fit (`zoom_to_fit`), the dock's
+//! `set_dock_panel` and the panes of mockup row 207 (Tile Grid, Split Right,
+//! Split Down, Open Second View, Move Tab to Other Pane, Close Pane, Sync
+//! Zoom with Other Pane, Equal Pane Sizes), open to agents by the
+//! maintainer's rule that everything is AI-controllable. They name no
+//! document, run the same handler as the menu row (the operand handler for
+//! the dock) and answer with what they left. See `docs/AGENT_SOCKET.md`,
+//! "Allowlist".
 
 use iced::Task;
 use serde_json::{Value, json};
 
-use super::handler::Verdict;
-use super::reply::outcome_verdict;
-use crate::app::command::CommandOutcome;
 use crate::app::command::enablement::disabled_reason;
+use crate::app::command::{CommandArgs, CommandOutcome};
 use crate::app::handlers::document_panes::refusal_line;
 use crate::app::{DocumentKey, Message, Signex, TileLayout};
 use crate::document_panes::{DropEdge, SplitRefusal};
@@ -41,11 +41,13 @@ fn layout_key(layout: TileLayout) -> &'static str {
 impl Signex {
     /// Run the window-layout `command` as its menu row does, refused with
     /// the row's reason when it is greyed, or with the pane's reason when a
-    /// pane command cannot act.
-    pub(super) fn run_agent_window_layout(
+    /// pane command cannot act. The agent runner of `run_command_request`
+    /// calls it (#2495, "One request path").
+    pub(crate) fn run_agent_window_layout(
         &mut self,
         command: &AppCommandId,
-    ) -> (Verdict, Task<Message>) {
+        args: &CommandArgs,
+    ) -> (CommandOutcome, Task<Message>) {
         // A greyed row's refusal is the command's own, not an access event.
         self.agent.reached_handler = true;
         let context = self.command_context(None);
@@ -53,28 +55,51 @@ impl Signex {
             let outcome = CommandOutcome::Disabled {
                 reason: reason.into(),
             };
-            return (
-                outcome_verdict(command.as_str(), outcome, None),
-                Task::none(),
-            );
+            return (outcome, Task::none());
         }
-        let task = match self.run_window_layout_command(command.as_str()) {
-            Ok(task) => task,
-            Err(why) => {
-                let outcome = CommandOutcome::Disabled {
-                    reason: refusal_line(why).into(),
-                };
-                return (
-                    outcome_verdict(command.as_str(), outcome, None),
-                    Task::none(),
-                );
+        let task = match command.as_str() {
+            "set_dock_panel" => {
+                return crate::app::handlers::dock::panel_command::set_dock_panel(self, args);
             }
+            "zoom_to_fit" => self.update(Message::CanvasEvent(crate::canvas::CanvasEvent::FitAll)),
+            other => match self.run_window_layout_command(other) {
+                Ok(task) => task,
+                Err(why) => {
+                    let outcome = CommandOutcome::Disabled {
+                        reason: refusal_line(why).into(),
+                    };
+                    return (outcome, Task::none());
+                }
+            },
         };
         self.agent.serving = true;
-        let layout = self.window_layout_json();
+        let answer = if command.as_str() == "zoom_to_fit" {
+            self.view_json()
+        } else {
+            self.window_layout_json()
+        };
         self.agent.serving = false;
-        let outcome = CommandOutcome::Answered(layout);
-        (outcome_verdict(command.as_str(), outcome, None), task)
+        (CommandOutcome::Answered(answer), task)
+    }
+
+    /// What Fit framed: the main window's active document, by id and name
+    /// when it belongs to an open project, as a tiled pane is named.
+    fn view_json(&self) -> Value {
+        let key = self
+            .document_state
+            .tabs
+            .get(self.document_state.active_tab)
+            .and_then(DocumentKey::of);
+        let entries = self.document_entries();
+        let entry = entries
+            .iter()
+            .find(|entry| key.is_some() && entry.key == key);
+        json!({
+            "fitted": {
+                "document": entry.and_then(|e| e.id).map(|id| id.to_string()),
+                "name": entry.map(|e| e.name.clone()),
+            }
+        })
     }
 
     /// The handler of window-layout `command`, as its menu row runs it.

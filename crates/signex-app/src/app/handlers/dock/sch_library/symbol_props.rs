@@ -108,7 +108,7 @@ impl Signex {
                 self.sym_editor_record_edit(None, |editor| {
                     deleted = remove_pins(editor.primitive_mut(), &rows);
                     if deleted {
-                        drop_pin_selection(&mut editor.selected);
+                        drop_pin_selection(&mut editor.gui.selected);
                     }
                     deleted
                 });
@@ -134,7 +134,7 @@ impl Signex {
                     let pasted =
                         apply_paste(editor.primitive_mut(), &rows, mode, view, pin_length_ok);
                     if pasted {
-                        drop_pin_selection(&mut editor.selected);
+                        drop_pin_selection(&mut editor.gui.selected);
                     }
                     pasted
                 });
@@ -193,7 +193,7 @@ impl Signex {
     /// filter and the issues-only view; none while the panel context shows
     /// another symbol.
     fn pin_table_acted_rows(&self, path: &Path, table: &PinTableUi) -> BTreeSet<usize> {
-        self.document_state
+        self.document_view
             .panel_ctx
             .symbol_editor
             .as_ref()
@@ -214,10 +214,10 @@ impl Signex {
         let Some(editor) = self.active_symbol_editor_mut() else {
             return;
         };
-        if editor.selected.take().is_some() {
-            editor.graphic_fill_picker = None;
-            editor.local_color_picker = None;
-            editor.canvas_cache.clear();
+        if editor.gui.selected.take().is_some() {
+            editor.gui.graphic_fill_picker = None;
+            editor.gui.local_color_picker = None;
+            editor.gui.canvas_cache.clear();
         }
         self.refresh_panel_ctx();
     }

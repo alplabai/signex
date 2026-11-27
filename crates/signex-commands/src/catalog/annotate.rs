@@ -1,7 +1,7 @@
 //! Annotation commands: number schematic designators, re-annotate a board
 //! and back-annotate its changes to the schematics.
 
-use super::{CommandFlags, CommandGroup, CommandMetadata, DocumentKind, Enablement};
+use super::{CommandFlags, CommandGroup, CommandMetadata, DocumentKind, Enablement, operands};
 use signex_i18n_ids::command_ids;
 
 pub(super) const ANNOTATE: &[CommandMetadata] = &[
@@ -23,6 +23,8 @@ pub(super) const ANNOTATE: &[CommandMetadata] = &[
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresDocument(DocumentKind::Schematic),
         flags: CommandFlags::MUTATES,
+        // #2470: `document` names a sheet of the project to number.
+        operands: operands::OPTIONAL_DOCUMENT,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -33,6 +35,7 @@ pub(super) const ANNOTATE: &[CommandMetadata] = &[
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresDocument(DocumentKind::Schematic),
         flags: CommandFlags::MUTATES,
+        operands: operands::OPTIONAL_DOCUMENT,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -46,7 +49,8 @@ pub(super) const ANNOTATE: &[CommandMetadata] = &[
         ..CommandMetadata::DEFAULT
     },
     // #1312: Positional Re-Annotate. Opens the dialog; its Execute is one
-    // board undo step. No default key.
+    // board undo step. No default key. #2470: the operand form runs the
+    // same step on the named board.
     CommandMetadata {
         id: "reannotate_board",
         category: "design",
@@ -54,12 +58,13 @@ pub(super) const ANNOTATE: &[CommandMetadata] = &[
         menu_label: Some(command_ids::CMD_MENU_REANNOTATE_BOARD),
         group: CommandGroup::Pcb,
         enable: Enablement::RequiresDocument(DocumentKind::Pcb),
-        flags: CommandFlags::GUI_ONLY,
+        flags: CommandFlags::MUTATES,
+        operands: operands::REANNOTATE_BOARD,
         ..CommandMetadata::DEFAULT
     },
     // #1312: Back Annotate, from a schematic or (Update Schematics) a board
     // of a project. Execute is one undo group across the changed sheets.
-    // No default key.
+    // No default key. #2470: the operand form executes the default ticks.
     CommandMetadata {
         id: "back_annotate_schematics",
         category: "pcb_sync",
@@ -67,7 +72,8 @@ pub(super) const ANNOTATE: &[CommandMetadata] = &[
         menu_label: Some(command_ids::CMD_MENU_BACK_ANNOTATE_SCHEMATICS),
         group: CommandGroup::Schematic,
         enable: Enablement::Always,
-        flags: CommandFlags::GUI_ONLY,
+        flags: CommandFlags::MUTATES,
+        operands: operands::BACK_ANNOTATE,
         ..CommandMetadata::DEFAULT
     },
 ];

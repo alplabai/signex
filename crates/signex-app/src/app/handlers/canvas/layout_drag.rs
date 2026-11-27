@@ -17,7 +17,7 @@ impl Signex {
 
     /// The `side` dock's footprint as stored, for the width limits below.
     fn side_dock_extent(&self, side: PanelPosition) -> DockExtent {
-        let dock = &self.document_state.dock;
+        let dock = &self.document_view.dock;
         DockExtent {
             present: dock.has_panels(side),
             collapsed: dock.is_collapsed(side),
@@ -53,7 +53,7 @@ impl Signex {
             return;
         }
         let preferred = |side: PanelPosition| DockExtent {
-            size: self.document_state.dock.preferred_width(side),
+            size: self.document_view.dock.preferred_width(side),
             ..self.side_dock_extent(side)
         };
         let (left, right) = fit_side_docks(
@@ -74,20 +74,20 @@ impl Signex {
             || self.library.components_panel.drag.is_some()
             || self.ui_state.modal_dragging.is_some()
             || self.ui_state.tab_dragging.is_some()
-            || self.document_state.dock.tab_drag.is_some()
+            || self.document_view.dock.tab_drag.is_some()
             || self
-                .document_state
+                .document_view
                 .dock
                 .floating
                 .iter()
                 .any(|fp| fp.dragging)
             || self
-                .document_state
+                .document_view
                 .bom_preview
                 .as_ref()
                 .is_some_and(|p| p.column_resize.is_some())
             || self
-                .document_state
+                .document_view
                 .preview
                 .as_ref()
                 .is_some_and(|p| p.panning.is_some())
@@ -107,7 +107,7 @@ impl Signex {
         // pressed, every mouse-move tick recomputes the column's
         // width as `start_width + (current_x - start_x)`. Min width
         // floors at 40 px so the column doesn't disappear.
-        if let Some(preview) = self.document_state.bom_preview.as_mut()
+        if let Some(preview) = self.document_view.bom_preview.as_mut()
             && let Some(resize) = preview.column_resize
         {
             let new_width = (resize.start_width + (x - resize.start_x)).max(40.0);
@@ -116,7 +116,7 @@ impl Signex {
         // PDF preview pan-drag: while panning, every move tick adds
         // (cursor - press_origin) to the original pan offset so the
         // page slides under the cursor 1:1.
-        if let Some(preview) = self.document_state.preview.as_mut()
+        if let Some(preview) = self.document_view.preview.as_mut()
             && let Some((origin, ox, oy)) = preview.panning
         {
             preview.pan = (origin.0 + (x - ox), origin.1 + (y - oy));
@@ -185,13 +185,13 @@ impl Signex {
                         // A dock drag is what sets the preferred width.
                         DragTarget::LeftPanel => {
                             self.ui_state.left_width = new_val;
-                            self.document_state
+                            self.document_view
                                 .dock
                                 .set_preferred_width(PanelPosition::Left, new_val);
                         }
                         DragTarget::RightPanel => {
                             self.ui_state.right_width = new_val;
-                            self.document_state
+                            self.document_view
                                 .dock
                                 .set_preferred_width(PanelPosition::Right, new_val);
                         }
@@ -207,7 +207,7 @@ impl Signex {
         }
 
         if let (Some((pos, idx)), Some((ox, oy))) = (
-            self.document_state.dock.tab_drag,
+            self.document_view.dock.tab_drag,
             self.interaction_state.tab_drag_origin,
         ) {
             let dx = x - ox;
@@ -221,14 +221,14 @@ impl Signex {
             let left_strip_horizontally = dx.abs() > 180.0;
             let left_strip = left_strip_vertically || left_strip_horizontally;
             if moved_far && left_strip {
-                self.document_state
+                self.document_view
                     .dock
                     .update(DockMessage::UndockPanel(pos, idx));
                 self.interaction_state.tab_drag_origin = None;
             }
         }
 
-        for fp in &mut self.document_state.dock.floating {
+        for fp in &mut self.document_view.dock.floating {
             if fp.dragging {
                 fp.x = x - fp.width / 2.0;
                 fp.y = y - 15.0;
@@ -275,7 +275,7 @@ impl Signex {
         if !past {
             return None;
         }
-        self.document_state
+        self.document_view
             .dock
             .floating
             .iter()
@@ -321,13 +321,13 @@ impl Signex {
         // global mouse-up — the resize handle's `on_release`
         // doesn't fire reliably when the cursor leaves the handle's
         // 4 px hit zone during the drag.
-        if let Some(preview) = self.document_state.bom_preview.as_mut() {
+        if let Some(preview) = self.document_view.bom_preview.as_mut() {
             preview.column_resize = None;
         }
         // Same belt-and-braces release for the PDF preview pan
         // drag — the on_release on the viewport mouse_area can miss
         // when the cursor leaves the modal during a fast drag.
-        if let Some(preview) = self.document_state.preview.as_mut() {
+        if let Some(preview) = self.document_view.preview.as_mut() {
             preview.panning = None;
         }
         if self.interaction_state.dragging.is_some() {
@@ -339,21 +339,21 @@ impl Signex {
             return;
         }
 
-        self.document_state.dock.tab_drag = None;
+        self.document_view.dock.tab_drag = None;
         self.interaction_state.tab_drag_origin = None;
         self.ui_state.tab_dragging = None;
         let has_dragging = self
-            .document_state
+            .document_view
             .dock
             .floating
             .iter()
             .any(|fp| fp.dragging);
         crate::diagnostics::log_debug(format!(
             "[dock-end] floating={} dragging={has_dragging}",
-            self.document_state.dock.floating.len()
+            self.document_view.dock.floating.len()
         ));
         if let Some(drag_idx) = self
-            .document_state
+            .document_view
             .dock
             .floating
             .iter()
@@ -363,17 +363,17 @@ impl Signex {
             let target = self.dock_drop_target(drag_idx);
             crate::diagnostics::log_debug(format!("[dock-end] target={target:?}"));
             if let Some(pos) = target {
-                self.document_state
+                self.document_view
                     .dock
                     .update(DockMessage::DockFloatingTo(drag_idx, pos));
             } else {
-                self.document_state.dock.floating[drag_idx].dragging = false;
+                self.document_view.dock.floating[drag_idx].dragging = false;
             }
         } else {
-            for fp in &mut self.document_state.dock.floating {
+            for fp in &mut self.document_view.dock.floating {
                 fp.dragging = false;
             }
         }
-        self.document_state.dock.drop_preview = None;
+        self.document_view.dock.drop_preview = None;
     }
 }

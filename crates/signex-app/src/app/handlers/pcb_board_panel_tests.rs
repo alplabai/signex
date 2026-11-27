@@ -188,7 +188,7 @@ fn board_information_counts_the_fixture_board_and_selects_by_side() {
     let (mut app, _path) = app_with_board(dir.path());
     app.refresh_panel_ctx();
     let summary = app
-        .document_state
+        .document_view
         .panel_ctx
         .pcb_board
         .clone()
@@ -302,7 +302,7 @@ fn a_hovered_field_is_panel_state_the_summary_carries() {
     assert!(hover(&app).is_field_highlighted(&BOARD_WIDTH));
     app.refresh_panel_ctx();
     let summary = app
-        .document_state
+        .document_view
         .panel_ctx
         .pcb_board
         .clone()

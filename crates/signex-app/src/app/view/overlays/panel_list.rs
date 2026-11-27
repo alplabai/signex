@@ -9,7 +9,7 @@ use signex_i18n::{MessageId, UserText, ids, t};
 
 use crate::dock::{PanelPosition, PanelSite};
 use crate::panels::PanelKind;
-use crate::panels::panel_groups::{PanelGroup, grouped_panels};
+use crate::panels::panel_groups::{PanelGroup, grouped_panels, with_extension_panels};
 
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
 const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
@@ -60,7 +60,7 @@ impl Signex {
     /// Where `kind` is open: in the dock, floating, or (open but in neither)
     /// detached into a window of its own. `None` while it is closed.
     pub(super) fn panel_region(&self, kind: PanelKind) -> Option<PanelRegion> {
-        match self.document_state.dock.locate(kind) {
+        match self.document_view.dock.locate(kind) {
             Some(site) => Some(PanelRegion::of_site(site)),
             None => self.is_panel_open(kind).then_some(PanelRegion::Window),
         }
@@ -74,14 +74,17 @@ impl Signex {
         if !ui.panel_list_open {
             return Vec::new();
         }
-        let document = &self.document_state;
+        let document = &self.document_view;
         let tokens = &document.panel_ctx.tokens;
         let open = OpenDocuments {
             schematic: document.panel_ctx.has_schematic,
             pcb: document.panel_ctx.has_pcb,
             footprint: self.active_footprint_editor_path().is_some(),
         };
-        let groups = grouped_panels(|kind| open.offers(kind));
+        let groups = with_extension_panels(
+            grouped_panels(|kind| open.offers(kind)),
+            &self.extensions.panels(),
+        );
         let mut list: Column<Element<'_, Message>> = Column::new().spacing(0);
         for (group, kinds) in &groups {
             list = list.push(group_caption(&ui.i18n, group.caption(), tokens));
@@ -434,7 +437,7 @@ mod tests {
     fn the_length_matching_row_docks_the_panel_on_the_right() {
         let (mut app, _boot) = Signex::new();
         let kind = PanelKind::LengthMatching;
-        app.document_state.dock.close_panel(kind);
+        app.document_view.dock.close_panel(kind);
         assert_eq!(app.panel_region(kind), None);
         let _ = app.update(Message::Overlay(OverlayMsg::OpenPanel(kind)));
         assert_eq!(app.panel_region(kind), Some(PanelRegion::Right));
@@ -459,7 +462,7 @@ mod tests {
     fn the_card_sits_just_above_the_panels_button() {
         let (app, _boot) = Signex::new();
         let window = app.ui_state.window_size;
-        let status_h = crate::status_bar::status_bar_height(&app.document_state.panel_ctx.tokens);
+        let status_h = crate::status_bar::status_bar_height(&app.document_view.panel_ctx.tokens);
         let sheet = OpenDocuments {
             schematic: true,
             pcb: false,
@@ -491,9 +494,9 @@ mod tests {
     fn the_region_follows_the_dock() {
         let (mut app, _boot) = Signex::new();
         let kind = PanelKind::Properties;
-        app.document_state.dock.close_panel(kind);
+        app.document_view.dock.close_panel(kind);
         assert_eq!(app.panel_region(kind), None);
-        app.document_state
+        app.document_view
             .dock
             .add_panel(PanelPosition::Bottom, kind);
         assert_eq!(app.panel_region(kind), Some(PanelRegion::Bottom));

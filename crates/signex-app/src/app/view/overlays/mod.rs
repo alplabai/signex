@@ -35,6 +35,7 @@ pub(super) mod read_only_badge;
 mod save_project_as_offer_tests;
 mod symbol_hover;
 mod text_edit;
+mod variant_part_edit;
 #[cfg(test)]
 mod window_gate_tests;
 mod zoom_pill;
@@ -102,7 +103,7 @@ impl Signex {
     /// [`Self::document_area_in`] in a window of `size`.
     fn document_area_sized(&self, size: (f32, f32)) -> iced::Rectangle {
         use crate::dock::PanelPosition::{Bottom, Left, Right};
-        let dock = &self.document_state.dock;
+        let dock = &self.document_view.dock;
         let extent = |pos, size| canvas_region::DockExtent {
             present: dock.has_panels(pos),
             collapsed: dock.is_collapsed(pos),
@@ -114,7 +115,7 @@ impl Signex {
             extent(Left, ui.left_width),
             extent(Right, ui.right_width),
             extent(Bottom, ui.bottom_height),
-            &self.document_state.panel_ctx.tokens,
+            &self.document_view.panel_ctx.tokens,
         )
     }
 
@@ -194,7 +195,7 @@ impl Signex {
         window_id: iced::window::Id,
     ) -> Vec<Element<'_, Message>> {
         let ui = &self.ui_state;
-        let document = &self.document_state;
+        let document = &self.document_view;
         let interaction = &self.interaction_state;
         let Some(ab_menu) = interaction.active_bar_menu else {
             return Vec::new();
@@ -304,7 +305,7 @@ impl Signex {
 
     /// Dock panel tab right-click menu: dismiss layer, then the placed menu.
     fn dock_tab_context_menu_overlay(&self) -> Vec<Element<'_, Message>> {
-        let Some(menu_ctx) = self.document_state.dock.tab_menu else {
+        let Some(menu_ctx) = self.document_view.dock.tab_menu else {
             return Vec::new();
         };
         Self::menu_overlay(
@@ -386,13 +387,14 @@ impl Signex {
         &self,
         window_id: iced::window::Id,
     ) -> Vec<Element<'_, Message>> {
-        let document = &self.document_state;
+        let document = &self.document_view;
         let mut out: Vec<Element<'_, Message>> = Vec::new();
         for i in 0..document.dock.floating.len() {
             if let Some(panel_widget) = document.dock.view_floating_panel(
                 i,
                 self.panel_ctx_for(window_id),
                 &self.library,
+                &self.extensions,
                 self.sheet_grid(),
             ) {
                 let fp = &document.dock.floating[i];

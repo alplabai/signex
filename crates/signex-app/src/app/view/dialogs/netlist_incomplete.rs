@@ -43,8 +43,8 @@ impl Signex {
     pub(in crate::app::view) fn netlist_incomplete_prompt_card(
         &self,
     ) -> Option<Element<'_, Message>> {
-        let prompt = self.document_state.netlist_incomplete_prompt.as_ref()?;
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let prompt = self.document_view.netlist_incomplete_prompt.as_ref()?;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let i18n = self.ui_state.i18n.as_ref();
         let ink = crate::styles::tokens::resolve(tokens);
         let detached = self.modal_detached(ModalId::NetlistIncompletePrompt);
@@ -285,7 +285,7 @@ mod tests {
             file: file.to_owned(),
             reason,
         };
-        app.document_state.netlist_incomplete_prompt =
+        app.document_view.netlist_incomplete_prompt =
             Some(crate::app::state::NetlistIncompletePrompt {
                 save_path: "out.net".into(),
                 messages: Vec::new(),

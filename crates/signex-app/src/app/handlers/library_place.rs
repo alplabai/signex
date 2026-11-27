@@ -283,7 +283,7 @@ impl Signex {
             "Place from library failed: {}",
             detail.render_en_us()
         ));
-        self.document_state.error_notice = Some(crate::app::state::ErrorNotice::new(
+        self.document_view.error_notice = Some(crate::app::state::ErrorNotice::new(
             signex_i18n::ids::NOTICE_PLACE_FAILED,
             detail,
         ));
@@ -333,6 +333,7 @@ fn placed_symbol(
         reference,
         value: resolved.value.clone(),
         is_power: resolved.is_power,
+        net_tie: resolved.net_tie && !resolved.is_power,
         position: at,
         unit: 1,
         ref_text: Some(text_at(-2.54)),
@@ -345,5 +346,46 @@ fn placed_symbol(
         footprint: resolved.footprint.clone(),
         fields: crate::library::part_sync::identity_fields(&resolved.fields),
         ..Default::default()
+    }
+}
+
+#[cfg(test)]
+mod net_tie_tests {
+    use super::*;
+
+    fn resolved(net_tie: bool, is_power: bool) -> ResolvedPlacement {
+        let row = uuid::Uuid::from_u128(0x1277_00b0);
+        ResolvedPlacement {
+            lib_id: "L:NT".into(),
+            lib_symbol: signex_types::schematic::power_port_lib_symbol("L:NT"),
+            library_id: uuid::Uuid::from_u128(0x1277_00a0),
+            row_id: row,
+            library_version: "1.0.0".into(),
+            stamp: signex_types::schematic::RowStamp::new(row),
+            internal_pn: "NT-0402".into(),
+            value: "NetTie".into(),
+            is_power,
+            net_tie,
+            prefix: "NT".into(),
+            class: "generic".into(),
+            prefix_override: None,
+            footprint: "NetTie_0402".into(),
+            datasheet: String::new(),
+            fields: Vec::new(),
+        }
+    }
+
+    fn placed(net_tie: bool, is_power: bool) -> bool {
+        let payload = part_payload(resolved(net_tie, is_power), "NT1".into());
+        payload.lone_symbol().expect("one part").net_tie
+    }
+
+    /// #1277: a part placed from a library symbol of type Net Tie is a net
+    /// tie; any other is not, and a power port never is.
+    #[test]
+    fn a_placement_carries_the_library_symbols_net_tie_type() {
+        assert!(placed(true, false));
+        assert!(!placed(false, false));
+        assert!(!placed(true, true));
     }
 }

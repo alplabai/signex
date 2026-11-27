@@ -335,7 +335,7 @@ fn a_commit_is_one_undo_step_with_the_outline_hole_and_keepout() {
 
     send(&mut f, menu_row("board_sketch"));
     assert!(!in_sketch(&f), "leaving commits and ends the mode");
-    assert!(f.app.document_state.error_notice.is_none());
+    assert!(f.app.document_view.error_notice.is_none());
     let after = live(&f);
     assert_eq!(after.outline.len(), 4, "the rectangle is the outline");
     let stored = after.sketch.as_ref().expect("the board keeps its sketch");
@@ -452,7 +452,7 @@ fn a_refused_bake_keeps_the_board_and_the_mode_and_says_why() {
     assert_eq!(snapshot(&f), before, "the board is unchanged");
     let notice = f
         .app
-        .document_state
+        .document_view
         .error_notice
         .as_ref()
         .expect("the notice card says why");

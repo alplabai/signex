@@ -28,7 +28,7 @@ impl Signex {
     /// `panel_ctx.library_row_detail`. Wired by the Properties-panel
     /// Pick Symbol / Pick Footprint buttons.
     fn open_library_row_primitive_picker(&mut self, kind: signex_library::PrimitiveKind) {
-        let Some(detail) = self.document_state.panel_ctx.library_row_detail.clone() else {
+        let Some(detail) = self.document_view.panel_ctx.library_row_detail.clone() else {
             return;
         };
         if self.refuse_read_only_write(&detail.library_path) {

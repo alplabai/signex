@@ -68,7 +68,7 @@ fn the_cli_prints_the_pages_the_box_names() {
     settle(&mut app, task);
     let bytes = std::fs::read(&file).expect("written");
     assert_eq!(pages_in(&bytes), 2);
-    assert!(app.document_state.preview.is_none(), "no dialog opens");
+    assert!(app.document_view.preview.is_none(), "no dialog opens");
 }
 
 #[test]
@@ -130,10 +130,10 @@ fn in_a_window_the_command_opens_export_pdf() {
         "export_schematic_pdf",
     )));
     settle(&mut app, task);
-    let preview = app.document_state.preview.as_ref().expect("the dialog");
+    let preview = app.document_view.preview.as_ref().expect("the dialog");
     assert_eq!(preview.source, dir.path().join(SHEETS[0]));
 
-    app.document_state.preview = None;
+    app.document_view.preview = None;
     app.document_state.active_path = None;
     assert!(!crate::app::command::is_enabled(
         &command,

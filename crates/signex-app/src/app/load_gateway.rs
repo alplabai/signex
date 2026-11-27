@@ -84,7 +84,7 @@ impl Signex {
             self.document_state.forget_parked_mark(&to);
             self.rekey_page_setup(&old_path, &to);
             // The new file is not what any sheet symbol places.
-            self.document_state.tab_placements.forget(&old_path);
+            self.document_view.tab_placements.forget(&old_path);
             self.rekey_undocked_windows(&old_path, &to);
         }
         // Write back only a change `finish` made: a dirty mark re-written
@@ -282,11 +282,23 @@ impl Signex {
         self.note_sheet_focused();
     }
 
-    pub(crate) fn open_pcb_tab(&mut self, path: PathBuf, title: String, mut board: PcbBoard) {
+    pub(crate) fn open_pcb_tab(&mut self, path: PathBuf, title: String, board: PcbBoard) {
+        self.install_pcb_tab(path, title, board, true);
+    }
+
+    /// [`Self::open_pcb_tab`] behind the person's tab (#2984): the tab is
+    /// added, the view and the text being typed stay as they are.
+    pub(crate) fn open_pcb_tab_behind(&mut self, path: PathBuf, title: String, board: PcbBoard) {
+        self.install_pcb_tab(path, title, board, false);
+    }
+
+    fn install_pcb_tab(&mut self, path: PathBuf, title: String, mut board: PcbBoard, front: bool) {
         report_unusable_zone_holes(&path, &board);
         let repaired = super::sheet_repairs::take_and_log_board(&path, &mut board);
         warn_if_read_only(&path, board.unknown.newer_minor_source.as_deref());
-        self.park_active_schematic_session();
+        if front {
+            self.park_active_schematic_session();
+        }
         let project_id = self.document_state.project_for_path(&path).map(|p| p.id);
         let engine = self.document_state.new_board_engine(&path, board);
         // An earlier run's recovery copy of this board (#1185): hold
@@ -296,8 +308,10 @@ impl Signex {
         let dirty_path = path.clone();
         self.document_state
             .push_pcb_tab(title, path, project_id, engine);
-        self.document_state.active_tab = self.document_state.tabs.len() - 1;
-        self.apply_loaded_pcb_document(true, true);
+        if front {
+            self.document_state.active_tab = self.document_state.tabs.len() - 1;
+            self.apply_loaded_pcb_document(true, true);
+        }
         if repaired {
             // The file on disk still holds what was repaired (#1886).
             self.document_state.mark_document_dirty(&dirty_path);

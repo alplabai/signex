@@ -49,7 +49,7 @@ fn items(kind: SelectedKind, n: usize) -> Vec<SelectedItem> {
 /// A context with 9 parts, 3 labels and 2 wires selected.
 fn mixed_ctx() -> PanelContext {
     let (app, _boot) = crate::app::Signex::new();
-    let mut ctx = app.document_state.panel_ctx.clone();
+    let mut ctx = app.document_view.panel_ctx.clone();
     ctx.selection_count = 14;
     ctx.multi_groups = groups();
     let mut selected = items(SelectedKind::Symbol, 9);

@@ -32,6 +32,7 @@ fn column_headers_keep_the_exported_english() {
         BomColumn::Stock,
         BomColumn::Distributor,
         BomColumn::PriceAge,
+        BomColumn::Alternates,
     ];
     for column in standard {
         let id = column_name(&column).expect("a standard column has a catalog name");

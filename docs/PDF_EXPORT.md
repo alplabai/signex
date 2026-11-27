@@ -73,6 +73,11 @@ the PDF yet (the not-fitted parts layer is its own issue, see the
 2026-11-19 Export PDF row in docs/DECISIONS.md); when they are, the goldens
 change with them.
 
+A part that is not fitted in the printed variant (or marked DNP) prints
+greyed with a cross over its body while `draw_not_fitted` is on: the user's
+"Cross out not-fitted parts" preference, on by default (#1294). The rule is
+`docs/RENDERING_RULES.md`, "sch-not-fitted".
+
 ## Watermark
 
 `Watermark` holds the text (`Draft` prints "DRAFT", `Confidential` prints
@@ -140,7 +145,8 @@ With `layers: Some(PdfLayerVisibility)` the export writes optional content:
 
 | `PdfLayer` | Group name | What it holds |
 |---|---|---|
-| `WiresAndBuses` | Wires and buses | Wires, buses, bus entries, signal harnesses, junctions |
+| `WiresAndBuses` | Wires and buses | Wires, buses, bus entries, junctions |
+| `SignalHarnesses` | Signal harnesses | Harness wires, harness connectors with their entries and type names, and harness-typed sheet entries (#2690) |
 | `Parts` | Parts | Part bodies, pins and their designator and value text |
 | `NetLabelsAndPorts` | Net labels and ports | Net, global and hierarchical labels (ports) |
 | `PowerPorts` | Power ports | Power port symbols and power labels |
@@ -154,6 +160,12 @@ Power ports never do. The group is written whenever layers are, like the
 other drawing groups, and it is visible on open unless the dialog's
 "Not-fitted parts (variant)" row is unticked; switched off in the reader it
 hides those parts and leaves every fitted part as it was.
+
+The group names in the file are English whatever the UI language (output is
+locale-invariant, DECISIONS 2026-11-07); the Export PDF dialog names each
+layer row from the message catalog (`pdf-layer-*`). The Signal harnesses
+group is written like the other drawing groups, harness or not: on a page
+with no harness it holds no drawing.
 
 Not in any group, so always visible: the page's paper fill, free drawings
 (Bezier curves, dimensions and tables included), notes, no-connect and No-ERC

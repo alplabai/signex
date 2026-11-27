@@ -118,7 +118,7 @@ impl Session {
         click(&mut app, (12.7, 0.0));
         let tab = app.update(Message::Tool(ToolMessage::PrePlacementTab));
         // The bare test sheet has no render snapshot to set this from.
-        app.document_state.panel_ctx.has_schematic = true;
+        app.document_view.panel_ctx.has_schematic = true;
         Self {
             app,
             window,
@@ -133,7 +133,7 @@ impl Session {
         let main = iced::window::Id::unique();
         app.ui_state.main_window_id = Some(main);
         // Every update refits the shown width from the preferred one.
-        app.document_state
+        app.document_view
             .dock
             .set_preferred_width(crate::dock::PanelPosition::Right, PIXEL_ALIGNED_RIGHT_DOCK);
         app.ui_state.right_width = PIXEL_ALIGNED_RIGHT_DOCK;
@@ -378,7 +378,7 @@ fn submit(session: &mut Session, field: AnnotationField) {
 }
 
 fn draft_text(session: &Session) -> Option<&str> {
-    let draft = &session.app.document_state.panel_ctx.annotation.draft;
+    let draft = &session.app.document_view.panel_ctx.annotation.draft;
     draft.as_ref().map(|(_, _, text)| text.as_str())
 }
 
@@ -393,7 +393,7 @@ fn enter_on_text_that_does_not_read_keeps_it_refused_and_paused() {
         assert!(session.is_paused(), "Enter does not resume");
         assert_eq!(draft_text(&session), Some("abc"), "the text stays");
     }
-    let panel = &session.app.document_state.panel_ctx.annotation;
+    let panel = &session.app.document_view.panel_ctx.annotation;
     assert!(
         panel.paused_form_refuses(uuid::Uuid::nil(), field, "abc"),
         "the box is marked as refused"
@@ -408,7 +408,7 @@ fn readable_text_after_a_refused_enter_commits_and_resumes() {
     let field = type_in_from_x(&mut session, "abc");
     submit(&mut session, field);
     type_in_from_x(&mut session, "2.54");
-    let panel = &session.app.document_state.panel_ctx.annotation;
+    let panel = &session.app.document_view.panel_ctx.annotation;
     assert!(!panel.paused_form_refuses(uuid::Uuid::nil(), field, "2.54"));
     submit(&mut session, field);
     assert!(!session.is_paused(), "readable text resumes");
@@ -421,13 +421,13 @@ fn readable_text_after_a_refused_enter_commits_and_resumes() {
 fn a_placed_dimensions_box_is_not_marked_by_the_paused_form() {
     let session = Session::docked();
     let field = AnnotationField::DimensionPoint(false, Axis::X);
-    let panel = &session.app.document_state.panel_ctx.annotation;
+    let panel = &session.app.document_view.panel_ctx.annotation;
     assert!(!panel.paused_form_refuses(uuid::Uuid::now_v7(), field, "abc"));
 }
 
 /// How many pixels of the drawn window carry the refused colour.
 fn refused_pixels(session: &Session) -> usize {
-    let error = crate::styles::ti(session.app.document_state.panel_ctx.tokens.error);
+    let error = crate::styles::ti(session.app.document_view.panel_ctx.tokens.error);
     let [r, g, b, _] = error.into_rgba8();
     let near = |have: u8, want: u8| have.abs_diff(want) <= 2;
     crate::layout_probe::draw_pixels(session.app.view(session.window), SIZE)
@@ -439,7 +439,7 @@ fn refused_pixels(session: &Session) -> usize {
 /// For a failed mark: a small closest distance is a border that missed whole
 /// pixels, a large one a box not drawn in the refused colour.
 fn refused_report(session: &Session, unmarked: usize) -> String {
-    let error = crate::styles::ti(session.app.document_state.panel_ctx.tokens.error);
+    let error = crate::styles::ti(session.app.document_view.panel_ctx.tokens.error);
     let [r, g, b, _] = error.into_rgba8();
     let closest = crate::layout_probe::draw_pixels(session.app.view(session.window), SIZE)
         .chunks_exact(4)
@@ -716,7 +716,7 @@ fn enter_in_override_keeps_the_pause_while_another_box_does_not_read() {
     let field = type_in_from_x(&mut session, "abc");
     assert!(session.enter(), "the Override box took Enter");
     assert!(session.is_paused(), "the refused point holds the pause");
-    let draft = &session.app.document_state.panel_ctx.annotation.draft;
+    let draft = &session.app.document_view.panel_ctx.annotation.draft;
     assert!(
         matches!(draft, Some((id, f, text)) if id.is_nil() && *f == field && text == "abc"),
         "the refused text stays in its box: {draft:?}"

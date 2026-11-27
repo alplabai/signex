@@ -10,6 +10,7 @@
 //! board bit for bit.
 
 pub mod align;
+pub mod area;
 mod batch;
 mod board_sketch;
 pub mod board_tools;
@@ -25,6 +26,7 @@ pub mod draw;
 mod draw_free;
 #[cfg(test)]
 mod draw_free_tests;
+pub mod drc_fix;
 pub mod drill_pairs;
 pub mod dxf;
 pub mod eco;
@@ -33,6 +35,7 @@ mod error;
 pub mod find;
 mod footprint;
 mod footprint_content;
+pub mod footprint_place;
 pub mod footprint_swap;
 pub mod footprint_text_edit;
 pub mod graphic;

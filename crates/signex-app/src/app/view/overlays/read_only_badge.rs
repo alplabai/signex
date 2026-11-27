@@ -132,7 +132,7 @@ mod tests {
         let (app, _boot) = crate::app::Signex::new();
         let i18n = signex_i18n::I18n::en_us();
         let label = i18n.message_plain(signex_i18n::ids::OVERLAY_READ_ONLY_BADGE, &[]);
-        let badge = read_only_badge(&app.document_state.panel_ctx.tokens, &i18n);
+        let badge = read_only_badge(&app.document_view.panel_ctx.tokens, &i18n);
         let texts = crate::layout_probe::lay_out_texts(badge, iced::Size::new(900.0, 500.0));
         let text = crate::layout_probe::find(&texts, &label);
         let metrics = signex_widgets::active_bar::Metrics::GRAPHITE;

@@ -140,7 +140,7 @@ impl Signex {
         let project_id = shown.kind.as_project()?;
         // Esc lets go of a row held by its grip, moving nothing.
         let holds_row = self
-            .document_state
+            .document_view
             .project_tabs
             .get(&project_id)
             .is_some_and(|tab| tab.is_dragging_row());

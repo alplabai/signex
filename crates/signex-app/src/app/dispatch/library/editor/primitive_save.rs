@@ -245,23 +245,26 @@ impl Signex {
         if let Some(editor) = self.document_state.symbol_editors.get_mut(path) {
             // Stamp the changed symbols so downstream consumers can
             // detect the rewrite.
-            let changed = editor.file.changed_since(&editor.baseline);
-            for symbol in &mut editor.file.symbols {
+            let changed = editor.draft.file.changed_since(&editor.draft.baseline);
+            for symbol in &mut editor.draft.file.symbols {
                 if changed.contains(&symbol.uuid) {
                     symbol.updated = now;
                 }
             }
             // A retry with no edit writes nothing, so it is not a change.
             if !changed.is_empty() {
-                editor.file.updated = now;
+                editor.draft.file.updated = now;
             }
             editor.mark_saved();
-            editor.save_generation = generation;
+            editor.draft.save_generation = generation;
             let snapshot = Snapshot::Symbol {
-                file: editor.file.clone(),
-                baseline: editor.baseline.clone(),
+                file: editor.draft.file.clone(),
+                baseline: editor.draft.baseline.clone(),
                 name: editor.primitive().name.clone(),
-                owed: with_kept(&editor.cascade_owed, self.library.owed_cascades.of(path)),
+                owed: with_kept(
+                    &editor.draft.cascade_owed,
+                    self.library.owed_cascades.of(path),
+                ),
             };
             self.document_state.keep_document_dirty_until_saved(path);
             return Ok(snapshot);
@@ -314,7 +317,7 @@ impl Signex {
         document
             .symbol_editors
             .get(path)
-            .map(|editor| editor.save_generation)
+            .map(|editor| editor.draft.save_generation)
             .or_else(|| {
                 document
                     .footprint_editors
@@ -529,13 +532,13 @@ impl Signex {
                 .symbol_editors
                 .get_mut(path)
                 .map(|editor| {
-                    cascade::apply_symbol_versions(&mut editor.file, versions);
-                    editor.baseline = saved;
-                    editor.cascade_owed = owed.to_vec();
+                    cascade::apply_symbol_versions(&mut editor.draft.file, versions);
+                    editor.draft.baseline = saved;
+                    editor.draft.cascade_owed = owed.to_vec();
                     // Older undo steps still hold the pre-bump version, so
                     // the saved depth no longer reproduces the file.
                     if editor.is_dirty() && !versions.is_empty() {
-                        editor.history.forget();
+                        editor.draft.history.forget();
                     }
                     editor.is_dirty()
                 }),
@@ -571,10 +574,17 @@ impl Signex {
     fn pay_debt_of_replacement(&mut self, path: &std::path::Path, still_owed: &[uuid::Uuid]) {
         let document = &mut self.document_state;
         let settled = if let Some(editor) = document.symbol_editors.get_mut(path) {
-            let owed = !editor.cascade_owed.is_empty();
-            editor.cascade_owed.retain(|id| still_owed.contains(id));
-            owed && editor.cascade_owed.is_empty()
-                && editor.file.changed_since(&editor.baseline).is_empty()
+            let owed = !editor.draft.cascade_owed.is_empty();
+            editor
+                .draft
+                .cascade_owed
+                .retain(|id| still_owed.contains(id));
+            owed && editor.draft.cascade_owed.is_empty()
+                && editor
+                    .draft
+                    .file
+                    .changed_since(&editor.draft.baseline)
+                    .is_empty()
         } else if let Some(editor) = document.footprint_editors.get_mut(path) {
             let owed = !editor.cascade_owed.is_empty();
             editor.cascade_owed.retain(|id| still_owed.contains(id));
@@ -595,7 +605,7 @@ impl Signex {
         let owed = document
             .symbol_editors
             .get(path)
-            .map(|e| e.cascade_owed.clone())
+            .map(|e| e.draft.cascade_owed.clone())
             .or_else(|| {
                 document
                     .footprint_editors
@@ -627,7 +637,7 @@ impl Signex {
             document
                 .symbol_editors
                 .iter()
-                .filter(|(_, e)| !e.cascade_owed.is_empty())
+                .filter(|(_, e)| !e.draft.cascade_owed.is_empty())
                 .map(|(path, _)| path.as_path()),
         );
         files.extend(
@@ -667,7 +677,7 @@ impl Signex {
         }
         let document = &mut self.document_state;
         if let Some(editor) = document.symbol_editors.get_mut(path) {
-            editor.cascade_owed = owed;
+            editor.draft.cascade_owed = owed;
         } else if let Some(editor) = document.footprint_editors.get_mut(path) {
             editor.cascade_owed = owed;
         } else {
@@ -686,7 +696,7 @@ impl Signex {
         let owes = document
             .symbol_editors
             .get(path)
-            .map(|e| !e.cascade_owed.is_empty())
+            .map(|e| !e.draft.cascade_owed.is_empty())
             .or_else(|| {
                 document
                     .footprint_editors
@@ -732,7 +742,7 @@ impl Signex {
     fn forget_draft_save_point(&mut self, path: &std::path::Path) {
         let document = &mut self.document_state;
         if let Some(editor) = document.symbol_editors.get_mut(path) {
-            editor.history.forget();
+            editor.draft.history.forget();
         } else if let Some(editor) = document.footprint_editors.get_mut(path) {
             editor.history.forget();
         }

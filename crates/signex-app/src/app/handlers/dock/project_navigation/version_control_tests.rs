@@ -59,6 +59,7 @@ fn push_demo_project(app: &mut Signex, dir: &std::path::Path) -> crate::app::sta
                 schematic_design: Default::default(),
                 fab_outputs: None,
                 router_tool_diameter: None,
+                bom_alternates: Vec::new(),
                 requirements: Default::default(),
                 parameters: Default::default(),
                 unknown: Default::default(),
@@ -134,7 +135,7 @@ fn an_adapter_failure_raises_the_card_and_skips_the_success_log() {
         .as_ref()
         .is_some_and(|state| state.error.is_some());
     assert!(
-        app.document_state.error_notice.is_some() || dialog_error,
+        app.document_view.error_notice.is_some() || dialog_error,
         "the failure must be shown to the user"
     );
     assert!(
@@ -291,7 +292,7 @@ fn a_run_finishing_after_its_project_closed_raises_the_notice() {
     );
 
     let notice = app
-        .document_state
+        .document_view
         .error_notice
         .as_ref()
         .expect("a closed project must raise the version-control notice");
@@ -483,7 +484,7 @@ fn commit_every_save_off_leaves_enable_git_off() {
     );
 
     assert!(!app.document_state.projects[0].data.enable_git);
-    assert!(app.document_state.error_notice.is_none(), "no failure card");
+    assert!(app.document_view.error_notice.is_none(), "no failure card");
     assert!(
         app.ui_state.enable_version_control.is_none(),
         "the dialog closes"

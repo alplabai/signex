@@ -31,7 +31,7 @@ fn badge_of(item: &DropdownItem<Message>) -> Option<&str> {
 /// `.git` probed absent so Enable Version Control is offered.
 fn app_with_tree() -> Signex {
     let mut app = crate::app::handlers::menu::export::tests::app_workspace("/p", &[]);
-    app.document_state.panel_ctx.project_tree = vec![TreeNode::branch(
+    app.document_view.panel_ctx.project_tree = vec![TreeNode::branch(
         "proj",
         TreeIcon::Folder,
         vec![
@@ -57,7 +57,7 @@ fn app_with_tree() -> Signex {
 
 /// The menu of the tree row at `path`.
 fn rows_at(app: &Signex, path: &[usize]) -> Vec<DropdownEntry<Message>> {
-    let key = key_of(&app.document_state.panel_ctx.project_tree, path).expect("the row exists");
+    let key = key_of(&app.document_view.panel_ctx.project_tree, path).expect("the row exists");
     let ctx = ProjectTreeContextMenuState {
         x: 0.0,
         y: 0.0,
@@ -194,7 +194,7 @@ fn the_title_bar_plus_opens_only_the_add_new_menu() {
         .as_ref()
         .expect("the menu opened");
     assert!(menu.add_new_only);
-    let root = key_of(&app.document_state.panel_ctx.project_tree, &[0]);
+    let root = key_of(&app.document_view.panel_ctx.project_tree, &[0]);
     assert_eq!(menu.key, root);
     let texts = super::super::placement::tests::lay_out_layers(
         app.project_tree_context_menu_overlay(main),
@@ -215,7 +215,7 @@ fn with_no_project_the_title_bar_plus_runs_new_project() {
     app.ui_state.main_window_id = Some(iced::window::Id::unique());
     app.ui_state.main_window_opened = true;
     app.ui_state.first_run_tour_open = false;
-    assert!(app.document_state.panel_ctx.project_tree.is_empty());
+    assert!(app.document_view.panel_ctx.project_tree.is_empty());
     let _ = app.update(Message::Dock(crate::dock::DockMessage::Panel(
         PanelMsg::Projects(ProjectsMsg::AddNewPressed),
     )));
@@ -229,7 +229,7 @@ fn with_no_project_the_title_bar_plus_runs_new_project() {
 fn compiled_design_and_unions_have_no_more_menu() {
     use crate::panels::{PanelKind, title_actions};
     let (app, _boot) = Signex::new();
-    let mut ctx = app.document_state.panel_ctx.clone();
+    let mut ctx = app.document_view.panel_ctx.clone();
     ctx.unions.has_sheet = true;
     assert_eq!(title_actions(PanelKind::CompiledDesign, &ctx).len(), 1);
     assert_eq!(title_actions(PanelKind::Unions, &ctx).len(), 1);
@@ -304,7 +304,7 @@ fn the_planned_flyout_lists_the_planned_rows_greyed_with_the_pill() {
 #[test]
 fn the_document_leaf_menu_ends_with_a_live_danger_remove_row() {
     let app = app_with_tree();
-    let key = key_of(&app.document_state.panel_ctx.project_tree, &[0, 0, 0]).expect("the leaf");
+    let key = key_of(&app.document_view.panel_ctx.project_tree, &[0, 0, 0]).expect("the leaf");
     let rows = rows_at(&app, &[0, 0, 0]);
     assert_eq!(
         layout(&rows),
@@ -354,7 +354,7 @@ fn the_document_leaf_menu_ends_with_a_live_danger_remove_row() {
 #[test]
 fn the_document_leaf_show_history_row_is_live() {
     let app = app_with_tree();
-    let key = key_of(&app.document_state.panel_ctx.project_tree, &[0, 0, 0]).expect("the leaf");
+    let key = key_of(&app.document_view.panel_ctx.project_tree, &[0, 0, 0]).expect("the leaf");
     let rows = rows_at(&app, &[0, 0, 0]);
     let row = item(&rows, "Show History");
     assert!(!row.disabled && !row.strong && !row.danger);
@@ -389,7 +389,7 @@ fn show_history_opens_the_history_panel_with_this_file_only() {
     });
     app.document_state.active_tab = app.document_state.tabs.len() - 1;
     assert_eq!(app.history_target_path(), Some(leaf));
-    let _ = app.document_state.dock.close_panel(PanelKind::History);
+    let _ = app.document_view.dock.close_panel(PanelKind::History);
     assert!(!app.is_panel_open(PanelKind::History));
     let rows = rows_at(&app, &[0, 0, 0]);
     let press = item(&rows, "Show History")
@@ -398,11 +398,11 @@ fn show_history_opens_the_history_panel_with_this_file_only() {
         .expect("a live row");
     let _ = app.update(press.clone());
     assert!(app.is_panel_open(PanelKind::History));
-    assert!(app.document_state.history.ui.filter.this_file_only);
-    let shown = &app.document_state.panel_ctx.history;
+    assert!(app.document_view.history.ui.filter.this_file_only);
+    let shown = &app.document_view.panel_ctx.history;
     assert!(shown.ui.filter.this_file_only, "the panel reads it");
     let _ = app.update(press);
-    assert!(app.document_state.history.ui.filter.this_file_only);
+    assert!(app.document_view.history.ui.filter.this_file_only);
 }
 
 /// Mockup row 20: Show History runs on the main window like the other leaf
@@ -475,8 +475,9 @@ fn the_library_add_new_flyout_creates_component_symbol_and_footprint() {
     }
 }
 
-/// Add New to Project: the documents, the libraries, then the planned
-/// project files, with Constraint File and VHDL File kept as planned rows.
+/// Add New to Project: the documents, the libraries, then the project
+/// files: Design Notebook live (mockup row 195), Export Job, Constraint File
+/// and VHDL File kept as planned rows.
 #[test]
 fn the_add_new_to_project_flyout_is_grouped_documents_libraries_planned() {
     let rows = add_new_entries(
@@ -504,12 +505,16 @@ fn the_add_new_to_project_flyout_is_grouped_documents_libraries_planned() {
         "VHDL File",
     ]);
     assert_eq!(layout(&rows), expected);
-    for planned in [
-        "Design Notebook",
-        "Export Job",
-        "Constraint File",
-        "VHDL File",
-    ] {
+    let notebook = item(&rows, "Design Notebook");
+    assert!(!notebook.disabled);
+    assert_eq!(badge_of(notebook), None);
+    assert!(matches!(
+        &notebook.on_press,
+        Some(Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
+            ProjectTreeAction::AddNewDesignNotebook(key)
+        ))) if key == &vec!["proj".to_string()]
+    ));
+    for planned in ["Export Job", "Constraint File", "VHDL File"] {
         let it = item(&rows, planned);
         assert!(it.disabled && it.on_press.is_none(), "{planned}");
         assert_eq!(badge_of(it), Some("planned"), "{planned}");
@@ -521,7 +526,7 @@ fn the_add_new_to_project_flyout_is_grouped_documents_libraries_planned() {
 #[test]
 fn a_row_without_an_icon_lines_its_label_up_with_the_others() {
     let app = app_with_tree();
-    let key = key_of(&app.document_state.panel_ctx.project_tree, &[0]).expect("the root");
+    let key = key_of(&app.document_view.panel_ctx.project_tree, &[0]).expect("the root");
     let ctx = ProjectTreeContextMenuState {
         x: 0.0,
         y: 0.0,

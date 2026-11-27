@@ -75,10 +75,10 @@ impl Signex {
         ) else {
             return Vec::new();
         };
-        let Some(data) = document_state.net_nav.index.latest(project.id) else {
+        let Some(data) = self.document_view.net_nav.index.latest(project.id) else {
             return Vec::new();
         };
-        let placement = document_state.tab_placements.get(path);
+        let placement = self.document_view.tab_placements.get(path);
         let Some(page) = data.cross_refs.for_page(path, placement) else {
             return Vec::new();
         };

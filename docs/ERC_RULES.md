@@ -139,12 +139,61 @@ a library symbol claiming more than 256 units (`MAX_UNITS_PER_PART`) is
 reported once as likely corrupt instead of being enumerated, and a message
 lists at most eight missing units before "(+N more)".
 
+## Differential pairs
+
+Added for #2951. Pairs and their suffix styles: `docs/SCHEMATIC_DIRECTIVES.md`,
+"Differential pairs".
+
+| Rule (key) | Default | What fires |
+|---|---|---|
+| `diff_pair_partner_missing` | Warning | One half of a differential pair whose partner net is not on the sheet (`signex_net::lone_pair_members`): a net named as a positive half (`USB_D_P`, `USB_DP`, `CLK+`) with no `USB_D_N` / `USB_DN` / `CLK-`, or the half a Differential Pair directive (or a Net Parameters directive naming a diff-pair class) sits on when the other is missing. A negative name alone (`RESET_N`, `PWRDN`) is not reported: it is an active-low signal far more often than half a pair, so only a directive makes it a member. A power net is never a member by name. One finding per net, at the label that names it (its primary, so the finding is waivable and a Blanket or No-ERC there silences it), else at the directive, tagged `pair:<name>`: `Net USB_D_P is named as the positive half of differential pair USB_D, but its partner USB_D_N is not on this sheet`. The check is per sheet: a pair whose halves sit on two sheets is reported on the sheet with the positive half (and on a sheet whose directive marks the other). |
+
 ## Blankets and Compile Masks
 
 Added for #2420. ERC never sees what a Compile Mask covers, and drops a
 finding located inside a Blanket that excludes its rule id (or `*`). A
 net-level finding counts as located at its anchor pin. Rules and the file
 format: `docs/SCHEMATIC_DIRECTIVES.md`.
+
+| Rule (key) | Default | What fires |
+|---|---|---|
+| `net_class_conflict` | Warning | Two directives give one net different net classes: two Net Parameters directives, a Net Parameters directive and a Net Blanket, or two Net Blankets (#2656). The net keeps the class of the first in rank (Net Parameters before Net Blankets, each in sheet order, `signex_net::class_assignments`). One finding per overridden directive and net, located at that directive (a Net Blanket's centre), with the winning directive as its peer and the net as its tag: `Net SW takes class POWER from a Net Parameters directive; class SIGNAL of this Net Blanket is overridden`. A Blanket that excludes the rule silences it. Directives naming the same class agree. In a project run the directives of every sheet are ranked together over the stitched netlist, as the netlist ranks them (Net Parameters of every sheet before the Net Blankets, sheets in key order, `signex_net::project_net_class_conflicts`); the finding is filed under the overridden directive's sheet and, when the winner is on another sheet, names that sheet (`... from a Net Parameters directive on sheet <key>; ...`) and has no peer. That project answer replaces the sheet's own on every directive and net the project netlist classes, one finding per overridden directive and net (#2961); a net the project netlist does not carry and a sheet the roots never reach keep their own. |
+
+A waiver on a finding about a directive lapses when the directive's kind,
+class or place changes.
+
+## Live ERC
+
+Added for #1288 (Caner, 2026-11-25): live ERC is on by default and quiet.
+The nets an edit changes are checked again after it, the canvas markers and
+the ERC counts follow, Run ERC (F8) stays the full check, and the `live_erc`
+preference turns live checking off.
+
+- **When.** Every sheet edit (an undo and a redo included) restarts a
+  400 ms wait (`LIVE_ERC_DEBOUNCE`); when it ends with no newer edit, the
+  check runs in the background, as Run ERC does. While a Run ERC or another
+  live check is in flight the wait starts again, and a Run ERC started
+  during a live check drops that check's result.
+- **What it re-checks.** Each open sheet is compared with the copy the last
+  live check read (`signex_erc::live::edit_scope`): the objects that came,
+  went or changed, the points they sit on before and after, and every object
+  and wire end of a net whose contents changed. A finding is re-checked when
+  its primary or peer object, its point or its net's name is in that scope;
+  on a sheet the edit did not change, only findings on a net whose name
+  changed elsewhere are. A change the scope cannot place (the sheet's library
+  symbols, harness objects or sheet variables) re-checks the whole sheet, and
+  so does a sheet first seen in the update that edited it.
+- **Quiet.** Every other finding stays as the last check left it: a live
+  check never brings up findings on parts of the design nobody touched, and
+  it writes no line in Messages (only a failed worker is said). It does not
+  bring the ERC panel forward, does not show "Running…", and leaves the
+  "checked" summary, the waiver counts and the stale banner to Run ERC: the
+  banner still says the results come from before the last edit, since only
+  the touched nets were checked again.
+- **Where.** Only with a window; a headless run checks with `check_erc`.
+- **Off.** `toggle_live_erc` flips the preference; `toggle_live_erc
+  enabled=false` sets it (`docs/CLI.md`, "Checks on demand"). Turning it off
+  drops a wait and a check in flight; the findings already shown stay.
 
 ## Waivers
 

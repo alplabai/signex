@@ -59,7 +59,7 @@ fn pdf_text(file: &Path) -> String {
 
 /// What the dialog's Export PDF… hands on once the save dialog answers.
 fn export_from_dialog(app: &mut Signex, file: &Path) {
-    let preview = app.document_state.preview.as_ref().expect("dialog open");
+    let preview = app.document_view.preview.as_ref().expect("dialog open");
     let request = PdfExportRequest {
         source: preview.source.clone(),
         options: preview.output_options(),
@@ -78,7 +78,7 @@ fn the_command_opens_export_pdf_on_the_sheet() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, sheet) = app_with_sheet(dir.path());
     run(&mut app, "export_schematic_pdf");
-    let preview = app.document_state.preview.as_ref();
+    let preview = app.document_view.preview.as_ref();
     assert_eq!(preview.map(|p| &p.source), Some(&sheet), "Export PDF opens");
 }
 
@@ -90,7 +90,7 @@ fn the_picked_colour_prints_and_the_next_opening_keeps_it() {
     pdf_option(&mut app, PdfOptionMsg::WatermarkToggled(true));
     let typed = PdfOptionMsg::WatermarkColourChanged("#0000ff".into());
     pdf_option(&mut app, typed);
-    let preview = app.document_state.preview.as_ref().expect("open");
+    let preview = app.document_view.preview.as_ref().expect("open");
     let printed = preview.output_options().watermark.expect("on");
     assert_eq!(printed.colour_rgb, BLUE, "the live preview draws this one");
 
@@ -105,7 +105,7 @@ fn the_picked_colour_prints_and_the_next_opening_keeps_it() {
 
     let _ = app.handle_print_preview_close();
     run(&mut app, "export_schematic_pdf");
-    let reopened = &app.document_state.preview.as_ref().expect("open").dialog;
+    let reopened = &app.document_view.preview.as_ref().expect("open").dialog;
     assert_eq!(reopened.watermark.settings.colour_rgb, BLUE, "remembered");
     assert_eq!(reopened.watermark.colour_input, "#0000FF");
 }
@@ -118,7 +118,7 @@ fn a_swatch_picks_its_colour_and_a_bad_code_changes_nothing() {
     let grey = crate::app::state::WATERMARK_SWATCHES[1];
     pdf_option(&mut app, PdfOptionMsg::WatermarkColourPicked(grey));
     pdf_option(&mut app, PdfOptionMsg::WatermarkColourChanged("#12".into()));
-    let preview = app.document_state.preview.as_ref().expect("open");
+    let preview = app.document_view.preview.as_ref().expect("open");
     let draft = &preview.dialog.watermark;
     assert_eq!(draft.settings.colour_rgb, grey);
     assert_eq!(draft.colour_input, "#12", "kept as typed");
@@ -170,7 +170,7 @@ fn the_cli_writes_a_watermarked_pdf_with_links() {
     assert!(text.contains("0 0 1 rg\n"), "the watermark prints in blue");
     assert!(text.contains("/ca 0.4"), "at 40 %");
     assert!(text.contains("/URI (https://example.com/ds.pdf)"));
-    assert!(app.document_state.preview.is_none(), "no dialog opens");
+    assert!(app.document_view.preview.is_none(), "no dialog opens");
 }
 
 #[test]

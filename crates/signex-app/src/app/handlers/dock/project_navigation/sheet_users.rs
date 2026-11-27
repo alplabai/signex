@@ -80,7 +80,7 @@ impl Signex {
         let (&project, rest) = tree_path.split_first()?;
         let (&docs, rest) = rest.split_first()?;
         let branch = signex_widgets::tree_view::get_node(
-            self.document_state.panel_ctx.project_tree.as_slice(),
+            self.document_view.panel_ctx.project_tree.as_slice(),
             &[project, docs],
         )?;
         if branch.label != "Source Documents" {
@@ -88,7 +88,7 @@ impl Signex {
         }
         let (&page, nested) = rest.split_first()?;
         let mut info = self
-            .document_state
+            .document_view
             .panel_ctx
             .projects
             .get(project)?

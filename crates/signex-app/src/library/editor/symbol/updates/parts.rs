@@ -17,24 +17,24 @@ pub(super) fn apply_symbol_parts(editor: &mut SymEditor, msg: SymbolEditorMsg) {
 
     match msg {
         SymbolEditorMsg::PrevPart => {
-            if editor.active_part > 1 {
-                editor.active_part -= 1;
+            if editor.draft.active_part > 1 {
+                editor.draft.active_part -= 1;
                 // Drop any selection so it can't dangle on a graphic that
                 // just became hidden on the newly-active unit.
-                editor.selected = None;
+                editor.gui.selected = None;
                 close_pickers(editor);
-                editor.canvas_cache.clear();
+                editor.gui.canvas_cache.clear();
             }
         }
         SymbolEditorMsg::NextPart => {
             let max = crate::library::editor::symbol::state::max_part_number(editor.primitive());
-            if editor.active_part < max {
-                editor.active_part += 1;
+            if editor.draft.active_part < max {
+                editor.draft.active_part += 1;
                 // Drop any selection so it can't dangle on a graphic that
                 // just became hidden on the newly-active unit.
-                editor.selected = None;
+                editor.gui.selected = None;
                 close_pickers(editor);
-                editor.canvas_cache.clear();
+                editor.gui.canvas_cache.clear();
             }
         }
         SymbolEditorMsg::NewPart => {
@@ -45,38 +45,38 @@ pub(super) fn apply_symbol_parts(editor: &mut SymEditor, msg: SymbolEditorMsg) {
             // Persist the unit so an empty part (no pins yet) survives
             // navigate + save — the count is now stored, not derived.
             editor.primitive_mut().part_count = new_part;
-            editor.active_part = new_part;
+            editor.draft.active_part = new_part;
             // Drop any selection so a stale index can't act (via keyboard
             // Delete / Rotate) on a graphic hidden by the unit switch.
-            editor.selected = None;
+            editor.gui.selected = None;
             close_pickers(editor);
             mark_dirty(editor);
         }
         SymbolEditorMsg::RemovePart => {
             let max = crate::library::editor::symbol::state::max_part_number(editor.primitive());
-            if max <= 1 || editor.active_part <= 1 {
+            if max <= 1 || editor.draft.active_part <= 1 {
                 // `warn!`, not `debug!`: the user pressed Remove Part and
                 // it was refused. `debug!` is below the default
                 // `LevelFilter::Info`, so in a shipped build the refusal
                 // and its reason reached no one.
                 tracing::warn!(
                     target: "signex::library",
-                    active = editor.active_part,
+                    active = editor.draft.active_part,
                     max,
                     "Remove Part was refused: a symbol must keep at least one part"
                 );
                 return;
             }
             push_undo(editor);
-            let to_remove = editor.active_part;
+            let to_remove = editor.draft.active_part;
             let new_active = crate::library::editor::symbol::state::delete_unit(
                 editor.primitive_mut(),
                 to_remove,
             );
-            editor.active_part = new_active;
+            editor.draft.active_part = new_active;
             // Drop any selection so a stale index can't act on geometry
             // shifted or hidden by the delete + renumber.
-            editor.selected = None;
+            editor.gui.selected = None;
             close_pickers(editor);
             mark_dirty(editor);
         }
@@ -106,16 +106,16 @@ mod tests {
     #[test]
     fn next_part_flushes_a_staged_polygon_onto_the_part_it_was_drawn_on() {
         let mut editor = new_editor();
-        assert_eq!(editor.active_part, 1);
-        editor.tool = SymbolTool::PlacePolygon;
-        editor.polygon_vertices = vec![(0.0, 0.0), (4.0, 0.0), (2.0, 3.0)];
+        assert_eq!(editor.draft.active_part, 1);
+        editor.gui.tool = SymbolTool::PlacePolygon;
+        editor.gui.polygon_vertices = vec![(0.0, 0.0), (4.0, 0.0), (2.0, 3.0)];
         // A second part must exist for NextPart to actually switch.
         editor.primitive_mut().part_count = 2;
 
         apply_symbol_parts(&mut editor, SymbolEditorMsg::NextPart);
 
-        assert_eq!(editor.active_part, 2, "part switch still happens");
-        assert!(editor.polygon_vertices.is_empty(), "stash flushed");
+        assert_eq!(editor.draft.active_part, 2, "part switch still happens");
+        assert!(editor.gui.polygon_vertices.is_empty(), "stash flushed");
         assert_eq!(editor.primitive().graphics.len(), 1);
         match &editor.primitive().graphics[0].kind {
             SymbolGraphicKind::Polygon { vertices } => assert_eq!(vertices.len(), 3),
@@ -134,16 +134,16 @@ mod tests {
     #[test]
     fn new_part_flushes_a_staged_polygon_onto_the_part_it_was_drawn_on() {
         let mut editor = new_editor();
-        editor.tool = SymbolTool::PlacePolygon;
-        editor.polygon_vertices = vec![(0.0, 0.0), (4.0, 0.0), (2.0, 3.0)];
+        editor.gui.tool = SymbolTool::PlacePolygon;
+        editor.gui.polygon_vertices = vec![(0.0, 0.0), (4.0, 0.0), (2.0, 3.0)];
 
         apply_symbol_parts(&mut editor, SymbolEditorMsg::NewPart);
 
         assert_eq!(
-            editor.active_part, 2,
+            editor.draft.active_part, 2,
             "a new part was created and activated"
         );
-        assert!(editor.polygon_vertices.is_empty(), "stash flushed");
+        assert!(editor.gui.polygon_vertices.is_empty(), "stash flushed");
         assert_eq!(editor.primitive().graphics.len(), 1);
         assert_eq!(
             editor.primitive().graphics[0].part_number,
@@ -157,14 +157,14 @@ mod tests {
     #[test]
     fn next_part_discards_a_short_staged_polygon() {
         let mut editor = new_editor();
-        editor.tool = SymbolTool::PlacePolygon;
-        editor.polygon_vertices = vec![(0.0, 0.0), (4.0, 0.0)];
+        editor.gui.tool = SymbolTool::PlacePolygon;
+        editor.gui.polygon_vertices = vec![(0.0, 0.0), (4.0, 0.0)];
         editor.primitive_mut().part_count = 2;
 
         apply_symbol_parts(&mut editor, SymbolEditorMsg::NextPart);
 
-        assert_eq!(editor.active_part, 2);
-        assert!(editor.polygon_vertices.is_empty());
+        assert_eq!(editor.draft.active_part, 2);
+        assert!(editor.gui.polygon_vertices.is_empty());
         assert!(editor.primitive().graphics.is_empty());
     }
 }

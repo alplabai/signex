@@ -42,6 +42,7 @@ impl Signex {
             M::BrowseRequested => return self.browse_fab_outputs_folder(),
             M::GenerateRequested => return self.generate_fab_outputs(),
             M::Written { generation, result } => self.fab_outputs_written(generation, result),
+            M::CommandWritten { run, result } => return self.fab_command_written(*run, result),
             M::FolderOpenRequested => return self.open_fab_outputs_folder(),
             M::FolderOpenFailed { folder, why } => {
                 let folder = folder.display().to_string();
@@ -110,9 +111,9 @@ impl Signex {
         let Some(project) = document.projects.iter_mut().find(|p| p.id == project_id) else {
             return;
         };
-        let tab = document.project_tabs.entry(project_id).or_default();
+        let history = document.general_history.entry(project_id).or_default();
         let command = ProjectGeneralCommand::SetFabOutputs(kinds.stored());
-        if tab.general_history.apply(&mut project.data, command) {
+        if history.apply(&mut project.data, command) {
             // Not a rule or a sheet: ERC results stay current.
             document.sync_project_history_dirty(project_id, false);
             self.refresh_panel_ctx();
@@ -170,12 +171,17 @@ impl Signex {
         )
     }
 
-    /// What Generate makes from `board`, a copy of the dialog's board as it
-    /// is in memory: the dialog's choices, the words the assembly PDF
-    /// prints and where the parts' STEP models are read from.
-    fn generate_job(&self, state: &FabOutputsState, board: PcbBoard) -> GenerateJob {
+    /// What Generate makes of `kinds` from `board`, a copy of the dialog's
+    /// board as it is in memory: the dialog's choices, the words the
+    /// assembly PDF prints and where the parts' STEP models are read from.
+    /// `fabrication_outputs` with operands builds its job here too.
+    pub(super) fn generate_job(
+        &self,
+        state: &FabOutputsState,
+        kinds: FabOutputKinds,
+        board: PcbBoard,
+    ) -> GenerateJob {
         let name = state.name.trim().to_string();
-        let kinds = self.fab_output_kinds(state);
         let pdf = kinds.assembly_pdf.then(|| {
             let options = assembly_pdf_options(&self.ui_state.board_output.print_options);
             let text = crate::app::board_output::print_text(&self.ui_state.i18n, &state.board_name);
@@ -219,7 +225,7 @@ impl Signex {
             .document_state
             .pcb_board_shown(&state.board)
             .map(std::borrow::Cow::into_owned)
-            .map(|board| self.generate_job(state, board));
+            .map(|board| self.generate_job(state, self.fab_output_kinds(state), board));
         self.ui_state.fab_outputs_writes += 1;
         let generation = self.ui_state.fab_outputs_writes;
         let Some(state) = self.ui_state.fab_outputs.as_mut() else {
@@ -253,7 +259,22 @@ impl Signex {
         generation: u64,
         result: Result<super::FabWritten, FabProblem>,
     ) {
-        let (line, is_warning) = match &result {
+        self.log_fab_outcome(result.as_ref());
+        if let Some(state) = self.ui_state.fab_outputs.as_mut()
+            && state.writing == Some(generation)
+        {
+            state.writing = None;
+            state.outcome = Some(result);
+            // The clock is read here, when the outcome arrives, never in view.
+            state.generated_at = Some(chrono::Local::now().time());
+        }
+    }
+
+    /// The Messages line of a finished Generate, the dialog's or the
+    /// command's: what was written with every note and stale file, a warning
+    /// when there is any, or why nothing was.
+    pub(super) fn log_fab_outcome(&self, result: Result<&super::FabWritten, &FabProblem>) {
+        let (line, is_warning) = match result {
             Ok(written) => super::written_message(written, &self.ui_state.i18n),
             Err(problem) => (
                 super::problem_text(problem, &self.ui_state.i18n).into_string(),
@@ -264,14 +285,6 @@ impl Signex {
             crate::diagnostics::log_warning(line);
         } else {
             crate::diagnostics::log_info(line);
-        }
-        if let Some(state) = self.ui_state.fab_outputs.as_mut()
-            && state.writing == Some(generation)
-        {
-            state.writing = None;
-            state.outcome = Some(result);
-            // The clock is read here, when the outcome arrives, never in view.
-            state.generated_at = Some(chrono::Local::now().time());
         }
     }
 

@@ -59,7 +59,7 @@ fn logged(needles: &[&str]) -> bool {
 
 fn edit_symbol(app: &mut Signex, path: &Path, index: usize, description: &str) {
     let editor = app.document_state.symbol_editors.get_mut(path).unwrap();
-    editor.file.symbols[index].description = description.into();
+    editor.draft.file.symbols[index].description = description.into();
     editor.mark_dirty();
 }
 
@@ -183,8 +183,8 @@ fn a_container_that_no_longer_parses_on_disk_is_not_overwritten() {
 
 fn delete_symbol(app: &mut Signex, path: &Path, index: usize) {
     let editor = app.document_state.symbol_editors.get_mut(path).unwrap();
-    editor.file.symbols.remove(index);
-    editor.active_idx = 0;
+    editor.draft.file.symbols.remove(index);
+    editor.draft.active_idx = 0;
     editor.mark_dirty();
 }
 

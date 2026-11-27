@@ -66,6 +66,15 @@ impl NetMember {
         !matches!(self.kind, NetMemberKind::Wire | NetMemberKind::Junction)
     }
 
+    /// Whether this member makes its net a power net: a power port or a
+    /// Power label. The compiled design and the power tree read this.
+    pub fn names_power_net(&self) -> bool {
+        matches!(
+            self.kind,
+            NetMemberKind::PowerPort | NetMemberKind::Label(LabelType::Power)
+        )
+    }
+
     /// The selection kind this member is picked as on its sheet.
     pub fn selected_kind(&self) -> SelectedKind {
         match self.kind {

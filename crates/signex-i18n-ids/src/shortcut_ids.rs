@@ -6,6 +6,8 @@ define_ids! {
         PALETTE_KEY_ESC = "palette-key-esc";
         PALETTE_KEY_ENTER = "palette-key-enter";
         PALETTE_OPEN_PANEL = "palette-open-panel";
+        EXTENSION_COMMAND_LABEL = "extension-command-label";
+        EXTENSION_COMMAND_UNAVAILABLE = "extension-command-unavailable";
         KEYMAP_COL_ACTION = "keymap-col-action";
         KEYMAP_COL_SHORTCUT = "keymap-col-shortcut";
         KEYMAP_GROUP_GENERAL = "keymap-group-general";

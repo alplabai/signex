@@ -195,7 +195,7 @@ fn selection_filter_opens_the_active_bars_filter() {
 fn net_classes_opens_the_net_classes_panel() {
     let mut app = one_symbol_selected();
     assert!(
-        app.document_state
+        app.document_view
             .dock
             .locate(crate::panels::PanelKind::NetClasses)
             .is_none(),
@@ -203,7 +203,7 @@ fn net_classes_opens_the_net_classes_panel() {
     );
     let _ = click(&mut app, "Design/Net Classes");
     assert!(
-        app.document_state
+        app.document_view
             .dock
             .locate(crate::panels::PanelKind::NetClasses)
             .is_some(),

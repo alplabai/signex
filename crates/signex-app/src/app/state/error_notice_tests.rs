@@ -18,7 +18,7 @@ fn switch(app: &mut Signex, tag: &str) {
 }
 
 fn shown(app: &Signex) -> (String, String) {
-    let notice = app.document_state.error_notice.as_ref().expect("a notice");
+    let notice = app.document_view.error_notice.as_ref().expect("a notice");
     let i18n = &app.ui_state.i18n;
     (notice.title_text(i18n), notice.detail_text(i18n))
 }
@@ -27,7 +27,7 @@ fn shown(app: &Signex) -> (String, String) {
 fn an_open_notice_follows_a_language_switch() {
     let (mut app, _task) = Signex::new();
     switch(&mut app, "en-US");
-    app.document_state.error_notice = Some(ErrorNotice::read_only("Basic Parts"));
+    app.document_view.error_notice = Some(ErrorNotice::read_only("Basic Parts"));
     let english = (
         "Library Is Read-Only".to_owned(),
         "The library \"Basic Parts\" ships with Signex and is not editable.".to_owned(),
@@ -51,7 +51,7 @@ fn an_open_notice_follows_a_language_switch() {
 fn a_verbatim_detail_is_shown_as_it_is_in_every_language() {
     let (mut app, _task) = Signex::new();
     let line = "Permission denied (os error 13)";
-    app.document_state.error_notice = Some(ErrorNotice::save(verbatim(line)));
+    app.document_view.error_notice = Some(ErrorNotice::save(verbatim(line)));
     switch(&mut app, "en-XA");
     let (title, detail) = shown(&app);
     assert_ne!(title, "Save Failed");
@@ -246,7 +246,7 @@ fn a_failed_save_puts_the_error_chain_in_the_system_block() {
     let (mut app, _task) = Signex::new();
     let error = anyhow::anyhow!("Access is denied. (os error 5)").context("writing /w/a.snxsch");
     app.report_save_failure("Failed to save active document", &error);
-    let notice = app.document_state.error_notice.as_ref().expect("a card");
+    let notice = app.document_view.error_notice.as_ref().expect("a card");
     assert_eq!(notice.title.render_en_us(), "Save Failed");
     assert_eq!(
         notice.detail.render_en_us(),
@@ -347,14 +347,14 @@ fn save_as_on_the_conflict_card_opens_save_as_for_the_conflicted_sheet() {
     let dir = tempfile::tempdir().expect("tempdir");
     let (mut app, conflicted, other) = conflict_fixture(dir.path());
     assert_eq!(active_path(&app), other, "another tab is in front");
-    app.document_state.error_notice = Some(ErrorNotice::disk_changed(
+    app.document_view.error_notice = Some(ErrorNotice::disk_changed(
         conflicted.clone(),
         DiskDrift::Changed,
     ));
 
     let task = app.handle_disk_conflict_save_as();
 
-    assert!(app.document_state.error_notice.is_none(), "the card closed");
+    assert!(app.document_view.error_notice.is_none(), "the card closed");
     assert!(
         iced_runtime::task::into_stream(task).is_some(),
         "the Save As dialog is asked for"
@@ -384,9 +384,9 @@ fn save_as_keeps_the_card_when_it_cannot_run() {
         dir.path().join("gone.snxsch"),
     ] {
         let card = ErrorNotice::disk_changed(path, DiskDrift::Changed);
-        app.document_state.error_notice = Some(card.clone());
+        app.document_view.error_notice = Some(card.clone());
         let _task = app.update(Message::Overlay(OverlayMsg::DiskConflictSaveAsChosen));
-        assert_eq!(app.document_state.error_notice.as_ref(), Some(&card));
+        assert_eq!(app.document_view.error_notice.as_ref(), Some(&card));
         assert_eq!(active_path(&app), other, "no tab was switched");
     }
 }
@@ -397,12 +397,12 @@ fn save_as_keeps_the_card_when_it_cannot_run() {
 fn copy_on_the_card_writes_the_clipboard_through_a_task() {
     let (mut app, _boot) = Signex::new();
     let card = ErrorNotice::create(verbatim("it failed"));
-    app.document_state.error_notice = Some(card.clone());
+    app.document_view.error_notice = Some(card.clone());
     let task = app.update(Message::Overlay(OverlayMsg::ErrorNoticeCopyPressed));
     assert!(task.units() > 0, "the clipboard write is a Task");
-    assert_eq!(app.document_state.error_notice.as_ref(), Some(&card));
+    assert_eq!(app.document_view.error_notice.as_ref(), Some(&card));
 
-    app.document_state.error_notice = None;
+    app.document_view.error_notice = None;
     let task = app.update(Message::Overlay(OverlayMsg::ErrorNoticeCopyPressed));
     assert_eq!(task.units(), 0, "no card, no work");
 }
@@ -429,7 +429,7 @@ fn save_as_from_the_card_onto_the_changed_file_leaves_their_version() {
         let dir = tempfile::tempdir().expect("tempdir");
         let (mut app, conflicted, _other) = conflict_fixture(dir.path());
         let card = ErrorNotice::disk_changed(conflicted.clone(), DiskDrift::Changed);
-        app.document_state.error_notice = Some(card.clone());
+        app.document_view.error_notice = Some(card.clone());
         answer_save_as(&mut app, &dir.path().join(spelling));
 
         crate::app::path_ops::settle(
@@ -443,7 +443,7 @@ fn save_as_from_the_card_onto_the_changed_file_leaves_their_version() {
             "{spelling}: their version stays"
         );
         assert_eq!(
-            app.document_state.error_notice.as_ref(),
+            app.document_view.error_notice.as_ref(),
             Some(&card),
             "{spelling}: the card is back"
         );
@@ -463,7 +463,7 @@ fn save_as_from_the_card_onto_the_changed_file_leaves_their_version() {
     app.open_symbol_editor_tab(symbol.clone(), file);
     app.document_state.mark_document_dirty(&symbol);
     let card = ErrorNotice::disk_changed(symbol.clone(), DiskDrift::Changed);
-    app.document_state.error_notice = Some(card.clone());
+    app.document_view.error_notice = Some(card.clone());
     answer_save_as(&mut app, &symbol);
 
     crate::app::path_ops::settle(
@@ -477,7 +477,7 @@ fn save_as_from_the_card_onto_the_changed_file_leaves_their_version() {
         "symbol: their version stays"
     );
     assert_eq!(
-        app.document_state.error_notice.as_ref(),
+        app.document_view.error_notice.as_ref(),
         Some(&card),
         "symbol: the card is back"
     );
@@ -497,7 +497,7 @@ fn file_save_as_onto_the_changed_file_itself_asks_like_ctrl_s() {
     app.record_disk_baseline(&conflicted, crate::persist::ContentHash::of(b"our version"));
     assert!(app.activate_tab_for_path(&conflicted));
     assert!(
-        app.document_state.error_notice.is_none(),
+        app.document_view.error_notice.is_none(),
         "the card was cancelled"
     );
 
@@ -515,7 +515,7 @@ fn file_save_as_onto_the_changed_file_itself_asks_like_ctrl_s() {
         "their version stays"
     );
     assert_eq!(
-        app.document_state.error_notice.as_ref(),
+        app.document_view.error_notice.as_ref(),
         Some(&ErrorNotice::disk_changed(
             conflicted.clone(),
             DiskDrift::Changed
@@ -551,7 +551,7 @@ fn file_save_as_onto_its_deleted_own_file_writes_it() {
     let open = app.active_schematic().expect("the sheet is still open");
     assert_eq!(written.uuid, open.uuid, "the open sheet is what is written");
     assert_eq!(written.paper_size, "A4");
-    assert_eq!(app.document_state.error_notice, None, "no card");
+    assert_eq!(app.document_view.error_notice, None, "no card");
     assert!(!app.document_state.is_document_dirty(&sheet));
     assert_eq!(active_path(&app), sheet, "no re-key");
 }
@@ -569,7 +569,7 @@ fn save_as_from_the_card_to_a_new_file_moves_the_document_there() {
     app.handle_save_found_disk_drift(conflicted.clone(), DiskDrift::Changed);
     let saves = &app.document_state.document_saves;
     assert!(saves.failure(&conflicted).is_some(), "the refused save");
-    assert!(app.document_state.error_notice.is_some(), "the card");
+    assert!(app.document_view.error_notice.is_some(), "the card");
     let copy = dir.path().join("copy.snxsch");
     answer_save_as(&mut app, &copy);
 
@@ -614,7 +614,7 @@ fn save_as_from_the_card_to_a_new_file_moves_the_document_there() {
     let saves = &app.document_state.document_saves;
     assert!(saves.failure(&symbol).is_some(), "symbol: the refused save");
     assert_eq!(
-        app.document_state.error_notice,
+        app.document_view.error_notice,
         Some(ErrorNotice::disk_changed(
             symbol.clone(),
             DiskDrift::Changed

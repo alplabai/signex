@@ -114,7 +114,7 @@ fn the_palette_row_runs_the_picked_job() {
     let task = app.update(Message::Menu(MenuMessage::command("run_output_job")));
     settle(&mut app, task);
     assert_full_set(&files_in(&dir.path().join("out")));
-    assert!(app.document_state.error_notice.is_none());
+    assert!(app.document_view.error_notice.is_none());
 }
 
 /// The CLI and an agent name the job and get the files written as JSON, the
@@ -301,7 +301,7 @@ fn a_picked_job_that_cannot_run_shows_the_notice() {
     answer_picker(&mut app, &outside);
     let task = app.update(Message::Menu(MenuMessage::command("run_output_job")));
     settle(&mut app, task);
-    let notice = app.document_state.error_notice.as_ref().expect("a notice");
+    let notice = app.document_view.error_notice.as_ref().expect("a notice");
     let text = notice.detail.render_en_us();
     assert!(text.contains("wrote nothing"), "{text}");
     assert!(!elsewhere.path().join("out").exists());

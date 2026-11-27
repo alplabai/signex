@@ -15,8 +15,7 @@ use signex_engine::part_swap::{self, PlacedPin};
 use signex_engine::pcb::BoardCommand;
 use signex_engine::pcb::pad_swap::{self, PadNetChange, SwapKind};
 use signex_i18n::{command_ids, ids, t};
-use signex_types::part_swap::SwapGroups;
-use signex_types::schematic::{LibSymbol, SchematicSheet, Symbol};
+use signex_types::schematic::{SchematicSheet, Symbol};
 use uuid::Uuid;
 
 use crate::app::command::{CommandOutcome, OperandValue, translator};
@@ -305,12 +304,8 @@ impl Signex {
             .resolve_lib_symbol(first)
             .ok_or_else(|| format!("the library symbol of {designator} is not on its sheet"))?;
         let gates = |a: u32, b: u32| -> Result<SwapPlan, String> {
-            let groups = SwapGroups::gates_of(first);
-            if !groups.same_group(&a.to_string(), &b.to_string()) {
-                return Err(format!(
-                    "gates {a} and {b} of {designator} are not in one gate swap group of its part"
-                ));
-            }
+            part_swap::check_gate_group(first, &designator, a, b)
+                .map_err(|refusal| refusal.to_string())?;
             let pairs = part_swap::gate_pin_pairs(&lib, &designator, a, b)
                 .map_err(|refusal| refusal.to_string())?;
             let swap = pad_swap::pad_swap(pcb, footprint, &pairs, SwapKind::Gates)
@@ -365,20 +360,21 @@ impl Signex {
                 gates(gate_a, gate_b)
             }
             SwapRequest::Pins(a, b) => {
-                if !SwapGroups::pins_of(first).same_group(a, b) {
-                    return Err(format!(
-                        "pins {a} and {b} of {designator} are not in one pin swap group of its part"
-                    ));
-                }
+                part_swap::check_pin_group(first, &designator, a, b)
+                    .map_err(|refusal| refusal.to_string())?;
                 let pairs = [(a.clone(), b.clone())];
                 let swap = pad_swap::pad_swap(pcb, footprint, &pairs, SwapKind::Pins)
                     .map_err(|refusal| refusal.to_string())?;
+                let holding = |pin: &str| {
+                    part_swap::unit_holding(&units, &lib, pin, &designator)
+                        .map_err(|refusal| refusal.to_string())
+                };
                 let pin_a = PlacedPin {
-                    symbol: unit_holding(&units, &lib, a, &designator)?,
+                    symbol: holding(a.as_str())?,
                     number: a,
                 };
                 let pin_b = PlacedPin {
-                    symbol: unit_holding(&units, &lib, b, &designator)?,
+                    symbol: holding(b.as_str())?,
                     number: b,
                 };
                 let sheet = part_swap::rewire_pins(doc, pin_a, pin_b)
@@ -430,21 +426,4 @@ impl Signex {
         );
         crate::diagnostics::log_info(line.into_string());
     }
-}
-
-/// The placed unit that draws pin `pin`: the unit of its gate, or the first
-/// unit for a pin every gate shares.
-fn unit_holding(
-    units: &[&Symbol],
-    lib: &LibSymbol,
-    pin: &str,
-    designator: &str,
-) -> Result<Uuid, String> {
-    let unit =
-        part_swap::unit_of_pin(lib, pin).ok_or_else(|| format!("{designator} has no pin {pin}"))?;
-    units
-        .iter()
-        .find(|s| unit == 0 || s.unit == unit)
-        .map(|s| s.uuid)
-        .ok_or_else(|| format!("the gate of pin {pin} of {designator} is not placed on its sheet"))
 }

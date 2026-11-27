@@ -64,7 +64,7 @@ impl Signex {
             None => {
                 let kind = TabKind::DesignChecklist(id);
                 let title = self.page_tab_title(&kind).unwrap_or_default();
-                self.document_state.project_tabs.entry(id).or_default();
+                self.document_view.project_tabs.entry(id).or_default();
                 self.document_state.tabs.push(TabInfo {
                     title,
                     path,
@@ -96,7 +96,7 @@ impl Signex {
     /// The Design Checklist tab of `project_id`. A tab whose project is gone
     /// renders a short note instead.
     pub(crate) fn view_design_checklist_tab(&self, project_id: ProjectId) -> Element<'_, Message> {
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let Some(project) = self.document_state.project_by_id(project_id) else {
             return container(
                 text(t!(self.ui_state.i18n, ids::RULES_NO_PROJECT))

@@ -103,6 +103,7 @@ fn fixture() -> Fixture {
         schematic_design: Default::default(),
         fab_outputs: None,
         router_tool_diameter: None,
+        bom_alternates: Vec::new(),
         requirements: Default::default(),
         parameters: Default::default(),
         unknown: Default::default(),
@@ -260,7 +261,7 @@ fn delete_keeps_the_file_when_the_saved_project_cannot_be_written() {
         "memory still lists it"
     );
     assert!(
-        f.app.document_state.error_notice.is_some(),
+        f.app.document_view.error_notice.is_some(),
         "the user is told"
     );
     assert!(f.app.document_state.pending_path_ops.is_empty());
@@ -449,7 +450,7 @@ fn in_flight_open_is_not_patched_behind(spelling: &str) {
         "the saved parent is not rewritten under an open that already read it"
     );
     assert!(
-        f.app.document_state.error_notice.is_some(),
+        f.app.document_view.error_notice.is_some(),
         "the user is told"
     );
     assert!(!f.app.document_state.engines.contains_key(&root));
@@ -513,5 +514,5 @@ fn a_failed_delete_restores_the_saved_project_entry() {
     assert_eq!(std::fs::read(&f.prj).unwrap(), before, "entry restored");
     assert!(names(&f.app.document_state.projects[0].data).contains(&"sub/Deep.snxsch".to_string()));
     assert!(!f.app.document_state.is_document_dirty(&f.prj));
-    assert!(f.app.document_state.error_notice.is_some());
+    assert!(f.app.document_view.error_notice.is_some());
 }

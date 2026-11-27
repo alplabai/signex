@@ -44,9 +44,13 @@ impl Signex {
         if self.interaction_state.editing_text.is_some() {
             return None;
         }
+        // Mockup row 197: a Notebook badge's card lists the blocks about it.
+        if let Some(card) = self.view_notebook_badge_card(window_id) {
+            return Some(card);
+        }
         // A net card (a wire, pin or label, #1270) takes the place of the
         // symbol card while the pointer rests on a pin.
-        if let Some(card) = &self.document_state.net_nav.hover.card {
+        if let Some(card) = &self.document_view.net_nav.hover.card {
             return Some(self.view_net_hover_card(card, window_id));
         }
         let interaction = &self.interaction_state;
@@ -60,13 +64,13 @@ impl Signex {
         let engine = self.document_state.engines.get(active_path)?;
         let symbol = engine.document().symbols.iter().find(|s| s.uuid == uuid)?;
 
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let ink = crate::styles::ti(tokens.text);
         let label_ink = crate::styles::tokens::resolve(tokens).ink4;
         // The values are data read off the canvas, so they keep the canvas
         // font. Mockup row 10 draws the chrome mono instead; that is an open
         // maintainer decision.
-        let canvas_font_name = self.document_state.panel_ctx.canvas_font_name.as_str();
+        let canvas_font_name = self.document_view.panel_ctx.canvas_font_name.as_str();
         let canvas_font = crate::fonts::canvas_iced_font(canvas_font_name);
         let ui_font_name = self.panel_ctx_for(window_id).ui_font_name.as_str();
 

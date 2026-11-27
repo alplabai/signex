@@ -102,6 +102,7 @@ pub(crate) fn rig(loaded: Option<SchematicSheet>) -> Rig {
         app.document_state.documents_epoch,
         app.child_sheet_signature(),
         "p".into(),
+        PathBuf::new(),
     );
     state.show(Arc::new(read));
     state.edit(0, "2".into());

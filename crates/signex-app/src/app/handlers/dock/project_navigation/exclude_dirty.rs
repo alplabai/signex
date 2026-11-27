@@ -62,6 +62,7 @@ impl Signex {
         fold: CaseFold,
     ) -> Vec<std::path::PathBuf> {
         let doc = &self.document_state;
+        let document_view = &self.document_view;
         let mut found: Vec<std::path::PathBuf> = doc
             .dirty_document_paths()
             .into_iter()
@@ -69,9 +70,9 @@ impl Signex {
                 // A sheet whose only change is a pending title-block draft, a
                 // sheet-variable value or text typed into a note is unsaved
                 // too: the draft is what Save would write (#2027).
-                doc.drafts.title_block_sheets(),
+                document_view.drafts.title_block_sheets(),
             )
-            .chain(doc.drafts.sheet_variable_sheets())
+            .chain(document_view.drafts.sheet_variable_sheets())
             .chain(self.typed_note_sheets())
             .filter(|p| path_is_under(p, target, fold))
             // A project file's own dirty marker is metadata, not a document
@@ -306,7 +307,7 @@ impl Signex {
                     return iced::Task::none();
                 }
                 // Discard drops the drafts with the rest of the edits.
-                self.document_state
+                self.document_view
                     .drafts
                     .retain_sheets(|sheet| !path_is_under(sheet, &state.target_path, fold));
                 self.drop_note_drafts_where(&|sheet| {
@@ -338,7 +339,7 @@ impl Signex {
         {
             // `failed` was written; the error names the spellings that were not.
             crate::diagnostics::log_warning(format!("Exclude from Project: {err}"));
-            self.document_state.error_notice = Some(crate::app::state::ErrorNotice::save(
+            self.document_view.error_notice = Some(crate::app::state::ErrorNotice::save(
                 signex_i18n::Translatable::new(signex_i18n::ids::NOTICE_NOT_EXCLUDED)
                     .arg("name", state.display_name.as_str())
                     .arg("error", err.to_string()),
@@ -350,7 +351,7 @@ impl Signex {
             .map(|f| f.to_string_lossy().into_owned())
             .unwrap_or_else(|| state.display_name.clone());
         crate::diagnostics::log_error(&format!("Exclude from Project: could not save {name}"), err);
-        self.document_state.error_notice = Some(crate::app::state::ErrorNotice::save(
+        self.document_view.error_notice = Some(crate::app::state::ErrorNotice::save(
             signex_i18n::Translatable::new(signex_i18n::ids::NOTICE_NOT_EXCLUDED_UNSAVED)
                 .arg("file", name)
                 .arg("name", state.display_name.as_str())

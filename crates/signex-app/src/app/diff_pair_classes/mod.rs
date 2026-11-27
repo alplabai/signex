@@ -4,10 +4,14 @@
 //! `ProjectData.schematic_design.diff_pair_classes` as one step of the
 //! project's General history. Max skew and max uncoupled length are rules
 //! of the Rules tab (High Speed), shown read-only here (DECISIONS
-//! 2026-11-19).
+//! 2026-11-19). The values on the board-style preview are edited there too
+//! (`preview`, #2661).
 //! Design note: `docs/SCHEMATIC_DIRECTIVES.md`, "Differential pairs".
 
+mod list;
+pub(crate) mod preview;
 mod update;
+pub use preview::{PairPreview, PairPreviewMsg};
 pub(crate) use update::NAME_INPUT_ID;
 
 #[cfg(test)]
@@ -51,6 +55,9 @@ pub enum DiffPairClassesMsg {
     /// A value of the selected class as typed.
     FieldEdited(PairClassField, String),
     PairBySuffixToggled(bool),
+    /// A value was set or the handle moved on the class preview, or its
+    /// expand button was pressed.
+    PreviewActed(PairPreviewMsg),
     /// "Edit in Rules ▸ High Speed": the Rules tab opens.
     RulesLinkClicked,
     CancelRequested,
@@ -89,6 +96,8 @@ pub struct DiffPairClassesState {
     pub drafts: Vec<(PairClassField, String)>,
     /// Why the last OK did not apply (a name used twice or left blank).
     pub problem: Option<PairClassProblem>,
+    /// The class preview's open value, held handle and size.
+    pub preview: PairPreview,
 }
 
 /// Why OK was refused.

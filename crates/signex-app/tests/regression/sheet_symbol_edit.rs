@@ -55,7 +55,7 @@ fn editing_the_name_is_dirty_undoable_and_redoable() {
     assert_eq!(identity(&app).0, "Power");
     assert_eq!(identity(&app).1, "sheet1.snxsch", "file is untouched");
     assert!(app.document_state.is_document_dirty(&path));
-    assert!(app.document_state.error_notice.is_none());
+    assert!(app.document_view.error_notice.is_none());
 
     let _ = app.update(Message::Edit(EditMsg::Undo));
     assert_eq!(identity(&app), original());
@@ -73,7 +73,7 @@ fn editing_the_file_repoints_without_touching_the_disk() {
     assert_eq!(identity(&app).1, "sub/power.snxsch");
     assert_eq!(identity(&app).0, "sheet1", "name is untouched");
     assert!(app.document_state.is_document_dirty(&path));
-    assert!(app.document_state.error_notice.is_none());
+    assert!(app.document_view.error_notice.is_none());
     assert!(!tmp.path().join("sub").exists(), "no folder is created");
     assert!(!tmp.path().join("sub/power.snxsch").exists());
     assert!(!tmp.path().join("sheet1.snxsch").exists());
@@ -90,10 +90,10 @@ fn an_invalid_filename_is_refused_with_a_visible_message() {
     let (mut app, id, path) = app_with_one_sheet(&tmp);
 
     for bad in ["", "   ", "power.txt", "power", ".snxsch"] {
-        app.document_state.error_notice = None;
+        app.document_view.error_notice = None;
         type_and_commit_file(&mut app, id, bad);
         let notice = app
-            .document_state
+            .document_view
             .error_notice
             .as_ref()
             .unwrap_or_else(|| panic!("'{bad}' must raise a visible notice"));
@@ -111,9 +111,9 @@ fn an_empty_or_duplicate_name_is_refused_with_a_visible_message() {
     assert_eq!(sheets(&app)[1].name, "sheet2");
 
     for bad in ["  ", "SHEET2"] {
-        app.document_state.error_notice = None;
+        app.document_view.error_notice = None;
         type_and_commit_name(&mut app, id, bad);
-        assert!(app.document_state.error_notice.is_some(), "'{bad}'");
+        assert!(app.document_view.error_notice.is_some(), "'{bad}'");
         assert_eq!(identity(&app), original());
     }
 }
@@ -130,10 +130,10 @@ fn a_path_escaping_the_sheets_folder_is_refused() {
         .into_owned();
 
     for bad in ["../evil.snxsch", "sub/../../evil.snxsch", absolute.as_str()] {
-        app.document_state.error_notice = None;
+        app.document_view.error_notice = None;
         type_and_commit_file(&mut app, id, bad);
         let notice = app
-            .document_state
+            .document_view
             .error_notice
             .as_ref()
             .unwrap_or_else(|| panic!("'{bad}' must raise a visible notice"));
@@ -155,7 +155,7 @@ fn committing_without_typing_changes_nothing() {
     panel(&mut app, PanelMsg::CommitChildSheetFile(id));
 
     assert_eq!(identity(&app), original());
-    assert!(app.document_state.error_notice.is_none());
+    assert!(app.document_view.error_notice.is_none());
     assert!(!app.document_state.is_document_dirty(&path));
 }
 
@@ -234,6 +234,7 @@ fn a_file_another_sheet_of_the_project_references_is_refused() {
             schematic_design: Default::default(),
             fab_outputs: None,
             router_tool_diameter: None,
+            bom_alternates: Vec::new(),
             requirements: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
@@ -252,12 +253,12 @@ fn a_file_another_sheet_of_the_project_references_is_refused() {
     let id = sheets(&app)[0].uuid;
     let before = identity(&app);
     app.document_state.mark_documents_clean_where(|_| true);
-    app.document_state.error_notice = None;
+    app.document_view.error_notice = None;
 
     type_and_commit_file(&mut app, id, "sheet1.snxsch");
 
     let notice = app
-        .document_state
+        .document_view
         .error_notice
         .as_ref()
         .expect("a file used by another sheet must raise a notice");
@@ -269,8 +270,8 @@ fn a_file_another_sheet_of_the_project_references_is_refused() {
     assert!(!app.document_state.is_document_dirty(&other));
 
     // A free file name is still accepted.
-    app.document_state.error_notice = None;
+    app.document_view.error_notice = None;
     type_and_commit_file(&mut app, id, "free.snxsch");
-    assert!(app.document_state.error_notice.is_none());
+    assert!(app.document_view.error_notice.is_none());
     assert_eq!(identity(&app).1, "free.snxsch");
 }

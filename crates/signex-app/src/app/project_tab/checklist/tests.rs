@@ -72,7 +72,7 @@ pub(super) fn undo(app: &mut Signex, id: ProjectId, back: bool) -> bool {
 }
 
 pub(super) fn tab(app: &Signex, id: ProjectId) -> &super::ChecklistTabState {
-    &app.document_state.project_tabs[&id].checklist
+    &app.document_view.project_tabs[&id].checklist
 }
 
 pub(super) fn start(app: &mut Signex, id: ProjectId, template: ChecklistTemplate) {

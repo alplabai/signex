@@ -47,6 +47,7 @@ impl Signex {
                 || tab.kind.is_project_page()
                 || tab.kind.is_gerber_viewer()
                 || tab.kind.is_output_job()
+                || tab.kind.is_block_diagram()
             {
                 return Surface::NoCamera;
             }
@@ -100,7 +101,7 @@ impl Signex {
     pub(crate) fn shows_footprint_layer_strip(&self, window_id: iced::window::Id) -> bool {
         self.ui_state.main_window_id != Some(window_id)
             || self
-                .document_state
+                .document_view
                 .dock
                 .locate(crate::panels::PanelKind::Layers)
                 .is_none()
@@ -125,7 +126,7 @@ impl Signex {
     pub(crate) fn grid_caret_anchor(&self, window: Option<iced::window::Id>) -> (f32, f32) {
         let ui = &self.ui_state;
         let (_, height) = window.map_or(ui.window_size, |window| ui.size_of_window(window));
-        let status_h = crate::status_bar::status_bar_height(&self.document_state.panel_ctx.tokens);
+        let status_h = crate::status_bar::status_bar_height(&self.document_view.panel_ctx.tokens);
         (
             crate::status_bar::grid_readout_x(),
             height - status_h - crate::status_bar::POPUP_GAP,
@@ -188,7 +189,7 @@ impl Signex {
     /// The tool the status bar of `window_id` names.
     pub fn status_tool(&self, window_id: iced::window::Id) -> String {
         match self.status_surface(window_id) {
-            Surface::SymbolEditor(editor) => editor.tool.label().to_string(),
+            Surface::SymbolEditor(editor) => editor.gui.tool.label().to_string(),
             _ => self.interaction_state.current_tool.to_string(),
         }
     }
@@ -196,7 +197,7 @@ impl Signex {
     /// The zoom, in percent, of the canvas `window_id` is showing.
     pub(crate) fn status_zoom(&self, window_id: iced::window::Id) -> f64 {
         match self.status_surface(window_id) {
-            Surface::SymbolEditor(editor) => editor.camera.zoom_percent(),
+            Surface::SymbolEditor(editor) => editor.gui.camera.zoom_percent(),
             Surface::FootprintEditor(editor) => editor.state.zoom_percent(),
             Surface::NoCamera => NO_CAMERA_ZOOM_PERCENT,
             Surface::Pcb => self
@@ -218,7 +219,7 @@ impl Signex {
     pub(crate) fn status_cursor(&self, window_id: iced::window::Id) -> (f64, f64) {
         let (x, y) = (self.ui_state.cursor_x, self.ui_state.cursor_y);
         match self.status_surface(window_id) {
-            Surface::SymbolEditor(editor) => editor.cursor_mm.unwrap_or_default(),
+            Surface::SymbolEditor(editor) => editor.gui.cursor_mm.unwrap_or_default(),
             Surface::FootprintEditor(editor) => editor.state.cursor_mm.unwrap_or_default(),
             Surface::NoCamera => (0.0, 0.0),
             // On a board, from its origin with Y up (#2384).
@@ -279,8 +280,8 @@ mod tests {
         let (mut app, window, path) = app_showing(TabKind::SymbolEditor);
         let file = signex_library::SymbolFile::from_symbol(signex_library::Symbol::empty("s"));
         let mut editor = SymbolDocument::new(path.clone(), file);
-        editor.camera.scale *= 2.5;
-        editor.cursor_mm = Some((1.5, -2.5));
+        editor.gui.camera.scale *= 2.5;
+        editor.gui.cursor_mm = Some((1.5, -2.5));
         app.document_state.symbol_editors.insert(path, editor);
 
         assert_eq!(app.status_zoom(window), SCHEMATIC_ZOOM * 2.5);

@@ -27,13 +27,15 @@ pub const LIFECYCLE_STATES: [&str; 5] =
 
 /// Every kind's name, as the file writes it, in the order an editor offers
 /// them.
-pub const REQUIREMENT_KINDS: [&str; 6] = [
+pub const REQUIREMENT_KINDS: [&str; 8] = [
     "erc_clean",
     "drc_clean",
     "board_size",
     "parts_state",
     "net_class",
     "bom_cost",
+    "rail_budget",
+    "layer_count",
 ];
 
 /// One requirement of the project.
@@ -94,10 +96,17 @@ pub enum RequirementKind {
     },
     /// Every part the BOM buys has a library row in one of `states`
     /// (lifecycle state names: `draft`, `in_review`, `released`,
-    /// `deprecated`, `obsolete`).
+    /// `deprecated`, `obsolete`). The BOM is the one of `variant` (`None`:
+    /// the project's active variant; `Base` names Base). With `fitted_only`
+    /// (the default, written only when off) the parts that variant does not
+    /// fit are not checked; off, every listed part is (#2686, mockup row 38).
     PartsState {
         #[serde(default = "default_part_states")]
         states: Vec<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        variant: Option<String>,
+        #[serde(default = "default_enabled", skip_serializing_if = "is_true")]
+        fitted_only: bool,
     },
     /// The board nets matching the pattern `nets` (`*` and `?`) belong to
     /// `class`, and their class sets at least the given track width and
@@ -118,6 +127,29 @@ pub enum RequirementKind {
         currency: String,
         max_unit_cost: f64,
     },
+    /// The rails matching `net` (a name, or a pattern with `*` and `?`)
+    /// have a source whose supply, less `margin_percent`, covers the summed
+    /// load (#2943). `voltage` with `tolerance_percent` bounds the rail's
+    /// own band; `max_current_a` caps the load too.
+    RailBudget {
+        net: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        voltage: Option<f64>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        tolerance_percent: Option<f64>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        max_current_a: Option<f64>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        margin_percent: Option<f64>,
+    },
+    /// The board has at least `min_layers` and at most `max_layers` copper
+    /// layers (#2943).
+    LayerCount {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        min_layers: Option<u32>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        max_layers: Option<u32>,
+    },
 }
 
 impl RequirementKind {
@@ -130,6 +162,8 @@ impl RequirementKind {
             Self::PartsState { .. } => "parts_state",
             Self::NetClass { .. } => "net_class",
             Self::BomCost { .. } => "bom_cost",
+            Self::RailBudget { .. } => "rail_budget",
+            Self::LayerCount { .. } => "layer_count",
         }
     }
 
@@ -138,9 +172,17 @@ impl RequirementKind {
         match self {
             Self::ErcClean { .. } | Self::DrcClean { .. } => &["allow_warnings"],
             Self::BoardSize { .. } => &["max_width_mm", "max_height_mm"],
-            Self::PartsState { .. } => &["states"],
+            Self::PartsState { .. } => &["states", "variant", "fitted_only"],
             Self::NetClass { .. } => &["nets", "class", "min_trace_width_mm", "min_clearance_mm"],
             Self::BomCost { .. } => &["quantity", "currency", "max_unit_cost"],
+            Self::RailBudget { .. } => &[
+                "net",
+                "voltage",
+                "tolerance_percent",
+                "max_current_a",
+                "margin_percent",
+            ],
+            Self::LayerCount { .. } => &["min_layers", "max_layers"],
         }
     }
 }

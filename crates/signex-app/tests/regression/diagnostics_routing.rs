@@ -2,7 +2,7 @@
 //! Messages panel by the time that message finishes.
 //!
 //! The panel does not read the diagnostics ring buffer directly — it
-//! renders `document_state.panel_ctx.diagnostics`, which is a snapshot
+//! renders `document_view.panel_ctx.diagnostics`, which is a snapshot
 //! republished by `sync_diagnostics_panel_ctx`. `finish_update` calls
 //! that, but not every dispatcher calls `finish_update`:
 //! `dispatch_preferences_message` deliberately does not, because
@@ -36,7 +36,7 @@ fn a_record_emitted_during_a_preferences_message_reaches_the_panel_snapshot() {
     let (mut app, _boot) = Signex::new();
     let marker = "diagnostics_routing marker 4f21ac";
     assert!(
-        !app.document_state
+        !app.document_view
             .panel_ctx
             .diagnostics
             .iter()
@@ -51,7 +51,7 @@ fn a_record_emitted_during_a_preferences_message_reaches_the_panel_snapshot() {
 
     // Assert
     assert!(
-        app.document_state
+        app.document_view
             .panel_ctx
             .diagnostics
             .iter()
@@ -72,7 +72,7 @@ fn the_panel_snapshot_is_refreshed_on_every_preferences_message() {
     let _ = app.update(Message::Preferences(PreferencesMsg::Open));
     let marker = "diagnostics_routing second marker 9b03de";
     assert!(
-        !app.document_state
+        !app.document_view
             .panel_ctx
             .diagnostics
             .iter()
@@ -86,7 +86,7 @@ fn the_panel_snapshot_is_refreshed_on_every_preferences_message() {
 
     // Assert
     assert!(
-        app.document_state
+        app.document_view
             .panel_ctx
             .diagnostics
             .iter()

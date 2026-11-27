@@ -12,6 +12,7 @@
 #   snxsim  Signex simulation
 #   snxlib  Signex library
 #   snxsym  Signex symbol
+#   snxblk  Signex block diagram
 #
 # Outputs (per file type):
 #   installer/windows/files/<ext>.ico            — multi-size ICO (16..256)
@@ -163,7 +164,7 @@ PY
 
 SIZES=(16 32 48 64 128 256 512 1024)
 
-for ext in snxprj snxsch snxpcb snxfpt snxsim snxlib snxsym snxpkg snxmat snxcfg snxmod; do
+for ext in snxprj snxsch snxpcb snxfpt snxsim snxlib snxsym snxblk snxpkg snxmat snxcfg snxmod; do
   src="$SRC_DIR/$ext.svg"
   if [[ ! -f "$src" ]]; then
     echo "warn: missing $src — skipping $ext" >&2

@@ -2,6 +2,8 @@
 //! sheets open, `b` the active tab with the person at work on it, and the
 //! listener reported as up; a request is run as `Signex::update` runs it.
 
+mod channel_forms;
+mod channel_writers;
 mod check_drc;
 mod check_erc;
 mod check_requirements;
@@ -11,6 +13,7 @@ mod deferred;
 #[cfg(unix)]
 mod hold;
 mod journal;
+mod layout_plan;
 #[cfg(unix)]
 mod live;
 mod net_class_membership;
@@ -23,7 +26,10 @@ mod placed_move;
 mod presence;
 mod query_surfaces;
 mod refusals;
+mod request_path;
 mod round_trip;
+mod sheet_entry_sync;
+mod update_pcb;
 mod window_layout;
 
 use serde_json::{Value, json};
@@ -55,7 +61,7 @@ pub(super) fn sheet_entry(name: &str) -> SheetEntry {
 /// An app with the project `P` (sheets `a` and `b`) open, the person on
 /// `b` with a wire selected, the wire tool, a wire in progress and a
 /// command-palette query typed; agent connections on and listening.
-pub(super) fn app_at_work() -> Signex {
+pub(in crate::app) fn app_at_work() -> Signex {
     app_in(path("a.snxsch").parent().unwrap())
 }
 
@@ -95,6 +101,7 @@ pub(super) fn app_in(dir: &std::path::Path) -> Signex {
             schematic_design: Default::default(),
             fab_outputs: None,
             router_tool_diameter: None,
+            bom_alternates: Vec::new(),
             requirements: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),

@@ -75,9 +75,9 @@ fn place_from_a_windows_row_menu_arms_on_the_windows_sheet_and_lands_there() {
         let _ = app.update(message);
     }
     assert!(
-        app.document_state.error_notice.is_none(),
+        app.document_view.error_notice.is_none(),
         "the place was refused: {:?}",
-        app.document_state.error_notice
+        app.document_view.error_notice
     );
     let session = app.interaction_state.placement.as_ref().expect("armed");
     assert_eq!(session.target_sheet, other);
@@ -107,9 +107,9 @@ fn a_row_dropped_in_a_window_commits_in_that_windows_sheet_when_the_read_lands()
     app.library.components_panel.pending_drop = Some((epoch, PLACE_AT));
     complete(&mut app, &f, "other-1252.snxsch", resolve(&f, f.row_id));
     assert!(
-        app.document_state.error_notice.is_none(),
+        app.document_view.error_notice.is_none(),
         "the arm was refused: {:?}",
-        app.document_state.error_notice
+        app.document_view.error_notice
     );
     assert_eq!(
         symbols_in(&app, &other),

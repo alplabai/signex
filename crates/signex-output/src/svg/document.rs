@@ -17,8 +17,7 @@ use super::labels::{
 };
 use super::markers::{push_no_connect_x, push_no_erc_diamond};
 use super::symbols::{
-    not_fitted_parts, push_symbol_body_fills, push_symbol_lib_graphics, push_symbol_pins,
-    symbol_layer,
+    push_symbol_body_fills, push_symbol_lib_graphics, push_symbol_pins, symbol_layer,
 };
 use super::text::glyph_em_pt;
 use super::text::{TextStyle, draw_text_outline};
@@ -125,8 +124,9 @@ impl SvgRenderContext {
             palette,
             &opts.schematic_defaults,
         );
-        // The parts that print in the Not-fitted parts layer (#2610).
-        let not_fitted = not_fitted_parts(&sheet.schematic, opts.variant.as_deref());
+        // The parts not fitted in the printed variant: in the Not-fitted
+        // parts layer (#2610), and greyed and crossed out (#1294).
+        let not_fitted = super::not_fitted::not_fitted_on_page(sheet, opts, eval_inputs);
         // Body fills sit under the wires but belong to their parts.
         push_symbol_body_fills(
             &mut elements,
@@ -220,7 +220,11 @@ impl SvgRenderContext {
                 },
             });
         }
+        layers.mark(PdfLayer::WiresAndBuses, wires_start..elements.len());
+        let harness_start = elements.len();
         super::harness::push_harness(&mut elements, &sheet.schematic, &xform, palette, opts);
+        layers.mark(PdfLayer::SignalHarnesses, harness_start..elements.len());
+        let junctions_start = elements.len();
 
         let from_wires = signex_types::schematic::junction_wire_colors(&sheet.schematic, |wire| {
             wire_style::wire_color(wire, &sheet.schematic.net_colors, &opts.net_class_styles)
@@ -250,7 +254,7 @@ impl SvgRenderContext {
                 },
             ));
         }
-        layers.mark(PdfLayer::WiresAndBuses, wires_start..elements.len());
+        layers.mark(PdfLayer::WiresAndBuses, junctions_start..elements.len());
 
         if opts.include_no_connect_markers {
             for nc in &sheet.schematic.no_connects {
@@ -267,6 +271,7 @@ impl SvgRenderContext {
                 );
             }
         }
+        super::directives::push_directives(&mut elements, &sheet.schematic, &xform, palette, opts);
 
         let document_family = sheet.schematic.font_family.as_deref();
         for label in &sheet.schematic.labels {
@@ -391,6 +396,10 @@ impl SvgRenderContext {
             refdes: global_refdes.as_ref().map(|t| t as &dyn Resolver),
             cell: eval_inputs.map(|e| e.cell),
         };
+        // The printed variant's own values (#2948), at this page's placement.
+        let drawn_values = eval_inputs
+            .and_then(|e| e.drawn_values)
+            .and_then(|values| values.at(&sheet.placement));
         for sym in &sheet.schematic.symbols {
             let symbol_start = elements.len();
             let symbol_vars = crate::field_value::symbol_eval_variables(sym);
@@ -421,11 +430,11 @@ impl SvgRenderContext {
             });
 
             let lib = sheet.schematic.resolve_lib_symbol(sym);
-            if let Some(lib) = lib {
+            if let Some(lib) = lib.as_deref() {
                 push_symbol_lib_graphics(
                     &mut elements,
                     sym,
-                    Some(&lib),
+                    Some(lib),
                     &xform,
                     palette,
                     &opts.schematic_defaults,
@@ -433,7 +442,7 @@ impl SvgRenderContext {
                 push_symbol_pins(
                     &mut elements,
                     sym,
-                    &lib,
+                    lib,
                     &xform,
                     &symbol_eval_ctx,
                     symbol_pin_nets,
@@ -441,11 +450,12 @@ impl SvgRenderContext {
                 );
             } else {
                 // Fallback if library is missing.
+                let half = super::not_fitted::MISSING_LIBRARY_BOX_HALF_MM;
                 elements.push(rect_path(
-                    xform.x(sym.position.x - 5.0),
-                    xform.px_y(sym.position.y - 5.0),
-                    (10.0 * xform.mm_to_unit) as f32,
-                    (10.0 * xform.mm_to_unit) as f32,
+                    xform.x(sym.position.x - half),
+                    xform.px_y(sym.position.y - half),
+                    (2.0 * half * xform.mm_to_unit) as f32,
+                    (2.0 * half * xform.mm_to_unit) as f32,
                     SvgStyle {
                         stroke_alpha: 1.0,
                         stroke_rgb: Some(palette.symbol_stroke),
@@ -454,6 +464,17 @@ impl SvgRenderContext {
                             * xform.mm_to_unit) as f32,
                     },
                 ));
+            }
+            if not_fitted.drawn.contains(&sym.uuid) {
+                super::not_fitted::grey_elements(&mut elements[symbol_start..], palette.paper);
+                super::not_fitted::push_not_fitted_cross(
+                    &mut elements,
+                    sym,
+                    lib.as_deref(),
+                    &xform,
+                    palette,
+                    &opts.schematic_defaults,
+                );
             }
 
             // Match canvas renderer parity:
@@ -487,6 +508,7 @@ impl SvgRenderContext {
             }
 
             // A power port's text is fixed to the port (docs/DECISIONS.md).
+            let drawn = crate::drawn_symbol(sym, drawn_values);
             if !sym.value.is_empty()
                 && let Some(val_text) = sheet.schematic.drawn_value_text(sym)
                 && !val_text.hidden
@@ -513,10 +535,13 @@ impl SvgRenderContext {
                     } else {
                         palette.value
                     },
-                    text: crate::shown_value(&value_scope, sym).text,
+                    text: crate::shown_value(&value_scope, &drawn).text,
                 });
             }
-            layers.mark(symbol_layer(sym, &not_fitted), symbol_start..elements.len());
+            layers.mark(
+                symbol_layer(sym, &not_fitted.in_variant),
+                symbol_start..elements.len(),
+            );
         }
 
         push_placed_drawings(

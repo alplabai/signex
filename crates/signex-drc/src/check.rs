@@ -6,6 +6,7 @@ use std::collections::{HashMap, HashSet};
 
 use signex_types::pcb::PcbBoard;
 use signex_types::pcb_free::free_pad_frame;
+use uuid::Uuid;
 
 use pcb_geom::{
     BoardIndex, CopperItem, IndexedItem, ItemRef, PointNm, collect_copper, no_net_copper,
@@ -14,12 +15,24 @@ use pcb_geom::{
 
 use super::{DrcReport, DrcRules, Violation, ViolationKind};
 
-/// Check `board` against `rules`.
+/// Check `board` against `rules`, each part's 3D body taken from its stored
+/// height alone (no library model).
 pub fn run(board: &PcbBoard, rules: &DrcRules) -> DrcReport {
+    run_with_bodies(board, rules, &crate::BodyModels::new())
+}
+
+/// Check `board` against `rules`, the parts' 3D bodies read from `models`
+/// (the library models of the footprints they came from, #2939).
+pub fn run_with_bodies(
+    board: &PcbBoard,
+    rules: &DrcRules,
+    models: &crate::BodyModels,
+) -> DrcReport {
     let items = per_layer_sizes(board, collect_copper(board));
     let no_net = per_layer_sizes(board, no_net_copper(board));
     let index = BoardIndex::build(board);
-    let mut violations = copper_pairs(&items, &no_net, &index, rules);
+    let ties = net_tie_footprints(board);
+    let mut violations = copper_pairs(&items, &no_net, &index, rules, &ties);
     violations.extend(unconnected(board, &items));
     let keepouts = super::keepout::check(board);
     violations.extend(keepouts.violations);
@@ -31,6 +44,8 @@ pub fn run(board: &PcbBoard, rules: &DrcRules) -> DrcReport {
     violations.extend(super::courtyard::violations(board, rules));
     let (outside_rooms, unmeasured) = super::rooms::violations(board);
     violations.extend(outside_rooms);
+    let bodies = super::bodies::violations(board, rules, models);
+    violations.extend(bodies.violations);
     violations.sort_unstable();
     let mut skipped = index.rejected().to_vec();
     skipped.extend(keepouts.bodies);
@@ -40,6 +55,12 @@ pub fn run(board: &PcbBoard, rules: &DrcRules) -> DrcReport {
         .filter(|r| !skipped.iter().any(|s| s.item == r.item))
         .collect();
     skipped.extend(unlisted);
+    // So is a part whose 3D body did not convert (#2939).
+    for rejected in bodies.rejected {
+        if !skipped.iter().any(|s| s.item == rejected.item) {
+            skipped.push(rejected);
+        }
+    }
     DrcReport {
         rules: rules.clone(),
         violations,
@@ -90,16 +111,39 @@ fn per_layer_sizes(board: &PcbBoard, items: Vec<CopperItem>) -> Vec<CopperItem> 
     out
 }
 
+/// The footprints whose pads may short each other: net ties (#1277).
+fn net_tie_footprints(board: &PcbBoard) -> HashSet<Uuid> {
+    board
+        .footprints
+        .iter()
+        .filter(|f| f.component.component_type.is_net_tie())
+        .map(|f| f.uuid)
+        .collect()
+}
+
+/// Whether `a` and `b` are two pads of one net tie: the copper bridge the
+/// tie is, an intended short, never a short or a clearance finding (#1277).
+/// A tie's pad against any other copper is checked as every pad is.
+fn is_tie_bridge(a: ItemRef, b: ItemRef, ties: &HashSet<Uuid>) -> bool {
+    match (a, b) {
+        (ItemRef::Pad { footprint: fa, .. }, ItemRef::Pad { footprint: fb, .. }) => {
+            fa == fb && ties.contains(&fa)
+        }
+        _ => false,
+    }
+}
+
 /// Shorts and clearance violations between copper of different nets:
 /// between the netted `items`, and between each piece of `no_net` copper
 /// (pads, tracks, arcs and vias of net 0, drawings and strings on copper;
 /// #2883, #2515) and the netted items. Two pieces of no net are never a
-/// pair.
+/// pair, and neither are two pads of one net tie in `ties`.
 fn copper_pairs(
     items: &[CopperItem],
     no_net: &[CopperItem],
     index: &BoardIndex,
     rules: &DrcRules,
+    ties: &HashSet<Uuid>,
 ) -> Vec<Violation> {
     // Every copy of an identity, in list order: an arc's chords share one
     // (#2373), and the index holds each of them.
@@ -116,7 +160,7 @@ fn copper_pairs(
                 continue;
             };
             // A pair is looked at once, from whichever side finds it first.
-            if !seen.insert((i.min(j), i.max(j))) {
+            if !seen.insert((i.min(j), i.max(j))) || is_tie_bridge(a.item, items[j].item, ties) {
                 continue;
             }
             found.keep(check_pair(a, &items[j], rules));
@@ -138,7 +182,9 @@ fn copper_pairs(
         let near = a.shape.aabb().inflate(reach);
         for hit in index.bounds_meeting(&near) {
             for j in copies_of(&slots, items, hit) {
-                found.keep(check_pair(a, &items[j], rules));
+                if !is_tie_bridge(a.item, items[j].item, ties) {
+                    found.keep(check_pair(a, &items[j], rules));
+                }
             }
         }
     }

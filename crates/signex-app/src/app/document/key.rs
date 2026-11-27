@@ -61,6 +61,11 @@ impl DocumentKey {
             TabKind::GerberViewer => None,
             // Saved by its own path (`app/output_job/document`); no undo.
             TabKind::OutputJob => None,
+            // Saved and undone by its own slice (`app::block_diagram`).
+            TabKind::BlockDiagram(_) => None,
+            // The notebook's text saves from its tab (Ctrl+S on the tab, Save
+            // All) and its editor keeps its own undo; no project step.
+            TabKind::Notebook(_) => None,
         }
     }
 }

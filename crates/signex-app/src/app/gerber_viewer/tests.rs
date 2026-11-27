@@ -121,34 +121,34 @@ fn a_click_selects_the_topmost_visible_object() {
 #[test]
 fn highlight_net_takes_the_selected_objects_net_and_lets_it_go() {
     let (mut app, _task) = Signex::new();
-    app.document_state.gerber_viewer.open = Some(opened());
+    app.document_view.gerber_viewer.open = Some(opened());
     let clicked = GerberViewerMsg::BoardClicked {
         at: PointNm::new(5_000_000, 0),
         tolerance: 0,
     };
     let _ = app.update(Message::from(clicked));
     let _ = app.update(Message::from(GerberViewerMsg::NetHighlightToggled));
-    let open = app.document_state.gerber_viewer.open.as_ref().unwrap();
+    let open = app.document_view.gerber_viewer.open.as_ref().unwrap();
     assert_eq!(open.net.as_deref(), Some("VIN"));
     assert!(open.package.has_net_attributes());
     let _ = app.update(Message::from(GerberViewerMsg::NetHighlightToggled));
-    let open = app.document_state.gerber_viewer.open.as_ref().unwrap();
+    let open = app.document_view.gerber_viewer.open.as_ref().unwrap();
     assert_eq!(open.net, None);
 }
 
 #[test]
 fn a_swatch_opens_its_colours_and_a_pick_closes_them() {
     let (mut app, _task) = Signex::new();
-    app.document_state.gerber_viewer.open = Some(opened());
+    app.document_view.gerber_viewer.open = Some(opened());
     let _ = app.update(Message::from(GerberViewerMsg::SwatchPressed(0)));
-    let open = app.document_state.gerber_viewer.open.as_ref().unwrap();
+    let open = app.document_view.gerber_viewer.open.as_ref().unwrap();
     assert_eq!(open.colour_open, Some(0));
     let colour = [1, 2, 3];
     let _ = app.update(Message::from(GerberViewerMsg::ColourPicked {
         layer: 0,
         colour,
     }));
-    let open = app.document_state.gerber_viewer.open.as_ref().unwrap();
+    let open = app.document_view.gerber_viewer.open.as_ref().unwrap();
     assert_eq!(open.looks[0].colour, colour);
     assert_eq!(open.colour_open, None);
 }
@@ -156,9 +156,9 @@ fn a_swatch_opens_its_colours_and_a_pick_closes_them() {
 #[test]
 fn a_grip_drag_moves_the_row_on_release() {
     let (mut app, _task) = Signex::new();
-    app.document_state.gerber_viewer.open = Some(opened());
+    app.document_view.gerber_viewer.open = Some(opened());
     let before = app
-        .document_state
+        .document_view
         .gerber_viewer
         .open
         .as_ref()
@@ -172,7 +172,7 @@ fn a_grip_drag_moves_the_row_on_release() {
     ] {
         let _ = app.update(Message::from(msg));
     }
-    let open = app.document_state.gerber_viewer.open.as_ref().unwrap();
+    let open = app.document_view.gerber_viewer.open.as_ref().unwrap();
     assert_eq!(open.order, vec![before[1], before[0]]);
     assert_eq!(open.grip, None);
 }
@@ -224,9 +224,9 @@ fn a_drop_with_no_hover_settles_after_the_batch() {
         window,
         path: PathBuf::from("readme.txt"),
     }));
-    assert_eq!(app.document_state.gerber_viewer.dropped.len(), 1);
+    assert_eq!(app.document_view.gerber_viewer.dropped.len(), 1);
     let _ = app.update(Message::from(GerberViewerMsg::DropSettled { window }));
-    assert!(app.document_state.gerber_viewer.dropped.is_empty());
+    assert!(app.document_view.gerber_viewer.dropped.is_empty());
     assert_eq!(
         app.gerber_viewer_tab(),
         None,
@@ -307,7 +307,7 @@ fn opening_paths_opens_one_tab_and_the_read_lands_on_it() {
         .filter(|t| t.kind.is_gerber_viewer())
         .collect();
     assert_eq!(tabs.len(), 1);
-    let job = app.document_state.gerber_viewer.reading.expect("a read");
+    let job = app.document_view.gerber_viewer.reading.expect("a read");
     let stale = GerberViewerMsg::PackageRead {
         job: job - 1,
         paths: paths.clone(),
@@ -316,7 +316,7 @@ fn opening_paths_opens_one_tab_and_the_read_lands_on_it() {
     };
     let _ = app.update(Message::from(stale));
     assert!(
-        app.document_state.gerber_viewer.open.is_none(),
+        app.document_view.gerber_viewer.open.is_none(),
         "a superseded read is dropped"
     );
     let landed = GerberViewerMsg::PackageRead {
@@ -326,7 +326,7 @@ fn opening_paths_opens_one_tab_and_the_read_lands_on_it() {
         waiting: None,
     };
     let _ = app.update(Message::from(landed));
-    let viewer = &app.document_state.gerber_viewer;
+    let viewer = &app.document_view.gerber_viewer;
     assert!(viewer.open.is_some() && viewer.reading.is_none());
     assert_eq!(viewer.recent.entries()[0].paths, paths);
     assert_eq!(viewer.recent.entries()[0].layers, 2);
@@ -341,7 +341,7 @@ fn the_tab_holds_no_document_and_closing_it_keeps_recent() {
     let (mut app, _task) = Signex::new();
     let paths = vec![PathBuf::from("/fab/p.zip")];
     let _ = app.update(Message::from(GerberViewerMsg::PathsOpened(paths.clone())));
-    let job = app.document_state.gerber_viewer.reading.unwrap();
+    let job = app.document_view.gerber_viewer.reading.unwrap();
     let landed = GerberViewerMsg::PackageRead {
         job,
         paths: paths.clone(),
@@ -360,7 +360,7 @@ fn the_tab_holds_no_document_and_closing_it_keeps_recent() {
     assert_eq!(app.ui_state.windows.len(), windows, "it stays docked");
     let _ = app.close_tab_now(idx);
     assert_eq!(app.gerber_viewer_tab(), None);
-    let viewer = &app.document_state.gerber_viewer;
+    let viewer = &app.document_view.gerber_viewer;
     assert!(viewer.open.is_none());
     assert_eq!(viewer.recent.entries().len(), 1);
 }
@@ -372,14 +372,14 @@ fn a_failed_read_keeps_the_empty_state() {
     // Installs the logger first.
     let said = crate::diagnostics::said_on_this_thread();
     let (mut app, _task) = Signex::new();
-    app.document_state
+    app.document_view
         .gerber_viewer
         .recent
         .record(vec![PathBuf::from("/fab/earlier.zip")], 4, 1);
     let _ = app.update(Message::from(GerberViewerMsg::PathsOpened(vec![
         PathBuf::from("/x"),
     ])));
-    let job = app.document_state.gerber_viewer.reading.unwrap();
+    let job = app.document_view.gerber_viewer.reading.unwrap();
     let why = "gerber-viewer-failed-read-marker";
     let failed = GerberViewerMsg::PackageRead {
         job,
@@ -389,7 +389,7 @@ fn a_failed_read_keeps_the_empty_state() {
     };
     let check = app.update(Message::from(failed));
     assert!(check.units() > 0, "the recent packages are checked");
-    let viewer = &app.document_state.gerber_viewer;
+    let viewer = &app.document_view.gerber_viewer;
     assert!(viewer.open.is_none() && viewer.reading.is_none());
     assert!(!viewer.has_files(), "tools that need files stay greyed");
     if crate::diagnostics::configured_level() < log::LevelFilter::Error {
@@ -415,18 +415,18 @@ fn a_moved_recent_package_is_marked_before_it_is_clicked() {
     let moved = dir.path().join("moved.zip");
     std::fs::write(&kept, b"").unwrap();
     let (mut app, _task) = Signex::new();
-    let recent = &mut app.document_state.gerber_viewer.recent;
+    let recent = &mut app.document_view.gerber_viewer.recent;
     recent.record(vec![moved.clone()], 4, 1);
     recent.record(vec![kept.clone()], 2, 2);
     let check = app.update(Message::from(GerberViewerMsg::OpenMenuToggled));
     assert!(check.units() > 0, "opening the menu checks the list");
-    let listed = app.document_state.gerber_viewer.recent.all_paths();
+    let listed = app.document_view.gerber_viewer.recent.all_paths();
     let found = super::update::recent_presence(listed);
     let _ = app.update(Message::from(GerberViewerMsg::RecentChecked {
         found,
         now: Some(10),
     }));
-    let viewer = &app.document_state.gerber_viewer;
+    let viewer = &app.document_view.gerber_viewer;
     let missing: Vec<_> = viewer
         .recent
         .entries()
@@ -437,7 +437,7 @@ fn a_moved_recent_package_is_marked_before_it_is_clicked() {
     assert_eq!(viewer.now, Some(10));
     let _ = app.update(Message::from(GerberViewerMsg::RecentPressed(1)));
     assert!(
-        app.document_state.gerber_viewer.reading.is_none(),
+        app.document_view.gerber_viewer.reading.is_none(),
         "a package not found does not open"
     );
 }
@@ -446,12 +446,12 @@ fn a_moved_recent_package_is_marked_before_it_is_clicked() {
 #[test]
 fn a_failed_recent_check_keeps_the_last_clock() {
     let (mut app, _task) = Signex::new();
-    app.document_state.gerber_viewer.now = Some(5);
+    app.document_view.gerber_viewer.now = Some(5);
     let _ = app.update(Message::from(GerberViewerMsg::RecentChecked {
         found: Vec::new(),
         now: None,
     }));
-    assert_eq!(app.document_state.gerber_viewer.now, Some(5));
+    assert_eq!(app.document_view.gerber_viewer.now, Some(5));
 }
 
 /// mockup row 193: the outline, the drill files and the drawings draw
@@ -487,18 +487,18 @@ fn the_outline_drills_and_drawings_draw_above_the_copper() {
 #[test]
 fn a_held_row_is_let_go_by_any_release_or_a_board_click() {
     let (mut app, _task) = Signex::new();
-    app.document_state.gerber_viewer.open = Some(opened());
+    app.document_view.gerber_viewer.open = Some(opened());
     let _ = app.update(Message::from(GerberViewerMsg::GripPressed(0)));
     let _ = app.update(Message::from(GerberViewerMsg::BoardClicked {
         at: PointNm::new(90_000_000, 0),
         tolerance: 0,
     }));
-    let open = app.document_state.gerber_viewer.open.as_ref().unwrap();
+    let open = app.document_view.gerber_viewer.open.as_ref().unwrap();
     assert_eq!(open.grip, None);
     let revision = open.revision;
     let _ = app.update(Message::from(GerberViewerMsg::RowEntered(1)));
     let _ = app.update(Message::from(GerberViewerMsg::GripReleased));
-    let open = app.document_state.gerber_viewer.open.as_ref().unwrap();
+    let open = app.document_view.gerber_viewer.open.as_ref().unwrap();
     assert_eq!(
         open.revision, revision,
         "with no row held, hover and release change nothing"
@@ -575,9 +575,9 @@ fn ctrl_o_on_the_tab_opens_the_open_menu() {
             .is_none()
     );
     let _ = app.update(message.unwrap());
-    assert!(app.document_state.gerber_viewer.open_menu);
+    assert!(app.document_view.gerber_viewer.open_menu);
     let _ = app.update(Message::from(GerberViewerMsg::OpenPressed(
         OpenKind::Folder,
     )));
-    assert!(!app.document_state.gerber_viewer.open_menu);
+    assert!(!app.document_view.gerber_viewer.open_menu);
 }

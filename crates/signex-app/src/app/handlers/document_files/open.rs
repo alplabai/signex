@@ -19,7 +19,7 @@ impl Signex {
             "Failed to open document path",
             &anyhow::anyhow!(message.clone()),
         );
-        self.document_state.error_notice = Some(crate::app::state::ErrorNotice::open(
+        self.document_view.error_notice = Some(crate::app::state::ErrorNotice::open(
             crate::app::state::untranslated(message),
         ));
     }
@@ -49,12 +49,27 @@ impl Signex {
             .map_err(|error| self.report_refused_open(&error))
     }
 
+    /// Open the board at `path` behind the person's tab (#2984): a run from
+    /// operands that needs a closed board leaves the tab in front and the
+    /// text being typed alone. A refusal is reported as
+    /// [`Self::open_path_reported`] does.
+    pub(crate) fn open_board_behind(
+        &mut self,
+        path: PathBuf,
+    ) -> Result<iced::Task<Message>, String> {
+        let task = self
+            .open_document_path(path.clone())
+            .map_err(|error| self.report_refused_open(&error))?;
+        self.document_state.pending_opens.mark_behind(&path);
+        Ok(task)
+    }
+
     /// Log a refused open and raise it as the Open Failed notice; returns
     /// the reason.
     pub(crate) fn report_refused_open(&mut self, error: &anyhow::Error) -> String {
         crate::diagnostics::log_error("Failed to open document path", error);
         let reason = format!("{error:#}");
-        self.document_state.error_notice = Some(crate::app::state::ErrorNotice::open(
+        self.document_view.error_notice = Some(crate::app::state::ErrorNotice::open(
             crate::app::state::verbatim(reason.clone()),
         ));
         reason
@@ -124,7 +139,7 @@ impl Signex {
             "Failed to create new project",
             &anyhow::anyhow!(error.to_owned()),
         );
-        self.document_state.error_notice = Some(crate::app::state::ErrorNotice::create(
+        self.document_view.error_notice = Some(crate::app::state::ErrorNotice::create(
             signex_i18n::Translatable::new(signex_i18n::ids::NOTICE_NEW_PROJECT_FAILED)
                 .arg("error", error),
         ));
@@ -248,7 +263,7 @@ impl Signex {
 
     fn report_sample_failure(&mut self, error: &anyhow::Error) {
         crate::diagnostics::log_error("Open sample project", error);
-        self.document_state.error_notice = Some(crate::app::state::ErrorNotice::open(
+        self.document_view.error_notice = Some(crate::app::state::ErrorNotice::open(
             crate::app::state::verbatim(format!("{error:#}")),
         ));
     }
@@ -312,6 +327,8 @@ impl Signex {
             // (or activates it if a tab for the same library is
             // already open).
             "snxlib" => self.handle_open_library_browser(path),
+            // A block diagram opens in its own tab (mockup row 171).
+            "snxblk" => self.open_block_diagram_file(path),
             _ => anyhow::bail!("unsupported file type: .{ext}"),
         };
 

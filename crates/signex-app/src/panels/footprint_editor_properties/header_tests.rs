@@ -27,7 +27,7 @@ fn panel(app: &mut Signex, msg: PanelMsg) {
 }
 
 fn panel_ctx(app: &Signex) -> FootprintEditorPanelContext {
-    app.document_state
+    app.document_view
         .panel_ctx
         .footprint_editor
         .as_deref()
@@ -165,7 +165,7 @@ const DOCK: iced::Size = iced::Size::new(260.0, 4000.0);
 
 /// The Pad Properties view of `app`.
 fn view(app: &Signex) -> iced::Element<'_, PanelMsg> {
-    let ctx = &app.document_state.panel_ctx;
+    let ctx = &app.document_view.panel_ctx;
     let fp = ctx.footprint_editor.as_ref().expect("footprint context");
     let palette = crate::panels::PanelPalette::from_tokens(&ctx.tokens);
     let i18n = signex_i18n::I18n::en_us();

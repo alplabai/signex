@@ -30,7 +30,7 @@ pub(crate) use step::{StepContext, make_step_of};
 pub(crate) use assembly::{board_assembly_drawing, export_assembly_svg, side_operand};
 pub(crate) use operands::{
     board_report_bom, board_report_components, board_report_net_length, board_report_netlist,
-    export_board_pdf, export_board_report, export_board_step,
+    export_board_pdf, export_board_report, export_board_step, output_board,
 };
 
 impl From<BoardOutputMsg> for crate::app::Message {
@@ -112,6 +112,24 @@ pub enum BoardOutputMsg {
         path: PathBuf,
         built: Result<Arc<BoardStepBuilt>, String>,
     },
+    /// The file of `export_board_report` or `export_board_pdf` run from its
+    /// operands was written to `path`, or why not (#2470): the export's
+    /// Messages lines, then the command answered with `answer` or refused.
+    CommandWritten(Box<CommandWritten>),
+}
+
+/// What [`BoardOutputMsg::CommandWritten`] carries.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CommandWritten {
+    pub(crate) waiting: crate::app::agent::WaitingCommand,
+    /// The board the command named.
+    pub(crate) board: PathBuf,
+    pub(crate) answer: serde_json::Value,
+    pub(crate) path: PathBuf,
+    /// `Err` holds the complete failure text of the write.
+    pub(crate) result: Result<(), String>,
+    pub(crate) success_log: String,
+    pub(crate) warnings: Vec<String>,
 }
 
 /// The on/off settings of a board print.
@@ -279,6 +297,7 @@ impl crate::app::Signex {
             M::StepBuilt { board, path, built } => {
                 return self.write_board_step(&board, path, built);
             }
+            M::CommandWritten(written) => return self.finish_command_export(*written),
         }
         iced::Task::none()
     }

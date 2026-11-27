@@ -222,48 +222,48 @@ impl Signex {
                 );
             }
             crate::panels::PanelMsg::ToggleChildSheetBorderPicker(_) => {
-                let was_open = self.document_state.panel_ctx.child_sheet_border_picker_open;
-                self.document_state.panel_ctx.child_sheet_border_picker_open = !was_open;
-                self.document_state.panel_ctx.child_sheet_fill_picker_open = false;
-                self.document_state
+                let was_open = self.document_view.panel_ctx.child_sheet_border_picker_open;
+                self.document_view.panel_ctx.child_sheet_border_picker_open = !was_open;
+                self.document_view.panel_ctx.child_sheet_fill_picker_open = false;
+                self.document_view
                     .panel_ctx
                     .child_sheet_border_advanced_open = false;
-                self.document_state.panel_ctx.child_sheet_fill_advanced_open = false;
+                self.document_view.panel_ctx.child_sheet_fill_advanced_open = false;
             }
             crate::panels::PanelMsg::ToggleChildSheetFillPicker(_) => {
-                let was_open = self.document_state.panel_ctx.child_sheet_fill_picker_open;
-                self.document_state.panel_ctx.child_sheet_fill_picker_open = !was_open;
-                self.document_state.panel_ctx.child_sheet_border_picker_open = false;
-                self.document_state
+                let was_open = self.document_view.panel_ctx.child_sheet_fill_picker_open;
+                self.document_view.panel_ctx.child_sheet_fill_picker_open = !was_open;
+                self.document_view.panel_ctx.child_sheet_border_picker_open = false;
+                self.document_view
                     .panel_ctx
                     .child_sheet_border_advanced_open = false;
-                self.document_state.panel_ctx.child_sheet_fill_advanced_open = false;
+                self.document_view.panel_ctx.child_sheet_fill_advanced_open = false;
             }
             crate::panels::PanelMsg::OpenChildSheetAdvancedPicker(_uuid, is_border) => {
                 if *is_border {
-                    self.document_state
+                    self.document_view
                         .panel_ctx
                         .child_sheet_border_advanced_open = true;
-                    self.document_state.panel_ctx.child_sheet_fill_advanced_open = false;
+                    self.document_view.panel_ctx.child_sheet_fill_advanced_open = false;
                 } else {
-                    self.document_state.panel_ctx.child_sheet_fill_advanced_open = true;
-                    self.document_state
+                    self.document_view.panel_ctx.child_sheet_fill_advanced_open = true;
+                    self.document_view
                         .panel_ctx
                         .child_sheet_border_advanced_open = false;
                 }
             }
             crate::panels::PanelMsg::CancelChildSheetColorPicker => {
-                self.document_state.panel_ctx.child_sheet_border_picker_open = false;
-                self.document_state.panel_ctx.child_sheet_fill_picker_open = false;
-                self.document_state
+                self.document_view.panel_ctx.child_sheet_border_picker_open = false;
+                self.document_view.panel_ctx.child_sheet_fill_picker_open = false;
+                self.document_view
                     .panel_ctx
                     .child_sheet_border_advanced_open = false;
-                self.document_state.panel_ctx.child_sheet_fill_advanced_open = false;
+                self.document_view.panel_ctx.child_sheet_fill_advanced_open = false;
             }
             crate::panels::PanelMsg::EditChildSheetBorderColor(uuid, color) => {
                 let stroke = iced_color_to_stroke(*color);
-                self.document_state.panel_ctx.child_sheet_border_picker_open = false;
-                self.document_state
+                self.document_view.panel_ctx.child_sheet_border_picker_open = false;
+                self.document_view
                     .panel_ctx
                     .child_sheet_border_advanced_open = false;
                 self.apply_engine_command(
@@ -279,8 +279,8 @@ impl Signex {
             }
             crate::panels::PanelMsg::EditChildSheetFillColor(uuid, color) => {
                 let stroke = iced_color_to_stroke(*color);
-                self.document_state.panel_ctx.child_sheet_fill_picker_open = false;
-                self.document_state.panel_ctx.child_sheet_fill_advanced_open = false;
+                self.document_view.panel_ctx.child_sheet_fill_picker_open = false;
+                self.document_view.panel_ctx.child_sheet_fill_advanced_open = false;
                 self.apply_engine_command(
                     signex_engine::Command::UpdateChildSheetStyle {
                         sheet_id: *uuid,
@@ -293,20 +293,20 @@ impl Signex {
                 );
             }
             crate::panels::PanelMsg::ChildSheetStrokeWidthTyping(_uuid, value) => {
-                self.document_state.panel_ctx.child_sheet_stroke_width_buf = Some(value.clone());
-                self.document_state.line_width_draft_selection =
-                    self.document_state.panel_ctx.selected_uuid;
+                self.document_view.panel_ctx.child_sheet_stroke_width_buf = Some(value.clone());
+                self.document_view.line_width_draft_selection =
+                    self.document_view.panel_ctx.selected_uuid;
             }
             crate::panels::PanelMsg::CommitChildSheetStrokeWidth(uuid) => {
                 // Refused text stays in the box to be fixed (#2767).
                 let typed = self
-                    .document_state
+                    .document_view
                     .panel_ctx
                     .child_sheet_stroke_width_buf
                     .as_deref()
                     .and_then(crate::numeric_field::typed_line_width);
                 if let Some(width) = typed {
-                    self.document_state.panel_ctx.child_sheet_stroke_width_buf = None;
+                    self.document_view.panel_ctx.child_sheet_stroke_width_buf = None;
                     self.apply_engine_command(
                         signex_engine::Command::UpdateChildSheetStyle {
                             sheet_id: *uuid,
@@ -332,13 +332,13 @@ impl Signex {
                 self.commit_child_sheet_file(*uuid);
             }
             crate::panels::PanelMsg::ResetChildSheetStyle(uuid) => {
-                self.document_state.panel_ctx.child_sheet_border_picker_open = false;
-                self.document_state.panel_ctx.child_sheet_fill_picker_open = false;
-                self.document_state
+                self.document_view.panel_ctx.child_sheet_border_picker_open = false;
+                self.document_view.panel_ctx.child_sheet_fill_picker_open = false;
+                self.document_view
                     .panel_ctx
                     .child_sheet_border_advanced_open = false;
-                self.document_state.panel_ctx.child_sheet_fill_advanced_open = false;
-                self.document_state.panel_ctx.child_sheet_stroke_width_buf = None;
+                self.document_view.panel_ctx.child_sheet_fill_advanced_open = false;
+                self.document_view.panel_ctx.child_sheet_stroke_width_buf = None;
                 self.apply_engine_command(
                     signex_engine::Command::UpdateChildSheetStyle {
                         sheet_id: *uuid,
@@ -359,7 +359,7 @@ impl Signex {
     /// Refused Line Width text belongs to the selection it was typed under:
     /// a panel whose selection changed drops it. Run after every message.
     pub(crate) fn drop_line_width_text_of_another_symbol(&mut self) {
-        let docs = &mut self.document_state;
+        let docs = &mut self.document_view;
         let typed_under = docs.line_width_draft_selection;
         let panels = std::iter::once(&mut docs.panel_ctx).chain(docs.window_panel_ctx.values_mut());
         for ctx in panels {

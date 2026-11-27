@@ -76,6 +76,6 @@ impl Signex {
     fn refuse_probe(&mut self, id: MessageId) {
         // Messages stays en-US whatever the UI language.
         crate::diagnostics::log_info(signex_i18n::I18n::en_us().message_plain(id, &[]));
-        self.document_state.error_notice = Some(ErrorNotice::new(ids::CROSS_PROBE_TITLE, id));
+        self.document_view.error_notice = Some(ErrorNotice::new(ids::CROSS_PROBE_TITLE, id));
     }
 }

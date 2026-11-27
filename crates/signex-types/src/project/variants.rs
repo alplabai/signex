@@ -115,9 +115,10 @@ impl ProjectData {
         Ok(())
     }
 
-    /// Rename a variant; the active variant follows its new name. Refused
-    /// while the variant settings are unreadable: the kept section would
-    /// still name the old variant.
+    /// Rename a variant; the active variant and every Part lifecycle
+    /// requirement checking it follow its new name. Refused while the
+    /// variant settings are unreadable: the kept section would still name
+    /// the old variant.
     pub fn rename_variant(&mut self, from: &str, to: &str) -> Result<(), VariantProblem> {
         self.check_settings_readable()?;
         let index = self
@@ -125,6 +126,7 @@ impl ProjectData {
             .ok_or_else(|| VariantProblem::Unknown(from.trim().to_string()))?;
         let to = self.check_variant_name(to, Some(from))?;
         let old = std::mem::replace(&mut self.variant_definitions[index], to.clone());
+        self.rename_requirement_variant(&old, &to);
         self.rename_variant_settings(&old, &to);
         if self
             .active_variant

@@ -54,7 +54,7 @@ fn app_with_package() -> Signex {
     app.open_gerber_viewer_tab();
     let package = package_of(&[(TOP, top_copper()), (PLANE, plane())]);
     let open = OpenPackage::new(package, vec![PathBuf::from("/fab/row193")]);
-    app.document_state.gerber_viewer.open = Some(open);
+    app.document_view.gerber_viewer.open = Some(open);
     app
 }
 
@@ -85,7 +85,7 @@ fn refusal(app: &mut Signex, name: &str, operands: &[&str]) -> Option<MessageId>
 }
 
 fn open(app: &Signex) -> &OpenPackage {
-    app.document_state
+    app.document_view
         .gerber_viewer
         .open
         .as_ref()
@@ -135,16 +135,16 @@ fn the_palette_flips_puts_the_holes_on_top_and_shows_the_open_menu() {
         assert_eq!(outcome, CommandOutcome::Ran, "{name}");
     }
     assert!(open(&app).flipped && open(&app).drills_on_top);
-    assert!(!app.document_state.gerber_viewer.open_menu);
+    assert!(!app.document_view.gerber_viewer.open_menu);
     assert!(!shows(&app, "Open folder"));
 
     let menu = id("show_gerber_open_menu");
     let (outcome, _task) = app.dispatch_command_reporting(&menu, CommandArgs::none(), None);
     assert_eq!(outcome, CommandOutcome::Ran);
-    assert!(app.document_state.gerber_viewer.open_menu);
+    assert!(app.document_view.gerber_viewer.open_menu);
     assert!(shows(&app, "Open folder"), "{:?}", shown(&app));
     let _ = app.update(Message::from(GerberViewerMsg::EscapePressed));
-    assert!(!app.document_state.gerber_viewer.open_menu);
+    assert!(!app.document_view.gerber_viewer.open_menu);
 }
 
 /// mockup row 193, "Top view, pad selected": a point selects the topmost
@@ -282,7 +282,7 @@ fn a_net_is_highlighted_by_name_or_from_the_selection() {
     let (mut bare, _task) = Signex::new();
     let no_nets = "%FSLAX46Y46*%\n%MOMM*%\n%ADD10C,1.000000*%\nD10*\nX0Y0D03*\nM02*\n";
     let package = package_of(&[("bare.gbr", no_nets.to_string())]);
-    bare.document_state.gerber_viewer.open = Some(OpenPackage::new(package, Vec::new()));
+    bare.document_view.gerber_viewer.open = Some(OpenPackage::new(package, Vec::new()));
     assert_eq!(
         refusal(&mut bare, net, &["on=true"]),
         Some(ids::GERBER_VIEWER_HIGHLIGHT_NET_NO_X2)
@@ -336,11 +336,11 @@ fn a_failed_recent_check_is_a_gerber_viewer_warning_from_the_catalog() {
     let why = format!("worker gone {marker}");
     let mark = crate::diagnostics::newest_entry_id();
     let (mut app, _task) = Signex::new();
-    app.document_state.gerber_viewer.now = Some(5);
+    app.document_view.gerber_viewer.now = Some(5);
     let _ = app.update(Message::from(GerberViewerMsg::RecentCheckFailed(
         why.clone(),
     )));
-    assert_eq!(app.document_state.gerber_viewer.now, Some(5));
+    assert_eq!(app.document_view.gerber_viewer.now, Some(5));
 
     if crate::diagnostics::configured_level() < log::LevelFilter::Warn {
         eprintln!("skipped the Messages half: the log filter drops warnings");

@@ -222,7 +222,7 @@ impl Signex {
         file: &str,
         dpi: u32,
     ) -> Result<(JobWork, String), String> {
-        let (ctx, issues) = super::build_page_scope_for_source(&self.document_state, source)
+        let (ctx, issues) = super::build_export_scope_for_source(&self.document_state, source)
             .ok_or_else(|| format!("{} is not open", source.display()))?;
         if issues.channel_naming_unreadable {
             return Err(channel_naming_refusal());

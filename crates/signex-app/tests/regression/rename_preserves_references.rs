@@ -98,6 +98,7 @@ pub(crate) fn fixture() -> Fixture {
             schematic_design: Default::default(),
             fab_outputs: None,
             router_tool_diameter: None,
+            bom_alternates: Vec::new(),
             requirements: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
@@ -334,9 +335,9 @@ fn save_all_after_renaming_a_child_persists_parent_and_project_references() {
     );
 
     assert!(
-        f.app.document_state.error_notice.is_none(),
+        f.app.document_view.error_notice.is_none(),
         "Save All must not report a failure: {:?}",
-        f.app.document_state.error_notice
+        f.app.document_view.error_notice
     );
     assert!(!f.app.document_state.has_dirty_documents());
 
@@ -389,9 +390,9 @@ fn renaming_a_non_sheet_file_with_a_malformed_sheet_sets_no_notice() {
 
     assert!(f.prj.with_file_name("pad2.snxfpt").exists());
     assert!(
-        f.app.document_state.error_notice.is_none(),
+        f.app.document_view.error_notice.is_none(),
         "a non-sheet rename never consults the sheets: {:?}",
-        f.app.document_state.error_notice
+        f.app.document_view.error_notice
     );
 }
 
@@ -416,7 +417,7 @@ fn a_malformed_project_sheet_is_reported_in_the_notice_and_the_messages_panel() 
         submit_rename(&mut f.app, &f.child, "renamed.snxsch");
 
         assert!(
-            f.app.document_state.error_notice.is_some(),
+            f.app.document_view.error_notice.is_some(),
             "{label}: the modal notice is set"
         );
         assert!(

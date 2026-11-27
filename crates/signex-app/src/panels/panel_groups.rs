@@ -18,10 +18,14 @@ pub enum PanelGroup {
     Library,
     /// The board's panels.
     Pcb,
+    /// The installed extensions' panels (#2495), last. Not in [`Self::ALL`]:
+    /// [`with_extension_panels`] adds it, and only when an extension added a
+    /// panel, so the Community list is unchanged.
+    Extensions,
 }
 
 impl PanelGroup {
-    /// Every group, top to bottom.
+    /// Every built-in group, top to bottom.
     pub const ALL: [PanelGroup; 5] = [
         PanelGroup::Project,
         PanelGroup::Inspect,
@@ -38,8 +42,22 @@ impl PanelGroup {
             PanelGroup::Verify => ids::PANELS_LIST_GROUP_VERIFY,
             PanelGroup::Library => ids::PANELS_LIST_GROUP_LIBRARY,
             PanelGroup::Pcb => ids::PANELS_LIST_GROUP_PCB,
+            PanelGroup::Extensions => ids::PANELS_LIST_GROUP_EXTENSIONS,
         }
     }
+}
+
+/// `groups` with the Extensions group of `panels` at the end, when there is
+/// any (#2495).
+pub fn with_extension_panels(
+    mut groups: Vec<(PanelGroup, Vec<PanelKind>)>,
+    panels: &[crate::extension::points::ExtensionPanelKind],
+) -> Vec<(PanelGroup, Vec<PanelKind>)> {
+    if !panels.is_empty() {
+        let kinds = panels.iter().copied().map(PanelKind::Extension).collect();
+        groups.push((PanelGroup::Extensions, kinds));
+    }
+    groups
 }
 
 /// The group `kind` is listed under. A tool document leaves the list only
@@ -51,6 +69,8 @@ impl PanelGroup {
 pub fn panel_group(kind: PanelKind) -> Option<PanelGroup> {
     let group = match kind {
         PanelKind::LayerStack | PanelKind::Todo => return None,
+        // Listed under Extensions by `with_extension_panels`, not by kind.
+        PanelKind::Extension(_) => return None,
         PanelKind::Projects
         | PanelKind::Components
         | PanelKind::Library

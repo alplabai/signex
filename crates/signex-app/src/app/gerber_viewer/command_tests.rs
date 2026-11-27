@@ -79,7 +79,7 @@ fn the_palette_opens_the_empty_viewer_and_focuses_it_after() {
     let idx = app.gerber_viewer_tab().expect("the tab opened");
     assert_eq!(app.document_state.active_tab, idx);
     assert!(
-        app.document_state.gerber_viewer.open.is_none(),
+        app.document_view.gerber_viewer.open.is_none(),
         "the empty state"
     );
     let (outcome, _task) = app.dispatch_command_reporting(&command, CommandArgs::none(), None);
@@ -129,7 +129,7 @@ fn a_headless_call_with_a_folder_answers_once_the_package_is_read() {
     assert!(problems[0]["line"].is_u64(), "{problems:#?}");
     let message = problems[0]["message"].as_str().expect("text");
     assert!(message.contains(&not_read), "{message}");
-    let viewer = &app.document_state.gerber_viewer;
+    let viewer = &app.document_view.gerber_viewer;
     assert!(viewer.open.is_some() && viewer.reading.is_none());
     assert_eq!(viewer.recent.entries()[0].paths, [dir.path().to_path_buf()]);
 
@@ -171,7 +171,7 @@ fn a_package_that_cannot_be_read_refuses_the_call_and_names_it() {
         text.starts_with(&format!("Gerber Viewer: {gone}: ")),
         "{text}"
     );
-    assert!(app.document_state.gerber_viewer.open.is_none());
+    assert!(app.document_view.gerber_viewer.open.is_none());
 
     if crate::diagnostics::configured_level() < log::LevelFilter::Error {
         eprintln!("skipped the Messages half: the log filter drops errors");
@@ -203,7 +203,7 @@ fn a_replaced_read_refuses_the_call_that_waited_on_it() {
     let ticket = waiting.ticket;
     let later = vec![dir.path().join("later.zip")];
     let _ = app.update(Message::from(GerberViewerMsg::PathsOpened(later)));
-    let job = app.document_state.gerber_viewer.reading.expect("a read");
+    let job = app.document_view.gerber_viewer.reading.expect("a read");
     let stale = GerberViewerMsg::PackageRead {
         job: job - 1,
         paths: vec![first],
@@ -218,7 +218,7 @@ fn a_replaced_read_refuses_the_call_that_waited_on_it() {
         }
         other => panic!("expected a refusal, got {other:?}"),
     }
-    let viewer = &app.document_state.gerber_viewer;
+    let viewer = &app.document_view.gerber_viewer;
     assert!(viewer.open.is_none());
     assert_eq!(viewer.reading, Some(job), "the later read is still awaited");
 }
@@ -229,7 +229,7 @@ fn a_persons_open_answers_no_command() {
     let (mut app, _task) = Signex::new();
     let paths = vec![PathBuf::from("/fab/p.zip")];
     let _ = app.update(Message::from(GerberViewerMsg::PathsOpened(paths.clone())));
-    let job = app.document_state.gerber_viewer.reading.expect("a read");
+    let job = app.document_view.gerber_viewer.reading.expect("a read");
     let finished = app.document_state.agent_edits.finished.len();
     let _ = app.update(Message::from(GerberViewerMsg::PackageRead {
         job,
@@ -238,5 +238,5 @@ fn a_persons_open_answers_no_command() {
         waiting: None,
     }));
     assert_eq!(app.document_state.agent_edits.finished.len(), finished);
-    assert!(app.document_state.gerber_viewer.open.is_none());
+    assert!(app.document_view.gerber_viewer.open.is_none());
 }

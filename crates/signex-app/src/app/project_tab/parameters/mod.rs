@@ -120,7 +120,7 @@ impl Signex {
     fn loaded_project_tab(&mut self, project_id: ProjectId) -> Option<&mut ProjectTabState> {
         self.document_state.project_by_id(project_id)?;
         Some(
-            self.document_state
+            self.document_view
                 .project_tabs
                 .entry(project_id)
                 .or_default(),

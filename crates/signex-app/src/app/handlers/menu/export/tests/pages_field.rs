@@ -16,14 +16,14 @@ fn send(app: &mut Signex, message: PrintPreviewMsg) {
 
 /// The sheet numbers of the preview's pages, in order.
 fn shown_pages(app: &Signex) -> Vec<usize> {
-    let preview = app.document_state.preview.as_ref().expect("dialog open");
+    let preview = app.document_view.preview.as_ref().expect("dialog open");
     preview.pages.iter().map(|page| page.page_number).collect()
 }
 
 /// Export what the dialog holds, as Export PDF… does once a file is picked,
 /// and return the file's text.
 fn export(app: &mut Signex, dir: &std::path::Path) -> String {
-    let preview = app.document_state.preview.as_ref().expect("dialog open");
+    let preview = app.document_view.preview.as_ref().expect("dialog open");
     let request = Box::new(crate::app::state::PdfExportRequest {
         source: preview.source.clone(),
         options: preview.output_options(),
@@ -57,7 +57,7 @@ fn specific_all_specific_previews_and_prints_the_page_in_the_box() {
     assert_eq!(shown_pages(&app), [1, 2, 3]);
     send(&mut app, PrintPreviewMsg::SetPageRangeSpecific);
 
-    let preview = app.document_state.preview.as_ref().expect("dialog open");
+    let preview = app.document_view.preview.as_ref().expect("dialog open");
     assert_eq!(preview.specific_page_input, "2", "the box");
     assert!(
         matches!(&preview.pdf_options.page_range, PageRange::Specific(pages) if pages == &[2]),

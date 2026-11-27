@@ -131,7 +131,8 @@ pub(super) fn footprint_commands(list: &EcoChangeList, board: &PcbBoard) -> Vec<
 
 /// The net edit of the ticked net rows, or `None` when none applies. The
 /// table starts from the board's own and takes each ticked add, remove and
-/// rename; a rename also renames the zones on that net.
+/// rename; a rename also renames the zones on that net. The pad locks that
+/// go with the applied rows join the pad changes.
 fn net_edit(list: &EcoChangeList, board: &PcbBoard) -> Option<BoardNetEdit> {
     let mut table: BTreeMap<u32, String> = board
         .nets
@@ -176,6 +177,12 @@ fn net_edit(list: &EcoChangeList, board: &PcbBoard) -> Option<BoardNetEdit> {
             _ => {}
         }
     }
+    pads.extend(list.applied_pad_locks().map(|lock| PadNetChange {
+        footprint: lock.footprint,
+        pad: lock.pad,
+        net: lock.net.clone(),
+        locked: true,
+    }));
     (table_changed || !pads.is_empty()).then(|| BoardNetEdit {
         nets: table
             .into_iter()

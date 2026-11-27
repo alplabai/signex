@@ -26,6 +26,10 @@ struct WireRequest {
     /// journaled so a person can see under which rights an agent worked.
     #[serde(default)]
     grants: Vec<String>,
+    /// The revision the `document` operand's document must still be at
+    /// (#2495); the request is refused when it moved.
+    #[serde(default)]
+    if_revision: Option<u64>,
 }
 
 /// A request that is well formed; its token is not checked yet.
@@ -38,6 +42,7 @@ pub(super) struct Request {
     pub(super) operands: Vec<(String, String)>,
     pub(super) client: Option<String>,
     pub(super) grants: Vec<String>,
+    pub(super) if_revision: Option<u64>,
 }
 
 /// One input line: `{"token": "...", "id": "...", "args": {...}}`. Unknown
@@ -56,6 +61,7 @@ pub(super) fn parse_request(line: &str) -> Result<Request, String> {
         operands,
         client: wire.client,
         grants: wire.grants,
+        if_revision: wire.if_revision,
     })
 }
 

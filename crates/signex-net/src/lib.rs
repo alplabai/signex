@@ -20,13 +20,23 @@ pub mod cross_probe;
 
 mod directives;
 pub use directives::{
-    BlanketCatch, BlanketNet, NetParametersOn, blanket_nets, directive_net_classes,
-    fill_pattern_classes, net_parameters,
+    BlanketCatch, BlanketNet, ClassAssignment, NetClassConflict, NetParametersOn, blanket_nets,
+    class_assignments, directive_net_classes, fill_pattern_classes, net_class_conflicts,
+    net_parameters,
 };
 pub use directives::{DiffPair, blanket_net_classes, compile_masked, diff_pairs};
+mod project_classes;
+pub use project_classes::{
+    ProjectClassConflicts, ProjectNetClassConflict, SheetClassAssignment,
+    project_net_class_conflicts,
+};
 mod diff_pair_classes;
 pub use diff_pair_classes::{
     ClassMember, class_members, diff_pairs_with_classes, pair_count, pairs_by_every_suffix,
+};
+mod diff_pair_partners;
+pub use diff_pair_partners::{
+    ListedPair, LonePairMember, PairFoundBy, listed_pairs, lone_pair_members,
 };
 
 mod net_class;
@@ -81,10 +91,20 @@ pub use project::{CrossRefPartner, PortCrossRef};
 mod compiled;
 #[cfg(test)]
 mod compiled_tests;
+
+mod block_diagram;
+#[cfg(test)]
+mod block_diagram_tests;
+pub use block_diagram::derive_block_diagram;
 pub use compiled::{
     CompiledDesign, CompiledNet, CompiledPart, CompiledSheet, CompiledSheetNet, CompiledTarget,
     SheetTitle, compile_design,
 };
+
+mod miniature;
+#[cfg(test)]
+mod miniature_tests;
+pub use miniature::{MiniatureText, SheetMiniature, sheet_miniature};
 
 mod harness;
 #[cfg(test)]
@@ -96,3 +116,7 @@ pub use harness::{
 
 mod names_in_use;
 pub use names_in_use::sheet_net_names;
+
+#[cfg(test)]
+mod net_tie_tests;
+pub mod power_tree;

@@ -237,6 +237,31 @@ pub(super) const PLACEMENT: &[CommandMetadata] = &[
         operands: super::operands::SWAP_GATES,
         ..CommandMetadata::DEFAULT
     },
+    // #1261: the same swaps started on the schematic. Only the sheet
+    // changes, one undo step; Update PCB carries the swap to the board. No
+    // default key.
+    CommandMetadata {
+        id: "swap_schematic_pins",
+        category: "modify",
+        label: command_ids::CMD_SWAP_SCHEMATIC_PINS,
+        menu_label: Some(command_ids::CMD_MENU_SWAP_SCHEMATIC_PINS),
+        group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::MUTATES,
+        operands: super::operands::SWAP_PINS,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "swap_schematic_gates",
+        category: "modify",
+        label: command_ids::CMD_SWAP_SCHEMATIC_GATES,
+        menu_label: Some(command_ids::CMD_MENU_SWAP_SCHEMATIC_GATES),
+        group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::MUTATES,
+        operands: super::operands::SWAP_GATES,
+        ..CommandMetadata::DEFAULT
+    },
     // #2410: design reuse. Saving writes the block file of the project and
     // leaves the board as it is; placing lays a block onto the selected
     // component's channel as one undo step.

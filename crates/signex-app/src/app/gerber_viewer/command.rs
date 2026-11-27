@@ -77,7 +77,7 @@ impl Signex {
     /// the paths opened, the layers in the list's order (top first), the
     /// files not read and each read problem with its Messages sentence.
     pub(crate) fn gerber_viewer_answer(&self) -> Value {
-        let viewer = &self.document_state.gerber_viewer;
+        let viewer = &self.document_view.gerber_viewer;
         let reading = viewer.reading.is_some();
         let view = view_answer(viewer);
         let Some(open) = viewer.open.as_ref() else {

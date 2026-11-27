@@ -19,13 +19,13 @@ fn run(app: &mut Signex, id: &str) {
 /// a known state whatever the boot layout is.
 fn app_without_properties() -> Signex {
     let (mut app, _task) = Signex::new();
-    app.document_state.dock.close_panel(PanelKind::Properties);
+    app.document_view.dock.close_panel(PanelKind::Properties);
     assert!(!app.is_panel_open(PanelKind::Properties));
     app
 }
 
 fn in_front(app: &Signex) -> bool {
-    app.document_state.dock.is_frontmost(PanelKind::Properties)
+    app.document_view.dock.is_frontmost(PanelKind::Properties)
 }
 
 #[test]
@@ -46,7 +46,7 @@ fn panel_shortcut_closes_an_open_focused_panel() {
     run(&mut app, "toggle_properties_panel");
 
     assert!(!app.is_panel_open(PanelKind::Properties), "check mark off");
-    assert!(!app.document_state.dock.is_frontmost(PanelKind::Properties));
+    assert!(!app.document_view.dock.is_frontmost(PanelKind::Properties));
 }
 
 #[test]
@@ -54,7 +54,7 @@ fn panel_shortcut_focuses_an_open_panel_hidden_behind_another_tab() {
     let mut app = app_without_properties();
     run(&mut app, "toggle_properties_panel");
     // Same home region as Properties; showing it takes the front.
-    app.document_state.dock.show_panel(PanelKind::Filter);
+    app.document_view.dock.show_panel(PanelKind::Filter);
     assert!(app.is_panel_open(PanelKind::Properties));
     assert!(!in_front(&app), "fixture: Properties is behind Filter");
 
@@ -69,7 +69,7 @@ fn panel_shortcut_focuses_an_open_panel_in_a_collapsed_region() {
     let mut app = app_without_properties();
     run(&mut app, "toggle_properties_panel");
     let home = crate::dock::PanelPosition::default_for(PanelKind::Properties);
-    app.document_state
+    app.document_view
         .dock
         .update(crate::dock::DockMessage::ToggleCollapse(home));
     assert!(!in_front(&app), "fixture: the region is collapsed");
@@ -89,7 +89,7 @@ fn every_panel_shortcut_toggles_its_own_panel() {
         ("toggle_schematic_list_panel", PanelKind::ObjectList),
     ] {
         let (mut app, _task) = Signex::new();
-        app.document_state.dock.close_panel(kind);
+        app.document_view.dock.close_panel(kind);
         run(&mut app, id);
         assert!(app.is_panel_open(kind), "{id} opens {kind:?}");
         run(&mut app, id);
@@ -180,7 +180,7 @@ fn previous_tab_goes_backwards_and_wraps_to_the_last() {
 #[test]
 fn the_menu_check_counts_a_detached_panel_window_counts_as_open() {
     let (mut app, _task) = Signex::new();
-    app.document_state.dock.close_panel(PanelKind::Messages);
+    app.document_view.dock.close_panel(PanelKind::Messages);
     assert_eq!(view_row_checked(&context(&app), "Messages"), Some(false));
 
     app.ui_state.windows.insert(

@@ -3,9 +3,11 @@
 //! `signex_output::fab::generate`, the IPC-2581 file and the ODB++ job, and
 //! beside them the assembly drawings and the board STEP model (#2489).
 //! Nothing reaches the disk until Generate; the files are built and written
-//! on a worker, from a copy of the board as it is in memory. Formats and
-//! rules: `docs/FABRICATION_OUTPUTS.md`.
+//! on a worker, from a copy of the board as it is in memory. The command
+//! with operands runs the same Generate with no dialog (#2470, `command`).
+//! Formats and rules: `docs/FABRICATION_OUTPUTS.md`.
 
+mod command;
 mod documents;
 mod groups;
 mod notes;
@@ -15,6 +17,8 @@ mod write;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
+mod tests_command;
+#[cfg(test)]
 mod tests_dialog;
 
 use std::path::PathBuf;
@@ -22,14 +26,16 @@ use std::path::PathBuf;
 use signex_output::fab::{FabError, FabNote, FabOptions, OdbForm};
 pub use signex_types::project::FabOutputKinds;
 
+pub use command::FabCommandRun;
+pub(crate) use command::fabrication_outputs;
 pub(crate) use documents::{DocumentsJob, assembly_pdf_options, step_file_name};
 pub use groups::{FabGroup, ticked_count};
 pub use notes::{BoardNote, NoteSeverity};
 pub(crate) use notes::{board_note_text, note_text};
 pub(crate) use notes::{outcome_notes, problem_text, written_message, written_text};
-pub use write::FabWritten;
 #[cfg(test)]
 pub(crate) use write::write_fab_outputs;
+pub use write::{FabWritten, Listed};
 pub(crate) use write::{GenerateJob, make_generate};
 
 impl From<FabOutputsMsg> for crate::app::Message {
@@ -141,6 +147,12 @@ pub enum FabOutputsMsg {
     Written {
         generation: u64,
         result: Result<FabWritten, FabProblem>,
+    },
+    /// `fabrication_outputs` run from its operands (#2470) finished
+    /// writing; its caller is answered.
+    CommandWritten {
+        run: Box<FabCommandRun>,
+        result: Result<Listed, FabProblem>,
     },
     /// The success banner's Open folder: the written folder in the file
     /// manager.

@@ -154,12 +154,12 @@ fn properties_follow_the_selection_of_the_focused_pane() {
         .uuid;
     app.interaction_state.canvas.selected = vec![SelectedItem::new(symbol, SelectedKind::Symbol)];
     app.update_selection_info();
-    assert_eq!(app.document_state.panel_ctx.selection_count, 1);
+    assert_eq!(app.document_view.panel_ctx.selection_count, 1);
     send(&mut app, Message::Window(WindowMsg::TilePanePressed(0)));
     assert!(app.interaction_state.canvas.selected.is_empty());
-    assert_eq!(app.document_state.panel_ctx.selection_count, 0);
+    assert_eq!(app.document_view.panel_ctx.selection_count, 0);
     send(&mut app, Message::Window(WindowMsg::TilePanePressed(1)));
-    assert_eq!(app.document_state.panel_ctx.selection_count, 1);
+    assert_eq!(app.document_view.panel_ctx.selection_count, 1);
 }
 
 /// A splitter dragged resizes the panes and the sizes are kept; a double

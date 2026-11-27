@@ -368,7 +368,7 @@ mod tests {
         super::view(
             &app.ui_state.profile_manager,
             Some(DEFAULT),
-            &app.document_state.panel_ctx.tokens,
+            &app.document_view.panel_ctx.tokens,
             &app.ui_state.i18n,
         )
         .boxed()

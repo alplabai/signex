@@ -156,7 +156,7 @@ fn the_pdf_text_follows_the_language() {
     assert_eq!(shown(&app), "SHEETS");
 }
 
-/// Folded sections say what they hold: "4 of 7" boxes of Schematics
+/// Folded sections say what they hold: "4 of 9" boxes of Schematics
 /// include, "3 on" of Bookmarks and Nets, the logical structure, and the
 /// ticked sheets.
 #[test]
@@ -169,7 +169,8 @@ fn folded_sections_show_their_summaries() {
         .map(|(k, _)| k.clone())
         .collect();
     let options = &mut preview.pdf_options;
-    // Schematics include: No-ERC, No-Connect, Notes and Collapsed notes.
+    // Schematics include: No-ERC, No-Connect, Notes and Collapsed notes
+    // (Compile Masks and Differential Pairs are off by default).
     options.include_parameter_sets = false;
     options.include_probes = false;
     options.include_blankets = false;
@@ -180,7 +181,7 @@ fn folded_sections_show_their_summaries() {
     options.use_physical_structure = false;
 
     let texts = texts_of(app.view_pdf_settings_column(&preview), COLUMN);
-    for summary in ["3 of 4", "4 of 7", "3 on", "Logical"] {
+    for summary in ["3 of 4", "4 of 9", "3 on", "Logical"] {
         assert!(texts.iter().any(|t| t == summary), "{summary}: {texts:#?}");
     }
     // Folded: their boxes are not drawn.
@@ -208,6 +209,27 @@ fn bookmarks_and_nets_has_no_component_parameters_box() {
     );
 }
 
+/// Schematics include names the directive boxes "Net Parameters" and "Net
+/// Blankets", and has a box each for Compile Masks and Differential Pairs
+/// (Caner, 2026-11-25).
+#[test]
+fn schematics_include_names_every_directive_kind() {
+    let (app, _task) = Signex::new();
+    let preview = four_sheets();
+    let texts = texts_of(app.view_pdf_settings_column(&preview), COLUMN);
+    for label in [
+        "Net Parameters",
+        "Net Blankets",
+        "Compile Masks",
+        "Differential Pairs",
+    ] {
+        assert!(texts.iter().any(|t| t == label), "{label}: {texts:#?}");
+    }
+    for old in ["Parameter Sets", "Blankets"] {
+        assert!(!texts.iter().any(|t| t == old), "{old}: {texts:#?}");
+    }
+}
+
 /// Clear and Select All re-render the preview: the "N of M" count, the
 /// thumbnails (dimmed, not removed) and the footer follow.
 #[test]
@@ -229,18 +251,18 @@ fn clear_and_select_all_move_the_count_the_thumbnails_and_the_footer() {
     settle(&mut app, task);
 
     let footer = |app: &Signex| {
-        let preview = app.document_state.preview.as_ref().expect("preview");
+        let preview = app.document_view.preview.as_ref().expect("preview");
         app.pdf_footer_caption(preview)
             .as_str()
             .replace(['\u{2068}', '\u{2069}'], "")
     };
     let count = |app: &Signex| {
-        let preview = app.document_state.preview.as_ref().expect("preview");
+        let preview = app.document_view.preview.as_ref().expect("preview");
         let texts = texts_of(app.view_pdf_settings_column(preview), COLUMN);
         (sheets_summary(preview), texts)
     };
     let dimmed = |app: &Signex| {
-        let preview = app.document_state.preview.as_ref().expect("preview");
+        let preview = app.document_view.preview.as_ref().expect("preview");
         rail_entries(preview)
             .iter()
             .map(|e| !e.ticked)
@@ -423,6 +445,35 @@ fn the_not_fitted_layer_row_hides_its_group_on_open() {
     assert!(!sent(&veiled, row), "{veiled:?}");
 }
 
+/// #2690: Signal harnesses is a layer row of its own, right under Wires and
+/// buses, named from the catalog; unticking it hides that group on open.
+#[test]
+fn signal_harnesses_have_their_own_layer_row() {
+    let (app, _task) = Signex::new();
+    let mut on = four_sheets();
+    on.dialog.layers.is_on = true;
+    let texts = texts_of(app.view_pdf_settings_column(&on), COLUMN);
+    let wires = texts.iter().position(|t| t == "Wires and buses");
+    let harnesses = texts.iter().position(|t| t == "Signal harnesses");
+    assert!(
+        wires.is_some() && harnesses == wires.map(|at| at + 1),
+        "{texts:#?}"
+    );
+    let off = four_sheets();
+    let (live, veiled) = click_on_and_off(&app, &on, &off, "Signal harnesses");
+    let row = |m: &PrintPreviewMsg| {
+        matches!(
+            m,
+            PrintPreviewMsg::PdfOption(PdfOptionMsg::PdfLayerVisibilityToggled(
+                PdfLayer::SignalHarnesses,
+                false
+            ))
+        )
+    };
+    assert!(sent(&live, row), "{live:?}");
+    assert!(!sent(&veiled, row), "{veiled:?}");
+}
+
 /// The part bookmarks' Group switch takes input only while "One bookmark
 /// per part" is ticked.
 #[test]
@@ -590,7 +641,7 @@ fn the_dialog_window_names_the_file_and_its_sheets() {
     assert_eq!(app.detached_modal_subtitle(ModalId::PrintPreview), None);
     let mut preview = four_sheets();
     preview.source = PathBuf::from("/w/dcdc.snxsch");
-    app.document_state.preview = Some(preview);
+    app.document_view.preview = Some(preview);
     let subtitle = app
         .detached_modal_subtitle(ModalId::PrintPreview)
         .map(|s| s.replace(['\u{2068}', '\u{2069}'], ""));

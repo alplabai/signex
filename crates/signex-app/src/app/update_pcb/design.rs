@@ -39,6 +39,9 @@ pub(crate) struct DesignSnapshot {
     /// The rules they ask for that are left out, with why; logged to
     /// Messages like `library_errors`.
     pub rule_problems: Vec<super::rules_from_schematic::RuleProblem>,
+    /// The classes the Net Blanket and Net Parameters directives give, with
+    /// their nets and rules, for the board's net-class table.
+    pub schematic_classes: Vec<signex_engine::SchematicClass>,
 }
 
 impl DesignSnapshot {
@@ -91,6 +94,10 @@ pub(crate) fn compute(request: DesignRequest) -> Result<Arc<Computed>, String> {
         &net_names,
     );
     drop(net_names);
+    let schematic_classes = signex_engine::schematic_classes(
+        sheets.iter().map(|(path, sheet)| (path, *sheet)),
+        &netlist,
+    );
     let snapshot = DesignSnapshot {
         board: request.board,
         revision: request.revision,
@@ -101,6 +108,7 @@ pub(crate) fn compute(request: DesignRequest) -> Result<Arc<Computed>, String> {
         library_errors: resolver.errors,
         schematic_rules,
         rule_problems,
+        schematic_classes,
     };
     let mut list = diff_board(&snapshot.input());
     if let Some(previous) = &request.previous {

@@ -1,3 +1,0 @@
-[submodule "docs/internal"]
-	path = docs/internal
-	url = https://github.com/alplabai/signex-internal.git

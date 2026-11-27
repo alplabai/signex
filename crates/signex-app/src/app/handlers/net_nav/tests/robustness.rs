@@ -28,7 +28,7 @@ fn a_hover_tick_during_the_build_does_not_drop_a_parked_jump() {
         (0.0, 0.0),
     );
     p.app
-        .document_state
+        .document_view
         .net_nav
         .hover
         .candidate
@@ -52,7 +52,7 @@ fn deleting_the_anchor_never_moves_the_highlight_to_an_unrelated_net() {
     p.send_settled(NetNavMsg::RelatedNetHighlightRequested);
     let name = p
         .app
-        .document_state
+        .document_view
         .net_nav
         .highlight
         .as_ref()
@@ -65,7 +65,7 @@ fn deleting_the_anchor_never_moves_the_highlight_to_an_unrelated_net() {
     delete_selected(&mut p);
     p.app.settle_net_index_blocking();
 
-    assert!(p.app.document_state.net_nav.highlight.is_none());
+    assert!(p.app.document_view.net_nav.highlight.is_none());
     assert!(p.bright().is_none());
     assert!(logged(&["was anchored to"]));
 }
@@ -81,7 +81,7 @@ fn a_successful_resolve_moves_the_anchor_to_a_member_that_still_exists() {
 
     let h = p
         .app
-        .document_state
+        .document_view
         .net_nav
         .highlight
         .as_ref()
@@ -106,7 +106,7 @@ fn hover_and_partners_follow_the_placement_the_tab_was_entered_through() {
         (0.0, 70.0),
     );
     p.app
-        .document_state
+        .document_view
         .net_nav
         .hover
         .candidate
@@ -118,7 +118,7 @@ fn hover_and_partners_follow_the_placement_the_tab_was_entered_through() {
     p.send_settled(NetNavMsg::HoverDwellTicked);
     let card = p
         .app
-        .document_state
+        .document_view
         .net_nav
         .hover
         .card
@@ -216,7 +216,7 @@ fn a_command_parked_in_a_closed_project_never_runs_in_another() {
     p.app.settle_net_index_blocking();
 
     assert_eq!(p.active(), Some(b_sheet));
-    assert!(p.app.document_state.net_nav.pending.is_none());
+    assert!(p.app.document_view.net_nav.pending.is_none());
     assert!(
         !logged(&["has no partner", ONLY_B]),
         "A's jump did not run against B's label"
@@ -421,7 +421,7 @@ fn a_parked_command_does_not_fire_against_a_newer_selection() {
         Some(p.root.clone()),
         "no jump from the old selection"
     );
-    assert!(p.app.document_state.net_nav.pending.is_none());
+    assert!(p.app.document_view.net_nav.pending.is_none());
     assert!(
         crate::diagnostics::logged_count(NOT_READY) > before,
         "and it says so"
@@ -448,7 +448,7 @@ fn a_command_whose_stale_build_finds_no_project_is_dropped_not_parked_again() {
 
     assert_eq!(follow_up.units(), 0, "nothing to rebuild");
     assert!(
-        p.app.document_state.net_nav.pending.is_none(),
+        p.app.document_view.net_nav.pending.is_none(),
         "dropped, not parked"
     );
     assert!(crate::diagnostics::logged_count(NOT_READY) > before);
@@ -465,7 +465,7 @@ fn another_projects_build_leaves_a_command_parked_for_a_project_still_open() {
     p.app.settle_net_index_blocking(); // B's build lands
 
     assert!(
-        p.app.document_state.net_nav.pending.is_some(),
+        p.app.document_view.net_nav.pending.is_some(),
         "A's command waits for A"
     );
     assert_eq!(p.active(), Some(b_sheet), "and did not run in B");
@@ -486,7 +486,7 @@ fn a_command_whose_project_is_out_of_view_when_its_index_lands_does_not_run() {
     let _follow_up = p.app.apply_net_index(&empty_outcome(a, key));
 
     assert_eq!(p.active(), Some(b_sheet));
-    assert!(p.app.document_state.net_nav.pending.is_none());
+    assert!(p.app.document_view.net_nav.pending.is_none());
     assert!(
         !logged(&["has no partner", ONLY_B]),
         "A's jump did not run on B's label"
@@ -508,7 +508,7 @@ fn a_command_whose_project_was_closed_under_the_same_sheet_is_dropped_with_a_lin
 
     let _follow_up = p.app.apply_net_index(&empty_outcome(a, key));
 
-    assert!(p.app.document_state.net_nav.pending.is_none());
+    assert!(p.app.document_view.net_nav.pending.is_none());
     assert!(
         crate::diagnostics::logged_count(NOT_READY) > before,
         "dropped with its own line"
@@ -524,7 +524,7 @@ fn a_parked_highlight_under_the_cursor_is_dropped_when_the_pointer_moved_on() {
     p.app.ui_state.cursor_y = 0.0;
     p.send(NetNavMsg::NetHighlightRequested);
     assert!(
-        p.app.document_state.net_nav.pending.is_some(),
+        p.app.document_view.net_nav.pending.is_some(),
         "the highlight was parked on the wire under the pointer"
     );
     let before = crate::diagnostics::logged_count(NOT_READY);
@@ -534,7 +534,7 @@ fn a_parked_highlight_under_the_cursor_is_dropped_when_the_pointer_moved_on() {
 
     p.app.settle_net_index_blocking();
 
-    assert!(p.app.document_state.net_nav.highlight.is_none());
-    assert!(p.app.document_state.net_nav.pending.is_none());
+    assert!(p.app.document_view.net_nav.highlight.is_none());
+    assert!(p.app.document_view.net_nav.pending.is_none());
     assert!(crate::diagnostics::logged_count(NOT_READY) > before);
 }

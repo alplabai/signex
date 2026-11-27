@@ -118,8 +118,9 @@ fn open_in_requirements_shows_the_requirement_in_the_project_tab() {
     let task = click(&mut app, id, "Open in Requirements");
     settle(&mut app, task);
     let docs = &app.document_state;
+    let view = &app.document_view;
     assert_eq!(docs.tabs[docs.active_tab].kind.as_project(), Some(id));
-    assert_eq!(docs.project_tabs[&id].section, ProjectSection::Requirements);
+    assert_eq!(view.project_tabs[&id].section, ProjectSection::Requirements);
 
     let value = answer(&mut app, "project_open_checklist_link", &["item=5"]);
     assert_eq!(value["opens"], "requirements");

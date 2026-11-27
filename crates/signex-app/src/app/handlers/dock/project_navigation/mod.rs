@@ -95,21 +95,21 @@ impl Signex {
         let handled = match panel_msg {
             crate::panels::PanelMsg::Tree(TreeMsg::Toggle(key)) => {
                 if let Some(path) =
-                    resolve_path(self.document_state.panel_ctx.project_tree.as_slice(), key)
+                    resolve_path(self.document_view.panel_ctx.project_tree.as_slice(), key)
                 {
                     signex_widgets::tree_view::toggle(
-                        &mut self.document_state.panel_ctx.project_tree,
+                        &mut self.document_view.panel_ctx.project_tree,
                         &path,
                     );
                 }
                 true
             }
             crate::panels::PanelMsg::Tree(TreeMsg::Select(key)) => {
-                let path = resolve_path(self.document_state.panel_ctx.project_tree.as_slice(), key)
+                let path = resolve_path(self.document_view.panel_ctx.project_tree.as_slice(), key)
                     .unwrap_or_default();
                 let path = &path;
                 let selected_node =
-                    get_node(self.document_state.panel_ctx.project_tree.as_slice(), path);
+                    get_node(self.document_view.panel_ctx.project_tree.as_slice(), path);
                 let is_openable = selected_node.is_some_and(tree_row_opens);
                 if !is_openable {
                     self.interaction_state.last_tree_click.clear();
@@ -124,7 +124,7 @@ impl Signex {
                 // background tint immediately, even before the second
                 // click opens it. Persists across panel refreshes via
                 // `runtime.rs`.
-                self.document_state.panel_ctx.project_tree_selected = Some(key.clone());
+                self.document_view.panel_ctx.project_tree_selected = Some(key.clone());
                 // Double-click gate — first click memos the path; the
                 // second click on the *same* path within the window
                 // actually opens the file. Otherwise the memo just
@@ -159,6 +159,10 @@ impl Signex {
     fn open_tree_row(&mut self, path: &[usize], label: String) -> Task<Message> {
         if let Some(missing) = self.missing_child_sheet_at(path) {
             return self.offer_create_child_sheet(&missing);
+        }
+        // Mockup row 195: the notebook row opens the project's notebook tab.
+        if crate::app::notebook_project::is_notebook_row(&label) {
+            return self.open_design_notebook_at(path);
         }
         // mockup row 193: a Gerber, drill or package zip row opens the viewer.
         if crate::app::gerber_viewer::opens_by_name(&label) {
@@ -223,10 +227,11 @@ impl Signex {
     fn project_add_new_target(&self) -> Option<signex_widgets::tree_view::TreeKey> {
         use signex_widgets::tree_view::key_of;
         let document = &self.document_state;
+        let document_view = &self.document_view;
         let tree = self
             .interaction_state
             .acting_window
-            .map_or(&document.panel_ctx, |w| self.panel_ctx_for(w))
+            .map_or(&document_view.panel_ctx, |w| self.panel_ctx_for(w))
             .project_tree
             .as_slice();
         let active = document
@@ -266,41 +271,41 @@ impl Signex {
             ProjectTreeAction::OpenNode(_) => {
                 // One pick opens: the double-click gate is the row's.
                 use signex_widgets::tree_view::{get_node, key_of};
-                let tree = self.document_state.panel_ctx.project_tree.as_slice();
+                let tree = self.document_view.panel_ctx.project_tree.as_slice();
                 let label = get_node(tree, &tree_path)
                     .filter(|node| tree_row_opens(node))
                     .map(|node| node.label.clone());
                 let key = key_of(tree, &tree_path);
                 self.interaction_state.last_tree_click.clear();
                 if let Some(label) = label {
-                    self.document_state.panel_ctx.project_tree_selected = key;
+                    self.document_view.panel_ctx.project_tree_selected = key;
                     return self.open_tree_row(&tree_path, label);
                 }
             }
             ProjectTreeAction::ToggleNode(_) => {
                 let path = tree_path;
                 signex_widgets::tree_view::toggle(
-                    &mut self.document_state.panel_ctx.project_tree,
+                    &mut self.document_view.panel_ctx.project_tree,
                     &path,
                 );
             }
             ProjectTreeAction::ExpandAll => {
-                let panel = &mut self.document_state.panel_ctx;
+                let panel = &mut self.document_view.panel_ctx;
                 set_expanded_recursive(&mut panel.project_tree, true);
                 panel
                     .projects_view
                     .set_groups_collapsed(&panel.project_tree, false);
             }
             ProjectTreeAction::CollapseAll => {
-                let panel = &mut self.document_state.panel_ctx;
+                let panel = &mut self.document_view.panel_ctx;
                 set_expanded_recursive(&mut panel.project_tree, false);
                 panel
                     .projects_view
                     .set_groups_collapsed(&panel.project_tree, true);
             }
             ProjectTreeAction::Refresh => {
-                self.document_state.panel_ctx.project_tree =
-                    crate::panels::build_project_tree(&self.document_state.panel_ctx);
+                self.document_view.panel_ctx.project_tree =
+                    crate::panels::build_project_tree(&self.document_view.panel_ctx);
             }
             ProjectTreeAction::CloseAllDocuments => {
                 // Reverse order so index-based close doesn't shift the
@@ -383,6 +388,9 @@ impl Signex {
             ProjectTreeAction::AddNewPcb(_) => {
                 return self.pcb_sync_from_tree(&tree_path, true);
             }
+            ProjectTreeAction::AddNewDesignNotebook(_) => {
+                return self.open_design_notebook_at(&tree_path);
+            }
             ProjectTreeAction::UpdatePcb(_) => {
                 return self.pcb_sync_from_tree(&tree_path, false);
             }
@@ -431,8 +439,10 @@ fn tree_row_opens(node: &signex_widgets::tree_view::TreeNode) -> bool {
             | TreeIcon::SnxSimulation
             | TreeIcon::SnxLibrary
             | TreeIcon::SnxSymbol
+            | TreeIcon::SnxBlockDiagram
     ) || crate::app::gerber_viewer::opens_by_name(&node.label)
         || crate::app::output_job::opens_by_name(&node.label)
+        || crate::app::notebook_project::is_notebook_row(&node.label)
 }
 
 fn set_expanded_recursive(nodes: &mut [signex_widgets::tree_view::TreeNode], expanded: bool) {
@@ -484,7 +494,7 @@ mod tests {
 
     fn label_at_key(app: &Signex, key: &[String]) -> Option<String> {
         use signex_widgets::tree_view::{get_node, resolve_path};
-        let tree = app.document_state.panel_ctx.project_tree.as_slice();
+        let tree = app.document_view.panel_ctx.project_tree.as_slice();
         let path = resolve_path(tree, key)?;
         get_node(tree, &path).map(|n| n.label.clone())
     }
@@ -497,8 +507,8 @@ mod tests {
         use signex_widgets::tree_view::{TreeIcon, TreeNode, key_of};
 
         let (mut app, _bootstrap_task) = Signex::new();
-        app.document_state.panel_ctx.project_tree = two_sheet_tree();
-        let b_key = key_of(&app.document_state.panel_ctx.project_tree, &[0, 0, 1]).expect("row b");
+        app.document_view.panel_ctx.project_tree = two_sheet_tree();
+        let b_key = key_of(&app.document_view.panel_ctx.project_tree, &[0, 0, 1]).expect("row b");
 
         let _ = app.handle_dock_project_navigation_panel_message(&crate::panels::PanelMsg::Tree(
             TreeMsg::Select(b_key.clone()),
@@ -507,12 +517,12 @@ mod tests {
             TreeMsg::ContextMenu(b_key.clone()),
         ));
 
-        app.document_state.panel_ctx.project_tree[0].children[0]
+        app.document_view.panel_ctx.project_tree[0].children[0]
             .children
             .insert(0, TreeNode::leaf("new.snxsch", TreeIcon::SnxSchematic));
 
         let selected = app
-            .document_state
+            .document_view
             .panel_ctx
             .project_tree_selected
             .clone()
@@ -534,18 +544,16 @@ mod tests {
         use signex_widgets::tree_view::key_of;
 
         let (mut app, _bootstrap_task) = Signex::new();
-        app.document_state.panel_ctx.project_tree = two_sheet_tree();
-        let tree = &app.document_state.panel_ctx.project_tree;
+        app.document_view.panel_ctx.project_tree = two_sheet_tree();
+        let tree = &app.document_view.panel_ctx.project_tree;
         let docs_key = key_of(tree, &[0, 0]).expect("row");
-        app.document_state.panel_ctx.project_tree[0]
-            .children
-            .clear();
+        app.document_view.panel_ctx.project_tree[0].children.clear();
 
         let _ = app.handle_dock_project_navigation_panel_message(&crate::panels::PanelMsg::Tree(
             TreeMsg::Toggle(docs_key),
         ));
 
-        assert!(app.document_state.panel_ctx.project_tree[0].expanded);
+        assert!(app.document_view.panel_ctx.project_tree[0].expanded);
     }
 
     /// A message this handler doesn't own must fall through as `None`

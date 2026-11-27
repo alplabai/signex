@@ -4,7 +4,7 @@
 use std::path::PathBuf;
 
 use super::{app_workspace, open_with, sheet_with_net};
-use crate::app::handlers::menu::export::build_page_scope;
+use crate::app::handlers::menu::export::build_export_scope;
 
 /// Two flat pages, each with a Global VCC label: each names the other page.
 #[test]
@@ -25,7 +25,7 @@ fn the_scope_names_the_other_page_of_a_global_label() {
     );
     app.document_state.active_path = Some(top.clone());
 
-    let (ctx, issues) = build_page_scope(&app.document_state).expect("scope");
+    let (ctx, issues) = build_export_scope(&app.document_state).expect("scope");
     let mut numbers: Vec<(usize, PathBuf)> = ctx
         .sheets
         .iter()

@@ -2,7 +2,7 @@
 //! and what the files leave out.
 
 use pcb_geom::GeomError;
-use signex_i18n::{I18n, Localized, ids, t};
+use signex_i18n::{I18n, Localized, MessageId, Translatable, ids, t};
 use signex_output::fab::{DrawnCopperFault, DrawnCopperItem, FabError, FabNote};
 use signex_types::pcb_graphic::BoardGraphicKind;
 use signex_types::pcb_layer::CopperLayer;
@@ -33,27 +33,34 @@ pub(crate) fn written_text(written: &FabWritten, i18n: &I18n) -> Localized {
     )
 }
 
+/// The catalog message of why Generate wrote nothing, and its `why`.
+fn problem_message(problem: &FabProblem) -> (MessageId, Option<&str>) {
+    let (id, why) = match problem {
+        FabProblem::Refused(FabError::NothingSelected) => (ids::FAB_OUTPUTS_NOTHING_SELECTED, None),
+        FabProblem::Refused(FabError::BadName) => (ids::FAB_OUTPUTS_BAD_NAME, None),
+        FabProblem::Refused(FabError::NoOutline) => (ids::FAB_OUTPUTS_NO_OUTLINE, None),
+        FabProblem::BoardGone => (ids::FAB_OUTPUTS_BOARD_GONE, None),
+        FabProblem::WriteFailed(why) => (ids::FAB_OUTPUTS_WRITE_FAILED, Some(why)),
+        FabProblem::PanelRefused(why) => (ids::FAB_OUTPUTS_PANEL_REFUSED, Some(why)),
+        FabProblem::AssemblyRefused(why) => (ids::FAB_OUTPUTS_ASSEMBLY_REFUSED, Some(why)),
+        FabProblem::StepRefused(why) => (ids::FAB_OUTPUTS_STEP_REFUSED, Some(why)),
+    };
+    (id, why.map(String::as_str))
+}
+
 /// Why Generate wrote nothing.
 pub(crate) fn problem_text(problem: &FabProblem, i18n: &I18n) -> Localized {
-    match problem {
-        FabProblem::Refused(FabError::NothingSelected) => {
-            t!(i18n, ids::FAB_OUTPUTS_NOTHING_SELECTED)
-        }
-        FabProblem::Refused(FabError::BadName) => t!(i18n, ids::FAB_OUTPUTS_BAD_NAME),
-        FabProblem::Refused(FabError::NoOutline) => t!(i18n, ids::FAB_OUTPUTS_NO_OUTLINE),
-        FabProblem::BoardGone => t!(i18n, ids::FAB_OUTPUTS_BOARD_GONE),
-        FabProblem::WriteFailed(why) => {
-            t!(i18n, ids::FAB_OUTPUTS_WRITE_FAILED, "why" => why.as_str())
-        }
-        FabProblem::PanelRefused(why) => {
-            t!(i18n, ids::FAB_OUTPUTS_PANEL_REFUSED, "why" => why.as_str())
-        }
-        FabProblem::AssemblyRefused(why) => {
-            t!(i18n, ids::FAB_OUTPUTS_ASSEMBLY_REFUSED, "why" => why.as_str())
-        }
-        FabProblem::StepRefused(why) => {
-            t!(i18n, ids::FAB_OUTPUTS_STEP_REFUSED, "why" => why.as_str())
-        }
+    match problem_message(problem) {
+        (id, None) => t!(i18n, id),
+        (id, Some(why)) => t!(i18n, id, "why" => why),
+    }
+}
+
+/// [`problem_text`] as a command's refusal (`fabrication_outputs`, #2470).
+pub(crate) fn problem_reason(problem: &FabProblem) -> Translatable {
+    match problem_message(problem) {
+        (id, None) => Translatable::new(id),
+        (id, Some(why)) => Translatable::new(id).arg("why", why.to_string()),
     }
 }
 

@@ -18,8 +18,11 @@ cmd-cancel-current-tool = Cancel current stage / exit placement mode
 cmd-center-on-cursor = Center on cursor
 cmd-center-view-at-cursor = Center/redraw view around cursor
 cmd-check-drc = Check design rules
+cmd-query-part-heights = Query part heights
+cmd-query-library = Query a library
 cmd-check-erc = Check electrical rules
 cmd-check-requirements = Check project requirements
+cmd-query-rail-budget = Query the project's rail budget
 cmd-close-active-document = Close active document
 cmd-menu-close-active-document = Close Document
 cmd-close-all-documents = Close all documents
@@ -66,6 +69,7 @@ cmd-find-text = Find text
 cmd-import-graphics = Import graphics
 cmd-menu-import-graphics = Import Graphics...
 cmd-list-documents = List documents
+cmd-list-annotations = List the annotation blocks of the project's Design Notebook
 cmd-measure-distance = Measure distance
 cmd-mirror-x = Mirror along X-axis
 cmd-menu-mirror-x = Mirror X
@@ -97,6 +101,8 @@ cmd-menu-open-net-inspector = Net Inspector
 cmd-open-preferences = Open preferences
 cmd-menu-open-preferences = Preferences...
 cmd-open-schematic-preferences = Open schematic preferences
+cmd-keymap-assign = Give a command a key in a custom keyboard profile
+cmd-keymap-clear = Take a command's keys away in a custom keyboard profile
 cmd-paste = Paste
 cmd-paste-array = Paste array
 cmd-paste-special = Paste special
@@ -108,6 +114,9 @@ cmd-print = Print
 cmd-menu-print = Print...
 cmd-query-pins = Query pins
 cmd-query-cross-references = Query off-sheet cross references
+cmd-query-power-tree = Query the project's power tree
+cmd-query-net-ties = Query net ties
+cmd-bom-lines = Read the bill of materials
 cmd-read-document = Read document
 cmd-redo = Redo
 cmd-refresh-view = Refresh/redraw
@@ -165,6 +174,7 @@ cmd-sync-pane-zoom = Give the other panes the focused pane's zoom
 cmd-menu-sync-pane-zoom = Sync Zoom with Other Pane
 cmd-equalize-panes = Make the panes the same size
 cmd-menu-equalize-panes = Equal Pane Sizes
+cmd-set-dock-panel = Open, close, collapse or expand a dock panel
 # Workspace layouts (mockup row 166): View ▸ Window ▸ Layouts.
 cmd-apply-layout-schematic = Workspace layout: Schematic
 cmd-menu-apply-layout-schematic = Schematic
@@ -270,10 +280,14 @@ cmd-run-erc = Run electrical rules check
 cmd-menu-run-erc = Electrical Rules Check
 cmd-open-erc-dialog = Open electrical rules check dialog
 cmd-menu-open-erc-dialog = Electrical Rules Check
+cmd-toggle-live-erc = Turn live electrical rules checking on or off
+cmd-menu-toggle-live-erc = Live ERC
 cmd-repair-pin-junctions = Add a junction where a pin end touches a wire
 cmd-menu-repair-pin-junctions = Repair Pin Junctions
 cmd-open-parameter-manager = Open Parameter Manager
 cmd-menu-open-parameter-manager = Parameter Manager...
+cmd-export-parameters = Export the active sheet's parameters to a CSV file
+cmd-import-parameters = Import parameters from a CSV file, with a preview to apply
 cmd-open-rules = Open the design rules of the project
 cmd-menu-open-rules = Rules...
 cmd-rules-list = List the design rules
@@ -298,14 +312,25 @@ cmd-remove-board-panel = Remove the board's panel
 cmd-menu-remove-board-panel = Remove Panel
 cmd-set-board-panel = Change a setting of the board's panel
 cmd-board-panel = Describe the board's panel
+cmd-layout-plan-get = Read the board's layout plan
+cmd-layout-plan-set = Change a stage of the board's layout plan
+cmd-layout-plan-status = Say how far each stage of the board's layout plan is
 cmd-project-settings = Read the settings of the project
 cmd-project-move-sheet = Move a sheet in the page order of the project
 cmd-project-add-variant = Add a variant to the project
 cmd-project-rename-variant = Rename a variant of the project
 cmd-project-remove-variant = Remove a variant of the project
 cmd-project-set-active-variant = Choose the active variant of the project
+cmd-project-set-default-variant = Choose the default variant of the project
+cmd-compare-variants = Compare two variants of the project
+cmd-variant-bom = Read the BOM of a variant of the project
+cmd-project-set-variant-fit = Set whether a variant fits a part of the project
+cmd-project-set-variant-alternate = Set the alternate part a variant uses for a part of the project
+cmd-project-set-variant-override = Set a parameter value a variant gives a part of the project
+cmd-project-duplicate-variant = Duplicate a variant of the project
 cmd-project-move-library = Move a library in the library order of the project
 cmd-project-set-annotate-undo = Set how many undo steps an annotate run of the project is
+cmd-project-set-annotate-numbering = Set how Annotate numbers the designators of the project
 cmd-project-set-version-control = Turn commit on save on or off for the project
 cmd-project-add-requirement = Add a requirement to the project
 cmd-project-set-requirement = Set a field of a project requirement
@@ -328,6 +353,12 @@ cmd-project-save-checklist-template = Save the design checklist as a template
 cmd-project-export-checklist-csv = Export the design checklist as a CSV file
 cmd-project-checklist-link-choices = List what a design checklist item can link to
 cmd-project-open-checklist-link = Show what a design checklist item links to
+cmd-project-set-rail = Set a power rail's voltage and tolerance
+cmd-bom-add-alternate = Add an alternate part to a BOM line
+cmd-bom-remove-alternate = Remove an alternate part from a BOM line
+cmd-bom-set-alternate-order = Move an alternate part in a BOM line's order
+cmd-query-bom = Query the priced BOM
+cmd-search-parts = Search parts by parameters
 cmd-number-schematic-sheets = Number schematic sheets
 cmd-menu-number-schematic-sheets = Number Schematic Sheets...
 cmd-reset-schematic-designators = Reset schematic designators
@@ -346,6 +377,9 @@ cmd-menu-open-project-options = Project Options...
 cmd-update-pcb-from-schematic = Update PCB from schematic
 cmd-compare-board-with-schematic = Compare board with schematic
 cmd-menu-compare-board-with-schematic = Compare Board with Schematic…
+cmd-check-board-against-schematic = Check the board against the schematic
+cmd-apply-board-schematic-differences = Apply board and schematic differences by id
+cmd-board-status = Board status counters
 cmd-back-annotate-schematics = Back-annotate the board's designators and values to the schematic
 cmd-menu-back-annotate-schematics = Back Annotate Schematics...
 cmd-open-selection-filter = Open the selection filter of the sheet
@@ -480,7 +514,9 @@ cmd-set-object-position = Set the position of a placed object
 cmd-set-object-rotation = Set the rotation of a placed part or label
 cmd-set-sheet-symbol-size = Set the size of a sheet symbol
 cmd-set-symbol-parameter = Set a parameter of a placed part
+cmd-set-object-text = Set a part's designator or value, a label's name or a text note's text
 cmd-set-sheet-variable = Set a sheet variable
+cmd-set-net-tie = Mark a placed part as a net tie
 cmd-menu-assign-net-class = Assign Net Class...
 cmd-place-component = Place component
 # Noun: a component placed on the sheet.
@@ -492,6 +528,8 @@ cmd-menu-open-drc-panel = DRC
 cmd-show-drc-violation = Select a DRC violation and centre the view on it
 cmd-waive-drc-violation = Waive a DRC violation with a note
 cmd-unwaive-drc-violation = Take back the waiver of a DRC violation
+cmd-fix-drc-violation = Fix one DRC violation without waiving it
+cmd-fix-drc = Fix the DRC violations of one rule, or of every rule with a fix
 cmd-filter-drc-results = Filter the DRC results by rule, layer and severity
 cmd-open-net-classes-panel = Open the Net Classes panel of the project
 cmd-menu-open-net-classes-panel = Net Classes
@@ -670,6 +708,11 @@ cmd-menu-place-board-text-frame = Text Frame
 cmd-add-board-graphic = Add a line, arc, circle, rectangle or text frame to a board
 cmd-set-board-graphic = Set one field of a board drawing
 cmd-set-footprint-text = Set the place, angle, height or justification of a component's designator or comment
+cmd-set-footprint-position = Move a component on the board to a point
+cmd-set-footprint-rotation = Set the rotation of a component on the board
+cmd-set-footprint-side = Put a component on the top or bottom side of the board
+cmd-assign-footprint = Set the footprint of a placed part
+cmd-query-footprint-assignments = List the footprint of every part
 cmd-place-board-diff-pair = Route a differential pair side by side at its coupled width and gap, around other nets
 cmd-menu-place-board-diff-pair = Differential Pair Routing
 cmd-place-board-quick-route = Route straight to the clicked point at the rule width, without avoiding other nets
@@ -713,6 +756,7 @@ cmd-set-job-profile = Make, rename, remove or change an Export Job profile
 cmd-set-job-triggers = Set what runs an Export Job profile automatically
 cmd-stop-output-job = Stop the Export Job run going now
 cmd-view-output-job-run = View an Export Job run's files in the Gerber Viewer
+cmd-export-block-diagram = Export a block diagram as an SVG or PDF file
 cmd-select-board-net = Select every track, via and pad of a board net
 cmd-menu-select-board-net = Select Net
 cmd-highlight-board-net = Highlight a board net
@@ -724,6 +768,10 @@ cmd-swap-pins = Swap the nets of two equivalent pins of a component, on the boar
 cmd-menu-swap-pins = Swap Pins
 cmd-swap-gates = Swap two equivalent gates of a component, on the board and on its schematic
 cmd-menu-swap-gates = Swap Gates
+cmd-swap-schematic-pins = Swap the nets of two equivalent pins of a part on its schematic; Update PCB carries the swap to the board
+cmd-menu-swap-schematic-pins = Swap Pins
+cmd-swap-schematic-gates = Swap two equivalent gates of a part on its schematic; Update PCB carries the swap to the board
+cmd-menu-swap-schematic-gates = Swap Gates
 cmd-save-board-reuse-block = Save the selected placed and routed parts as a reuse block of the project
 cmd-menu-save-board-reuse-block = Save as Reuse Block
 cmd-place-board-reuse-block = Place a reuse block on the channel of the selected component
@@ -733,6 +781,11 @@ cmd-place-board-room = Draw a room by two corners: an area for the parts of one 
 cmd-menu-place-board-room = Room
 cmd-create-rooms-from-sheets = Make a room for each sheet of the project and move its parts into it
 cmd-menu-create-rooms-from-sheets = Create Rooms from Sheets...
+cmd-arrange-in-room = Pack the parts of the selected room inside it again
+cmd-menu-arrange-in-room = Arrange in Room
+# #2941: placement only; nothing is routed.
+cmd-auto-place = Place the parts of each room inside it by connection length, heat, noise and connector edges
+cmd-menu-auto-place = Auto Place in Rooms
 cmd-footprint-mode-pads = Switch footprint editor to Pads mode
 cmd-footprint-mode-sketch = Switch footprint editor to Sketch mode
 cmd-footprint-mode-view-3d = Switch footprint editor to 3D View mode
@@ -780,6 +833,13 @@ cmd-menu-compile-project = Compile Project
 cmd-open-compiled-design = Open Compiled Design panel
 cmd-menu-open-compiled-design = Compiled Design
 
+## Block diagram from the sheet hierarchy (#2968).
+
+cmd-generate-block-diagram = Generate a block diagram from the sheet hierarchy
+cmd-menu-generate-block-diagram = Generate Block Diagram
+cmd-regenerate-block-diagram = Regenerate the block diagram from the sheet hierarchy
+cmd-menu-regenerate-block-diagram = Regenerate Block Diagram
+
 ## Signal harnesses (#1280).
 
 cmd-open-harness-definitions = Open the harness definitions
@@ -787,6 +847,7 @@ cmd-open-harness-definitions = Open the harness definitions
 ## Differential pair classes (#1282).
 cmd-open-diff-pair-classes = Open the project's differential pair classes
 cmd-menu-open-diff-pair-classes = Differential Pair Classes…
+cmd-list-diff-pairs = List the differential pairs of a project's schematic
 
 ## Named unions (mockup row 158).
 cmd-create-union = Create a union from the selection
@@ -817,3 +878,59 @@ cmd-flip-gerber-view = Show the Gerber board from the bottom
 cmd-show-gerber-drills-on-top = Draw the Gerber holes over everything
 cmd-highlight-gerber-net = Highlight a net in the Gerber Viewer
 cmd-show-gerber-open-menu = Show the Gerber Viewer's Open menu
+# block-diagram
+# The block diagram document (mockup row 171, #2796): File ▸ New ▸ Block
+# Diagram and the edits its tab and the command line make.
+cmd-new-block-diagram = New block diagram in the project
+cmd-menu-new-block-diagram = Block Diagram
+cmd-block-add = Add a block to a block diagram
+cmd-block-set = Change a block of a block diagram
+cmd-block-remove = Remove a block from a block diagram
+cmd-block-port-add = Add a port to a block
+cmd-block-port-remove = Remove a port from a block
+cmd-block-link = Connect two blocks
+cmd-block-link-set = Change a block connection
+cmd-block-unlink = Remove a block connection
+cmd-block-group = Group blocks
+cmd-block-group-set = Change a block group
+cmd-block-ungroup = Remove a block group
+cmd-query-block-diagram = Query a block diagram
+# Snippets and templates (#1283): a snippet is a saved circuit fragment of
+# the project or of the user's library; a template starts a sheet or project.
+cmd-save-snippet = Save the selected circuit as a snippet
+cmd-menu-save-snippet = Save as Snippet
+cmd-place-snippet = Place a saved snippet
+cmd-menu-place-snippet = Snippet...
+cmd-list-snippets = List the snippets of the project and the library
+cmd-list-templates = List the sheet and project templates
+# design-notebook
+# The project's Design Notebook (mockup rows 195, 197, 201 and 202). "Wiki"
+# stays a search word of the notebook (mockup row 60b).
+cmd-open-design-notebook = Open the Design Notebook of the project (Wiki)
+cmd-menu-open-design-notebook = Open Design Notebook
+cmd-generate-design-notebook = Generate a design notebook from the project
+cmd-menu-generate-design-notebook = Generate from Project…
+cmd-export-notebook-pdf = Export the Design Notebook as PDF
+cmd-menu-export-notebook-pdf = Design Notebook PDF…
+cmd-toggle-notebook-badges = Show or hide the Notebook badges on the schematic
+cmd-menu-toggle-notebook-badges = Notebook Badges
+# notebook-tab
+# The Design Notebook tab's commands (mockup row 195).
+cmd-notebook-compile = Compile the project's Design Notebook and report its pages and problems
+cmd-notebook-insert = Insert a reference or a block into the open Design Notebook
+cmd-notebook-view = Set the view, the side panel or the next problem of the Design Notebook tab
+# notebook-references
+# Design Notebook references and the Notebook badges (mockup rows 196 and 197).
+cmd-notebook-references = List the notebook's references and the stale ones
+cmd-notebook-reference-card = Read the hover card of a notebook reference
+cmd-notebook-reference-picker = List what the @ reference picker offers
+cmd-notebook-badges = List the Notebook badges and their blocks
+cmd-notebook-fix-reference = Fix a stale notebook reference
+# notebook-measurements
+# Mockup row 199: the Design Notebook's readings, timelines and attachments.
+cmd-notebook-measurements = List the notebook's measurements with their results
+cmd-notebook-timeline = Show the measurement timeline of a net, part or pin
+cmd-notebook-attachments = List the notebook's attachments and their stale marks
+cmd-export-notebook-timeline = Export a measurement timeline as a CSV file
+cmd-mark-notebook-attachment-valid = Mark a stale attachment or reading as still valid
+cmd-attach-notebook-file = Copy a file into the notebook as an attachment

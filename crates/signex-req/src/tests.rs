@@ -45,9 +45,11 @@ fn facts(list: serde_json::Value) -> Facts {
         board: Board::NotListed,
         classes: Vec::new(),
         parts: None,
+        variant_parts: HashMap::new(),
         row_states: HashMap::new(),
         bom: None,
         prices: PriceBook::default(),
+        rails: Ok(std::collections::BTreeMap::new()),
         warnings: Vec::new(),
     }
 }
@@ -332,9 +334,131 @@ fn a_parts_shortfall_counts_parts_not_bom_lines() {
                 miss("R3", 1, PartProblem::Unplaced),
                 miss("R4", 1, PartProblem::NoLibrary),
             ],
+            fitted_only: true,
         })
     );
     assert_eq!(parts_shortfall(&[]), None);
+}
+
+/// Library rows `released` and `draft`, and a BOM of R1 (released,
+/// fitted), R2 (draft, fitted) and R3 (draft, not fitted).
+fn variant_facts(list: serde_json::Value) -> (Facts, BomTable) {
+    let mut facts = facts(list);
+    let released = library_row_key("lib", "r1");
+    let draft = library_row_key("lib", "r2");
+    facts.row_states = [
+        (released.clone(), "released".to_string()),
+        (draft.clone(), "draft".to_string()),
+    ]
+    .into_iter()
+    .collect();
+    let mut not_fitted = row(&["R3"], 0, Some(&draft), "");
+    not_fitted.qty = 1;
+    not_fitted.not_fitted_qty = 1;
+    let table = BomTable {
+        rows: vec![
+            row(&["R1"], 1, Some(&released), ""),
+            row(&["R2"], 1, Some(&draft), ""),
+            not_fitted,
+        ],
+        metadata: Default::default(),
+    };
+    (facts, table)
+}
+
+fn designators(report: &CheckReport) -> Vec<String> {
+    report
+        .findings
+        .iter()
+        .map(|f| f.evidence["designator"].as_str().unwrap_or("").to_string())
+        .collect()
+}
+
+/// #2686: Fitted parts only (the default) leaves out a part its variant
+/// does not fit and counts only the fitted parts; off, every listed part is
+/// checked.
+#[test]
+fn fitted_parts_only_skips_the_parts_not_fitted() {
+    let (mut all, table) = variant_facts(json!([
+        {"id": "parts", "kind": "parts_state", "fitted_only": false},
+    ]));
+    all.parts = Some(Ok(table.clone()));
+    let report = check_report(&all);
+    assert_eq!(designators(&report), ["R2", "R3"]);
+    assert_eq!(report.findings[0].evidence["parts"], json!(3));
+    assert_eq!(report.findings[0].evidence["fitted_only"], json!(false));
+
+    let (mut fitted, _) = variant_facts(json!([
+        {"id": "parts", "kind": "parts_state"},
+    ]));
+    fitted.parts = Some(Ok(table));
+    let report = check_report(&fitted);
+    assert_eq!(designators(&report), ["R2"]);
+    assert_eq!(report.findings[0].evidence["parts"], json!(2));
+    assert_eq!(report.findings[0].evidence["fitted_only"], json!(true));
+    let found: Vec<&Finding> = report.findings.iter().collect();
+    let shortfall = parts_shortfall(&found).expect("a shortfall");
+    assert!(shortfall.fitted_only);
+    assert_eq!((shortfall.missed, shortfall.of), (1, 2));
+}
+
+/// #2686: a requirement naming a variant checks that variant's BOM, not
+/// the active one; a variant whose BOM was not built is not checked.
+#[test]
+fn a_named_variant_checks_its_own_bom() {
+    let list = json!([
+        {"id": "active", "kind": "parts_state"},
+        {"id": "lite", "kind": "parts_state", "variant": " Lite "},
+        {"id": "gone", "kind": "parts_state", "variant": "Gone"},
+    ]);
+    let (mut facts, table) = variant_facts(list);
+    facts.parts = Some(Ok(BomTable {
+        rows: table.rows[..1].to_vec(),
+        metadata: Default::default(),
+    }));
+    facts
+        .variant_parts
+        .insert(variant_key("lite"), Ok(table.clone()));
+    facts.variant_parts.insert(
+        variant_key("gone"),
+        Err("the project has no variant `Gone`".into()),
+    );
+    let report = check_report(&facts);
+    assert!(report.passed.contains(&"req::active".to_string()));
+    let lite: Vec<&Finding> = report
+        .findings
+        .iter()
+        .filter(|f| f.rule == "req::lite")
+        .collect();
+    assert_eq!(lite.len(), 1, "R2 in Lite's BOM; R3 is not fitted");
+    assert_eq!(lite[0].evidence["designator"], json!("R2"));
+    assert_eq!(lite[0].evidence["variant"], json!("Lite"));
+    let gone: Vec<&str> = report
+        .findings
+        .iter()
+        .filter(|f| f.rule == "req::gone")
+        .map(|f| f.message.as_str())
+        .collect();
+    assert_eq!(
+        gone,
+        ["The parts could not be listed: the project has no variant `Gone`"]
+    );
+}
+
+/// #2686: the app builds one BOM per variant the switched-on Part
+/// lifecycle requirements name, each name once whatever its case.
+#[test]
+fn part_variants_lists_each_named_variant_once() {
+    let list = entries(json!([
+        {"id": "a", "kind": "parts_state", "variant": "Lite"},
+        {"id": "b", "kind": "parts_state", "variant": " lite"},
+        {"id": "c", "kind": "parts_state"},
+        {"id": "d", "kind": "parts_state", "variant": "Base"},
+        {"id": "e", "kind": "parts_state", "variant": "Pro", "enabled": false},
+        {"id": "f", "kind": "erc_clean"},
+    ]));
+    assert_eq!(part_variants(&list), ["Lite", "Base"]);
+    assert_eq!(variant_key(" LiTe "), "lite");
 }
 
 /// Findings that are not per-part ones are no parts shortfall; the card
@@ -547,4 +671,80 @@ fn a_turned_off_requirement_is_not_checked_needs_nothing_and_says_so() {
         "{:?}",
         report.warnings
     );
+}
+
+#[test]
+fn a_layer_count_passes_within_its_limits_and_says_the_count_when_not() {
+    let list = json!([
+        {"id": "two_to_four", "kind": "layer_count", "min_layers": 2, "max_layers": 4},
+        {"id": "six_up", "kind": "layer_count", "min_layers": 6},
+        {"id": "upside_down", "kind": "layer_count", "min_layers": 4, "max_layers": 2},
+    ]);
+    let mut facts = facts(list);
+    assert_eq!(
+        Needs::of(&facts.requirements),
+        Needs {
+            board: true,
+            ..Needs::default()
+        }
+    );
+    facts.board = read_board(SetupProfile::Custom.pcb(4).new_board());
+    let report = check_report(&facts);
+    assert_eq!(report.passed, ["req::two_to_four"]);
+    let under = report
+        .findings
+        .iter()
+        .find(|f| f.rule == "req::six_up")
+        .expect("a finding");
+    assert_eq!(under.evidence["count"], json!(4));
+    assert_eq!(under.evidence["min_layers"], json!(6));
+    assert_eq!(under.sheet, BOARD);
+    assert!(rules(&report).contains(&"req::upside_down"));
+
+    let mut no_board = facts.clone();
+    no_board.board = Board::NotListed;
+    assert!(
+        check_report(&no_board).passed.is_empty(),
+        "no board is no pass"
+    );
+}
+
+#[test]
+fn a_rail_budget_passes_on_one_project_and_fails_on_another() {
+    let list = json!([
+        {"id": "core", "kind": "rail_budget", "net": "+1V8", "voltage": 1.8,
+         "margin_percent": 20},
+    ]);
+    let rail = |load: &str| {
+        let mut facts = facts(list.clone());
+        facts.rails = Ok(std::collections::BTreeMap::from([(
+            "+1V8".to_string(),
+            signex_types::project::RailSpec {
+                voltage: 1.8,
+                tolerance_percent: None,
+            },
+        )]));
+        let mut source = row(&["U1"], 1, None, "LDO");
+        source
+            .custom
+            .insert("Rail Supply +1V8".into(), "500mA".into());
+        let mut sink = row(&["U2"], 1, None, "MCU");
+        sink.custom.insert("Rail Load +1V8".into(), load.into());
+        facts.parts = Some(Ok(BomTable {
+            rows: vec![source, sink],
+            ..BomTable::default()
+        }));
+        check_report(&facts)
+    };
+    let met = rail("0.3");
+    assert_eq!(met.passed, ["req::core"]);
+    assert!(met.findings.is_empty(), "{:?}", met.findings);
+    let over = rail("450mA");
+    assert!(over.passed.is_empty());
+    assert_eq!(rules(&over), ["req::core"]);
+    let evidence = &over.findings[0].evidence;
+    assert_eq!(evidence["kind"], "rail_budget");
+    assert_eq!(evidence["rail"]["net"], "+1V8");
+    assert_eq!(evidence["rail"]["loads"][0]["designator"], "U2");
+    assert_eq!(rail("450mA").keys(), rail("480mA").keys(), "the key holds");
 }

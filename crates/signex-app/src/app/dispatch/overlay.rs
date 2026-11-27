@@ -52,7 +52,7 @@ impl Signex {
                 })
             }
             OverlayMsg::LinkOpenFailed(detail) => {
-                self.document_state.error_notice =
+                self.document_view.error_notice =
                     Some(crate::app::state::ErrorNotice::link(detail));
                 Task::none()
             }
@@ -76,13 +76,13 @@ impl Signex {
                 // Inlined rather than a handler in `menu/export`, which
                 // is where it used to live: the card is not export-only
                 // (#532), so neither is clearing it.
-                self.document_state.error_notice = None;
+                self.document_view.error_notice = None;
                 Task::none()
             }
             OverlayMsg::DiskConflictOverwriteChosen => self.handle_disk_conflict_overwrite(),
             OverlayMsg::DiskConflictReloadChosen => self.handle_disk_conflict_reload(),
             OverlayMsg::DiskConflictSaveAsChosen => self.handle_disk_conflict_save_as(),
-            OverlayMsg::ErrorNoticeCopyPressed => match &self.document_state.error_notice {
+            OverlayMsg::ErrorNoticeCopyPressed => match &self.document_view.error_notice {
                 Some(notice) => {
                     iced::clipboard::write(notice.copy_text(&self.ui_state.i18n)).discard()
                 }
@@ -160,6 +160,8 @@ impl Signex {
             ProjectMsg::CloseConfirm(choice) => self.handle_project_close_choice(choice),
             ProjectMsg::AssignFootprints(msg) => self.dispatch_assign_footprints_message(msg),
             ProjectMsg::CompiledDesign(msg) => self.dispatch_compiled_design_message(msg),
+            ProjectMsg::BlockDiagramSync(msg) => self.dispatch_block_diagram_sync_message(msg),
+            ProjectMsg::VariantPartEdit(msg) => self.dispatch_variant_part_edit_message(msg),
             ProjectMsg::CloseRefsResolved { project_id, result } => {
                 self.handle_close_refs_resolved(project_id, result)
             }
@@ -200,6 +202,7 @@ impl Signex {
             ProjectMsg::AppQuitConfirm(choice) => self.handle_app_quit_choice(choice),
             ProjectMsg::Tab(msg) => self.dispatch_project_tab_message(msg),
             ProjectMsg::Rules(msg) => self.dispatch_rules_tab_message(msg),
+            ProjectMsg::Notebook(msg) => self.dispatch_notebook_message(msg),
             ProjectMsg::Git(msg) => self.dispatch_project_git_message(msg),
             ProjectMsg::FileSaved(done) => self.handle_project_file_saved(*done),
             ProjectMsg::AddExistingFilePicked { project_id, paths } => {
@@ -352,6 +355,7 @@ impl Signex {
                 x,
                 y,
                 world,
+                hit_object: self.sheet_object_at(world),
                 window,
             });
         }
@@ -520,6 +524,7 @@ impl Signex {
             ContextMenuMsg::Action(action) => {
                 let menu = self.interaction_state.context_menu.take();
                 let opened_at = menu.as_ref().and_then(|menu| menu.world);
+                let anchor = menu.as_ref().map_or((0.0, 0.0), |menu| (menu.x, menu.y));
                 // The window the canvas menu opened in; `None` is the main one.
                 let menu_window = menu.and_then(|menu| menu.window);
                 // The project tree's menu closes with the canvas one: a row of
@@ -565,6 +570,13 @@ impl Signex {
                     }
                     ContextAction::NewVariant(project_id) => {
                         self.open_variant_manager_of(project_id, true)
+                    }
+                    ContextAction::VariantFit { parts, fitted } => {
+                        self.pick_channel_fit(parts, Some(fitted));
+                        Task::none()
+                    }
+                    ContextAction::VariantPartEdit(kind) => {
+                        self.open_variant_part_edit(kind, anchor, menu_window)
                     }
                 }
             }
@@ -692,6 +704,7 @@ impl Signex {
             ErcMsg::RunFinished { generation, result } => {
                 self.handle_erc_run_finished(generation, &result)
             }
+            ErcMsg::Live(msg) => self.dispatch_live_erc_message(msg),
             ErcMsg::StoreRulesInProject => self.handle_store_erc_rules_in_project(),
             ErcMsg::PinJunctionRepairRequested => {
                 self.repair_pin_junctions();
@@ -974,7 +987,7 @@ impl Signex {
         interaction.submenu_launcher_hovered = None;
         interaction.submenu_panel_hovered = false;
         interaction.submenu_unhovered_since = None;
-        self.document_state.dock.tab_menu = None;
+        self.document_view.dock.tab_menu = None;
         self.library.components_panel.row_menu = None;
         self.ui_state.tab_overflow_menu_open = false;
     }

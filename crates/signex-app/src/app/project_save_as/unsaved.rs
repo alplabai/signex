@@ -117,8 +117,8 @@ impl Signex {
         }
         let now = chrono::Utc::now();
         if let Some(editor) = docs.symbol_editors.get(path) {
-            let mut file = editor.file.clone();
-            let changed = file.changed_since(&editor.baseline);
+            let mut file = editor.draft.file.clone();
+            let changed = file.changed_since(&editor.draft.baseline);
             for symbol in &mut file.symbols {
                 if changed.contains(&symbol.uuid) {
                     symbol.updated = now;

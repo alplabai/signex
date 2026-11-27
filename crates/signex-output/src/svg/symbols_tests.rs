@@ -411,7 +411,7 @@ fn body_fills(sheet: &SchematicSheet, tint: Option<(f32, f32, f32)>) -> Vec<(f32
         sheet,
         &xform,
         &palette,
-        &HashSet::new(),
+        &NotFitted::default(),
         &mut LayerSpans::default(),
     );
     out.iter()

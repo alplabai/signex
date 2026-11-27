@@ -37,7 +37,7 @@ fn texts(ctx: &PanelContext, view: &NetInspectorView) -> Vec<String> {
 #[test]
 fn the_hovered_net_row_shows_highlight_and_its_press_highlights_the_net() {
     let (app, _boot) = crate::app::Signex::new();
-    let ctx = app.document_state.panel_ctx.clone();
+    let ctx = app.document_view.panel_ctx.clone();
     let quiet = view_hovering(None);
     assert!(
         !texts(&ctx, &quiet).iter().any(|t| t == "Highlight"),
@@ -68,7 +68,7 @@ fn the_hovered_net_row_shows_highlight_and_its_press_highlights_the_net() {
 #[test]
 fn a_press_on_the_net_name_still_folds_the_row() {
     let (app, _boot) = crate::app::Signex::new();
-    let ctx = app.document_state.panel_ctx.clone();
+    let ctx = app.document_view.panel_ctx.clone();
     let view = view_hovering(None);
     let pressed = messages_on_click(list(&ctx, &view), WINDOW, "GND");
     assert!(

@@ -55,6 +55,9 @@ pub struct SchematicPalette {
     pub harness: (f32, f32, f32),
     /// Harness connector and entry fill.
     pub harness_soft: (f32, f32, f32),
+    /// The theme's error ink (`CanvasColors::erc_error`): the not-fitted
+    /// cross (#1294, decision of 2026-11-25).
+    pub error: (f32, f32, f32),
 }
 
 impl SchematicPalette {
@@ -87,6 +90,7 @@ impl SchematicPalette {
             field_text: (0.1, 0.1, 0.1),
             harness: (0.42, 0.31, 0.63),
             harness_soft: (0.94, 0.92, 0.97),
+            error: (0.66, 0.19, 0.12),
         }
     }
 }
@@ -133,6 +137,7 @@ impl From<&CanvasColors> for SchematicPalette {
             field_text: rgb(c.reference),
             harness: rgb(c.harness_color()),
             harness_soft: rgb(c.harness_soft_color()),
+            error: rgb(c.erc_error),
         }
     }
 }
@@ -181,6 +186,16 @@ mod tests {
         let pal = SchematicPalette::from(&graphite);
         assert_ne!(pal.bus, pal.wire, "fixture needs distinct wire and bus");
         assert_ne!(pal.bus_entry, pal.bus);
+    }
+
+    #[test]
+    fn the_error_ink_is_the_themes_error_token() {
+        for id in ThemeId::BUILTINS {
+            let colors = canvas_colors(*id);
+            let pal = SchematicPalette::from(&colors);
+            assert_eq!(pal.error, rgb(colors.erc_error), "{id:?}");
+            assert_ne!(pal.error, pal.symbol_stroke, "{id:?}");
+        }
     }
 
     #[test]

@@ -54,7 +54,7 @@ impl Signex {
     /// The stored rule text's table, as the tab's analysis holds it.
     fn rules_table(&self, id: ProjectId) -> RuleTable {
         let analysed = self
-            .document_state
+            .document_view
             .project_tabs
             .get(&id)
             .and_then(|tab| tab.rules.analysis.as_ref())
@@ -125,7 +125,7 @@ impl Signex {
         let sets = self.rules_sets(id);
         let mut source = self.rules_row_source(id, &table);
         let i18n = &self.ui_state.i18n;
-        let Some(tab) = self.document_state.project_tabs.get_mut(&id) else {
+        let Some(tab) = self.document_view.project_tabs.get_mut(&id) else {
             return;
         };
         let state = &mut tab.rules;
@@ -169,7 +169,7 @@ impl Signex {
         let table = self.rules_table(id);
         let sets = self.rules_sets(id);
         let i18n = &self.ui_state.i18n;
-        let Some(tab) = self.document_state.project_tabs.get_mut(&id) else {
+        let Some(tab) = self.document_view.project_tabs.get_mut(&id) else {
             return;
         };
         let grid = &mut tab.rules.grid;
@@ -199,7 +199,7 @@ impl Signex {
             }
             GridMessage::ColumnQueryChanged(query) => {
                 let i18n = &self.ui_state.i18n;
-                if let Some(tab) = self.document_state.project_tabs.get_mut(&id) {
+                if let Some(tab) = self.document_view.project_tabs.get_mut(&id) {
                     tab.rules.find.typed(query, i18n);
                 }
                 self.jump_to_found(id)
@@ -461,7 +461,7 @@ impl Signex {
     pub(super) fn refresh_rules_drawing(&mut self, id: ProjectId) {
         let sets = self.rules_sets(id);
         let i18n = &self.ui_state.i18n;
-        let Some(tab) = self.document_state.project_tabs.get_mut(&id) else {
+        let Some(tab) = self.document_view.project_tabs.get_mut(&id) else {
             return;
         };
         let state = &mut tab.rules;
@@ -501,11 +501,12 @@ impl Signex {
             return None;
         };
         let docs = &self.document_state;
+        let document_view = &self.document_view;
         let shown = docs.tab_shown_in_window(window, &self.ui_state)?;
         let TabKind::Rules(id) = shown.kind.clone() else {
             return None;
         };
-        let tab = docs.project_tabs.get(&id)?;
+        let tab = document_view.project_tabs.get(&id)?;
         drawing::key_message(&tab.rules.drawing, key, *modifiers).map(|msg| {
             Message::Project(ProjectMsg::Rules(RulesTabMsg::PreviewActed {
                 project_id: id,

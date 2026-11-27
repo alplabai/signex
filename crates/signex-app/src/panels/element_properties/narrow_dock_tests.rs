@@ -138,7 +138,7 @@ fn a_seven_character_value_fits_side_by_side_at_300_px() {
 /// is `pin2_hidden` ("Yes" / "No").
 fn two_pin_ctx(pin2_hidden: &str) -> crate::panels::PanelContext {
     let (app, _task) = crate::app::Signex::new();
-    let mut ctx = app.document_state.panel_ctx.clone();
+    let mut ctx = app.document_view.panel_ctx.clone();
     ctx.selection_info = vec![
         ("Type".into(), "Symbol".into()),
         ("Pin: 1".into(), "A\tPassive\tNo".into()),

@@ -43,7 +43,7 @@ pub fn tree_style(tokens: &ThemeTokens) -> TreeStyle {
 }
 
 /// Short kind badge of a document row, with its tint: SCH info, PCB ok,
-/// LIB violet, BOM warn, OUT neutral.
+/// LIB violet, BOM warn, OUT and BLK (a block diagram) neutral.
 fn kind_badge(node: &TreeNode) -> Option<(&'static str, BadgeTone)> {
     // File-extension match, not UI text: ASCII lowercase in every language.
     // ast-grep-ignore: no-case-in-view
@@ -59,6 +59,7 @@ fn kind_badge(node: &TreeNode) -> Option<(&'static str, BadgeTone)> {
         TreeIcon::SnxSchematic | TreeIcon::Schematic | TreeIcon::Sheet => "SCH",
         TreeIcon::SnxPcb | TreeIcon::Pcb => "PCB",
         TreeIcon::SnxLibrary | TreeIcon::SnxSymbol | TreeIcon::SnxFootprint => "LIB",
+        TreeIcon::SnxBlockDiagram => return Some(("BLK", BadgeTone::Neutral)),
         _ => return None,
     };
     Some((tag, kind_tone(node.icon)?))
@@ -439,7 +440,7 @@ mod summary_tests {
 
     fn context() -> PanelContext {
         let (app, _boot) = crate::app::Signex::new();
-        app.document_state.panel_ctx.clone()
+        app.document_view.panel_ctx.clone()
     }
 
     fn texts(ctx: &PanelContext) -> Vec<String> {

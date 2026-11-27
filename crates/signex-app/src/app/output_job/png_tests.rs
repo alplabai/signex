@@ -89,5 +89,5 @@ fn the_palette_row_writes_the_pages_into_the_picked_folder() {
     let expect = |mm: f64| (mm / 25.4 * f64::from(DEFAULT_PNG_DPI)) as u32;
     assert!(w.max(h).abs_diff(expect(210.0)) <= 2, "{w} x {h}");
     assert!(w.min(h).abs_diff(expect(148.0)) <= 2, "{w} x {h}");
-    assert!(app.document_state.error_notice.is_none());
+    assert!(app.document_view.error_notice.is_none());
 }

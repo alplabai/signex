@@ -45,10 +45,10 @@ fn stage(mode: &PickerMode) -> Option<(&ChangeSession, Option<&ChangePreview>)> 
     }
 }
 
-/// Whether Change applies: a comparison is shown and the list still shows
-/// and picks the part it compares.
+/// Whether Change applies: a comparison is shown, its pin mapping can be
+/// followed, and the list still shows and picks the part it compares.
 fn can_apply(picker: &PickerState, change: Option<&ChangePreview>) -> bool {
-    let Some(change) = change else {
+    let Some(change) = change.filter(|c| c.preview.refused.is_none()) else {
         return false;
     };
     picker.shown_selection().is_some_and(|(_, summary)| {

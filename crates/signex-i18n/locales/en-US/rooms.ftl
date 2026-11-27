@@ -96,3 +96,23 @@ rooms-no-project = Create Rooms from Sheets: the board in view is in no open pro
 rooms-read-failed = Create Rooms from Sheets: the sheets could not be read: { $why }
 rooms-no-sheets = Create Rooms from Sheets: no sheet is placed under the root sheet.
 rooms-kept = Room { $room } already exists and was kept.
+
+## Arrange in Room and Auto Place in Rooms
+rooms-undo-arrange = Arrange in room
+rooms-undo-auto-place = Auto place in rooms
+rooms-arranged = Room { $room }: { $moved } parts arranged; { $outside } did not fit and went below it.
+rooms-auto-placed = Auto Place: { $moved } parts placed in { $rooms } rooms; { $unplaced } did not fit and stayed.
+rooms-select-one = Arrange in Room: select one room first.
+
+## Refusals of the rooms commands run with operands
+rooms-board-no-project = { $board } is in no open project with a root sheet.
+rooms-no-rooms = The board has no rooms.
+rooms-unknown-room = The board has no room { $room }.
+rooms-name-taken = The board already has a room named { $room }.
+rooms-bad-side = `side` is top, bottom or both, not { $side }.
+rooms-bad-shape = `shape` is around_parts or even_grid, not { $shape }.
+rooms-bad-sheet = `sheet` is a sheet placement written /<uuid>/.., not { $sheet }.
+rooms-bad-corners = `corners` is three or more points <x>,<y>;<x>,<y>;.. in mm, not { $corners }.
+rooms-outline-needed = Give the room's outline as `start` and `end`, or as `corners`, not both.
+rooms-no-area = The room's outline has no area.
+rooms-bad-weights = The weights were not read: { $why }

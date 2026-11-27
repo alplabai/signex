@@ -755,6 +755,7 @@ pub mod catalog;
 mod dock_layout;
 pub mod document_report;
 mod erc;
+mod extension_prefs;
 mod fast_grids;
 mod language;
 mod layer_strip;
@@ -792,6 +793,7 @@ pub use prefs_file::{
 pub use board_views::*;
 pub use dock_layout::*;
 pub use erc::*;
+pub use extension_prefs::*;
 pub use fast_grids::*;
 pub use language::*;
 pub use layer_strip::*;

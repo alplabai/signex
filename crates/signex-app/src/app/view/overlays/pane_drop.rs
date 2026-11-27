@@ -57,7 +57,7 @@ impl Signex {
         let name = self.document_state.tabs.get(tab)?.title.clone();
         let second_view = self.ui_state.workspace_layouts.panes.second_view_held;
         let i18n = self.ui_state.i18n.as_ref();
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let ink = crate::styles::tokens::resolve(tokens).accent_text;
         let label = text(signex_i18n::t!(i18n, drop_line(edge, second_view), "name" => name))
             .size(TS.body)

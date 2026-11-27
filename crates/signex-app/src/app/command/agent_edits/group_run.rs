@@ -11,7 +11,9 @@ use serde_json::{Value, json};
 use signex_engine::{CommandResult, DocumentPatch, Engine, EngineError, UndoGroupId};
 
 use super::apply::{Prepared, Ran, file_name, refused};
-use crate::app::{Message, Signex, UndoGroupKind, UndoGroupSheets};
+use super::joined::{joined_paths, roll_back_joined, settle_joined, take_joined};
+use crate::app::state::JoinedSheet;
+use crate::app::{Message, Signex};
 
 use super::super::CommandOutcome;
 
@@ -51,7 +53,7 @@ fn begin_all(app: &mut Signex, sheets: &[PathBuf]) -> Result<(), String> {
     Ok(())
 }
 
-fn rollback_all(app: &mut Signex, sheets: &[PathBuf]) {
+pub(super) fn rollback_all(app: &mut Signex, sheets: &[PathBuf]) {
     for path in sheets {
         if let Some(engine) = app.document_state.engines.get_mut(path) {
             engine.rollback_transaction();
@@ -66,6 +68,9 @@ struct Executed {
     results: Vec<Value>,
     owed: HashMap<PathBuf, DocumentPatch>,
     failure: Option<String>,
+    /// Sheets an edit wrote without the call naming them (#2501); they
+    /// commit and roll back with the named ones.
+    joined: Vec<JoinedSheet>,
 }
 
 /// Run every edit with the target set to the sheet it acts on. The refresh a
@@ -78,6 +83,7 @@ fn run_edits(app: &mut Signex, sheets: &[PathBuf], edits: &[Prepared]) -> Execut
         results: Vec::new(),
         owed: HashMap::new(),
         failure: None,
+        joined: Vec::new(),
     };
     for (index, edit) in edits.iter().enumerate() {
         let state = &mut app.document_state.agent_edits;
@@ -114,6 +120,7 @@ fn run_edits(app: &mut Signex, sheets: &[PathBuf], edits: &[Prepared]) -> Execut
             }
         }
     }
+    ran.joined = take_joined(app);
     let state = &mut app.document_state.agent_edits;
     state.target = None;
     state.listing = false;
@@ -186,8 +193,13 @@ fn run_listed(
     let ran = run_edits(app, sheets, edits);
     if let Some(reason) = ran.failure {
         rollback_all(app, sheets);
+        roll_back_joined(app, &ran.joined);
         return refused(format!("{reason}. Nothing was applied"));
     }
+    let all: Vec<PathBuf> = (sheets.iter().cloned())
+        .chain(joined_paths(&ran.joined))
+        .collect();
+    let sheets = all.as_slice();
     // With one sheet the commit itself refuses, and nothing has landed to take
     // back; with several, no engine may commit until every one can.
     let ready = sheets.len() < 2
@@ -199,6 +211,7 @@ fn run_listed(
         });
     if !ready {
         rollback_all(app, sheets);
+        roll_back_joined(app, &ran.joined);
         return refused("a sheet's transaction cannot commit. Nothing was applied");
     }
     let group = app.mint_undo_group();
@@ -207,6 +220,9 @@ fn run_listed(
     }) {
         Ok(landed) => landed,
         Err(why) => {
+            // Taken back or rolled back already; a sheet loaded for the step
+            // goes too.
+            roll_back_joined(app, &ran.joined);
             if sheets.len() > 1 {
                 // Past the readiness check this does not happen.
                 crate::diagnostics::log_error(
@@ -242,6 +258,13 @@ fn finish(
         .filter(|(_, changed)| *changed)
         .map(|(path, _)| path.clone())
         .collect();
+    // A joined sheet the edits left unchanged is dropped, and not listed: the
+    // call did not name it.
+    settle_joined(app, group, &changed, &ran.joined);
+    let landed: Vec<(PathBuf, bool)> = (landed.iter())
+        .filter(|(path, changed)| *changed || !ran.joined.iter().any(|j| &j.path == path))
+        .cloned()
+        .collect();
     let revision_of = |app: &Signex, path: &Path| {
         app.document_state
             .engines
@@ -255,16 +278,6 @@ fn finish(
         app.document_state
             .agent_edits
             .record_step(group, label.clone(), &app.agent.origin);
-        if changed.len() > 1 {
-            app.set_undo_group_sheets(
-                group,
-                UndoGroupSheets {
-                    live: changed.clone(),
-                    kind: UndoGroupKind::AgentEdit,
-                    ..UndoGroupSheets::default()
-                },
-            );
-        }
         for path in &changed {
             let owed = ran.owed.get(path).copied().unwrap_or_default();
             let patch = if owed == DocumentPatch::NONE {

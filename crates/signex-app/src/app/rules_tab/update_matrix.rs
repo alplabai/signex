@@ -210,12 +210,7 @@ impl Signex {
         self.sync_rules_matrix(id);
         let book = self.matrix_book(id);
         let format = LengthFormat::new(&self.ui_state.i18n, Unit::Mm);
-        let tab = &mut self
-            .document_state
-            .project_tabs
-            .entry(id)
-            .or_default()
-            .rules;
+        let tab = &mut self.document_view.project_tabs.entry(id).or_default().rules;
         tab.matrix.update(msg, &book.values(), format)
     }
 

@@ -166,7 +166,7 @@ fn a_matrix_cell_typed_in_writes_one_rule_as_one_undo_step() {
     let _ = app.view_rules_tab(id);
     // An empty cell falls back, greyed, to what the pair needs without it:
     // the board-wide `base` 0.2 mm, which wins over the HV class value.
-    let analysis = app.document_state.project_tabs[&id]
+    let analysis = app.document_view.project_tabs[&id]
         .rules
         .analysis
         .as_ref()
@@ -192,7 +192,7 @@ fn a_matrix_cell_typed_in_writes_one_rule_as_one_undo_step() {
         "rule cc_LV_HV on clearance when class == \"LV\" and other_class == \"HV\" require clearance >= 0.8mm then error"
     ));
     assert_eq!(undo_steps(&app, id), 1);
-    let tab = &app.document_state.project_tabs[&id].rules;
+    let tab = &app.document_view.project_tabs[&id].rules;
     assert!(tab.matrix_edit.is_none());
     assert!(tab.matrix.edit().is_none(), "the cell closed");
     assert_eq!(tab.matrix_open, Some(("LV".into(), "HV".into())));
@@ -255,7 +255,7 @@ fn a_bad_matrix_value_is_refused_and_changes_nothing() {
         &mut app,
         RulesTabMsg::MatrixCellCommitted { project_id: id },
     );
-    let tab = &app.document_state.project_tabs[&id].rules;
+    let tab = &app.document_view.project_tabs[&id].rules;
     assert!(tab.refused.is_some());
     assert!(tab.matrix_edit.is_some(), "the cell stays open");
     assert_eq!(dsl(&app), TEXT);
@@ -515,7 +515,7 @@ fn a_tier_preset_shows_its_diff_then_applies_as_one_undo_step() {
             preset: "tier:standard".into(),
         },
     );
-    let preview = app.document_state.project_tabs[&id]
+    let preview = app.document_view.project_tabs[&id]
         .rules
         .preview
         .clone()
@@ -547,7 +547,7 @@ fn a_tier_preset_shows_its_diff_then_applies_as_one_undo_step() {
             "rule fab_via on via require diameter >= 0.5mm and drill >= 0.25mm then error"
         )
     );
-    assert!(app.document_state.project_tabs[&id].rules.preview.is_none());
+    assert!(app.document_view.project_tabs[&id].rules.preview.is_none());
     assert_eq!(undo_steps(&app, id), 1);
     command(&mut app, "undo");
     assert_eq!(dsl(&app), TEXT);
@@ -571,7 +571,7 @@ fn a_preview_of_rules_that_moved_since_is_refused() {
         &["class_a=HV", "class_b=LV", "value=0.8mm"],
     );
     send(&mut app, RulesTabMsg::PresetApplied { project_id: id });
-    let tab = &app.document_state.project_tabs[&id].rules;
+    let tab = &app.document_view.project_tabs[&id].rules;
     assert!(
         tab.refused
             .as_deref()
@@ -673,7 +673,7 @@ fn only_the_lower_triangle_of_the_matrix_is_edited() {
     // the live cell (1, 0) before the widget sees it.
     let mirror = ClassPair { row: 0, col: 1 };
     act(&mut app, id, MatrixMessage::CellPressed(mirror));
-    let tab = &app.document_state.project_tabs[&id].rules;
+    let tab = &app.document_view.project_tabs[&id].rules;
     assert_eq!(tab.matrix.pinned(), Some(ClassPair { row: 1, col: 0 }));
     assert_eq!(tab.matrix_open, Some(("LV".into(), "HV".into())));
     assert_eq!(tab.matrix_pin, Some(CellKey::new("LV", "HV")));
@@ -839,7 +839,7 @@ fn a_tier_card_previews_old_and_new_values_and_applies_as_one_step() {
             },
         );
         let _ = app.view_rules_tab(id);
-        let preview = app.document_state.project_tabs[&id]
+        let preview = app.document_view.project_tabs[&id]
             .rules
             .preview
             .clone()
@@ -851,7 +851,7 @@ fn a_tier_card_previews_old_and_new_values_and_applies_as_one_step() {
             .expect("the clearance floor changes");
         assert_eq!(super::presets::change_values(clearance), values, "{tier}");
         send(&mut app, RulesTabMsg::PresetApplied { project_id: id });
-        assert!(app.document_state.project_tabs[&id].rules.preview.is_none());
+        assert!(app.document_view.project_tabs[&id].rules.preview.is_none());
         assert_eq!(undo_steps(&app, id), steps, "one undo step per apply");
     }
     assert!(dsl(&app).contains("rule fab_clearance on clearance require clearance >= 0.1mm"));
@@ -880,7 +880,7 @@ fn a_matrix_cell_stores_its_length_as_typed() {
         assert_eq!(shown_at(&app, id, &key), Some(Shown::Written(mm)));
         assert_eq!(undo_steps(&app, id), step + 1);
         assert!(
-            app.document_state.project_tabs[&id]
+            app.document_view.project_tabs[&id]
                 .rules
                 .matrix
                 .edit()

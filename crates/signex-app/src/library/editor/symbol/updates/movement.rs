@@ -9,7 +9,7 @@ pub(super) fn apply_symbol_move(editor: &mut SymEditor, msg: SymbolEditorMsg) {
     // A click that never moved a field must not store a position, push an
     // undo entry or dirty the document.
     if let (SymbolEditorMsg::MoveSelected { x, y }, Some(SymbolSelection::Field(key))) =
-        (&msg, &editor.selected)
+        (&msg, &editor.gui.selected)
         && crate::library::editor::symbol::state::field_move_is_noop(
             editor.primitive(),
             *key,
@@ -20,13 +20,13 @@ pub(super) fn apply_symbol_move(editor: &mut SymEditor, msg: SymbolEditorMsg) {
     {
         return;
     }
-    if !editor.mid_drag {
-        editor.drag_corner_radius = None;
+    if !editor.draft.is_moving() {
+        editor.gui.drag_corner_radius = None;
     }
     begin_drag_if_needed(editor);
     match msg {
         SymbolEditorMsg::MoveSelected { x, y } => {
-            let selected = editor.selected.clone();
+            let selected = editor.gui.selected.clone();
             crate::library::editor::symbol::state::move_selected(
                 editor.primitive_mut(),
                 selected,
@@ -34,7 +34,7 @@ pub(super) fn apply_symbol_move(editor: &mut SymEditor, msg: SymbolEditorMsg) {
                 y,
             );
         }
-        SymbolEditorMsg::MoveAll { dx, dy } => match &editor.selected {
+        SymbolEditorMsg::MoveAll { dx, dy } => match &editor.gui.selected {
             Some(SymbolSelection::Multiple {
                 pin_indices,
                 graphic_indices,
@@ -87,14 +87,14 @@ fn stored_corner_radius(editor: &SymEditor, idx: usize) -> Option<f64> {
 /// clamp that follows the move depends only on the new size.
 fn rewind_drag_radius(editor: &mut SymEditor, idx: usize) {
     let Some(stored) = stored_corner_radius(editor, idx) else {
-        editor.drag_corner_radius = None;
+        editor.gui.drag_corner_radius = None;
         return;
     };
-    let start = match editor.drag_corner_radius {
+    let start = match editor.gui.drag_corner_radius {
         Some((i, start, last)) if i == idx && last == stored => start,
         _ => stored,
     };
-    editor.drag_corner_radius = Some((idx, start, stored));
+    editor.gui.drag_corner_radius = Some((idx, start, stored));
     if let Some(SymbolGraphicKind::RoundRectangle { corner_radius, .. }) = editor
         .primitive_mut()
         .graphics
@@ -108,7 +108,7 @@ fn rewind_drag_radius(editor: &mut SymEditor, idx: usize) {
 /// Record the radius this tick wrote.
 fn note_drag_radius(editor: &mut SymEditor, idx: usize) {
     let written = stored_corner_radius(editor, idx);
-    if let (Some((_, _, last)), Some(written)) = (editor.drag_corner_radius.as_mut(), written) {
+    if let (Some((_, _, last)), Some(written)) = (editor.gui.drag_corner_radius.as_mut(), written) {
         *last = written;
     }
 }

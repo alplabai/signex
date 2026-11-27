@@ -5,13 +5,27 @@
 //! the Rules manager reads `rules_list`, `rules_get`, `rules_effective`,
 //! `rules_explain`, `rules_conflicts`, `rules_matrix_get` and
 //! `rules_preset_diff` (#2398, `app::rules_tab`; a profile preset reads the
-//! rule profile library, read off the update loop first), and the board
+//! rule profile library, read off the update loop first), the notebook's
+//! `notebook_measurements`, `notebook_timeline` and `notebook_attachments`
+//! (mockup row 199, `app::notebook_measurements`), and the board
 //! queries `measure_board`, `query_board_nets` and `find_similar_items`
-//! (#2403), `board_panel` (#2410, `app::board_panel`), and the Project tab's
-//! `project_settings` (#1689-#1693, `app::project_tab`),
-//! `query_cross_references` (#1273), answered once the project's net index
-//! is current, and `project_checklist` (#1291, with the last run of the
-//! checklist's checks). Each
+//! (#2403), `board_panel` (#2410, `app::board_panel`), the layout plan's
+//! `layout_plan_get` and `layout_plan_status` (#2942, `app::layout_plan`),
+//! the Project tab's `project_settings` (#1689-#1693, `app::project_tab`)
+//! with the Variant Manager's `compare_variants` and `variant_bom` (#2949),
+//! `project_checklist` (#1291, with the last run of the checklist's checks),
+//! `list_snippets` and `list_templates` (#1283, `app::design_reuse`),
+//! `query_net_ties` (#1277), the BOM's `bom_lines` (#1988), the project's
+//! differential pairs `list_diff_pairs` (#2952, `app::diff_pair_classes`),
+//! `query_footprint_assignments` (#2937, `footprint_assign_operands`),
+//! `check_board_against_schematic` (#2462, `app::compare_board`),
+//! `board_status` (#2460), `query_rail_budget` (#2943), the BOM and part
+//! search queries `query_bom` (#2938) and `search_parts` (#1297, `bom`),
+//! `query_library` (#2944, the rows of an open library),
+//! `list_annotations` (mockup row 198, the project's notebook files),
+//! `query_cross_references` (#1273, once the project's net index is
+//! current) and `query_power_tree` (#1313, `app::power_tree`, run by
+//! `off_thread`), answered once their reads land. Each
 //! answers with data through [`CommandOutcome::Answered`], never a bare
 //! `Ran`, and reads only the documents (engines, boards, editors, projects,
 //! the library): no active tab, window, selection or panel is looked at, and
@@ -21,7 +35,14 @@
 //! Which ids the commands print, and where each kind stores one, is in
 //! `docs/DOCUMENT_IDS.md`; the answer shapes are in `docs/COMMANDS.md`.
 
+mod annotations;
+pub use annotations::AnnotationsListed;
 mod board;
+mod board_status;
+mod bom;
+mod bom_lines;
+#[cfg(test)]
+mod bom_tests;
 mod check_drc;
 mod check_erc;
 mod check_requirements;
@@ -31,8 +52,13 @@ mod cross_refs;
 mod documents;
 mod elements;
 mod find;
+mod library;
+mod net_ties;
+mod off_thread;
 mod pins;
 pub(in crate::app::command) use pins::pin_id;
+mod power_tree;
+mod rail_budget;
 mod read;
 mod sheet_view;
 mod transient;
@@ -54,6 +80,7 @@ const QUERY_IDS: &[&str] = &[
     "read_document",
     "query_pins",
     "query_cross_references",
+    "query_net_ties",
     "check_erc",
     "check_drc",
     "check_requirements",
@@ -71,6 +98,30 @@ const QUERY_IDS: &[&str] = &[
     "project_settings",
     "project_checklist",
     "project_checklist_link_choices",
+    // #2796: a block diagram's blocks, ports, connections and groups.
+    "query_block_diagram",
+    "query_power_tree",
+    // #1283: the snippets and templates of the project in view and the
+    // library, answered once their folders are read.
+    "list_snippets",
+    "list_templates",
+    "bom_lines",
+    // #2949: the Variant Manager's Compare variants and Open in BOM Studio.
+    "compare_variants",
+    "variant_bom",
+    "list_diff_pairs",
+    "list_annotations",
+    // #2937: every part's footprint (`footprint_assign_operands`).
+    "query_footprint_assignments",
+    "check_board_against_schematic",
+    "board_status",
+    "layout_plan_get",
+    "layout_plan_status",
+    "query_rail_budget",
+    "query_bom",
+    "search_parts",
+    // #2944: the rows of an open library.
+    "query_library",
 ];
 
 /// The queries that run a check (`check_run`): each says nothing in
@@ -82,9 +133,12 @@ pub(crate) fn is_check(command: &AppCommandId) -> bool {
     CHECK_IDS.contains(&command.as_str())
 }
 
-/// Every query command id.
+/// Every query command id: these and the notebook's measurement reads.
 pub(crate) fn query_command_ids() -> impl Iterator<Item = &'static str> {
-    QUERY_IDS.iter().copied()
+    QUERY_IDS
+        .iter()
+        .copied()
+        .chain(crate::app::notebook_measurements::QUERY_IDS)
 }
 
 /// Is `command` one of the query commands?
@@ -96,12 +150,7 @@ pub fn is_query(command: &AppCommandId) -> bool {
 pub(super) type Answer = Result<Value, String>;
 
 /// The text of operand `name`, if it was given.
-pub(super) fn text_operand<'a>(args: &'a CommandArgs, name: &str) -> Option<&'a str> {
-    match args.operand(name) {
-        Some(OperandValue::Text(text)) => Some(text),
-        _ => None,
-    }
-}
+pub(super) use super::operand_str as text_operand;
 
 /// The `bool` operand `name`, if it was given.
 pub(super) fn bool_operand(args: &CommandArgs, name: &str) -> Option<bool> {
@@ -136,6 +185,24 @@ impl Signex {
             "check_requirements" => return Some(self.check_requirements(command, args)),
             // Waits for the project's net index when it is not current.
             "query_cross_references" => return Some(self.query_cross_references(command, args)),
+            // The project's power tree, stitched off the UI thread (#1313).
+            "query_power_tree" => return Some(self.query_power_tree(command, args)),
+            // The project's notebook files are read first (mockup row 198).
+            "list_annotations" => return Some(self.list_annotations(command, args)),
+            // The notebook's measurement reads wait for the notebook's files.
+            "notebook_measurements" | "notebook_timeline" | "notebook_attachments" => {
+                return Some(crate::app::notebook_measurements::query(
+                    self, command, args,
+                ));
+            }
+            // Compare Board with Schematic as a query (#2462) and the board
+            // counters with it (#2460), answered once the reads land.
+            "check_board_against_schematic" => {
+                return Some(self.check_board_against_schematic(command, args));
+            }
+            "board_status" => return Some(self.board_status_query(command, args)),
+            // The project's rails against its parts, read off the UI thread.
+            "query_rail_budget" => return Some(self.query_rail_budget(command, args)),
             // The Rules manager's reads (#2398).
             "rules_list" | "rules_get" | "rules_effective" | "rules_explain"
             | "rules_conflicts" => {
@@ -152,9 +219,16 @@ impl Signex {
                 };
                 return Some((outcome, Task::none()));
             }
-            // The Project tab's sections (#1689-#1693).
-            "project_settings" => {
-                let outcome = match self.project_settings(args) {
+            // The Project tab's sections (#1689-#1693) and the project's
+            // differential pairs (#2952).
+            "project_settings" | "compare_variants" | "variant_bom" | "list_diff_pairs" => {
+                let answer = match id {
+                    "compare_variants" => self.compare_variants(args),
+                    "variant_bom" => self.variant_bom(args),
+                    "list_diff_pairs" => self.list_diff_pairs(args),
+                    _ => self.project_settings(args),
+                };
+                let outcome = match answer {
                     Ok(value) => CommandOutcome::Answered(value),
                     Err(reason) => CommandOutcome::disabled(reason),
                 };
@@ -175,6 +249,18 @@ impl Signex {
             }
             // A profile preset may need the profile library read first.
             "rules_preset_diff" => return Some(self.rules_preset_diff(args)),
+            // #2796: a block diagram, answered by its slice; one not open is
+            // read first.
+            "query_block_diagram" => {
+                if let Some(waiting) = self.open_diagram_first(id, args) {
+                    return Some(waiting);
+                }
+                return Some((self.query_block_diagram_outcome(args), Task::none()));
+            }
+            "list_snippets" => return Some(self.list_snippets(command, args)),
+            "list_templates" => return Some(self.list_templates(command, args)),
+            // #2938: answered once the BOM, built off the UI thread, lands.
+            "query_bom" => return Some(self.query_bom(command, args)),
             _ => {}
         }
         let answer = match id {
@@ -183,10 +269,16 @@ impl Signex {
             "resolve" => self.resolve_id(args),
             "find_items" => self.find(args),
             "query_pins" => self.query_pins(args),
+            "query_net_ties" => self.query_net_ties(args),
+            "bom_lines" => self.bom_lines(args),
             "measure_board" => self.measure_board(args),
             "query_board_nets" => self.query_board_nets(args),
             "find_similar_items" => self.find_similar_items(args),
             "board_panel" => self.board_panel_query(args),
+            "query_footprint_assignments" => self.query_footprint_assignments(args),
+            "layout_plan_get" | "layout_plan_status" => self.layout_plan_query(id, args),
+            "search_parts" => self.search_parts_query(args),
+            "query_library" => self.query_library(args),
             _ => self.read_document(args),
         };
         // The heads of referenced files that were never read are read now,
@@ -199,7 +291,7 @@ impl Signex {
     }
 }
 
-fn refused(reason: String) -> (CommandOutcome, Task<Message>) {
+pub(super) fn refused(reason: String) -> (CommandOutcome, Task<Message>) {
     (CommandOutcome::disabled(reason), Task::none())
 }
 
@@ -219,10 +311,22 @@ pub(in crate::app) mod tests;
 pub(in crate::app) mod pins_tests;
 
 #[cfg(test)]
+mod annotations_tests;
+#[cfg(test)]
+mod board_status_tests;
+#[cfg(test)]
 mod check_drc_base_rules_tests;
+#[cfg(test)]
+mod check_drc_bodies_tests;
 #[cfg(test)]
 pub(crate) mod check_drc_tests;
 #[cfg(test)]
 mod check_erc_tests;
 #[cfg(test)]
 mod check_requirements_tests;
+#[cfg(test)]
+mod library_tests;
+#[cfg(test)]
+pub(crate) mod power_tree_tests;
+#[cfg(test)]
+mod rail_budget_tests;
