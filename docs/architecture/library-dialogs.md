@@ -129,7 +129,8 @@ palette), by Import… in the Library Browser's LIBRARIES header, and by Import
 library… in a project's Project tab ▸ Libraries section (#3122). Opened from a
 project, Mount for all projects starts off and "This project" means that
 project (`ImportDialogState::project`), whether or not it is the active one;
-an open dialog stays as it is. It runs an installed library converter
+an open dialog stays as it is. The user's view of it is USER_GUIDE.md,
+"Importing a library" (#3125). It runs an installed library converter
 ([LIBRARY_CONVERTER_CONTRACT.md](../LIBRARY_CONVERTER_CONTRACT.md)) through the
 engine in `crate::library_import`, in three steps under a stepper; the header
 note repeats the step ("Step 2 of 3 · Preview"). Handlers:

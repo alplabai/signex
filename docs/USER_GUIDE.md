@@ -565,6 +565,80 @@ never places into it. A sheet written by a newer Signex is read-only in this
 build: Signex says so in the Messages panel and does not attach the part. With
 no schematic open, Signex shows a **Place Failed** notice instead.
 
+### Importing a library
+
+A component library made in another EDA tool can be turned into a Signex
+library with a library converter. Signex ships no converter: each one is a
+separate program you install, and Signex finds it on `PATH` (a program named
+`signex-<format>-import`) or in the `SIGNEX_LIBRARY_CONVERTERS` variable, a
+list of converter programs in `PATH` syntax. Open the dialog with
+**File ▸ Import ▸ Library…**, with **Import…** at the top of the Library
+Browser's library list, or with **Import library…** in the **Libraries**
+section of a project's Project tab.
+
+**Supported sources.** The dialog asks every installed converter what it
+reads, so the kinds offered are the ones your converters name: library
+files (one or several picked together), or a database link file, whose
+database is read once during the import and never linked to afterwards. When
+no converter reads the file you picked, the dialog says so, lists any
+converter it set aside and why (for example one written for a newer Signex),
+and offers **Look again** once you have installed one. **Next** stays off
+until a converter reads every picked file.
+
+**Where the library goes.** The new library is a folder, by default
+`~/Signex/Libraries/<name>`, following the name until you change the
+location. The folder must be new or empty, or hold a library you imported
+before (see updating below); the dialog refuses any other folder, or a link,
+and changes nothing in it. The library is mounted for all
+projects, or only for the project when **Mount for all projects** is off
+(off by default when you open the dialog from a project). Signex keeps the
+library under version control from the start: the import is its first
+commit, so a later update is one change you can compare or revert.
+
+**Preview, import and the loss report.** **Next** runs the converter once
+without writing anything and lists what it would approximate, drop or skip.
+**Import** writes the library; **Cancel** stops after the current item and
+removes what was written. When it finishes, the result card says how many
+parts were imported, where the library went, where it is mounted and which
+commit holds it. **View loss report** lists every item that did not come
+across unchanged, grouped by how much was lost and by the converter's code
+for the problem:
+
+- **Info**: nothing was lost; the converter notes something, such as a
+  default it applied.
+- **Approximated**: the item was imported, drawn as close as Signex can.
+- **Dropped**: the item was imported without part of it, such as a third
+  body style.
+- **Skipped** (an error in the report file): the item was not imported, for
+  example a part whose footprint the source does not hold.
+
+An import that skipped or dropped items says so on the result card. The
+report is stored in the library folder as `import-report.json` and
+`import-report.md`; **Save report…** saves a copy where you choose and
+**Open report** opens it. Later, right-click the library in the Library
+Browser's list and choose **View import report** to see it again. When the
+converter fails, the dialog says why and shows the end of its error output.
+
+**Updating an import.** Import the same source into the folder of a library
+you imported earlier, and the dialog offers **Update this library**. An
+update is one new commit: the converter deletes or overwrites only the items
+it wrote itself, so rows and files you added to the library stay. It is
+refused, before anything is written, when the folder has no version history,
+when it has uncommitted changes (commit or discard them first), when the
+library has unsaved changes open in Signex, and when a row you added has the
+same part number as one the update would write. When the library has commits
+of its own since the last import, the dialog warns that the update replaces
+their content; the commits stay in the history. A failed or cancelled update
+puts the library back to its last import. To change an imported part for
+good, copy it into a library of your own.
+
+**Licences of imported libraries.** An imported library keeps the licence of
+its source. A converter records it in the library's manifest (the `license`
+and `source` keys), and the Library Browser shows both under the library's
+name. Converters may also write `LICENSE` and `NOTICE` files into the
+library folder; Signex commits them with the library. Keep them with the
+library when you share it.
+
 ### Normal and alternate (De Morgan) bodies
 
 Some library symbols, mostly logic gates, have a second body that draws the
