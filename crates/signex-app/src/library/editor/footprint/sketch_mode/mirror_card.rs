@@ -100,7 +100,7 @@ pub fn is_card_pick(editor: &FootprintDocument, msg: &FootprintEditorMsg) -> boo
 impl MirrorCard {
     /// A fresh card: the selection becomes the objects, a selected
     /// centerline the mirror line, and the pattern selected on the canvas
-    /// an object. Keep linked is on.
+    /// an object in place of its source. Keep linked is on.
     pub fn opened(editor: &FootprintDocument) -> Self {
         let mut card = Self {
             objects: Vec::new(),
@@ -118,9 +118,9 @@ impl MirrorCard {
             for id in selected {
                 card.pick(sketch, id);
             }
-        }
-        if let Some(pattern) = state.sketch_overlay.selected_pattern {
-            card.add_pattern(pattern);
+            if let Some(pattern) = state.sketch_overlay.selected_pattern {
+                card.add_pattern(sketch, pattern);
+            }
         }
         card
     }
@@ -143,7 +143,7 @@ impl MirrorCard {
             self.take_line(id);
             return;
         }
-        if self.line == Some(id) {
+        if self.line == Some(id) || self.has_pattern_from(sketch, id) {
             return;
         }
         let object = MirrorObject::Entity(id);
@@ -155,13 +155,26 @@ impl MirrorCard {
         self.focus_line_when_due();
     }
 
-    /// Add a pattern picked on the canvas to the objects.
-    pub fn add_pattern(&mut self, pattern: ArrayId) {
+    /// Add a pattern picked on the canvas to the objects, dropping its
+    /// source: the pattern's mirror already holds the source's image, so
+    /// mirroring both would stack a bare copy on it (#2859).
+    pub fn add_pattern(&mut self, sketch: &SketchData, pattern: ArrayId) {
         let object = MirrorObject::Pattern(pattern);
         if !self.objects.contains(&object) {
             self.objects.push(object);
         }
+        if let Some(source) = sketch.innermost_source(pattern) {
+            self.objects.retain(|o| *o != MirrorObject::Entity(source));
+        }
         self.focus_line_when_due();
+    }
+
+    /// Whether `id` is the source a pattern among the objects repeats.
+    fn has_pattern_from(&self, sketch: &SketchData, id: SketchEntityId) -> bool {
+        self.objects.iter().any(|o| match o {
+            MirrorObject::Pattern(p) => sketch.innermost_source(*p) == Some(id),
+            MirrorObject::Entity(_) => false,
+        })
     }
 
     fn take_line(&mut self, id: SketchEntityId) {
@@ -271,7 +284,9 @@ pub fn route(
             None
         }
         FootprintEditorMsg::SketchCanvas(SketchCanvasMsg::PatternSelected(Some(pattern))) => {
-            card.add_pattern(pattern);
+            if let Some(sketch) = sketch {
+                card.add_pattern(sketch, pattern);
+            }
             Some(msg)
         }
         other => Some(other),
