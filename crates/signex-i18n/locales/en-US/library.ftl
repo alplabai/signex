@@ -1060,3 +1060,5 @@ library-import-dialog-run-stopping = The previous run is stopping…
 # $path is the library folder.
 library-import-dialog-unchanged = The import was refused before it started, so nothing was changed in { $path }.
 library-import-dialog-other-run = Another library import is running.
+# $path is the chosen folder.
+library-import-dialog-target-link = { $path } is a link to another place. Choose the folder itself, or a new folder.

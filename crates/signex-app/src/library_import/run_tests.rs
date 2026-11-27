@@ -501,6 +501,25 @@ fn a_new_run_creates_its_folder_and_refuses_one_that_holds_anything() {
     );
 }
 
+/// A link is refused as a link, not as a folder that holds files, and
+/// neither it nor the folder it points at is touched.
+#[test]
+fn a_new_run_refuses_a_link_as_a_link() {
+    use super::run::claim_output;
+    let dir = tempfile::tempdir().unwrap();
+    let real = dir.path().join("real");
+    std::fs::create_dir(&real).unwrap();
+    let link = dir.path().join("link");
+    std::os::unix::fs::symlink(&real, &link).unwrap();
+    assert_eq!(
+        claim_output(&request(link.clone(), RunMode::Import)),
+        Err(ImportError::OutputIsLink { path: link.clone() })
+    );
+    assert!(real.is_dir() && link.exists(), "both left as they were");
+    let shown = ImportError::OutputIsLink { path: link }.to_string();
+    assert!(shown.contains("is a link"), "{shown}");
+}
+
 #[test]
 fn a_failed_run_into_an_empty_folder_removes_it_and_a_full_one_never_runs() {
     let dir = tempfile::tempdir().unwrap();

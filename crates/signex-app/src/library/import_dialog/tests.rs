@@ -406,6 +406,16 @@ fn a_folder_that_holds_files_is_refused_and_the_check_removes_nothing() {
     let file = dir.path().join("file");
     std::fs::write(&file, "x").unwrap();
     assert!(problem(&file).is_some());
+    #[cfg(unix)]
+    {
+        let link = dir.path().join("link");
+        std::os::unix::fs::symlink(&empty, &link).unwrap();
+        let why = problem(&link).expect("a link is refused");
+        assert_eq!(
+            why.id(),
+            Some(signex_i18n::ids::LIBRARY_IMPORT_DIALOG_TARGET_LINK)
+        );
+    }
 }
 
 #[test]

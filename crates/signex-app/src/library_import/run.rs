@@ -268,9 +268,9 @@ pub fn run_library_in(
 /// Take `--output` for a new import or a dry run: this run creates the
 /// folder (and its parents), so a failed run removes only a folder it made.
 /// An empty folder already there is replaced by one this run creates; one
-/// that holds anything, or anything that is not a folder, is refused before
-/// the converter starts. `false` for an update, whose folder is never this
-/// run's to remove.
+/// that holds anything, a symbolic link, or anything else that is not a
+/// folder, is refused before the converter starts. `false` for an update,
+/// whose folder is never this run's to remove.
 pub fn claim_output(request: &LibraryRunRequest) -> Result<bool, ImportError> {
     if request.mode == RunMode::Update {
         return Ok(false);
@@ -290,6 +290,9 @@ pub fn claim_output(request: &LibraryRunRequest) -> Result<bool, ImportError> {
         Err(e) => return Err(unusable(e)),
         // remove_dir refuses a folder that is not empty, so nothing put in
         // it meanwhile is lost.
+        Ok(meta) if meta.file_type().is_symlink() => {
+            return Err(ImportError::OutputIsLink { path: out.clone() });
+        }
         Ok(meta) if meta.is_dir() => std::fs::remove_dir(out).map_err(|e| {
             if e.kind() == std::io::ErrorKind::DirectoryNotEmpty {
                 taken()

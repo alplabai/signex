@@ -471,4 +471,5 @@ define_ids! {
     LIBRARY_IMPORT_DIALOG_RUN_STOPPING = "library-import-dialog-run-stopping";
     LIBRARY_IMPORT_DIALOG_UNCHANGED = "library-import-dialog-unchanged";
     LIBRARY_IMPORT_DIALOG_OTHER_RUN = "library-import-dialog-other-run";
+    LIBRARY_IMPORT_DIALOG_TARGET_LINK = "library-import-dialog-target-link";
 }

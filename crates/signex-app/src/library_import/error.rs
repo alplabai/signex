@@ -101,6 +101,11 @@ pub enum ImportError {
         path: PathBuf,
         detail: String,
     },
+    /// A new import's folder is a symbolic link; the run never writes
+    /// through one.
+    OutputIsLink {
+        path: PathBuf,
+    },
 }
 
 /// How many uncommitted paths the refusal names.
@@ -199,6 +204,9 @@ impl ImportError {
             }
             Self::OutputNotEmpty { path: p } => {
                 Translatable::new(ids::LIBRARY_IMPORT_DIALOG_TARGET_NOT_EMPTY).arg("path", path(p))
+            }
+            Self::OutputIsLink { path: p } => {
+                Translatable::new(ids::LIBRARY_IMPORT_DIALOG_TARGET_LINK).arg("path", path(p))
             }
             Self::OutputUnusable { path: p, detail } => {
                 Translatable::new(ids::LIBRARY_IMPORT_DIALOG_TARGET_UNREADABLE)

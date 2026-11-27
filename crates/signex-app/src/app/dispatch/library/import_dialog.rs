@@ -41,6 +41,11 @@ pub(crate) fn target_problem(location: &Path) -> Option<Translatable> {
         }
         Ok(meta) => meta,
     };
+    if meta.file_type().is_symlink() {
+        return Some(
+            Translatable::new(ids::LIBRARY_IMPORT_DIALOG_TARGET_LINK).arg("path", path()),
+        );
+    }
     if !meta.is_dir() {
         return Some(
             Translatable::new(ids::LIBRARY_IMPORT_DIALOG_TARGET_NOT_FOLDER).arg("path", path()),
