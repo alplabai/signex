@@ -52,7 +52,7 @@ mod place_dimension;
 pub(crate) use place_directive::{net_parameters_directive, parse_value};
 mod directive_panel;
 mod place_drawing;
-pub(crate) use place_dimension::AnnotationTool;
+pub(crate) use place_dimension::{AnnotationTool, DimensionToolStyle, dimension_from_clicks};
 mod place_label;
 mod place_table;
 pub(crate) use place_label::{GLOBAL_PORT_SHAPE, label_command};

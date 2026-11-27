@@ -126,7 +126,8 @@ The placements (`place_net_label` and the other labels, `place_power_symbol`,
 `place_bus`, `draw_bus`, `place_text`, `place_text_string`, `draw_line`,
 `draw_graphic_line`, `draw_rectangle`, the curve drawings `draw_ellipse`,
 `draw_elliptical_arc` and `draw_round_rectangle` (#1267, see "Curve drawings"
-below), and the directives `place_blanket`,
+below), `place_linear_dimension` and `place_aligned_dimension` (#2836, see
+"Dimensions"), and the directives `place_blanket`,
 `place_compile_mask`, `place_diff_pair` and `edit_blanket` (#2420) and
 `place_parameter_set` (#1489: `at` on a wire, refused off one; optional
 `class`, `diff_pair_class`, `width`, `clearance`, `via_diameter` and
@@ -881,6 +882,37 @@ run launches nothing. `list_image_assets` is a query: it scans the project's
 answers each file's facts, use count and whether it is missing. Without
 operands, `set_image`, `relink_image` and `show_image_in_folder` say which
 Properties row runs them.
+
+## Dimensions
+
+The operand form of the sheet's two dimension tools (#2836). It is one undo
+step and ends in the commit the tool's third click ends in.
+
+```text
+place_linear_dimension start=x,y end=x,y at=x,y [direction=..] [units=..]
+    [precision=..] [arrows=..] [text=..] [document=..]
+place_aligned_dimension (the same operands)
+```
+
+- `start` and `end` are the two measured points and `at` a point the
+  dimension line runs through, the tool's three clicks. Each is refused off
+  the grid, as for any placement; a pin reference is the pin's tip.
+- `direction` is `horizontal`, `vertical` or `aligned`. Left out, a linear
+  dimension is horizontal or vertical by the axis its points are further apart
+  along (horizontal on a tie), and an aligned one measures the straight
+  distance.
+- `units` is `mm`, `mil` or `in`, `precision` the decimals written, 0 to 3,
+  and `arrows` is `filled_inside`, `filled_outside` or `open`: the words the
+  sheet file stores. `text` is written instead of the measured value; left
+  out or blank, the measured value is written.
+- What is left out takes the tool form's defaults (mm, two decimals, filled
+  arrows inside), never what the person typed in the armed tool's form.
+- Points that measure nothing in the dimension's direction, a precision above
+  3 and an unknown word are refused with the reason.
+
+The answer is `{"id", "kind": "dimension", "label", "measured_mm",
+"dimension"}`: `label` is the text on the sheet and `dimension` the dimension
+as stored. Without operands, in a window, each command arms its tool.
 
 ## Checks on demand
 

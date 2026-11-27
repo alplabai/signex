@@ -446,6 +446,8 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
         "draw_ellipse",
         "draw_elliptical_arc",
         "draw_round_rectangle",
+        "place_linear_dimension",
+        "place_aligned_dimension",
         "place_blanket",
         "edit_blanket",
         "edit_no_erc_rules",

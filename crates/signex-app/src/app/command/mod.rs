@@ -29,6 +29,9 @@ mod component_operand;
 mod curve_operand_tests;
 mod curve_operands;
 #[cfg(test)]
+mod dimension_operand_tests;
+mod dimension_operands;
+#[cfg(test)]
 mod directive_operand_tests;
 mod directive_operands;
 #[cfg(test)]

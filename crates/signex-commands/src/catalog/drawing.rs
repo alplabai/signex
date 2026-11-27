@@ -1,6 +1,7 @@
 //! Drawing commands: arcs, circles, ellipses, lines, rectangles, polygons
 //! and curves on a schematic sheet, and graphics import.
 
+use super::operands::{optional, required};
 use super::{
     CommandFlags, CommandGroup, CommandMetadata, DocumentKind, Enablement, Operand, OperandKind,
     operands,
@@ -39,6 +40,20 @@ const ROUND_RECTANGLE: &[Operand] = &[
     operand("end", OperandKind::Point, true),
     operand("corner_radius", OperandKind::Length, false),
     operand("document", OperandKind::Document, false),
+];
+/// A dimension (#2836): the two measured points, a point the dimension line
+/// runs through (the tool's three clicks), then its Properties form:
+/// `direction`, `units`, `precision`, `arrows` and the override `text`.
+const DIMENSION: &[Operand] = &[
+    required("start", OperandKind::Point),
+    required("end", OperandKind::Point),
+    required("at", OperandKind::Point),
+    optional("direction", OperandKind::Text),
+    optional("units", OperandKind::Text),
+    optional("precision", OperandKind::Text),
+    optional("arrows", OperandKind::Text),
+    optional("text", OperandKind::Text),
+    optional("document", OperandKind::Document),
 ];
 
 pub(super) const DRAWING: &[CommandMetadata] = &[
@@ -160,6 +175,7 @@ pub(super) const DRAWING: &[CommandMetadata] = &[
         ..CommandMetadata::DEFAULT
     },
     // #1267: dimensions; Linear is horizontal or vertical by the drag.
+    // #2836: the operands stand for the three clicks and the tool's form.
     CommandMetadata {
         id: "place_linear_dimension",
         category: "place",
@@ -167,7 +183,8 @@ pub(super) const DRAWING: &[CommandMetadata] = &[
         menu_label: Some(command_ids::CMD_MENU_PLACE_LINEAR_DIMENSION),
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresDocument(DocumentKind::Schematic),
-        flags: CommandFlags::GUI_MUTATES,
+        flags: CommandFlags::MUTATES,
+        operands: DIMENSION,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -177,7 +194,8 @@ pub(super) const DRAWING: &[CommandMetadata] = &[
         menu_label: Some(command_ids::CMD_MENU_PLACE_ALIGNED_DIMENSION),
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresDocument(DocumentKind::Schematic),
-        flags: CommandFlags::GUI_MUTATES,
+        flags: CommandFlags::MUTATES,
+        operands: DIMENSION,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {

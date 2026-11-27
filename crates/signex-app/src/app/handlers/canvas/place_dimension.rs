@@ -149,16 +149,23 @@ impl Signex {
             let d = dimension_from_clicks(tool, from, to, at, style);
             // Two clicks on one spot measure nothing: nothing is placed.
             if d.measured_mm() > 0.0 {
-                self.apply_engine_command(
-                    signex_engine::Command::PlaceSchDrawing {
-                        drawing: SchDrawing::Dimension(d),
-                    },
-                    false,
-                    false,
-                );
+                self.place_sheet_dimension(d);
             }
         }
         self.sync_annotation_draft();
+    }
+
+    /// Commit `d` to the sheet the edit targets, one undo step: what the
+    /// third click and `place_linear_dimension` / `place_aligned_dimension`
+    /// with operands both end in. `false` when nothing changed.
+    pub(crate) fn place_sheet_dimension(&mut self, d: SchDimension) -> bool {
+        self.apply_engine_command(
+            signex_engine::Command::PlaceSchDrawing {
+                drawing: SchDrawing::Dimension(d),
+            },
+            false,
+            false,
+        )
     }
 
     /// A dimension belongs to the window of its first point: a click from
