@@ -78,6 +78,7 @@ fn pad(uuid: Uuid, number: &str, x: f64, smd: bool) -> Pad {
         rotation: 0.0,
         layer_sizes: None,
         net_locked: false,
+        thermal: Default::default(),
         unknown: Default::default(),
         unknown_columns: Default::default(),
     }

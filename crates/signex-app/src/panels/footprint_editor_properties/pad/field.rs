@@ -27,9 +27,20 @@ pub(in crate::panels::footprint_editor_properties) enum Refusal {
     NoCopper,
     /// A corner radius outside `pad_field::CORNER_RADIUS_PCT`.
     CornerRadiusRange,
+    /// A thermal relief spoke count that is no whole number from 1 to 4
+    /// (#2593).
+    SpokeCount,
 }
 
 impl Refusal {
+    /// Why `text` was not taken as a pad's spoke count.
+    pub(super) fn of_spokes(text: &str) -> Option<Self> {
+        match text.trim().parse::<u8>() {
+            Ok(n) if signex_types::pad_thermal::is_spoke_count(n) => None,
+            _ => Some(Refusal::SpokeCount),
+        }
+    }
+
     /// Why `text` was not taken by a field: a number at all, above zero
     /// when `positive`, and accepted by `fits`. `None` when it would be
     /// taken (a stale entry shows as plain text).
@@ -70,6 +81,7 @@ impl Refusal {
             Refusal::Negative => ids::EDITORS_FP_PAD_INVALID_NEGATIVE,
             Refusal::NoCopper => ids::EDITORS_FP_PAD_INVALID_NO_COPPER,
             Refusal::CornerRadiusRange => ids::EDITORS_FP_PAD_INVALID_CORNER_RADIUS,
+            Refusal::SpokeCount => ids::EDITORS_FP_PAD_INVALID_SPOKES,
         }
     }
 }

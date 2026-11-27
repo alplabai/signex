@@ -12,6 +12,7 @@ mod facts;
 mod free;
 mod graphic;
 mod links;
+mod pair;
 mod placement;
 mod stack_facts;
 mod tune;
@@ -22,10 +23,13 @@ mod zone;
 mod dimension_style_tests;
 #[cfg(test)]
 mod tune_tests;
+#[cfg(test)]
+mod via_limit_tests;
 
 pub(crate) use dimension_style::dimension_style_edit;
 pub(crate) use free::dimension_edit;
 pub(crate) use graphic::graphic_edit;
+pub(crate) use pair::set_diff_pair_width;
 pub(crate) use zone::zone_edit;
 
 use std::collections::BTreeMap;
@@ -41,6 +45,7 @@ use signex_i18n::{MessageId, ids, t};
 use signex_types::pcb::{MaskExpansion, PadShape, PcbBoard};
 use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 use signex_types::pcb_stack::StackMode;
+use signex_types::zone_pour_shape::{PourCorners, PourFillMode};
 use signex_widgets::property_illustration::IllustrationHover;
 
 use crate::app::Signex;
@@ -138,6 +143,11 @@ pub(crate) enum PrimitiveEdit {
     Flag(PrimitiveFlag, bool),
     /// A pour's Remove Dead Copper (#2216).
     DeadIslands(bool),
+    /// A pour's Corners (#2578) and Fill Mode (#2579).
+    PourCorners(PourCorners),
+    PourFill(PourFillMode),
+    /// A pour's Thermal Relief switch (#2580).
+    ThermalRelief(bool),
     /// A field of a dimension's look (#2868).
     DimensionStyle(DimensionStyleEdit),
 }
@@ -195,6 +205,27 @@ impl Signex {
                     target,
                     PrimitiveEdit::DeadIslands(*on),
                     ids::PCB_PRIM_REMOVE_DEAD_ISLANDS,
+                );
+            }
+            M::PourCornersPicked { target, corners } => {
+                self.apply_primitive_edit(
+                    target,
+                    PrimitiveEdit::PourCorners(*corners),
+                    ids::PCB_PRIM_POUR_CORNERS,
+                );
+            }
+            M::PourFillPicked { target, fill } => {
+                self.apply_primitive_edit(
+                    target,
+                    PrimitiveEdit::PourFill(*fill),
+                    ids::PCB_PRIM_POUR_FILL_MODE,
+                );
+            }
+            M::ThermalReliefToggled { target, on } => {
+                self.apply_primitive_edit(
+                    target,
+                    PrimitiveEdit::ThermalRelief(*on),
+                    ids::PCB_PRIM_POUR_THERMAL,
                 );
             }
             M::ShapePicked { target, shape } => {
@@ -337,6 +368,13 @@ impl Signex {
                     self.tune_track_length(target, value);
                     return;
                 }
+                // #2585: a pair's Width reaches both tracks of the pair.
+                Some(value) if field == PrimitiveField::Width => {
+                    if self.widen_pair_tracks(target, value) {
+                        return;
+                    }
+                    PrimitiveEdit::Number(field, value)
+                }
                 Some(value) if field.is_mask() => {
                     PrimitiveEdit::Mask(field, MaskExpansion::Manual { mm: value })
                 }
@@ -478,6 +516,10 @@ fn field_name(field: PrimitiveField) -> MessageId {
         F::Precision => ids::PCB_PRIM_PRECISION,
         F::Priority => ids::PCB_PRIM_PRIORITY,
         F::MinIslandArea => ids::PCB_PRIM_MIN_ISLAND_AREA,
+        F::CornerSize => ids::PCB_PRIM_POUR_CORNER_SIZE,
+        F::HatchWidth => ids::PCB_PRIM_POUR_HATCH_WIDTH,
+        F::HatchGap => ids::PCB_PRIM_POUR_HATCH_GAP,
+        F::ThermalSpokeWidth | F::ThermalAirGap => ids::PCB_PRIM_POUR_SPOKE_GAP,
         F::CenterX | F::CenterY => ids::PCB_PRIM_GRAPHIC_CENTER,
         F::ArrowLength => ids::PCB_PRIM_DIM_ARROW_LENGTH,
         F::ArrowWidth => ids::PCB_PRIM_DIM_ARROW_WIDTH,

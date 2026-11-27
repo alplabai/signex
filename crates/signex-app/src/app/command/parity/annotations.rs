@@ -206,6 +206,16 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "set_via_span",
             "set_layer_sizes",
             "set_pad_shape",
+            "set_pour_corners",
+            "set_pour_fill",
+            "set_pour_thermal_relief",
+            "set_pad_thermal_relief",
+            "length_matching",
+            "set_length_group",
+            "remove_length_group",
+            "set_teardrop_rule",
+            "set_pad_teardrop",
+            "set_pour_properties",
             "hide_layer",
             "highlight_layer",
             "hide_layer_group",
@@ -325,6 +335,10 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
     // category listed in scripts/uifree-state.txt, so it is no implicit input.
     (&["show_drc_violation"], Operand, &[ActiveDocument, Window]),
     (&["filter_drc_results"], Operand, &[ActiveDocument]),
+    // The routing options (#2719) are the router's tool state (conflict and
+    // corner mode, the route being drawn) and the tool form's width and via
+    // size (`pcb_tool_defaults`).
+    (&["route_options"], Operand, &[PrePlacementForm, ToolState]),
     // The DRC fixes check the named board with Run DRC's rules: a project
     // without rules is checked with the machine rules (`fix_drc` ->
     // `board_design_rules` -> `drc_inputs`), configuration.
@@ -815,6 +829,8 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
     (&["autoplace_fields"], Bridge, &[ActiveDocument, Selection]),
     (&["clear_all_net_colors"], ActiveBar, &[ActiveDocument]),
     (&["clear_net_color", "color_net"], ActiveBar, &[Selection]),
+    // #2585: without `net` it widens the selected pair tracks.
+    (&["set_diff_pair_width"], Operand, &[Selection]),
     (
         &[
             "bring_to_front_of",

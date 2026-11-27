@@ -42,6 +42,7 @@ fn pad(uuid: Uuid, net: Option<u32>) -> Pad {
         rotation: 0.0,
         layer_sizes: None,
         net_locked: false,
+        thermal: Default::default(),
         unknown: Default::default(),
         unknown_columns: Default::default(),
     }
@@ -228,6 +229,11 @@ fn zone(n: u128, net: u32, fill: &str) -> signex_types::pcb::Zone {
         remove_dead_islands: false,
         shelved: false,
         unfilled: false,
+        corners: Default::default(),
+        corner_size: 0.0,
+        fill_mode: Default::default(),
+        hatch_width: 0.0,
+        hatch_gap: 0.0,
         unknown: Default::default(),
     }
 }

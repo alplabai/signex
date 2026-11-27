@@ -41,6 +41,7 @@ mod pour_cut;
 mod quick;
 mod route;
 mod route_end;
+mod route_options;
 mod route_order;
 mod route_rats;
 mod router;
@@ -50,6 +51,7 @@ mod string;
 pub(crate) use form::has_form;
 pub use form::{BoardToolDefaults, PlacementPause};
 pub(crate) use free_form::precision_of;
+pub(crate) use route_options::RouteOptionsEdit;
 pub(crate) use route_order::{RouteMade, RouteOrder, ViaOrder, tool_refusal};
 pub use router::RouterState;
 
@@ -80,7 +82,11 @@ mod pause_tests;
 #[cfg(test)]
 mod pour_cut_tests;
 #[cfg(test)]
+mod pour_shape_tests;
+#[cfg(test)]
 mod pour_tests;
+#[cfg(test)]
+mod route_options_tests;
 #[cfg(test)]
 mod route_order_tests;
 #[cfg(test)]

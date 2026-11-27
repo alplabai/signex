@@ -145,6 +145,11 @@ pub struct PanelContext {
     /// The pours of the board in view, for the Polygon Manager tab and the
     /// PCB panel's Polygons mode (mockup row 178).
     pub polygons: Option<super::PolygonFacts>,
+    /// The length-matching groups of the board in view, for the Length
+    /// Matching tab and its dock panel (#2797, mockup row 107).
+    pub length_matching: Option<super::LengthMatchingFacts>,
+    /// Their view state; kept across context rebuilds.
+    pub length_matching_ui: super::LengthMatchingUi,
     // Selection info for Properties panel
     /// How many items are currently selected.
     pub selection_count: usize,

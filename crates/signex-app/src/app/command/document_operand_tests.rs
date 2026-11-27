@@ -522,6 +522,10 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     "set_via_span",
                     "set_layer_sizes",
                     "set_pad_shape",
+                    "set_pour_corners",
+                    "set_pour_fill",
+                    "set_pour_thermal_relief",
+                    "set_pad_thermal_relief",
                     // The board queries (#2403).
                     "measure_board",
                     "query_board_nets",
@@ -532,6 +536,9 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     "stitch_vias",
                     "add_teardrops",
                     "remove_teardrops",
+                    "set_teardrop_rule",
+                    "set_pad_teardrop",
+                    "set_pour_properties",
                     "gloss_selected_routes",
                     "board_shape_from_selection",
                     "keepout_from_selection",
@@ -632,6 +639,8 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     "delete_net_class",
                     "set_net_class_rules",
                     "assign_board_net_class",
+                    // #2719: the routing options of the named board.
+                    "route_options",
                     // #2402, #2404: board reports and Board Print / PDF.
                     "board_report_bom",
                     "board_report_netlist",
@@ -682,6 +691,12 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     // #2389: length tuning on the named board.
                     "tune_net_length",
                     "tune_diff_pair",
+                    // #2585, #2797: a pair's width and the length-matching
+                    // groups of the named board.
+                    "set_diff_pair_width",
+                    "length_matching",
+                    "set_length_group",
+                    "remove_length_group",
                     // #2470: the routing tools and the via on the named board.
                     "place_board_via",
                     "place_board_track",

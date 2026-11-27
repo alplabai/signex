@@ -17,6 +17,11 @@ pub const IMPORT_TRAILER: &str = "Signex-Import";
 /// (`docs/CLI.md`, "Library tools").
 pub const FOOTPRINT_DIFF_ATTRIBUTE: &str = "*.snxfpt diff=snxfpt";
 
+/// The `.gitattributes` line that keeps every file's bytes as written: git
+/// never converts line endings in an import repository, whatever
+/// `core.autocrlf` or `core.eol` say, so a restore is byte for byte.
+pub const BYTES_AS_WRITTEN_ATTRIBUTE: &str = "* -text";
+
 /// The repo-local setting that names the textconv driver.
 pub const FOOTPRINT_TEXTCONV_KEY: &str = "diff.snxfpt.textconv";
 
@@ -182,6 +187,8 @@ pub fn restore_to_head(root: &Path) -> Result<(), LibraryError> {
         ));
     }
     let repo = git2::Repository::open(root).map_err(|e| backend("git open", e))?;
+    // A repository an older build prepared has no setting yet.
+    keep_line_endings(&repo)?;
     let head = repo
         .head()
         .and_then(|h| h.peel_to_commit())
@@ -237,12 +244,10 @@ fn prepare_snapshot_repo_with(root: &Path, cli: Option<&Path>) -> Result<bool, L
         files.write()?;
         git2::Repository::init(root).map_err(|e| backend("git init", e))?;
     }
-    ensure_footprint_attribute(root)?;
+    ensure_attributes(root)?;
     let repo = git2::Repository::open(root).map_err(|e| backend("git open", e))?;
-    let config = repo.config().map_err(|e| backend("git config", e))?;
-    let mut local = config
-        .open_level(git2::ConfigLevel::Local)
-        .map_err(|e| backend("git config", e))?;
+    keep_line_endings(&repo)?;
+    let mut local = local_config(&repo)?;
     match cli {
         Some(exe) => local
             .set_str(FOOTPRINT_TEXTCONV_KEY, &footprint_textconv_command(exe))
@@ -255,17 +260,37 @@ fn prepare_snapshot_repo_with(root: &Path, cli: Option<&Path>) -> Result<bool, L
     Ok(created)
 }
 
-/// Add [`FOOTPRINT_DIFF_ATTRIBUTE`] to `.gitattributes` unless a line
-/// already says it; the rest of the file is kept.
-fn ensure_footprint_attribute(root: &Path) -> Result<(), LibraryError> {
+fn local_config(repo: &git2::Repository) -> Result<git2::Config, LibraryError> {
+    repo.config()
+        .and_then(|config| config.open_level(git2::ConfigLevel::Local))
+        .map_err(|e| backend("git config", e))
+}
+
+/// Turn line-ending conversion off for this repository: `core.autocrlf =
+/// false` in its own config wins over a user's global setting. Without it
+/// a user with `core.autocrlf = true` gets CRLF files back from a restore
+/// (#3190). The `.gitattributes` line is written by the import itself
+/// ([`prepare_snapshot_repo`]), so a restore leaves the tree as committed.
+fn keep_line_endings(repo: &git2::Repository) -> Result<(), LibraryError> {
+    local_config(repo)?
+        .set_bool("core.autocrlf", false)
+        .map_err(|e| backend("git config core.autocrlf", e))
+}
+
+/// Add [`BYTES_AS_WRITTEN_ATTRIBUTE`] and [`FOOTPRINT_DIFF_ATTRIBUTE`] to
+/// `.gitattributes` unless a line already says each; the rest of the file
+/// is kept.
+fn ensure_attributes(root: &Path) -> Result<(), LibraryError> {
     let path = root.join(".gitattributes");
     let existing = match std::fs::read_to_string(&path) {
         Ok(text) => text,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => String::new(),
         Err(e) => return Err(backend(&format!("read {}", path.display()), e)),
     };
-    let merged =
-        signex_types::managed_block::append_missing_lines(&existing, FOOTPRINT_DIFF_ATTRIBUTE);
+    let merged = signex_types::managed_block::append_missing_lines(
+        &existing,
+        &format!("{BYTES_AS_WRITTEN_ATTRIBUTE}\n{FOOTPRINT_DIFF_ATTRIBUTE}"),
+    );
     if merged == existing {
         return Ok(());
     }
@@ -398,7 +423,10 @@ mod tests {
         std::fs::write(dir.path().join(".gitattributes"), "*.step filter=lfs\n").unwrap();
         prepare_snapshot_repo(dir.path()).unwrap();
         let attributes = std::fs::read_to_string(dir.path().join(".gitattributes")).unwrap();
-        assert_eq!(attributes, "*.step filter=lfs\n*.snxfpt diff=snxfpt\n");
+        assert_eq!(
+            attributes,
+            "*.step filter=lfs\n* -text\n*.snxfpt diff=snxfpt\n"
+        );
     }
 
     #[test]

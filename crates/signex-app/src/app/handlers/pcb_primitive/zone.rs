@@ -184,6 +184,11 @@ pub(super) fn zone_facts(
             .all(|z| z.is_pour())
             .then(|| shared(zones.iter().map(|z| z.shelved)))
             .flatten(),
+        corners: shared(zones.iter().map(|z| z.corners)),
+        corner_size: shared(zones.iter().map(|z| z.corner_size)),
+        fill_mode: shared(zones.iter().map(|z| z.fill_mode)),
+        hatch_width: shared(zones.iter().map(|z| z.hatch_settings().width_mm)),
+        hatch_gap: shared(zones.iter().map(|z| z.hatch_settings().gap_mm)),
         thermal: shared(
             zones
                 .iter()
@@ -230,6 +235,14 @@ pub(crate) fn zone_edit(edit: &PrimitiveEdit) -> Option<ZoneEdit> {
         PrimitiveEdit::Number(F::Priority, v) => ZoneEdit::Priority(v),
         PrimitiveEdit::Number(F::MinIslandArea, v) => ZoneEdit::MinIslandArea(v),
         PrimitiveEdit::DeadIslands(on) => ZoneEdit::RemoveDeadIslands(on),
+        PrimitiveEdit::PourCorners(corners) => ZoneEdit::Corners(corners),
+        PrimitiveEdit::Number(F::CornerSize, v) => ZoneEdit::CornerSize(v),
+        PrimitiveEdit::PourFill(mode) => ZoneEdit::FillMode(mode),
+        PrimitiveEdit::Number(F::HatchWidth, v) => ZoneEdit::HatchWidth(v),
+        PrimitiveEdit::Number(F::HatchGap, v) => ZoneEdit::HatchGap(v),
+        PrimitiveEdit::ThermalRelief(on) => ZoneEdit::ThermalRelief(on),
+        PrimitiveEdit::Number(F::ThermalSpokeWidth, v) => ZoneEdit::ThermalSpokeWidth(v),
+        PrimitiveEdit::Number(F::ThermalAirGap, v) => ZoneEdit::ThermalAirGap(v),
         _ => return None,
     })
 }

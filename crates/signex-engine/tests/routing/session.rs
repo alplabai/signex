@@ -46,15 +46,7 @@ pub fn rules_of(board: &PcbBoard, classes: &[NetClass]) -> DrcRules {
 pub fn plan(board: &PcbBoard, rng: &mut Rng, mode: RouteMode, legs: usize) -> Option<RoutePlan> {
     let copper = collect_copper(board);
     let usable = usable_layers(board);
-    let corner = CornerRule {
-        mode: *rng.pick(&[
-            CornerMode::Ortho90,
-            CornerMode::Angle45Start,
-            CornerMode::Angle45End,
-            CornerMode::FreeAngle,
-        ])?,
-        is_flipped: rng.chance(50),
-    };
+    let corner = random_corner(rng);
     let (from, to, layers) = match ratsnest_ends(board, &copper, rng) {
         Some(found) if found.2 & usable != 0 && rng.chance(70) => found,
         _ => stub_ends(&copper, rng)?,
@@ -75,6 +67,21 @@ pub fn plan(board: &PcbBoard, rng: &mut Rng, mode: RouteMode, legs: usize) -> Op
         mode,
         corner,
     })
+}
+
+/// A corner rule as a route or a drag takes it: one of the four corner
+/// modes, flipped half the time.
+pub fn random_corner(rng: &mut Rng) -> CornerRule {
+    const MODES: [CornerMode; 4] = [
+        CornerMode::Ortho90,
+        CornerMode::Angle45Start,
+        CornerMode::Angle45End,
+        CornerMode::FreeAngle,
+    ];
+    CornerRule {
+        mode: MODES[rng.below(MODES.len())],
+        is_flipped: rng.chance(50),
+    }
 }
 
 /// A random ratsnest line's ends and the layers where both hold its net.

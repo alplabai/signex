@@ -1,7 +1,10 @@
 //! Board layer commands: step through the layers, single-layer mode, layer
 //! visibility, the Layers panel and the ratsnest.
 
-use super::{CommandFlags, CommandGroup, CommandMetadata, DocumentKind, Enablement};
+use super::operands::{optional, required};
+use super::{
+    CommandFlags, CommandGroup, CommandMetadata, DocumentKind, Enablement, Operand, OperandKind,
+};
 use signex_i18n_ids::command_ids;
 
 pub(super) const LAYERS: &[CommandMetadata] = &[
@@ -241,6 +244,57 @@ pub(super) const LAYERS: &[CommandMetadata] = &[
         operands: super::operands::SET_PAD_SHAPE,
         ..CommandMetadata::DEFAULT
     },
+    // #2578: a pour's Corners and Corner Size rows in agent form. One undo
+    // step.
+    CommandMetadata {
+        id: "set_pour_corners",
+        category: "modify",
+        label: command_ids::CMD_SET_POUR_CORNERS,
+        menu_label: None,
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::MUTATES,
+        operands: SET_POUR_CORNERS,
+        ..CommandMetadata::DEFAULT
+    },
+    // #2579: a pour's Fill Mode and hatch rows in agent form. One undo step.
+    CommandMetadata {
+        id: "set_pour_fill",
+        category: "modify",
+        label: command_ids::CMD_SET_POUR_FILL,
+        menu_label: None,
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::MUTATES,
+        operands: SET_POUR_FILL,
+        ..CommandMetadata::DEFAULT
+    },
+    // #2580: a pour's Thermal Relief switch, spoke width and air gap, the
+    // pour panel's rows in agent form. One undo step.
+    CommandMetadata {
+        id: "set_pour_thermal_relief",
+        category: "modify",
+        label: command_ids::CMD_SET_POUR_THERMAL_RELIEF,
+        menu_label: None,
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::MUTATES,
+        operands: super::operands::SET_POUR_THERMAL_RELIEF,
+        ..CommandMetadata::DEFAULT
+    },
+    // #2593: a footprint pad's own thermal relief air gap, spoke width and
+    // spoke count, each Rule or Manual. One undo step.
+    CommandMetadata {
+        id: "set_pad_thermal_relief",
+        category: "modify",
+        label: command_ids::CMD_SET_PAD_THERMAL_RELIEF,
+        menu_label: None,
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::MUTATES,
+        operands: super::operands::SET_PAD_THERMAL_RELIEF,
+        ..CommandMetadata::DEFAULT
+    },
     // #2363: the Layers panel's board view configuration, on the named
     // board's view: never the board, no undo step.
     CommandMetadata {
@@ -335,4 +389,25 @@ pub(super) const LAYERS: &[CommandMetadata] = &[
         operands: super::operands::OBJECT_TRANSPARENCY,
         ..CommandMetadata::DEFAULT
     },
+];
+
+/// `set_pour_corners` (#2578): pours by uuid, their `corners` (`sharp`,
+/// `rounded` or `chamfer`) and, optionally, the `corner_size` in mm (a
+/// Rounded corner's radius, a Chamfer's cut; 0 or more).
+const SET_POUR_CORNERS: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("ids", OperandKind::Targets),
+    required("corners", OperandKind::Text),
+    optional("corner_size", OperandKind::Text),
+];
+
+/// `set_pour_fill` (#2579): pours by uuid, their `fill` (`solid` or
+/// `hatched`) and, optionally, the hatch line `width` and the `gap` between
+/// lines in mm (0 or more; 0 uses the default).
+const SET_POUR_FILL: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("ids", OperandKind::Targets),
+    required("fill", OperandKind::Text),
+    optional("width", OperandKind::Text),
+    optional("gap", OperandKind::Text),
 ];

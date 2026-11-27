@@ -201,6 +201,7 @@ impl Signex {
                         | TabKind::Pcb
                         | TabKind::LayerStack
                         | TabKind::PolygonManager
+                        | TabKind::LengthMatching
                 )
             })
             .map(|tab| tab.path.as_path());

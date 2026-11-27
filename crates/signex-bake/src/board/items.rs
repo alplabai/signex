@@ -118,6 +118,11 @@ fn pours(ctx: &Context<'_>, nets: &[NetDef]) -> Result<Vec<Zone>, BoardBakeError
             // board edits.
             shelved: false,
             unfilled: false,
+            corners: Default::default(),
+            corner_size: 0.0,
+            fill_mode: Default::default(),
+            hatch_width: 0.0,
+            hatch_gap: 0.0,
             unknown: UnknownFields::default(),
         };
         let kind = BakedKind::BoardPours;

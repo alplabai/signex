@@ -1,7 +1,8 @@
 //! The board commands of the DRC results panel (#2399), the DRC fixes
-//! (#2940) and the board Net Classes panel (#2400), run from their
-//! operands. Each names its board with
-//! `document` and runs the same app path as the panel's button, so a person,
+//! (#2940), the board Net Classes panel (#2400) and the Interactive Routing
+//! options (#2719), run from their operands. Each names its board with
+//! `document` and runs the same app path as the panel's button or the
+//! routing keys, so a person,
 //! the CLI and an agent get one behaviour; each answers with what it did as
 //! JSON (`CommandOutcome::Answered`).
 
@@ -11,15 +12,19 @@ use iced::Task;
 use serde_json::Value;
 use signex_engine::NetClassCommand;
 use signex_engine::pcb::drc_fix::{FixRule, FixScope};
+use signex_engine::pcb::route::RouteMode;
+use signex_types::corner::CornerMode;
 use signex_types::format::parse_pcb_layer;
 use signex_types::net_class::NetClassStyle;
 use signex_types::pcb_layer::PcbLayer;
 use signex_types::theme::Color;
 use signex_types::violation::Severity;
 
+use super::operand_mm::operand_mm;
 use super::{CommandArgs, CommandOutcome, OperandValue};
 use crate::app::document::DocumentKey;
 use crate::app::handlers::board_net_classes::{typed_mm, with_rule};
+use crate::app::handlers::pcb_tool::RouteOptionsEdit;
 use crate::app::{Message, Signex};
 use crate::panels::{BoardNetClassField, DrcFilter};
 
@@ -268,6 +273,46 @@ fn assign_board_net_class_answer(app: &mut Signex, args: &CommandArgs) -> Result
     app.edit_board_net_classes(&board, NetClassCommand::AssignNet { net, class })
 }
 
+/// `route_options document=.. [conflict_mode=] [corner_mode=] [width=]
+/// [via_diameter=] [via_hole=]` (#2719): set the options given, then answer
+/// with every Interactive Routing option. A token that names no mode
+/// refuses the whole command, so nothing changes.
+fn route_options_answer(app: &mut Signex, args: &CommandArgs) -> Result<Value, String> {
+    let board = named_board(app, args, "`route_options`")?;
+    let one_of = |name: &str, tokens: &[&str]| format!("`{name}` is one of {}", tokens.join(", "));
+    let conflict_mode = text(args, "conflict_mode")
+        .map(|t| {
+            RouteMode::from_token(t)
+                .ok_or_else(|| one_of("conflict_mode", &RouteMode::ALL.map(RouteMode::token)))
+        })
+        .transpose()?;
+    let corner_mode = text(args, "corner_mode")
+        .map(|t| {
+            CornerMode::from_token(t)
+                .ok_or_else(|| one_of("corner_mode", &CornerMode::ALL.map(CornerMode::token)))
+        })
+        .transpose()?;
+    // `width`, `via_diameter` and `via_hole` are Text by the one operand
+    // convention, read by the one `operand_mm`.
+    let length = |name: &str| {
+        text(args, name)
+            .map(|raw| {
+                operand_mm(raw).ok_or_else(|| {
+                    format!("`{name}` is a length above 0 mm the board can store, not `{raw}`")
+                })
+            })
+            .transpose()
+    };
+    let edit = RouteOptionsEdit {
+        conflict_mode,
+        corner_mode,
+        width_mm: length("width")?,
+        via_diameter_mm: length("via_diameter")?,
+        via_hole_mm: length("via_hole")?,
+    };
+    app.route_options(&board, edit)
+}
+
 /// The operand handlers: each runs its `_answer` and reports what it
 /// answered, or why it was refused.
 macro_rules! answering {
@@ -288,4 +333,5 @@ answering! {
     delete_net_class => delete_net_class_answer;
     set_net_class_rules => set_net_class_rules_answer;
     assign_board_net_class => assign_board_net_class_answer;
+    route_options => route_options_answer;
 }

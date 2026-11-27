@@ -48,6 +48,7 @@ fn tracks(count: u128) -> TrackFacts {
         locked: Some(false),
         paste_mask: None,
         solder_mask: None,
+        pair: None,
     }
 }
 
@@ -121,6 +122,48 @@ fn position_start_and_end_each_keep_x_and_y_on_one_row() {
         tops.windows(2).all(|w| w[0] < w[1]),
         "Start, End in order: {tops:?}"
     );
+}
+
+/// #2585, mockup row 95: a pair track shows Pair, Paired Net and Pair Gap
+/// under Net, with the gap to three decimals; a plain track shows none.
+#[test]
+fn a_pair_track_shows_the_pair_rows() {
+    use crate::panels::pcb_primitive_properties::PairFacts;
+    let ctx = context();
+    let texts = |f: &TrackFacts| -> Vec<String> {
+        strip(lay_out_texts(
+            properties(Look::of(&ctx), f).expect("the properties"),
+            DOCK,
+        ))
+        .into_iter()
+        .map(|t| t.text)
+        .collect()
+    };
+    let rows = [
+        said(&ctx, ids::PCB_PRIM_PAIR),
+        said(&ctx, ids::PCB_PRIM_PAIRED_NET),
+        said(&ctx, ids::PCB_PRIM_PAIR_GAP),
+    ];
+    let plain_track = texts(&tracks(1));
+    for row in &rows {
+        assert!(!plain_track.contains(row), "{row}: {plain_track:?}");
+    }
+    let mut pair = tracks(1);
+    pair.pair = Some(PairFacts {
+        name: "USB".into(),
+        positive: "USB_P".into(),
+        negative: "USB_N".into(),
+        paired_net: Some("USB_N".into()),
+        gap_mm: Some(0.15),
+        tracks: vec![Uuid::from_u128(1), Uuid::from_u128(2)],
+    });
+    let shown = texts(&pair);
+    for row in &rows {
+        assert!(shown.contains(row), "{row}: {shown:?}");
+    }
+    for value in ["USB", "USB_N", "0.150"] {
+        assert!(shown.iter().any(|t| t == value), "{value}: {shown:?}");
+    }
 }
 
 /// Two tracks with different ends: every Start and End half reads "Mixed",

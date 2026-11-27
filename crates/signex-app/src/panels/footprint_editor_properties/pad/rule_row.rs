@@ -41,54 +41,90 @@ pub(in crate::panels::footprint_editor_properties) fn rule_or_manual_row<'a>(
     i18n: &I18n,
 ) -> Element<'a, PanelMsg> {
     let is_manual = value_mm.is_some() || buffer.is_some();
-    let pick = on_input.clone();
-    let source = segmented(
-        [
-            (false, Label::from(t!(i18n, ids::EDITORS_FP_PAD_RULE))),
-            (true, Label::from(t!(i18n, ids::EDITORS_FP_PAD_MANUAL))),
-        ],
-        is_manual,
-        segment_style(tokens),
-        move |manual: bool| source_picked(manual, is_manual, &pick),
-    );
     let stored = value_mm.map(|v| format!("{v:.3}")).unwrap_or_default();
     let shown = Shown::from_buffer(buffer.as_ref(), stored, false, |_| true);
-    let value = if is_manual {
-        number_input(&shown, on_input, tokens)
-    } else {
-        read_only_cell(t!(i18n, ids::EDITORS_FP_PAD_RULE_TAG), tokens)
-    };
-    let row = labelled_row(label, pair(source, value), SUB_ROW_WIDTHS, palette.muted);
-    linked_field(
-        with_refusals(row, &[shown.refusal], tokens, i18n),
+    let row = RuleRow {
+        label,
         field,
-        hover,
-        tokens,
-    )
+        is_manual,
+        seed: "0",
+    };
+    row.view(shown, on_input, palette, tokens, hover, i18n)
 }
 
-/// A value the board's rule always decides for a library pad: `label` and
-/// the read-only rule tag (per-pad values need a model field).
-pub(super) fn rule_only_row<'a>(
-    label: Localized,
-    palette: PanelPalette,
-    tokens: &ThemeTokens,
-    i18n: &I18n,
-) -> Element<'a, PanelMsg> {
-    let value = read_only_cell(t!(i18n, ids::EDITORS_FP_PAD_RULE_TAG), tokens);
-    labelled_row(label, value, SUB_ROW_WIDTHS, palette.muted)
+/// A Rule | Manual row whose Manual value is not 0 when picked (#2593: an
+/// air gap, spoke width or spoke count), shown as `shown`.
+pub(in crate::panels::footprint_editor_properties) struct RuleRow {
+    pub label: Localized,
+    pub field: FieldId,
+    /// Manual: a value is stored or refused text is shown.
+    pub is_manual: bool,
+    /// The text picking Manual sends.
+    pub seed: &'static str,
 }
 
-/// The message of a Rule | Manual pick: nothing when the pick is the
-/// current source, `""` for Rule and `"0"` for Manual.
+impl RuleRow {
+    pub(in crate::panels::footprint_editor_properties) fn view<'a>(
+        self,
+        shown: Shown,
+        on_input: impl Fn(String) -> PanelMsg + Clone + 'a,
+        palette: PanelPalette,
+        tokens: &ThemeTokens,
+        hover: &IllustrationHover,
+        i18n: &I18n,
+    ) -> Element<'a, PanelMsg> {
+        let (is_manual, seed) = (self.is_manual, self.seed);
+        let pick = on_input.clone();
+        let source = segmented(
+            [
+                (false, Label::from(t!(i18n, ids::EDITORS_FP_PAD_RULE))),
+                (true, Label::from(t!(i18n, ids::EDITORS_FP_PAD_MANUAL))),
+            ],
+            is_manual,
+            segment_style(tokens),
+            move |manual: bool| source_picked_with(manual, is_manual, seed, &pick),
+        );
+        let value = if is_manual {
+            number_input(&shown, on_input, tokens)
+        } else {
+            read_only_cell(t!(i18n, ids::EDITORS_FP_PAD_RULE_TAG), tokens)
+        };
+        let row = labelled_row(
+            self.label,
+            pair(source, value),
+            SUB_ROW_WIDTHS,
+            palette.muted,
+        );
+        linked_field(
+            with_refusals(row, &[shown.refusal], tokens, i18n),
+            self.field,
+            hover,
+            tokens,
+        )
+    }
+}
+
+/// The message of a Rule | Manual pick of an expansion row: nothing when
+/// the pick is the current source, `""` for Rule and `"0"` for Manual.
+#[cfg(test)]
 fn source_picked(
     manual: bool,
     is_manual: bool,
     on_input: &impl Fn(String) -> PanelMsg,
 ) -> PanelMsg {
+    source_picked_with(manual, is_manual, "0", on_input)
+}
+
+/// [`source_picked`] with `seed` as the text Manual sends.
+fn source_picked_with(
+    manual: bool,
+    is_manual: bool,
+    seed: &str,
+    on_input: &impl Fn(String) -> PanelMsg,
+) -> PanelMsg {
     match (manual, is_manual) {
         (true, true) | (false, false) => PanelMsg::Noop,
-        (true, false) => on_input("0".to_string()),
+        (true, false) => on_input(seed.to_string()),
         (false, true) => on_input(String::new()),
     }
 }
@@ -126,5 +162,16 @@ mod tests {
             source_picked(false, false, &on_input),
             PanelMsg::Noop
         ));
+    }
+
+    /// #2593: a thermal relief row's Manual sends its seed, not 0, which no
+    /// pour can use.
+    #[test]
+    fn manual_sends_the_rows_seed() {
+        let on_input = PanelMsg::FpEditorSetNextPadPasteMarginTop;
+        assert_eq!(
+            typed(super::source_picked_with(true, false, "0.508", &on_input)),
+            Some("0.508".into())
+        );
     }
 }

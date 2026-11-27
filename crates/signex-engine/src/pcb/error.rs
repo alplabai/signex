@@ -115,6 +115,9 @@ pub enum BoardCommandError {
     /// A panel that breaks a rule or cannot be laid out on the board (#2410).
     #[error("the panel cannot be set: {0}")]
     Panel(signex_types::pcb_panel::PanelError),
+    /// A teardrop rule whose shares cannot shape a teardrop.
+    #[error("the teardrop rule cannot be set: {0}")]
+    TeardropRule(signex_types::pcb_teardrop_rule::TeardropRuleError),
     #[error(
         "the board changed since revision {expected} (it is at {current}); read it again and retry"
     )]

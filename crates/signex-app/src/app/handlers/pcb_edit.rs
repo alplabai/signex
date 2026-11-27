@@ -120,6 +120,7 @@ impl Signex {
             self.document_view.panel_ctx.pcb_nets = self.pcb_nets_summary();
             self.document_view.panel_ctx.layer_stack = self.layer_stack_facts();
             self.refresh_polygon_facts();
+            self.document_view.panel_ctx.length_matching = self.length_matching_facts();
         } else {
             self.repaint_undocked_boards(path);
         }

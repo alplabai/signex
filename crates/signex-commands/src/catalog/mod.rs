@@ -12,6 +12,7 @@ mod annotate;
 mod arrange;
 mod block_diagram;
 mod board;
+mod board_rule_operands;
 mod bom;
 mod categories;
 mod clipboard;

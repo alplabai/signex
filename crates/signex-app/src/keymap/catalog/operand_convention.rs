@@ -175,6 +175,35 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     // #2552: a move's wire handling, given by the caller, not the settings.
     ("keep_wires", OperandKind::Bool),
     ("wiring", OperandKind::Text),
+    // #2719: the Interactive Routing conflict and corner mode tokens.
+    ("conflict_mode", OperandKind::Text),
+    ("corner_mode", OperandKind::Text),
+    // #2580, #2593: thermal relief in mm (a pad's may also be `rule`) and a
+    // pad's spoke count.
+    ("air_gap", OperandKind::Text),
+    ("spoke_width", OperandKind::Text),
+    ("spokes", OperandKind::Text),
+    // #2797: a length-matching group's band (mm), topology, member nets
+    // (comma separated) and new name; its `tolerance` is declared with #1297
+    // below.
+    ("target", OperandKind::Text),
+    ("topology", OperandKind::Text),
+    ("members", OperandKind::Text),
+    ("rename", OperandKind::Text),
+    // #2578, #2579: a pour's corner size, fill mode and hatch gap.
+    ("corner_size", OperandKind::Text),
+    ("fill", OperandKind::Text),
+    ("gap", OperandKind::Text),
+    // The board's teardrop rule and a pad's own setting (PCB Routing).
+    ("pads", OperandKind::Bool),
+    ("vias", OperandKind::Bool),
+    ("width_share", OperandKind::Text),
+    ("length_share", OperandKind::Text),
+    ("teardrop", OperandKind::Text),
+    // A pour's fill priority and island removal (#2216).
+    ("priority", OperandKind::Text),
+    ("islands_below", OperandKind::Text),
+    ("dead_copper", OperandKind::Bool),
     // #2796: a block diagram's blocks, ports, connections and groups.
     ("function", OperandKind::Text),
     ("note", OperandKind::Text),

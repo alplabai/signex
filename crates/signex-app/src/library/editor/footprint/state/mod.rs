@@ -36,6 +36,7 @@ pub mod pad;
 pub mod pad_link;
 pub mod pad_scope;
 mod pad_source;
+pub mod pad_thermal;
 pub mod placement;
 pub mod properties_view;
 pub mod selection;
@@ -63,6 +64,7 @@ pub use pad_link::{PadLinkFocus, PadLinkMsg, PadLinkOffer};
 pub use pad_source::{
     InstanceOverrides, PadAttribute, PadInstance, PadPatternKind, PadSketchSource,
 };
+pub use pad_thermal::PadThermalField;
 pub use placement::{PlaceArcPending, PlacementInput, PlacementInputKind};
 pub use properties_view::{
     COURTYARD_LINE_WIDTH_BUFFER, FOOTPRINT_HEIGHT_BUFFER, PAD_CLEARANCE_BUFFER,

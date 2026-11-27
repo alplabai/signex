@@ -20,6 +20,7 @@ use signex_types::pcb::{PadShape, PcbBoard, Point, Segment, Via, Zone};
 use signex_types::pcb_dimension_style::DimensionStyle;
 use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 use signex_types::zone_keepout::KEEPOUT_FILL;
+use signex_types::zone_pour_shape::{PourCorners, PourFillMode};
 use uuid::Uuid;
 
 use crate::app::handlers::pcb_primitive::{PrimitiveEdit, zone_edit};
@@ -76,6 +77,16 @@ pub struct BoardToolDefaults {
     pub pour_priority: Option<f64>,
     pub pour_min_island_mm2: Option<f64>,
     pub pour_remove_dead_islands: Option<bool>,
+    /// A pour's corners and size (#2578), fill mode and hatch (#2579).
+    pub pour_corners: Option<PourCorners>,
+    pub pour_corner_size_mm: Option<f64>,
+    pub pour_fill: Option<PourFillMode>,
+    pub pour_hatch_width_mm: Option<f64>,
+    pub pour_hatch_gap_mm: Option<f64>,
+    /// A pour's thermal relief switch, spoke width and air gap (#2580).
+    pub pour_thermal_relief: Option<bool>,
+    pub pour_thermal_width_mm: Option<f64>,
+    pub pour_thermal_gap_mm: Option<f64>,
     /// The line width of a drawing the Graphics tools place (#2424).
     pub graphic_width_mm: Option<f64>,
     /// A text frame's text; `None` reads the catalog's new-frame text.
@@ -95,6 +106,15 @@ impl BoardToolDefaults {
             self.pour_min_island_mm2.map(ZoneEdit::MinIslandArea),
             self.pour_remove_dead_islands
                 .map(ZoneEdit::RemoveDeadIslands),
+            self.pour_corners.map(ZoneEdit::Corners),
+            self.pour_corner_size_mm.map(ZoneEdit::CornerSize),
+            self.pour_fill.map(ZoneEdit::FillMode),
+            self.pour_hatch_width_mm.map(ZoneEdit::HatchWidth),
+            self.pour_hatch_gap_mm.map(ZoneEdit::HatchGap),
+            // The switch first: switching on seeds the width and gap.
+            self.pour_thermal_relief.map(ZoneEdit::ThermalRelief),
+            self.pour_thermal_width_mm.map(ZoneEdit::ThermalSpokeWidth),
+            self.pour_thermal_gap_mm.map(ZoneEdit::ThermalAirGap),
         ];
         for edit in edits.into_iter().flatten() {
             // Each value was checked by `apply_zone_edit` when it was set,
@@ -431,6 +451,20 @@ impl Signex {
             ZoneEdit::RemoveDeadIslands(on) if zone.is_pour() => {
                 defaults.pour_remove_dead_islands = Some(on);
             }
+            ZoneEdit::Corners(corners) if zone.is_pour() => {
+                defaults.pour_corners = Some(corners);
+            }
+            ZoneEdit::CornerSize(v) if zone.is_pour() => defaults.pour_corner_size_mm = Some(v),
+            ZoneEdit::FillMode(fill) if zone.is_pour() => defaults.pour_fill = Some(fill),
+            ZoneEdit::HatchWidth(v) if zone.is_pour() => defaults.pour_hatch_width_mm = Some(v),
+            ZoneEdit::HatchGap(v) if zone.is_pour() => defaults.pour_hatch_gap_mm = Some(v),
+            ZoneEdit::ThermalRelief(on) if zone.is_pour() => {
+                defaults.pour_thermal_relief = Some(on);
+            }
+            ZoneEdit::ThermalSpokeWidth(v) if zone.is_pour() => {
+                defaults.pour_thermal_width_mm = Some(v);
+            }
+            ZoneEdit::ThermalAirGap(v) if zone.is_pour() => defaults.pour_thermal_gap_mm = Some(v),
             _ => return,
         }
         self.refresh_pcb_highlight();

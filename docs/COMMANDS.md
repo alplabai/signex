@@ -506,6 +506,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `layout_plan_get` | Read the board's layout plan | pcb | — | — |
 | `layout_plan_set` | Change a stage of the board's layout plan | pcb | — | — |
 | `layout_plan_status` | Say how far each stage of the board's layout plan is | pcb | — | — |
+| `length_matching` | Open the Length Matching tab of the board: each length-matching group with its members' routed lengths against the target band | pcb | — | — |
 | `lock_board_items` | Lock the selected tracks and vias | modify | — | — |
 | `measure_board` | Measure on a board | search | — | — |
 | `new_pcb_document` | New PCB in the project | file | — | — |
@@ -547,12 +548,14 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `query_part_heights` | Query part heights | validation | — | — |
 | `reannotate_board` | Re-annotate the board's designators by position | design | — | — |
 | `remove_board_panel` | Remove the board's panel | pcb | — | — |
+| `remove_length_group` | Remove a length-matching group of a board; its nets stay | pcb | — | — |
 | `remove_teardrops` | Remove the teardrops of the selected nets, or of every net | pcb | — | — |
 | `rename_net_class` | Rename a net class | design | — | — |
 | `repour_all` | Fill every polygon pour of the board again and report their copper | pcb | — | — |
 | `repour_selected` | Fill the selected polygon pours again and report their copper | pcb | — | — |
 | `reset_board_origin` | Move the board origin to the bottom-left of the board outline | edit | — | — |
 | `reset_layer_colors` | Give every layer the board palette color again | view | — | — |
+| `route_options` | Read or set the Interactive Routing options of a board | pcb | — | — |
 | `rules_add` | Add a design rule | design | — | — |
 | `rules_conflicts` | List shadowed and conflicting design rules | validation | — | — |
 | `rules_effective` | Show the rule value that governs a net | validation | — | — |
@@ -577,6 +580,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `set_board_graphic` | Set one field of a board drawing | edit | — | — |
 | `set_board_origin` | Set the board origin at a clicked point | edit | `E O S` | `Shift+O` |
 | `set_board_panel` | Change a setting of the board's panel | pcb | — | — |
+| `set_diff_pair_width` | Set the width of a differential pair's tracks, both nets at once | modify | — | — |
 | `set_footprint_position` | Move a component on the board to a point | edit | — | — |
 | `set_footprint_rotation` | Set the rotation of a component on the board | edit | — | — |
 | `set_footprint_side` | Put a component on the top or bottom side of the board | edit | — | — |
@@ -586,10 +590,18 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `set_layer_stack` | Replace the layer stack of a board | design | — | — |
 | `set_layer_tab_names` | Name the layer tabs short, medium or long | view | — | — |
 | `set_layer_visible` | Show or hide one layer of the board view | view | — | — |
+| `set_length_group` | Make or change a length-matching group of a board: its target, tolerance, topology and member nets | pcb | — | — |
 | `set_net_class_rules` | Set the color and board rules of a net class | design | — | — |
 | `set_object_transparency` | Set how transparent one kind of object is drawn | view | — | — |
 | `set_object_visible` | Show or hide one kind of object in the board view | view | — | — |
 | `set_pad_shape` | Set the copper shape of pads, with a trapezoid's delta or a custom outline | modify | — | — |
+| `set_pad_teardrop` | Set whether pads take teardrops: always, never, or as the board's teardrop rule says | pcb | — | — |
+| `set_pad_thermal_relief` | Set a pad's own thermal relief air gap, spoke width and spokes, or follow the pour | modify | — | — |
+| `set_pour_corners` | Set how polygon pours shape the corners of their outline: sharp, rounded or chamfered, with a size | modify | — | — |
+| `set_pour_fill` | Set whether polygon pours fill with solid copper or a hatch, with the hatch width and gap | modify | — | — |
+| `set_pour_properties` | Set the fill priority and island removal of polygon pours | modify | — | — |
+| `set_pour_thermal_relief` | Set the thermal relief of polygon pours: on or off, spoke width and air gap | modify | — | — |
+| `set_teardrop_rule` | Set the board's teardrop rule: which pads and vias take teardrops, and how wide and long they are | pcb | — | — |
 | `set_via_span` | Set the copper layers vias span | modify | — | — |
 | `show_all_layers` | Show every layer | view | — | — |
 | `show_drc_violation` | Select a DRC violation and centre the view on it | pcb | — | — |

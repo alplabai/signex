@@ -594,6 +594,7 @@ define_ids! {
         CMD_PLACE_BOARD_ROUTE = "cmd-place-board-route";
         CMD_MENU_PLACE_BOARD_ROUTE = "cmd-menu-place-board-route";
         CMD_CYCLE_ROUTE_MODE = "cmd-cycle-route-mode";
+        CMD_ROUTE_OPTIONS = "cmd-route-options";
         CMD_BOARD_LAYER_STACK = "cmd-board-layer-stack";
         CMD_MENU_BOARD_LAYER_STACK = "cmd-menu-board-layer-stack";
         CMD_SET_LAYER_STACK = "cmd-set-layer-stack";
@@ -604,12 +605,19 @@ define_ids! {
         CMD_SET_VIA_SPAN = "cmd-set-via-span";
         CMD_SET_LAYER_SIZES = "cmd-set-layer-sizes";
         CMD_SET_PAD_SHAPE = "cmd-set-pad-shape";
+        CMD_SET_POUR_CORNERS = "cmd-set-pour-corners";
+        CMD_SET_POUR_FILL = "cmd-set-pour-fill";
+        CMD_SET_POUR_THERMAL_RELIEF = "cmd-set-pour-thermal-relief";
+        CMD_SET_PAD_THERMAL_RELIEF = "cmd-set-pad-thermal-relief";
         CMD_STITCH_VIAS = "cmd-stitch-vias";
         CMD_MENU_STITCH_VIAS = "cmd-menu-stitch-vias";
         CMD_ADD_TEARDROPS = "cmd-add-teardrops";
         CMD_MENU_ADD_TEARDROPS = "cmd-menu-add-teardrops";
         CMD_REMOVE_TEARDROPS = "cmd-remove-teardrops";
         CMD_MENU_REMOVE_TEARDROPS = "cmd-menu-remove-teardrops";
+        CMD_SET_TEARDROP_RULE = "cmd-set-teardrop-rule";
+        CMD_SET_PAD_TEARDROP = "cmd-set-pad-teardrop";
+        CMD_SET_POUR_PROPERTIES = "cmd-set-pour-properties";
         CMD_GLOSS_SELECTED_ROUTES = "cmd-gloss-selected-routes";
         CMD_MENU_GLOSS_SELECTED_ROUTES = "cmd-menu-gloss-selected-routes";
         CMD_BOARD_SHAPE_FROM_SELECTION = "cmd-board-shape-from-selection";
@@ -667,6 +675,13 @@ define_ids! {
         CMD_MENU_TUNE_NET_LENGTH = "cmd-menu-tune-net-length";
         CMD_TUNE_DIFF_PAIR = "cmd-tune-diff-pair";
         CMD_MENU_TUNE_DIFF_PAIR = "cmd-menu-tune-diff-pair";
+        // #2585: the width of a differential pair's tracks.
+        CMD_SET_DIFF_PAIR_WIDTH = "cmd-set-diff-pair-width";
+        // #2797: the Length Matching tab and its groups.
+        CMD_LENGTH_MATCHING = "cmd-length-matching";
+        CMD_MENU_LENGTH_MATCHING = "cmd-menu-length-matching";
+        CMD_SET_LENGTH_GROUP = "cmd-set-length-group";
+        CMD_REMOVE_LENGTH_GROUP = "cmd-remove-length-group";
         CMD_CHANGE_FOOTPRINT = "cmd-change-footprint";
         CMD_MENU_CHANGE_FOOTPRINT = "cmd-menu-change-footprint";
         CMD_BOARD_REPORT_BOM = "cmd-board-report-bom";

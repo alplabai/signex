@@ -237,6 +237,8 @@ mod tests {
                 "layout_plan_get",
                 "layout_plan_set",
                 "layout_plan_status",
+                // #2797: the named board's length-matching groups.
+                "length_matching",
                 // Mockup row 198: the notebook's review records, by typed id.
                 "list_annotations",
                 // #2952: a query.
@@ -322,6 +324,7 @@ mod tests {
                 "read_document",
                 "reannotate_board",
                 "remove_board_panel",
+                "remove_length_group",
                 "remove_teardrops",
                 "rename_net_class",
                 // #2216: each pour's fill of the named board, as JSON.
@@ -331,6 +334,8 @@ mod tests {
                 "reset_layer_colors",
                 "resolve",
                 "revert",
+                // #2719: the routing options on the named board.
+                "route_options",
                 "rules_add",
                 "rules_conflicts",
                 "rules_effective",
@@ -358,6 +363,8 @@ mod tests {
                 "set_active_layer",
                 "set_board_graphic",
                 "set_board_panel",
+                // #2585: a differential pair's track width.
+                "set_diff_pair_width",
                 // #2470: a dock panel opened, closed, collapsed or expanded.
                 "set_dock_panel",
                 // #2936: a footprint placed by id on the named board.
@@ -369,10 +376,22 @@ mod tests {
                 "set_layer_sizes",
                 "set_layer_stack",
                 "set_layer_visible",
+                "set_length_group",
                 "set_net_class_rules",
                 "set_object_transparency",
                 "set_object_visible",
                 "set_pad_shape",
+                // #2578, #2579, #2580, #2593: pour shape, fill rules and
+                // thermal relief, and a pad's own teardrop and relief
+                // settings, on the named board.
+                "set_pad_teardrop",
+                "set_pad_thermal_relief",
+                "set_pour_corners",
+                "set_pour_fill",
+                "set_pour_properties",
+                "set_pour_thermal_relief",
+                // The board's teardrop rule.
+                "set_teardrop_rule",
                 "set_via_span",
                 "show_drc_violation",
                 "show_layer_group",

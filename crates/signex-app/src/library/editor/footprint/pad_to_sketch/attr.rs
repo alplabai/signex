@@ -109,6 +109,7 @@ pub fn seed_pads_from_sketch_attrs(pads: &mut [EditorPad], sketch: &SketchData) 
         pad.stack.mask_tented_bottom = st.mask_bottom_tented;
         pad.stack.thermal_relief = st.thermal_relief;
         pad.stack.corner_radius_pct = st.corner_radius_pct;
+        pad.stack.thermal = st.thermal;
     }
 }
 
@@ -168,6 +169,7 @@ fn mirror_stack(stack: &mut PadStackOverrides, pad: &EditorPad) {
     stack.mask_bottom_tented = ui.mask_tented_bottom;
     stack.thermal_relief = ui.thermal_relief;
     stack.corner_radius_pct = ui.corner_radius_pct;
+    stack.thermal = ui.thermal;
 }
 
 /// `signex_bake::pad` reads `PadAttr::shape`, so the sketch copy of

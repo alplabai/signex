@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::format::{BoardUnknown, UnknownColumns, UnknownFields, parse_pcb_layer};
+use crate::pad_thermal::PadThermal;
 use crate::part::FootprintSourceRef;
 use crate::pcb_layer::{CopperLayer, PcbLayer};
 pub use crate::pcb_stack::{LayerSize, LayerSizes, LayerStack};
@@ -233,6 +234,10 @@ pub struct Pad {
     /// on every layer. Saved in the optional `layer_sizes` pad column.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub layer_sizes: Option<LayerSizes<Point>>,
+    /// The pad's own thermal relief values (#2593), each `None` following
+    /// the pour. Saved in the optional `thermal` pad column.
+    #[serde(default, skip_serializing_if = "PadThermal::is_rule")]
+    pub thermal: PadThermal,
     /// Keys in this pad's `[extras.pads.<uuid>]` table that this build
     /// does not recognise, kept so a save re-emits them.
     #[serde(default, skip_serializing_if = "UnknownFields::is_empty")]
@@ -524,6 +529,29 @@ pub struct Zone {
     /// when off.
     #[serde(default, skip_serializing_if = "crate::zone_pour::is_off")]
     pub unfilled: bool,
+    /// How a pour's fill shapes the convex corners of its outline (#2578).
+    /// Not written when Sharp.
+    #[serde(
+        default,
+        skip_serializing_if = "crate::zone_pour_shape::PourCorners::is_sharp"
+    )]
+    pub corners: crate::zone_pour_shape::PourCorners,
+    /// The radius of a Rounded corner or the cut of a Chamfer, in mm. Not
+    /// written when 0.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub corner_size: f64,
+    /// Solid or hatched copper (#2579). Not written when Solid.
+    #[serde(
+        default,
+        skip_serializing_if = "crate::zone_pour_shape::PourFillMode::is_solid"
+    )]
+    pub fill_mode: crate::zone_pour_shape::PourFillMode,
+    /// A hatched pour's line width and the gap between lines, in mm; 0
+    /// uses the default (`zone_pour_shape`). Not written when 0.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub hatch_width: f64,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub hatch_gap: f64,
     /// Keys in this zone's `[[zones]]` table that this build does not
     /// recognise, kept so a save re-emits them: a zone field added by a
     /// later build (as `holes` was in #818) survives a re-save here (#883).

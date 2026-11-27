@@ -629,6 +629,11 @@ fn every_field_pad() -> Pad {
         hole_rotation_deg: Some(90.0),
         copper_offset_x_mm: Some(0.15),
         copper_offset_y_mm: Some(-0.35),
+        thermal: signex_types::pad_thermal::PadThermal {
+            air_gap: Some(0.3),
+            spoke_width: Some(0.35),
+            spokes: Some(2),
+        },
     }
 }
 

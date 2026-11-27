@@ -19,11 +19,11 @@ use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 use signex_types::pcb_stack::board_copper_layers;
 
 use super::operand_handlers::refused;
+use super::operand_mm::operand_mm;
 use super::{CommandArgs, CommandOutcome, OperandValue};
 use crate::app::handlers::pcb_tool::{RouteMade, RouteOrder, ViaOrder, tool_refusal};
 use crate::app::pcb_tools::BoardPlaceTool;
 use crate::app::{Message, Signex};
-use crate::panels::pcb_primitive_properties::parse_number;
 
 type Ran = (CommandOutcome, Task<Message>);
 
@@ -265,8 +265,7 @@ fn via_span(board: &PcbBoard, names: &str) -> Result<(CopperLayer, CopperLayer),
 /// A length in mm above zero that the board file can store (#2985): a
 /// size past its range would make every later Save fail.
 fn length(operand: &'static str, value: &str) -> Result<f64, Translatable> {
-    parse_number(value)
-        .filter(|mm| *mm > 0.0 && mm_as_stored_nm(*mm).is_some())
+    operand_mm(value)
         .ok_or_else(|| Translatable::new(ids::PCB_ROUTE_ORDER_LENGTH).arg("operand", operand))
 }
 

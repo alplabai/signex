@@ -342,6 +342,7 @@ fn pad(n: u128, at: (f64, f64), net: Option<u32>, pad_type: PadType) -> Pad {
         custom_outline: Vec::new(),
         layer_sizes: None,
         net_locked: false,
+        thermal: Default::default(),
         unknown: Default::default(),
         unknown_columns: Default::default(),
     }

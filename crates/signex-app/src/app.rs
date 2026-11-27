@@ -57,6 +57,7 @@ mod handlers;
 pub(crate) mod hierarchy_fixture;
 mod layer_stack_tab;
 pub(crate) mod layout_plan;
+mod length_matching_tab;
 mod library_delete;
 mod load_gateway;
 mod mutation_gateway;

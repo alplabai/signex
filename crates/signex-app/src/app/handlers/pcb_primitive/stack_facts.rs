@@ -3,7 +3,10 @@
 //! their protection class come from `signex_engine::pcb::via_types`; this
 //! module only names them.
 
-use signex_engine::pcb::via_types::{ViaTypeDef, is_overridden, min_via_drill, type_of, via_types};
+use signex_drc::DrcRules;
+use signex_engine::pcb::via_types::{
+    SizeOverride, ViaTypeDef, overridden_fields, type_of, via_min_drill, via_types,
+};
 use signex_i18n::{I18n, ids, t};
 use signex_types::pcb::{Pad, PcbBoard, Point, Via, ViaType};
 use signex_types::pcb_layer::{CopperLayer, InnerCopper};
@@ -71,14 +74,16 @@ fn type_choice(i18n: &I18n, def: &ViaTypeDef) -> ViaTypeChoice {
 }
 
 /// Fill in what `facts` shows of the vias' type (mockup row 96): the
-/// board's types, the one the vias share, whether they override its size,
-/// the drill pair, protection, finished hole, the board's minimum drill and
-/// the sides the vias reach.
+/// board's types, the one the vias share, which sizes override its own,
+/// the drill pair, protection, finished hole, the minimum drill and the
+/// sides the vias reach. `rules` are the board's design rules, when they
+/// compile: the minimum drill is the one the check holds the vias to.
 pub(super) fn fill_via_type_facts(
     facts: &mut ViaFacts,
     board: &PcbBoard,
     stack: &[CopperLayer],
     vias: &[&Via],
+    rules: Option<&DrcRules>,
     i18n: &I18n,
 ) {
     let defs = via_types(board);
@@ -86,19 +91,32 @@ pub(super) fn fill_via_type_facts(
     let shared_type = shared(vias.iter().map(|v| type_of(&defs, v))).flatten();
     facts.via_type = shared_type.map(|i| facts.types[i].clone());
     facts.type_size = shared_type.map(|i| (defs[i].diameter, defs[i].drill));
-    facts.overridden = shared_type.map(|i| vias.iter().any(|v| is_overridden(&defs[i], v)));
+    facts.overridden_sizes = shared_type.map(|i| {
+        vias.iter()
+            .map(|v| overridden_fields(&defs[i], v))
+            .fold(SizeOverride::default(), SizeOverride::either)
+    });
+    facts.overridden = facts.overridden_sizes.map(SizeOverride::any);
     facts.protection = shared(vias.iter().map(|v| ViaProtection::of_via(v)));
     let spans: Vec<Option<(usize, usize)>> =
         vias.iter().map(|v| pcb_geom::via_span(stack, v)).collect();
     facts.drill_pair = shared(vias.iter().map(|v| v.via_type).zip(spans.iter().copied()))
         .and_then(|(kind, span)| Some(drill_pair(i18n, kind, span?)));
     facts.finished_hole = facts.hole.map(ViaTypeDef::finished_hole);
-    facts.min_drill = min_via_drill(board);
+    facts.min_drill = min_drill(board, vias, rules);
     let last = stack.len();
     facts.reaches = (
         spans.iter().all(|s| s.is_some_and(|(from, _)| from == 1)),
         spans.iter().all(|s| s.is_some_and(|(_, to)| to == last)),
     );
+}
+
+/// The largest of the vias' minimum drills (`via_min_drill`): a drill they
+/// share below it is below some via's own limit.
+fn min_drill(board: &PcbBoard, vias: &[&Via], rules: Option<&DrcRules>) -> Option<f64> {
+    vias.iter()
+        .filter_map(|v| via_min_drill(board, rules.and_then(|r| r.via_drill_limit_mm(v))))
+        .reduce(f64::max)
 }
 
 pub(super) fn layer_choice(i18n: &I18n, layer: CopperLayer) -> LayerChoice {

@@ -169,6 +169,11 @@ this build cannot read refuses the file. Layer colour... and the reset rows
 of a layer tab, the Layers panel's colour chips and `set_layer_color` /
 `reset_layer_colors` set them, each as one `SetBoardOptions` undo step.
 
+Length-matching groups (#2797) are `[[board_options.length_groups]]`, written
+only when the board has one, and then the board writes `snxpcb/1.12`. The
+Length Matching tab and `set_length_group` / `remove_length_group` set them,
+each as one `SetBoardOptions` undo step ([PCB_LENGTH_MATCHING.md](PCB_LENGTH_MATCHING.md)).
+
 Waived design-rule findings (#2399) are `[[board_options.drc_waivers]]`, one
 table per waiver with `key` (`signex_drc::waiver_key`), `rule`, `note` and
 `fingerprint`, written only when the board waives one. The DRC results panel
@@ -185,6 +190,8 @@ board saved before it re-saves byte-identical.
 See `docs/architecture/pcb-drc.md`, "Waivers".
 
 The panel (#2410) is `[board_options.panel]`, written only when the board has one; the panel edits run its own `SetBoardPanel` command, and the options edits here carry it unchanged. See [PANELISATION.md](PANELISATION.md).
+
+The teardrop rule is `[board_options.teardrops]`, written only when it is not the default (`snxpcb/1.12`); `set_teardrop_rule` and `set_pad_teardrop` change it, each as one `SetBoardOptions` undo step. See [PCB_TOOLS.md](PCB_TOOLS.md), "Teardrop rule".
 
 The layout plan (#2942) is `[board_options.layout_plan]`, written only when it
 sets anything (the board then writes `snxpcb/1.12`); `layout_plan_set` changes

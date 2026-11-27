@@ -152,17 +152,27 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
   and `fix_drc_violation` (#2940, one undo step on the board),
   `add_net_class`,
   `rename_net_class`, `delete_net_class`, `set_net_class_rules` and
-  `assign_board_net_class`, each answering with what it did, the board
+  `assign_board_net_class`, each answering with what it did, the
+  Interactive Routing options `route_options` (#2719; tool state, no undo
+  step, [CLI.md](CLI.md), "Routing options"), the board
   edits `set_layer_stack`, `lock_board_items`, `unlock_board_items`,
   `set_via_span` and `set_layer_sizes` (#2401, #2407: each one undo step on
   the board it names, [PCB_LAYER_STACK.md](PCB_LAYER_STACK.md)), the pad edit
   `set_pad_shape` (#2242: a trapezoid with its `delta` or a custom pad with
-  its `corners`, pad-local mm; one undo step), and the board
+  its `corners`, pad-local mm; one undo step), the pour edits
+  `set_pour_corners` and `set_pour_fill` (#2578, #2579: corners and size,
+  solid or hatched fill with its width and gap; one undo step each,
+  answered with the pours and their fill, [PCB_TOOLS.md](PCB_TOOLS.md),
+  "Corners and hatched fill"), and the board
   Tools edits (#2408, #2409) `stitch_vias`, `add_teardrops`,
   `remove_teardrops`, `gloss_selected_routes`, `board_shape_from_selection`,
   `keepout_from_selection` and `arrange_in_box`, each one board undo step
   answered with the uuids it added, removed and changed
-  ([PCB_TOOLS.md](PCB_TOOLS.md), "Board Tools"), and the board drawing edits
+  ([PCB_TOOLS.md](PCB_TOOLS.md), "Board Tools"), the board rule edits
+  `set_teardrop_rule`, `set_pad_teardrop` and `set_pour_properties` (one
+  board undo step each, answered with the rule, the pads or the pours as
+  JSON; [PCB_TOOLS.md](PCB_TOOLS.md), "Teardrop rule" and "Pour
+  properties"), and the board drawing edits
   `add_board_graphic` and `set_board_graphic` (#2424; one board undo step
   each, answered with the drawing as JSON), the area tools
   `place_board_fill`, `place_board_region`, `place_board_polygon_pour`,
@@ -173,7 +183,12 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
   its own, one board undo step, answered with the text as JSON), and the
   length tuning commands
   `tune_net_length` and `tune_diff_pair` (#2389; one undo step on the named
-  board, answered with the tuned nets and their lengths as JSON), and
+  board, answered with the tuned nets and their lengths as JSON), the pair
+  width `set_diff_pair_width` (#2585; one undo step, answered with the pair,
+  its nets, the tracks changed and the gap), the length-matching commands
+  `length_matching` (the groups as JSON), `set_length_group` and
+  `remove_length_group` (#2797; one undo step each,
+  [PCB_LENGTH_MATCHING.md](PCB_LENGTH_MATCHING.md)), and
   `update_pcb_from_schematic` (#2470; for the project of the named sheet or
   board, `dry_run=true` or `apply=true`, answered with the change list once
   it is read; an apply is one undo step on the board, [CLI.md](CLI.md),
