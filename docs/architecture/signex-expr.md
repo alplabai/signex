@@ -47,10 +47,12 @@ millimetres. A parameter named after a reserved constant (`pi`,
 every expression would read the constant instead.
 
 A footprint field parses in the context its value must have (#2683): an
-array pitch in `LiteralContext::Length`, so `2.54m` is metres; an array
-count in `LiteralContext::Count` and a pad rotation or polar sweep in
-`LiteralContext::Angle`. Both refuse a prefix-only or RKM literal (`4k7`,
-`10m`), so a count or an angle is never read as an SI multiplier.
+array pitch or any other length in `LiteralContext::Length`, so `2.54m` is
+metres; an array count in `LiteralContext::Count` and a pad rotation or
+polar sweep in `LiteralContext::Angle`. All three refuse a prefix-only or
+RKM literal (`4k7`, `1k`, `1u`; `ExprError::BadQuantity` naming it), so a
+length, a count or an angle is never read as an SI multiplier. In a length
+the bare `m` alone is kept, as metres (`docs/DECISIONS.md`, 2026-11-27).
 
 ## Resolver
 

@@ -10,15 +10,16 @@ use crate::dimension::Dimension;
 use crate::unit::{Quantity, Unit};
 
 /// Where a literal is read. The meaning of a bare `m` depends on it (see
-/// [`bare_m_meaning`]), and [`LiteralContext::Geometry`],
-/// [`LiteralContext::Angle`] and [`LiteralContext::Count`] refuse a literal
-/// whose suffix is only an SI prefix.
+/// [`bare_m_meaning`]), and every context but [`LiteralContext::General`]
+/// refuses a literal whose suffix is only an SI prefix (a bare `m` aside).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum LiteralContext {
     /// Any value: a field, a variable, a BOM column.
     #[default]
     General,
-    /// A value that must be a length (a pad width, a clearance).
+    /// A value that must be a length (a pad width, a clearance). A bare
+    /// `m` is metres; any other prefix-only or RKM literal (`4k7`, `1k`,
+    /// `1u`) is refused (Caner 2026-11-27).
     Length,
     /// A sketch parameter: a length, an angle or a count that drives
     /// geometry. A prefix-only literal (`10m`, `1u`, `4k7`, `2n`) has no
@@ -52,12 +53,10 @@ pub fn bare_m_meaning(context: LiteralContext) -> BareM {
 }
 
 /// True when `context` refuses a literal whose suffix is only an SI prefix
-/// (`1u`, `2n`) or that is written in RKM notation (`4k7`).
+/// (`1u`, `2n`, `1k`) or that is written in RKM notation (`4k7`). A bare
+/// `m` is decided by [`bare_m_meaning`] first.
 pub(crate) fn refuses_prefix_only(context: LiteralContext) -> bool {
-    matches!(
-        context,
-        LiteralContext::Geometry | LiteralContext::Angle | LiteralContext::Count
-    )
+    context != LiteralContext::General
 }
 
 /// Millimetres in one metre.

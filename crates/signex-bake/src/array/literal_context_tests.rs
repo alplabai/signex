@@ -1,6 +1,7 @@
 //! #2683: every array field and the pad rotation parse in the context its
-//! value must have. A pitch is a length (`2.54m` is metres), a count and an
-//! angle refuse SI multipliers (`4k7` is a parse error, never 4700).
+//! value must have. A pitch is a length (`2.54m` is metres); a length, a
+//! count and an angle refuse SI multipliers (`4k7` is a parse error, never
+//! 4700).
 
 use std::collections::HashMap;
 
@@ -106,25 +107,22 @@ fn xs(pads: &[LibPad]) -> Vec<f64> {
     pads.iter().map(|p| p.position[0]).collect()
 }
 
-/// The millimetres `text` is worth in a length field such as a pad width.
-fn as_a_length_field(text: &str) -> f64 {
-    let ctx = EvalContext {
-        params: Default::default(),
-        array_index: None,
-    };
-    crate::eval_util::eval_mm(text, &ctx).expect("a length field reads it")
-}
-
 #[test]
 fn a_linear_pitch_in_metres_is_metres() {
     let (sketch, _) = sketch_with(None, linear("2", "2.54m"));
     assert_eq!(xs(&bake(&sketch).unwrap()), [0.0, 2540.0]);
 }
 
+/// Caner (2026-11-27): a pitch refuses an RKM or prefix-only literal.
 #[test]
-fn a_linear_pitch_reads_4k7_as_a_length_field_does() {
-    let (sketch, _) = sketch_with(None, linear("2", "4k7"));
-    assert_eq!(xs(&bake(&sketch).unwrap()), [0.0, as_a_length_field("4k7")]);
+fn a_linear_pitch_refuses_4k7_and_1k() {
+    for pitch in ["4k7", "1k", "1u"] {
+        let (sketch, _) = sketch_with(None, linear("2", pitch));
+        assert!(
+            matches!(bake(&sketch), Err(SketchError::Expr(_))),
+            "pitch {pitch} is a parse error"
+        );
+    }
 }
 
 #[test]
@@ -139,10 +137,25 @@ fn a_grid_pitch_in_metres_is_metres_on_both_axes() {
 }
 
 #[test]
-fn a_grid_pitch_reads_4k7_as_a_length_field_does() {
-    let (sketch, _) = sketch_with(None, grid("2", "4k7", "1mm"));
-    let pads = bake(&sketch).unwrap();
-    assert_eq!(pads[1].position[0], as_a_length_field("4k7"));
+fn a_grid_pitch_refuses_4k7() {
+    for (dx, dy) in [("4k7", "1mm"), ("1mm", "4k7")] {
+        let (sketch, _) = sketch_with(None, grid("2", dx, dy));
+        assert!(
+            matches!(bake(&sketch), Err(SketchError::Expr(_))),
+            "pitch ({dx}, {dy}) is a parse error"
+        );
+    }
+}
+
+/// A pad size, a length field outside a pattern, refuses it too.
+#[test]
+fn a_length_field_refuses_4k7() {
+    let ctx = EvalContext {
+        params: Default::default(),
+        array_index: None,
+    };
+    assert!(crate::eval_util::eval_mm("4k7", &ctx).is_err());
+    assert_eq!(crate::eval_util::eval_mm("2.54m", &ctx), Ok(2540.0));
 }
 
 #[test]

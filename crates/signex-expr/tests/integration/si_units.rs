@@ -176,3 +176,27 @@ fn count_context_refuses_si_multipliers() {
     );
     assert!(signex_expr::parse_with("2 * 4k7", LiteralContext::Count).is_err());
 }
+
+/// Caner (2026-11-27): a length refuses an RKM or prefix-only literal, as a
+/// count and an angle do; a bare `m` stays metres and a prefixed named unit
+/// stays what it is.
+#[test]
+fn length_context_refuses_rkm_and_prefix_only_literals() {
+    for literal in ["4k7", "1k", "1u", "2n2", "5k"] {
+        assert!(
+            parse_quantity_with(literal, LiteralContext::Length).is_err(),
+            "{literal} must be refused as a length"
+        );
+    }
+    assert!(signex_expr::parse_with("1mm + 4k7", LiteralContext::Length).is_err());
+    assert_eq!(
+        parse_quantity_with("2.54m", LiteralContext::Length).unwrap(),
+        Quantity::length(2540.0)
+    );
+    assert_eq!(
+        parse_quantity_with("0.65", LiteralContext::Length).unwrap(),
+        Quantity::count(0.65)
+    );
+    assert!(parse_quantity_with("10mV", LiteralContext::Length).is_ok());
+    assert!(parse_quantity("4k7").is_ok(), "General still reads RKM");
+}
