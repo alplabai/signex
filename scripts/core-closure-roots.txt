@@ -1,0 +1,11 @@
+# Core closure roots (scripts/check_core_closure.sh, #2326). Besides the types
+# named in DocumentState, the port types the host uses directly. One type name
+# per line followed by a `# why` comment. A view or adapter type is never a root.
+
+CoreEvent          # the events a document edit reports back (DocumentState::settle_run returns Vec<CoreEvent>)
+MutationOutcome    # the result of an engine command batch through the mutation gateway
+Origin             # who runs a command: an argument of every command run, kept in AgentEdits.origins
+JoinedSheet        # held by DocumentState.agent_edits (AgentEdits lives outside app/core/ until it lifts)
+DiagramItem        # payload of DiagramEdit::RemoveItems, the block-diagram edit command
+UnreadableCause    # why a document read failed: the typed result of the sheet read (S4)
+ResolvedPlacement  # a library row read for placing: the library read's result the place-part command consumes
