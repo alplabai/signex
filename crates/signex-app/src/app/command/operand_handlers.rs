@@ -593,6 +593,11 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
             "`set_layer_tab_names` needs the operand `style` — \
              right-click a layer tab under the board",
         ),
+        // #2470: for agents and scripts; a person uses the dock itself.
+        "set_dock_panel" => Some(
+            "`set_dock_panel` needs the operands `panel` and `state` — \
+             use the panel list, a tab's close button or the region's arrow",
+        ),
         // #2363: a person uses the Layers panel.
         "set_layer_visible" | "set_active_layer" | "set_layer_color" => Some(
             "this command needs the operands `layer` and `document` — \

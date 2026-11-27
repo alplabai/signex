@@ -54,7 +54,12 @@ fn write_export_task(
                     crate::app::path_op_jobs::write_new(&path, &bytes, true)
                 };
                 written.map_err(|e| {
-                    if e.kind() == std::io::ErrorKind::AlreadyExists {
+                    // Only the claim of a new file says the file is there;
+                    // a folder in the way of a replace is a plain failure.
+                    let taken = !rule.replace
+                        && e.kind() == std::io::ErrorKind::AlreadyExists
+                        && path.is_file();
+                    if taken {
                         Translatable::new(signex_i18n::ids::NOTEBOOK_TAB_CMD_TARGET_EXISTS)
                             .arg("value", path.display().to_string())
                             .render_en_us()
