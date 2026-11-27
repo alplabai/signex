@@ -80,7 +80,7 @@ impl Signex {
         // user may well be printing or reviewing mid-refactor with a child
         // file genuinely absent from disk. So this degrades rather than
         // blocks, but it degrades *loudly*, once, from this user action.
-        super::log_stitch_issues(&source, &ctx, &issues);
+        self.report_stitch_issues(&source, &ctx, &issues);
         super::sheet_numbers::log_numbering_issues(issues.sheet_numbering.as_ref());
 
         self.retire_dead_placement(&issues, &source, &options.page_range);
@@ -179,7 +179,7 @@ impl Signex {
         if self.refused_for_channel_naming(&issues) {
             return Task::none();
         }
-        super::log_stitch_issues(&source, &ctx, &issues);
+        self.report_stitch_issues(&source, &ctx, &issues);
 
         // Not a hole the user can accept: the file would be wrong, not partial.
         if let Some(refusal) = issues.shared_reference_refusal(&ctx) {

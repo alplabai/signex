@@ -98,7 +98,7 @@ fn the_cli_writes_the_not_fitted_layer() {
     settle(&mut app, task);
     let text = String::from_utf8_lossy(&std::fs::read(&file).expect("written")).into_owned();
     assert!(text.contains("/Name (Not-fitted parts)"), "the group");
-    // R1 is marked DNP: its drawing is in the group (the sixth, `OC5`), and
+    // R1 is marked DNP: its drawing is in the group (the seventh, `OC6`), and
     // the group is not listed among those visible on open.
     let begin = signex_output::PdfLayer::ALL
         .iter()
@@ -110,8 +110,8 @@ fn the_cli_writes_the_not_fitted_layer() {
     let off = &text[off_at..off_at + text[off_at..].find(']').expect("array")];
     assert_eq!(
         off.matches(" 0 R").count(),
-        3,
-        "net labels, power ports, not fitted: {off}"
+        4,
+        "signal harnesses, net labels, power ports, not fitted: {off}"
     );
 }
 

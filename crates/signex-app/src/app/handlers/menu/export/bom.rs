@@ -526,7 +526,7 @@ impl Signex {
         // *wrong* subtree — wrong parts, wrong quantities. Surface it loudly,
         // once, from this user action, exactly like the PDF/netlist
         // deliverables (ADR-0002 D8: degradation is reported, never silent).
-        super::log_stitch_issues(&source, &ctx, &issues);
+        self.report_stitch_issues(&source, &ctx, &issues);
         crate::library::drift::apply_library_names(&mut ctx, &self.library.drift.names);
         // A project whose hierarchy could not be derived falls back to the
         // printed pages only, so child-sheet parts would be missing. Say so in

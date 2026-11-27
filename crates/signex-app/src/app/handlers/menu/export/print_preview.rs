@@ -42,7 +42,7 @@ impl Signex {
             crate::diagnostics::log_warning("Print preview: no active document");
             return iced::Task::none();
         };
-        super::log_stitch_issues(&source, &ctx, &issues);
+        self.report_stitch_issues(&source, &ctx, &issues);
         super::sheet_numbers::log_numbering_issues(issues.sheet_numbering.as_ref());
 
         // The sheet's own paper, the theme's palette and the project's

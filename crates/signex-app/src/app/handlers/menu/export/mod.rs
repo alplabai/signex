@@ -268,6 +268,31 @@ fn log_stitch_issues(source: &std::path::Path, ctx: &ExportContext, issues: &Exp
     }
 }
 
+impl Signex {
+    /// [`log_stitch_issues`] for a user action on `source`, with each stitch
+    /// problem also claimed in its project's reported warnings, so a net
+    /// index build the action sets off (the cross references) does not say
+    /// it a second time.
+    fn report_stitch_issues(
+        &mut self,
+        source: &std::path::Path,
+        ctx: &ExportContext,
+        issues: &ExportIssues,
+    ) {
+        log_stitch_issues(source, ctx, issues);
+        let Some(project) = self.document_state.document_project(source).map(|p| p.id) else {
+            return;
+        };
+        let reported = &mut self.document_view.net_nav.reported;
+        for issue in &issues.stitch {
+            reported.claim(
+                project,
+                &crate::app::project_sheets::stitch_issue_message(issue),
+            );
+        }
+    }
+}
+
 /// One page per project sheet entry, in list order. Sheets open as tabs carry
 /// the live engine snapshot (so unsaved edits show in the preview); the rest
 /// were read from disk by the assembler.
