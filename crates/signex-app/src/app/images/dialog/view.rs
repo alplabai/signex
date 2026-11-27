@@ -120,7 +120,7 @@ fn thumb<'a>(
             let hovered = matches!(status, button::Status::Hovered);
             button::Style {
                 background: (chosen || hovered)
-                    .then(|| Background::Color(iced::Color { a: 0.12, ..accent })),
+                    .then_some(Background::Color(iced::Color { a: 0.12, ..accent })),
                 border: Border {
                     width: if chosen { 1.5 } else { 0.0 },
                     color: accent,

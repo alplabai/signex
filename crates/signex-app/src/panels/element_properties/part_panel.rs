@@ -249,7 +249,7 @@ pub(crate) fn open_part_menu(ctx: &PanelContext) -> Option<OpenPartMenu> {
 /// The ⋯ button, right-aligned; its menu is an app overlay
 /// ([`open_part_menu`]).
 pub(super) fn push_part_menu<'a>(
-    mut col: Column<Element<'a, PanelMsg>>,
+    col: Column<Element<'a, PanelMsg>>,
     ctx: &'a PanelContext,
     part: uuid::Uuid,
 ) -> Column<Element<'a, PanelMsg>> {

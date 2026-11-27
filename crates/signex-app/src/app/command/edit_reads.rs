@@ -98,6 +98,9 @@ impl std::fmt::Debug for EditReads {
     }
 }
 
+/// `(picked file, project root, names picks not saved yet took)`.
+type ImageRead = (PathBuf, PathBuf, Vec<(String, String)>);
+
 /// The reads an edit needs, captured in `update`.
 #[derive(Default)]
 struct ReadPlan {
@@ -114,7 +117,7 @@ struct ReadPlan {
     links: Vec<(PathBuf, PathBuf)>,
     texts: Vec<PathBuf>,
     /// `(picked file, project root, names picks not saved yet took)`.
-    images: Vec<(PathBuf, PathBuf, Vec<(String, String)>)>,
+    images: Vec<ImageRead>,
     footprints: Vec<PrimitiveRef>,
 }
 
