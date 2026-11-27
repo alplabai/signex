@@ -79,6 +79,12 @@ impl Signex {
         let Some(editor) = self.active_symbol_editor_mut() else {
             return true;
         };
+        // A file that opened repaired takes no edit until it is saved (#3129).
+        if editor.draft.is_read_only() {
+            crate::library::editor::symbol::updates::refuse_read_only(editor);
+            self.refresh_panel_ctx();
+            return true;
+        }
         let applied = editor.record_edit(key, |editor| {
             let before = editor.primitive().clone();
             if !edit(editor) {
@@ -90,6 +96,18 @@ impl Signex {
             if *editor.primitive() == before {
                 return false;
             }
+            // Pin text a save could not store is refused here, where it
+            // was typed or pasted, not at save (#3129).
+            let refusal = crate::library::editor::symbol::updates::new_unstorable_pin_text(
+                &before,
+                editor.primitive(),
+            );
+            if let Some(refusal) = refusal {
+                *editor.primitive_mut() = before;
+                crate::library::editor::symbol::updates::refuse_pin_text(editor, refusal);
+                return false;
+            }
+            editor.gui.pin_text_refusal = None;
             editor.mark_dirty();
             editor.gui.canvas_cache.clear();
             true

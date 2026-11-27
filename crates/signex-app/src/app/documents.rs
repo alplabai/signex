@@ -409,6 +409,9 @@ pub struct SymbolEditorView {
     /// `FootprintEditorState`'s `context_menu` field 1:1 in structure —
     /// see `crate::library::editor::symbol::state::SymbolContextMenuState`.
     pub context_menu: Option<crate::library::editor::symbol::state::SymbolContextMenuState>,
+    /// Pin text the last edit was refused for (#3129); the Properties panel
+    /// shows why under the pin's fields until the next edit.
+    pub pin_text_refusal: Option<signex_library::UnstorablePinText>,
 }
 
 impl SymbolDocument {
@@ -513,6 +516,7 @@ impl SymbolEditorView {
             tool_epoch: 0,
             status_message: None,
             context_menu: None,
+            pin_text_refusal: None,
         }
     }
 }

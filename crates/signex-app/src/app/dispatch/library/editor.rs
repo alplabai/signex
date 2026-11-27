@@ -26,6 +26,8 @@ mod primitive_save_refresh_tests;
 #[cfg(test)]
 mod primitive_save_tests;
 mod primitive_write;
+#[cfg(test)]
+mod symbol_repair_save_tests;
 
 impl Signex {
     /// Open a `.snxsym` or `.snxfpt` as a main-window document tab.

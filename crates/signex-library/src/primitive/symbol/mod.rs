@@ -857,7 +857,15 @@ impl SymbolFile {
     /// files) so every consumer of a `Symbol` gets already-migrated
     /// data regardless of entry point, and the next save re-emits the
     /// corrected values, healing the file on disk too.
+    ///
+    /// A file holding a control character in a pin table (#3129) is refused
+    /// with [`SymbolFileError::RepairableControlChars`]; the Symbol Editor
+    /// opens it through [`Self::from_bytes_repairing`].
     pub fn from_toml_str(text: &str) -> Result<Self, SymbolFileError> {
+        Self::parse_toml(text).map_err(|e| load_repair::explain_failure(text).unwrap_or(e))
+    }
+
+    fn parse_toml(text: &str) -> Result<Self, SymbolFileError> {
         let wire: SymbolFileWire = signex_types::numeric::parse_toml_finite(text)?;
         let format = SYMBOL_FILE_VERSION.read(wire.format.as_deref())?;
         let mut symbols = Vec::with_capacity(wire.symbols.len());
@@ -966,7 +974,7 @@ impl SymbolFile {
         let mut tsv_payloads: Vec<String> = Vec::with_capacity(self.symbols.len());
         let mut wire_symbols: Vec<SymbolWire> = Vec::with_capacity(self.symbols.len());
         for (idx, sym) in self.symbols.iter().enumerate() {
-            let payload = pins_to_tsv(&sym.pins)?;
+            let payload = pins_to_tsv(&sym.pins).map_err(|e| e.in_symbol(&sym.name))?;
             // MD-27: refuse to emit a TSV payload that contains the
             // post-emit-replace sentinel — `String::replace` is
             // non-anchored, so a payload byte sequence matching the
@@ -1026,70 +1034,6 @@ impl SymbolFile {
     }
 }
 
-/// Error variants for [`SymbolFile`] parsers + serialisers.
-#[derive(Debug, thiserror::Error)]
-pub enum SymbolFileError {
-    #[error("empty .snxsym file")]
-    Empty,
-    #[error("invalid UTF-8 in TOML payload: {0}")]
-    Utf8(#[from] std::str::Utf8Error),
-    #[error("TOML deserialise failed: {0}")]
-    TomlDeserialize(#[from] toml::de::Error),
-    #[error("non-finite number (nan/inf) at `{path}`; fix the value to open this file")]
-    NonFiniteNumber { path: String },
-    #[error("TOML serialise failed: {0}")]
-    TomlSerialize(toml::ser::Error),
-    #[error(".snxsym {0}")]
-    UnsupportedFormat(#[from] signex_types::format_version::FormatVersionError),
-    #[error(
-        "TSV cell in column {column:?} contains a tab, newline, or triple-quote: \
-         {value:?}; cells must be free of \\t, \\n, and the literal \"'''\""
-    )]
-    InvalidTsvCell { column: &'static str, value: String },
-    /// A pin function name containing `|`, which separates a pin's
-    /// functions on disk, so it would reload as two functions.
-    #[error("pin function {value:?} contains '|', which separates pin functions; rename it")]
-    PipeInPinFunction { value: String },
-    #[error("pins_tsv block is empty (no header row)")]
-    EmptyPinsTsv,
-    #[error("pins_tsv header does not match the expected schema; got columns {got:?}")]
-    PinsTsvSchemaMismatch { got: Vec<String> },
-    #[error("pins_tsv row {row_index} has {got} cells; header declares {expected}")]
-    PinsTsvCellCountMismatch {
-        row_index: usize,
-        got: usize,
-        expected: usize,
-    },
-    #[error("unknown {kind} token {got:?} in pins_tsv cell")]
-    UnknownEnumToken { kind: &'static str, got: String },
-    #[error("invalid numeric cell in column {column:?}: {value:?}")]
-    InvalidNumericCell { column: &'static str, value: String },
-    /// #828: a NaN or infinite number cannot be written to a `.snxsym`.
-    /// `field` names where it sits (a pin cell or a key path), so the
-    /// save fails loudly instead of writing an empty cell or panicking.
-    #[error("{field} holds a non-finite number (NaN or infinity); it cannot be saved")]
-    NonFiniteField { field: String },
-    #[error(
-        "invalid boolean cell in column {column:?}: {value:?} (expected \"true\" or \"false\")"
-    )]
-    InvalidBoolCell { column: &'static str, value: String },
-    /// MD-27: pin TSV payload contains the placeholder sentinel that
-    /// `to_toml_string` uses for the post-emit `String::replace` pass.
-    /// Mirrors `SimFileError::InvalidBody` — output corruption guard.
-    #[error("symbol {symbol_index} pin TSV contains the placeholder sentinel")]
-    InvalidPinsTsv { symbol_index: usize },
-}
-
-impl From<signex_types::numeric::TomlFiniteError> for SymbolFileError {
-    fn from(e: signex_types::numeric::TomlFiniteError) -> Self {
-        use signex_types::numeric::TomlFiniteError as E;
-        match e {
-            E::Toml(e) => Self::TomlDeserialize(e),
-            E::NonFinite { path } => Self::NonFiniteNumber { path },
-        }
-    }
-}
-
 #[cfg(test)]
 mod body_style_tests;
 mod chain;
@@ -1098,6 +1042,11 @@ mod chain_tests;
 mod curves;
 #[cfg(test)]
 mod curves_tests;
+mod error;
+mod load_repair;
+#[cfg(test)]
+mod load_repair_tests;
+mod pin_text;
 mod serde_tsv;
 #[cfg(test)]
 mod tests;
@@ -1109,4 +1058,7 @@ pub use chain::{
     CHAIN_ARC_SAMPLES, CHAIN_ENDPOINT_EPSILON_MM, ChainError, ChainSegment,
     chain_into_closed_contour,
 };
+pub use error::SymbolFileError;
+pub use load_repair::SymbolLoadRepair;
+pub use pin_text::UnstorablePinText;
 pub(crate) use serde_tsv::{pins_from_tsv, pins_to_tsv};

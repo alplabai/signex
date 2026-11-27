@@ -77,9 +77,14 @@ pub(super) fn save_symbol_container(
                 whole_file(editor.symbols.iter().map(|s| s.uuid)),
             )
         };
+        let mut repaired = Vec::new();
         let (mut file, m) = match current {
             Some(bytes) if options.mode == ContainerWrite::Merge && !holds_nothing(bytes) => {
-                let disk = SymbolFile::from_bytes(bytes).map_err(|e| unreadable_on_disk(&e))?;
+                // A file an older build wrote with a control character in a
+                // pin table reads repaired (#3129); the save writes the repair.
+                let (disk, repairs) =
+                    SymbolFile::from_bytes_repairing(bytes).map_err(|e| unreadable_on_disk(&e))?;
+                repaired = repairs;
                 editor
                     .merge_into(baseline, disk, now)
                     .or_else(|duplicate| duplicated_uuids(path, duplicate, whole()))?
@@ -90,6 +95,11 @@ pub(super) fn save_symbol_container(
             return Err(would_be_empty("symbol"));
         }
         merge = m;
+        for uuid in repaired.iter().filter_map(|r| r.symbol_uuid) {
+            if !merge.changed.contains(&uuid) {
+                merge.changed.push(uuid);
+            }
+        }
         if merge.is_empty() {
             return Ok(None);
         }
