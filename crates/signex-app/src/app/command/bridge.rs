@@ -329,10 +329,10 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
             crate::workspace_layouts::WorkspaceLayoutMsg::ResetActiveRequested.into()
         }
         "open_parameter_manager" => Message::ParameterManager(ParameterManagerMsg::Open),
+        "print" => Message::PrintPreview(PrintPreviewMsg::Requested),
         // #1295: the Parameter Manager footer's Export… and Import….
         "export_parameters" => crate::app::parameter_io::ParameterIoMsg::ExportRequested.into(),
         "import_parameters" => crate::app::parameter_io::ParameterIoMsg::ImportRequested.into(),
-        "print" => Message::PrintPreview(PrintPreviewMsg::Requested),
         "redo" => Message::Edit(EditMsg::Redo),
         // #2896: the Gerber Viewer tab, as it holds; a path is the operand
         // handler's.

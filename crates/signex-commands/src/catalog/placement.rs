@@ -177,6 +177,9 @@ pub(super) const PLACEMENT: &[CommandMetadata] = &[
         flags: CommandFlags::GUI_MUTATES,
         ..CommandMetadata::DEFAULT
     },
+    // #1116: an image as a project asset. Without operands it asks for the
+    // file; the image lands on the cursor and one click places it as one
+    // undo step. No default key.
     CommandMetadata {
         id: "place_graphic",
         category: "place",
@@ -184,7 +187,8 @@ pub(super) const PLACEMENT: &[CommandMetadata] = &[
         menu_label: Some(command_ids::CMD_MENU_PLACE_GRAPHIC),
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresDocument(DocumentKind::Schematic),
-        flags: CommandFlags::GUI_MUTATES,
+        flags: CommandFlags::MUTATES,
+        operands: operands::PLACE_IMAGE,
         ..CommandMetadata::DEFAULT
     },
     // #2505: Place ▸ Component on a board opens the part picker; the pick

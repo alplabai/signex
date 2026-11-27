@@ -44,6 +44,8 @@ fn sheet() -> SchematicSheet {
             justify_h: HAlign::Left,
             justify_v: VAlign::Bottom,
             locked: false,
+            format: Default::default(),
+            rich: Default::default(),
         }],
         symbols: vec![Symbol {
             uuid: Uuid::from_u128(3),

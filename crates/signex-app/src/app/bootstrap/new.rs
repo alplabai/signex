@@ -537,6 +537,7 @@ impl Signex {
                 paste_array: None,
                 paste_array_opens: 0,
                 text_edit_opens: 0,
+                rich_notes: Default::default(),
                 selection_filter_custom: None,
                 erc_violations: Vec::new(),
                 erc_violations_by_path: std::collections::HashMap::new(),
@@ -618,6 +619,7 @@ impl Signex {
                 command_log: Default::default(),
                 command_replay: Default::default(),
                 workspace_layouts: Box::new(workspace_layouts),
+                image_cache: Default::default(),
             },
             document_state: DocumentState {
                 document_saves: crate::persist::DocumentSaves::default(),
@@ -689,6 +691,7 @@ impl Signex {
                 notebooks: std::collections::HashMap::new(),
                 generated_reports: std::collections::HashMap::new(),
                 output_jobs: Default::default(),
+                image_copies: Vec::new(),
             },
             document_view: DocumentViewState {
                 drafts: drafts.clone(),

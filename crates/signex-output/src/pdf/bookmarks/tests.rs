@@ -90,6 +90,7 @@ fn default_opts() -> PdfOptions {
         net_class_styles: Default::default(),
         schematic_defaults: Default::default(),
         port_cross_refs: Default::default(),
+        images: Default::default(),
         draw_not_fitted: true,
     }
 }

@@ -46,8 +46,11 @@ mod drawn_copper;
 mod extras;
 mod finite_toml;
 mod header_id;
+mod image_rows;
 mod length_groups;
 mod load_repair;
+mod note_format_extras;
+mod note_layout_extras;
 mod pad_shape_cells;
 mod pad_thermal_cells;
 mod page_extras;
@@ -97,6 +100,8 @@ mod bus_entry_tests;
 #[cfg(test)]
 mod bus_style_tests;
 #[cfg(test)]
+mod curve_drawing_tests;
+#[cfg(test)]
 mod directive_tests;
 #[cfg(test)]
 mod drawing_placement_tests;
@@ -120,6 +125,10 @@ mod net_tie_tests;
 mod no_erc_tests;
 #[cfg(test)]
 mod non_finite_tests;
+#[cfg(test)]
+mod note_format_tests;
+#[cfg(test)]
+mod note_layout_tests;
 #[cfg(test)]
 mod object_lock_tests;
 #[cfg(test)]
@@ -194,8 +203,8 @@ pub use pcb_token::{
 };
 pub use sch_rows::{SchComponentRow, SchJunctionRow, SchLabelRow, SchWireRow};
 pub use sch_token::{
-    SNXSCH_FORMAT_BUS_STYLE, SNXSCH_FORMAT_NO_ERC_RULES, SNXSCH_FORMAT_REFINEMENT,
-    SNXSCH_FORMAT_V1, SNXSCH_VERSION, snxsch_token,
+    SNXSCH_FORMAT_BUS_STYLE, SNXSCH_FORMAT_CURVES, SNXSCH_FORMAT_NO_ERC_RULES,
+    SNXSCH_FORMAT_REFINEMENT, SNXSCH_FORMAT_V1, SNXSCH_VERSION, snxsch_token,
 };
 pub use text_size_repair::MAX_TEXT_SIZE_MM;
 pub use tsv::{parse_tsv_block, write_tsv_block};
@@ -623,7 +632,10 @@ impl SnxSchematic {
         let labels = label_rows.into_iter().map(row_to_label).collect();
 
         let net_colors = sheet_extras.parsed_net_colors();
-        let drawing_placements = sheet_extras.parsed_drawing_placements();
+        let drawing_placements = image_rows::with_placements(
+            sheet_extras.parsed_drawing_placements(),
+            &sheet_extras.images,
+        );
         // Ids naming an object that is gone match nothing and are dropped.
         let locked_objects: std::collections::HashSet<&str> = sheet_extras
             .locked_objects
@@ -641,6 +653,10 @@ impl SnxSchematic {
         }
         let entry_types =
             refinement_extras::entry_types_from_read(sheet_extras.harness_entry_types)?;
+        let (note_formats, unread_note_formats) =
+            note_format_extras::decode(sheet_extras.note_formats);
+        let (note_layouts, unread_note_layouts) =
+            note_layout_extras::decode(sheet_extras.note_layouts);
         let mut sheet = SchematicSheet {
             uuid: raw.schematic_id,
             version: raw.version,
@@ -667,6 +683,14 @@ impl SnxSchematic {
                         .cloned()
                         .or(note.font_family);
                     note.locked = locked_objects.contains(note.uuid.to_string().as_str());
+                    note.format = note_formats
+                        .get(&note.uuid.to_string())
+                        .copied()
+                        .unwrap_or_default();
+                    note.rich = note_layouts
+                        .get(&note.uuid.to_string())
+                        .copied()
+                        .unwrap_or_default();
                     note
                 })
                 .collect(),
@@ -680,6 +704,7 @@ impl SnxSchematic {
                         .set_locked(locked_objects.contains(drawing.uuid().to_string().as_str()));
                     drawing
                 })
+                .chain(image_rows::drawings(sheet_extras.images))
                 .collect(),
             no_erc_directives: sheet_extras.no_erc_directives,
             directives: sheet_extras.directives,
@@ -716,6 +741,8 @@ impl SnxSchematic {
                     .then(|| format.clone()),
                 load_repairs: Vec::new(),
                 source_hash: None,
+                note_formats: unread_note_formats,
+                note_layouts: unread_note_layouts,
             },
         };
         sheet.upgrade_unversioned_bodies();

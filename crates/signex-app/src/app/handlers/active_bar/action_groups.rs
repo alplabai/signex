@@ -83,6 +83,8 @@ impl Signex {
                         justify_v: signex_types::schematic::VAlign::default(),
                         font_family: None,
                         locked: false,
+                        format: Default::default(),
+                        rich: Default::default(),
                     });
                 task
             }

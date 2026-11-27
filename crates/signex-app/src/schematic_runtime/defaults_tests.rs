@@ -112,7 +112,7 @@ fn export_widths(defaults: SchematicDefaults) -> (f32, f32, f32, f32) {
     let page = SvgRenderContext::from_sheet(&snapshot, &opts, 297.0, 210.0, 1.0, None);
     let stroke = |i: usize| match &page.elements[i] {
         SvgElement::Path { style, .. } => style.stroke_width,
-        SvgElement::Text { .. } => panic!("a path"),
+        SvgElement::Text { .. } | SvgElement::Image { .. } => panic!("a path"),
     };
     // Page fill, border, then the two wires, the bus and the junction disc
     // (#2115): its x extent is the diameter.
@@ -130,7 +130,7 @@ fn export_widths(defaults: SchematicDefaults) -> (f32, f32, f32, f32) {
             xs.iter().copied().fold(f32::MIN, f32::max)
                 - xs.iter().copied().fold(f32::MAX, f32::min)
         }
-        SvgElement::Text { .. } => panic!("a path"),
+        SvgElement::Text { .. } | SvgElement::Image { .. } => panic!("a path"),
     };
     (stroke(2), stroke(3), stroke(4), side)
 }
@@ -254,7 +254,7 @@ fn a_project_line_style_dashes_the_wire_on_canvas_and_in_export() {
         let page = SvgRenderContext::from_sheet(&snapshot, &opts, 297.0, 210.0, 1.0, None);
         match &page.elements[2] {
             SvgElement::Path { commands, .. } => commands.len(),
-            SvgElement::Text { .. } => panic!("a path"),
+            SvgElement::Text { .. } | SvgElement::Image { .. } => panic!("a path"),
         }
     };
     assert_eq!(
@@ -322,7 +322,7 @@ fn an_explicit_solid_class_beats_a_dashed_project_and_none_inherits() {
         let page = SvgRenderContext::from_sheet(&snapshot, &opts, 297.0, 210.0, 1.0, None);
         match &page.elements[2] {
             SvgElement::Path { commands, .. } => commands.len(),
-            SvgElement::Text { .. } => panic!("a path"),
+            SvgElement::Text { .. } | SvgElement::Image { .. } => panic!("a path"),
         }
     };
     let solid = classes(Some(NetLineStyle::Solid));

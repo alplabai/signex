@@ -227,6 +227,8 @@ mod tests {
                 "delete_selection",
                 "document_info",
                 "equalize_panes",
+                // #2817: the pins of the named symbol file, one undo step.
+                "edit_symbol_pins",
                 // #2470: the board writers, into a path inside the project.
                 "export_board_pdf",
                 "export_board_report",
@@ -256,6 +258,8 @@ mod tests {
                 // #2952: a query.
                 "list_diff_pairs",
                 "list_documents",
+                // #1116: a query, the named sheet's project's image assets.
+                "list_image_assets",
                 // #1283: the snippets and templates in view, as JSON.
                 "list_snippets",
                 "list_templates",
@@ -312,6 +316,9 @@ mod tests {
                 "project_move_sheet",
                 "project_open_checklist_link",
                 "project_remove_checklist_item",
+                // #1178: the Fonts section's edits; `project_add_font`
+                // takes a file path, so it is not on the agent channel.
+                "project_remove_font",
                 "project_remove_requirement",
                 "project_remove_variant",
                 "project_rename_variant",
@@ -327,6 +334,7 @@ mod tests {
                 "project_set_default_variant",
                 // #2943: the project's rails and their budget.
                 "project_set_rail",
+                "project_set_font_license",
                 "project_set_requirement",
                 "project_set_variant_alternate",
                 "project_set_variant_fit",
@@ -436,6 +444,11 @@ mod tests {
                 // #1261: the same swaps started on the named sheet.
                 "swap_schematic_gates",
                 "swap_schematic_pins",
+                // #2838: a curve shape drawn on the symbol named.
+                "symbol_draw_bezier",
+                "symbol_draw_elliptical_arc",
+                "symbol_draw_pie",
+                "symbol_draw_round_rectangle",
                 // #2249: the window layout, by the maintainer's rule that
                 // everything is AI-controllable.
                 "tile_windows_grid",
@@ -555,6 +568,9 @@ mod tests {
             "draw_line",
             "draw_graphic_line",
             "draw_rectangle",
+            "draw_ellipse",
+            "draw_elliptical_arc",
+            "draw_round_rectangle",
         ] {
             let meta = metadata_for(&id(name)).expect("in the catalog");
             assert!(

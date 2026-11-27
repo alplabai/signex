@@ -28,6 +28,7 @@ fn class_widths(styles: &WireClassStyles) -> WireWidths<'_> {
         defaults: Default::default(),
         designator_standard: None,
         special_strings: None,
+        rich_notes: None,
         variant_values: None,
     }
 }
@@ -121,6 +122,7 @@ fn scene_cache_rebuilds_on_class_style_or_designator_change() {
                     special_strings: None,
                     defaults: Default::default(),
                     designator_standard: None,
+                    rich_notes: None,
                     not_fitted: None,
                     variant_values: None,
                 },
@@ -242,6 +244,7 @@ fn a_project_wire_width_widens_the_hit_area_and_the_box() {
         },
         designator_standard: None,
         special_strings: None,
+        rich_notes: None,
         variant_values: None,
     };
     let none = Designators::new();

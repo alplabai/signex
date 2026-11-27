@@ -24,6 +24,7 @@ define_ids! {
     COMMAND_NEEDS_SHEETS = "command-needs-sheets";
     COMMAND_NEEDS_ACTIVE_SHEET = "command-needs-active-sheet";
     COMMAND_NEEDS_FOOTPRINT_EDITOR = "command-needs-footprint-editor";
+    COMMAND_NEEDS_SYMBOL_EDITOR = "command-needs-symbol-editor";
     COMMAND_NEEDS_PCB = "command-needs-pcb";
     COMMAND_NEEDS_EDITABLE_PCB = "command-needs-editable-pcb";
     COMMAND_NEEDS_MEASURE_TARGET = "command-needs-measure-target";

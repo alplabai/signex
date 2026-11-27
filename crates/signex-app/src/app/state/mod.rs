@@ -634,6 +634,9 @@ pub struct DocumentState {
         std::collections::HashMap<ProjectId, signex_notebook::generate::GeneratedNotebook>,
     /// Export Jobs open as tabs, or closed with unsaved edits (#1299).
     pub output_jobs: std::collections::BTreeMap<PathBuf, signex_types::output_job::OutputJob>,
+    /// Picked image files waiting to be copied into their project, each when
+    /// the sheet that places it is saved (#1116).
+    pub image_copies: Vec<signex_types::image_asset::PendingImageCopy>,
 }
 
 /// A project folder a rename moved from `old` to `new`.

@@ -30,6 +30,7 @@ mod graphite;
 pub mod grid;
 mod halo_cache;
 mod hit_cache;
+mod image_grip;
 mod input;
 pub(crate) mod middle_zoom;
 mod move_pick;
@@ -122,6 +123,8 @@ pub struct CanvasState {
     wire_grip: Option<wire_grip::WireGrip>,
     /// Set while a drag holds one handle of a selected Bezier.
     bezier_drag: Option<bezier_grip::BezierDrag>,
+    /// Set while a drag holds one handle of a selected image (#1116).
+    image_drag: Option<image_grip::ImageDrag>,
     // ─── Double-click detection ───
     /// Timestamp of last left-click (for double-click detection).
     last_click_time: Option<std::time::Instant>,
@@ -700,10 +703,15 @@ pub struct CanvasViewPrefs<'a> {
     pub unions: crate::schematic_runtime::unions::UnionView<'a>,
     /// The Notebook badges of the sheet's design and their inks (mockup row 197).
     pub notebook_badges: crate::schematic_runtime::notebook_badges::NotebookBadgeView<'a>,
+    /// The compiled rich text notes (#1114, mockup row 203).
+    pub rich_notes: Option<&'a crate::schematic_runtime::rich_note::RichNoteRenders>,
     /// Device pixels per logical pixel in the window this canvas draws in
     /// (`UiState::device_px_per_logical_px`): the stroke floor and the
     /// hairline snap work on that grid (#1887).
     pub device_px_per_logical_px: f32,
+    /// The pictures of placed images read so far (#1116); `None` draws
+    /// every image as still loading.
+    pub image_cache: Option<&'a crate::app::images::ImageCache>,
 }
 
 impl CanvasViewPrefs<'_> {
@@ -715,6 +723,7 @@ impl CanvasViewPrefs<'_> {
             defaults: self.schematic_defaults,
             designator_standard: self.designator_standard,
             special_strings: None,
+            rich_notes: self.rich_notes,
             variant_values: None,
         }
     }
@@ -773,6 +782,7 @@ impl<'a> SchematicCanvas<'a> {
             special_strings: self.slot.special_strings.as_ref(),
             defaults: self.prefs.schematic_defaults,
             designator_standard: self.prefs.designator_standard,
+            rich_notes: self.prefs.rich_notes,
             not_fitted: Some(&self.slot.not_fitted),
             variant_values: Some(&self.slot.variant_values),
         }
@@ -1188,7 +1198,9 @@ mod tests {
                 ),
             },
             notebook_badges: Default::default(),
+            rich_notes: None,
             device_px_per_logical_px: 1.0,
+            image_cache: None,
         }
     }
 

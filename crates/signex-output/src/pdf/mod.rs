@@ -35,6 +35,7 @@ pub(crate) mod cross_ref;
 mod embed;
 mod font;
 pub(crate) mod frame;
+mod images;
 pub(crate) mod layout;
 mod links;
 pub(crate) mod optional_content;
@@ -43,6 +44,7 @@ mod page_setup;
 pub mod palette;
 mod subset;
 mod surface;
+mod table_links;
 pub(crate) mod text_document;
 mod watermark;
 
@@ -53,6 +55,7 @@ pub use page_setup::{
     parse_percent,
 };
 pub use palette::SchematicPalette;
+pub use table_links::{PdfTableLink, pdf_table_links};
 pub use watermark::{Watermark, WatermarkPages, WatermarkPlacement, WatermarkText};
 
 use crate::svg::{
@@ -192,6 +195,9 @@ pub struct PdfOptions {
     /// the caller from the stitched project; each entry is a link to its
     /// page. Empty (the default) prints none.
     pub port_cross_refs: crate::cross_ref::PortCrossRefs,
+    /// The checked bytes of the placed images' files (#1116), read by the
+    /// caller. An image whose file is not here prints as an empty box.
+    pub images: crate::svg::ExportImages,
     /// Draw a part that is not fitted in `variant` (or marked DNP) greyed
     /// and crossed out, as the canvas does (#1294). The user's "Cross out
     /// not-fitted parts" preference; on by default.
@@ -216,6 +222,8 @@ pub struct PdfOutput {
     /// Characters none of the bundled fonts cover. They are drawn as the
     /// font's `.notdef` box; the caller should warn the user. Sorted, unique.
     pub uncovered_chars: Vec<char>,
+    /// The table rows written as links to their sheet's page (#2663).
+    pub table_links: Vec<PdfTableLink>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -318,6 +326,7 @@ impl Default for PdfOptions {
             net_class_styles: std::collections::HashMap::new(),
             schematic_defaults: Default::default(),
             port_cross_refs: Default::default(),
+            images: Default::default(),
             draw_not_fitted: true,
         }
     }
@@ -414,6 +423,14 @@ impl Exporter for PdfExporter {
             bookmark_id_base + pending_bookmarks.len() as i32,
         );
 
+        // One `/Link` annotation per linked table row (#2663), off with the
+        // other links.
+        let row_links = if opts.links {
+            table_links::collect(ctx, opts, &sheet_indices, page_w_mm, page_h_mm, page_h_pt)
+        } else {
+            Vec::new()
+        };
+
         let mut catalog = pdf.catalog(catalog_id);
         catalog.pages(page_tree_id);
         if bookmarks_active {
@@ -450,7 +467,9 @@ impl Exporter for PdfExporter {
         let embedded = write_fonts(&mut pdf, &fonts, font_base)?;
 
         // Link annotations (#1298) and the cross-reference entries (#1273),
-        // one `/Annots` array per page, numbered after the layer groups.
+        // numbered after the layer groups, then the table rows' links
+        // (#2663), then the placed images' objects (#1116). Each page has
+        // one `/Annots` array holding both kinds of link.
         let page_links = links::page_links(
             ctx,
             opts,
@@ -458,22 +477,32 @@ impl Exporter for PdfExporter {
             (page_w_mm, page_h_mm),
             &mut contents,
         );
-        let annot_refs = links::assign_refs(
-            &page_links,
-            bookmark_id_base + pending_bookmarks.len() as i32 + layer_groups.len() as i32,
-        );
+        let annot_base =
+            bookmark_id_base + pending_bookmarks.len() as i32 + layer_groups.len() as i32;
+        let annot_refs = links::assign_refs(&page_links, annot_base);
+        let link_base = annot_base + annot_refs.iter().map(Vec::len).sum::<usize>() as i32;
+        let mut image_objects = images::ImageObjects::new(link_base + row_links.len() as i32);
 
         for (idx, content) in contents.iter().enumerate() {
             let content_ref = content_refs[idx];
             pdf.stream(content_ref, &content.bytes);
+            let page_images: Vec<Ref> = content
+                .images
+                .iter()
+                .map(|picture| image_objects.object(&mut pdf, picture))
+                .collect();
 
             // Create the page object referencing the content stream.
             let mut page = pdf.page(page_refs[idx]);
             page.parent(page_tree_id)
                 .media_box(Rect::new(0.0, 0.0, page_w_pt, page_h_pt))
                 .contents(content_ref);
-            if !annot_refs[idx].is_empty() {
-                page.annotations(annot_refs[idx].iter().copied());
+            let mut annotations = annot_refs[idx].clone();
+            annotations.extend(table_links::page_annotation_refs(
+                &row_links, idx, link_base,
+            ));
+            if !annotations.is_empty() {
+                page.annotations(annotations);
             }
 
             // /Font resources dict — maps the F1-F4 aliases used in the
@@ -484,12 +513,20 @@ impl Exporter for PdfExporter {
                 font_dict.pair(Name(f.font.alias().as_bytes()), f.type0);
             }
             font_dict.finish();
+            if !page_images.is_empty() {
+                let mut x_objects = resources.x_objects();
+                for (index, image) in page_images.iter().enumerate() {
+                    x_objects.pair(Name(surface::image_name(index).as_bytes()), *image);
+                }
+                x_objects.finish();
+            }
             write_alpha_states(&mut resources, content);
             optional_content::write_page_properties(&mut resources, &layer_groups);
             resources.finish();
 
             page.finish();
         }
+        table_links::write_annotations(&mut pdf, &row_links, link_base, &page_refs);
 
         // Outline tree must be written after every page Ref has been
         // allocated so /Dest entries can point at concrete pages.
@@ -511,6 +548,7 @@ impl Exporter for PdfExporter {
             bytes,
             page_count: page_refs.len(),
             uncovered_chars: fonts.uncovered_chars(),
+            table_links: row_links,
         })
     }
 }
@@ -536,4 +574,4 @@ mod watermark_tests;
 
 use content::build_page_content;
 use page_range::resolve_page_range;
-pub use page_range::{check_page_range, printed_sheet_numbers};
+pub use page_range::{check_page_range, printed_sheet_numbers, printed_sheet_paths};

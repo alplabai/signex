@@ -18,7 +18,8 @@ format declares only its own table row below.
   Differential Pair using a field added with them), which writes
   `snxsch/1.3` (`docs/architecture/snxsch-refinement-objects.md`), or a bus
   with its own width or colour, which writes `snxsch/1.4`
-  (`docs/architecture/snxsch-wire-color.md`). A board
+  (`docs/architecture/snxsch-wire-color.md`), or an ellipse, elliptical arc
+  or round rectangle drawing (#1267), which writes `snxsch/1.5`. A board
   stays `snxpcb/1.4`, byte for byte, writes `snxpcb/1.5` when a layer has a
   colour of its own, `snxpcb/1.6` when it has rooms (#2457) and `snxpcb/1.8`
   when its stackup has a name (#2833), a board sketch pattern repeats a baked
@@ -67,7 +68,7 @@ format declares only its own table row below.
 
 | File | Writes | Reads | Newer minor | No token |
 |---|---|---|---|---|
-| `.snxsch` | `snxsch/1.1`, `1.2` with a No-ERC rule list, `1.3` with Schematic Refinement content, `1.4` with a bus's own width or colour | `snxsch/1`, `1.1`, `1.2`, `1.3`, `1.4` | opens read-only | refused |
+| `.snxsch` | `snxsch/1.1`, `1.2` with a No-ERC rule list, `1.3` with Schematic Refinement content, `1.4` with a bus's own width or colour, `1.5` with a curve drawing (an ellipse, elliptical arc or round rectangle, #1267), whatever else it holds | `snxsch/1`, `1.1`, `1.2`, `1.3`, `1.4`, `1.5` | opens read-only | refused |
 | `.snxpcb` | `snxpcb/1.4`; `1.5` with layer colours; `1.6` with rooms | `snxpcb/1` to `snxpcb/1.6` | opens read-only | refused |
 | `.snxpcb`, board sketch targets | `snxpcb/1.7` while the board sketch carries a slot, pour, mechanical drawing or component anchor (decision 2, 2026-11-20), or a reference dimension, pattern link, pattern mirror or pad override (decisions 5, 9, 10), rooms or not; else the token above, byte for byte | adds `snxpcb/1.7` | opens read-only | refused |
 | `.snxpcb`, stackup name, patterned targets, numbering sweep | `snxpcb/1.8` while `[stackup]` carries `stack_name` (mockup row 105, #2833), an array or mirror repeats a baked target (a source on or connected to one; #2517), or an array's numbering sweep is not row by row (mockup row 126), whatever else the board holds; else the tokens above, byte for byte | adds `snxpcb/1.8` | opens read-only | refused |
@@ -126,6 +127,26 @@ rows, written only when some pad sets one. A build that does not know the
 column keeps it as a foreign cell and writes it back unchanged, and it draws
 no thermal relief spokes at all, so it reads nothing differently because of
 the cell. A free pad has no such key: its own values are refused on save.
+
+**`snxsch/1.5` and older builds.** A curve drawing is a new drawing `type`,
+`curve`, whose `shape` table names its kind (`ellipse`, `elliptical_arc` or
+`round_rect`) and geometry in mm and degrees. A build that reads up to
+`snxsch/1.4` has no such type, so it opens a 1.5 sheet read-only and refuses
+its saves instead of failing on the drawing. A sheet with no curve drawing
+keeps its lower token, byte for byte.
+
+**Images need no token.** Placed images (#1116) are `[[extras.sheet.images]]`
+rows, a key of `[extras.sheet]` written only when the sheet has an image, not
+entries of `drawings`. An older build keeps the key as an unknown key and
+writes it back, so a sheet with images keeps its token
+(`docs/SCHEMATIC_IMAGES.md`, "File format").
+
+**Rich text notes need no token.** A note's format and its Frame and Size
+(#1114) are `[extras.sheet.note_formats]` and `[extras.sheet.note_layouts]`,
+keys of `[extras.sheet]` written only when a note is rich or has a layout. An
+older build keeps them as unknown keys and writes them back, so a sheet with
+rich notes keeps the token its other content needs
+(`docs/architecture/snxsch-note-format.md`).
 
 **`.snxprj` stays `snxprj/1`.** The Schematic Refinement project settings
 (`schematic_design`: channel naming, harness definitions, differential pair

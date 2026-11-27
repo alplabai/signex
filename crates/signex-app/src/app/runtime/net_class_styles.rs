@@ -391,6 +391,7 @@ impl Signex {
                 .active_canvas()
                 .special_strings
                 .as_ref(),
+            rich_notes: Some(&self.ui_state.rich_notes.renders),
             variant_values: Some(&self.interaction_state.active_canvas().variant_values),
         }
     }

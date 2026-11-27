@@ -32,6 +32,7 @@ pub(crate) mod parked_boards;
 pub(crate) mod parts_read_error;
 pub(crate) mod pending_library;
 pub(crate) mod pin_selection_mode;
+pub(crate) mod project_fonts;
 pub(crate) mod project_id;
 pub(crate) mod rail_rename;
 pub(crate) mod resolved_placement;

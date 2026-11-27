@@ -18,11 +18,13 @@
 //! sections (#1689-#1693) edit through the same history; their commands are
 //! in `sections` and each is a step of its own. So do the Requirements
 //! section's edits (#2339, `requirements`), the rails edit (#2943,
-//! `rails`), a BOM line's alternates (#2938, `bom_alternates`) and the
-//! Design Checklist tab's (#1291, `checklist`).
+//! `rails`), a BOM line's alternates (#2938, `bom_alternates`), the Design
+//! Checklist tab's (#1291, `checklist`) and the Fonts section's edits
+//! (#1178, `fonts`).
 
 mod bom_alternates;
 mod checklist;
+mod fonts;
 mod rails;
 mod requirements;
 mod sections;
@@ -40,6 +42,7 @@ use signex_types::project::{
 
 pub use bom_alternates::ProjectBomCommand;
 pub use checklist::ProjectChecklistCommand;
+pub use fonts::ProjectFontCommand;
 pub use rails::ProjectRailCommand;
 pub use requirements::ProjectRequirementCommand;
 pub use sections::ProjectSectionCommand;
@@ -143,6 +146,8 @@ struct GeneralSnapshot {
     agent_journal: AgentJournalSettings,
     fab_outputs: Option<FabOutputKinds>,
     diff_pair_classes: Vec<signex_types::diff_pair_class::DiffPairClass>,
+    /// The font list as stored (#1178), read or not.
+    fonts: Option<serde_json::Value>,
     sections: SectionsSnapshot,
     /// The project's rules, held only by the two sides of a
     /// [`ProjectGeneralCommand::SetFabTier`] step.
@@ -160,6 +165,7 @@ impl GeneralSnapshot {
             agent_journal: data.agent_journal,
             fab_outputs: data.fab_outputs,
             diff_pair_classes: data.schematic_design.diff_pair_classes.clone(),
+            fonts: data.project_fonts_raw().cloned(),
             sections: SectionsSnapshot::of(data),
             rules: None,
         }
@@ -187,6 +193,7 @@ impl GeneralSnapshot {
         data.agent_journal = self.agent_journal;
         data.fab_outputs = self.fab_outputs;
         data.schematic_design.diff_pair_classes = self.diff_pair_classes;
+        data.restore_project_fonts_raw(self.fonts);
         self.sections.restore(data);
     }
 }
@@ -390,6 +397,16 @@ impl ProjectGeneralHistory {
         self.apply_step(data, |data| command.apply(data))
     }
 
+    /// Apply one Fonts edit (#1178) as an undo step of its own, like
+    /// [`Self::apply_section`].
+    pub fn apply_font(
+        &mut self,
+        data: &mut ProjectData,
+        command: &ProjectFontCommand,
+    ) -> Result<bool, signex_types::project::ProjectFontProblem> {
+        self.apply_step(data, |data| command.apply(data))
+    }
+
     /// Apply one rails edit (#2943) as an undo step of its own, like
     /// [`Self::apply_section`].
     pub fn apply_rail(
@@ -474,6 +491,8 @@ impl ProjectGeneralHistory {
 
 #[cfg(test)]
 mod bom_alternate_tests;
+#[cfg(test)]
+mod font_tests;
 #[cfg(test)]
 mod section_tests;
 #[cfg(test)]

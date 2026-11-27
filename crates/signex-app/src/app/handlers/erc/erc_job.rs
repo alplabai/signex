@@ -37,6 +37,8 @@ pub(super) struct ErcRunInputs {
     pub channel_naming: crate::app::saved_channel_naming::SavedChannelNaming,
     /// The owning project's key rules, chosen once by whoever picked the project.
     pub fold: crate::app::state::scope::CaseFold,
+    /// `(file, hash)` of the image picks a save will copy (#1116): not missing.
+    pub pending_images: Vec<(String, String)>,
 }
 
 /// What the job found. Messages are replayed to the Messages panel by the
@@ -200,6 +202,13 @@ fn run_job(
         snapshots.entry(path).or_insert(sheet);
     }
 
+    // The image files the sheets name and cannot show (#1116), read here.
+    let config = crate::app::images::with_missing_images(
+        &inputs.config,
+        inputs.project_dir.as_deref(),
+        &snapshots,
+        &inputs.pending_images,
+    );
     let mut by_path: ViolationsByPath = HashMap::new();
     // One memo for the whole run: a sheet reached from several parents (or
     // from several sheets' runs) is projected once (#998).
@@ -212,7 +221,7 @@ fn run_job(
             &graph.resolved,
             &graph.sheets,
             dsl_eval_fns.as_deref().unwrap_or(&[]),
-            &inputs.config,
+            &config,
             &mut hierarchy_memo,
         );
         by_path.insert(

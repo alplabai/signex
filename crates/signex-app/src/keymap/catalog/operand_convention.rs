@@ -232,6 +232,33 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("format", OperandKind::Text),
     ("zeros", OperandKind::Text),
     ("apertures", OperandKind::Text),
+    // #1267, #2838: the curve shapes of a sheet and of a symbol body.
+    ("center", OperandKind::Point),
+    ("radius", OperandKind::Length),
+    ("radius_x", OperandKind::Length),
+    ("radius_y", OperandKind::Length),
+    ("start_angle", OperandKind::Turn),
+    ("end_angle", OperandKind::Turn),
+    ("corner_radius", OperandKind::Length),
+    ("control_1", OperandKind::Point),
+    ("control_2", OperandKind::Point),
+    // #2817: the Pin table's Paste rows text (its paste `mode` is declared
+    // with #2470 below).
+    ("paste", OperandKind::Text),
+    // #1114: a text note's format and a rich note's Frame, Size, source,
+    // editor cursor and link (`format` and `target` are declared above).
+    ("frame", OperandKind::Text),
+    ("border", OperandKind::Text),
+    ("padding", OperandKind::Text),
+    ("sizing", OperandKind::Text),
+    ("height", OperandKind::Text),
+    ("source", OperandKind::Text),
+    ("column", OperandKind::Text),
+    // #1178: a project font by family.
+    ("family", OperandKind::Text),
+    // #2836: a dimension's decimals and arrow style.
+    ("precision", OperandKind::Text),
+    ("arrows", OperandKind::Text),
     // #2796: a block diagram's blocks, ports, connections and groups.
     ("function", OperandKind::Text),
     ("note", OperandKind::Text),

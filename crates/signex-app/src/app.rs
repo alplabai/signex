@@ -55,6 +55,9 @@ pub use gerber_viewer::{GerberViewerMsg, GerberViewerState};
 mod handlers;
 #[cfg(test)]
 pub(crate) mod hierarchy_fixture;
+// #1116: images placed on a sheet as project assets.
+pub(crate) mod images;
+pub use images::ImagesMsg;
 mod layer_stack_tab;
 pub(crate) mod layout_plan;
 mod length_matching_tab;
@@ -93,6 +96,8 @@ mod project_tab;
 pub(crate) mod projector;
 pub(crate) mod rail_rename;
 pub use rail_rename::RailRenameMsg;
+// Mockup row 203 (#1114): rich text notes, their compiles and the editor.
+pub mod rich_note;
 pub(crate) mod rooms;
 mod rules_tab;
 pub(crate) mod sch_tables;
@@ -281,6 +286,9 @@ impl Signex {
         // the active project.
         tasks.push(self.sync_closed_parameter_sheets());
         tasks.push(self.sync_compare_board());
+        // Rich text notes show their cached compile; a missing one compiles
+        // in a task (#1114, mockup row 203).
+        tasks.push(self.sync_rich_notes());
         // A board that opened takes its kept view; a changed view is saved
         // soon (#2480).
         tasks.push(self.sync_pcb_layer_views());

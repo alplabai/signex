@@ -400,6 +400,46 @@ define_ids! {
     // dialog-polish
     PROJECT_PARAMETER_UNRESOLVED = "project-parameter-unresolved";
     PROJECT_READ_ONLY_BANNER = "project-read-only-banner";
+    // Fonts section (#1178, mockup row 205)
+    PROJECT_SECTION_FONTS = "project-section-fonts";
+    PROJECT_FONTS_HELP = "project-fonts-help";
+    PROJECT_FONTS_TITLE = "project-fonts-title";
+    PROJECT_FONTS_SUMMARY = "project-fonts-summary";
+    PROJECT_FONTS_ADD = "project-fonts-add";
+    PROJECT_FONTS_ADDING = "project-fonts-adding";
+    PROJECT_FONTS_EMPTY = "project-fonts-empty";
+    PROJECT_FONTS_COL_FAMILY = "project-fonts-col-family";
+    PROJECT_FONTS_COL_STYLES = "project-fonts-col-styles";
+    PROJECT_FONTS_COL_EMBEDDING = "project-fonts-col-embedding";
+    PROJECT_FONTS_COL_LICENSE = "project-fonts-col-license";
+    PROJECT_FONTS_FILES = "project-fonts-files";
+    PROJECT_FONTS_NO_STYLE = "project-fonts-no-style";
+    PROJECT_FONTS_LICENSE_PLACEHOLDER = "project-fonts-license-placeholder";
+    PROJECT_FONTS_LICENSE_MISSING = "project-fonts-license-missing";
+    PROJECT_FONTS_REMOVE = "project-fonts-remove";
+    PROJECT_FONTS_EMBEDDING_INSTALLABLE = "project-fonts-embedding-installable";
+    PROJECT_FONTS_EMBEDDING_EDITABLE = "project-fonts-embedding-editable";
+    PROJECT_FONTS_EMBEDDING_PREVIEW_AND_PRINT = "project-fonts-embedding-preview-and-print";
+    PROJECT_FONTS_EMBEDDING_RESTRICTED = "project-fonts-embedding-restricted";
+    PROJECT_FONTS_DIALOG_TITLE = "project-fonts-dialog-title";
+    PROJECT_FONTS_FILTER = "project-fonts-filter";
+    PROJECT_FONTS_ADDED = "project-fonts-added";
+    PROJECT_FONTS_LICENSE_HINT = "project-fonts-license-hint";
+    PROJECT_FONTS_REFUSED = "project-fonts-refused";
+    PROJECT_FONTS_NOT_A_FONT_FILE = "project-fonts-not-a-font-file";
+    PROJECT_FONTS_TOO_LARGE = "project-fonts-too-large";
+    PROJECT_FONTS_UNREADABLE_FILE = "project-fonts-unreadable-file";
+    PROJECT_FONTS_NO_FAMILY = "project-fonts-no-family";
+    PROJECT_FONTS_RESTRICTED = "project-fonts-restricted";
+    PROJECT_FONTS_IO = "project-fonts-io";
+    PROJECT_FONTS_LIST_UNREADABLE = "project-fonts-list-unreadable";
+    PROJECT_FONTS_NO_SUCH_FAMILY = "project-fonts-no-such-family";
+    PROJECT_FONTS_LICENSE_TOO_LONG = "project-fonts-license-too-long";
+    PROJECT_FONTS_BAD_PATH = "project-fonts-bad-path";
+    PROJECT_FONTS_READ_ONLY = "project-fonts-read-only";
+    PROJECT_FONTS_PROJECT_MOVING = "project-fonts-project-moving";
+    PROJECT_FONTS_NO_PROJECT = "project-fonts-no-project";
+    PROJECT_FONTS_PROJECT_GONE = "project-fonts-project-gone";
     // Block diagram from the sheet hierarchy (#2968).
     PROJECT_BLOCK_DIAGRAM_GENERATED = "project-block-diagram-generated";
     PROJECT_BLOCK_DIAGRAM_CHANGES = "project-block-diagram-changes";

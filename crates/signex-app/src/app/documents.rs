@@ -1095,6 +1095,12 @@ pub enum Tool {
     HarnessEntry,
     /// One click on a wire places a Net Parameters flag there (#1489).
     NetParameters,
+    /// The centre, then a corner of its box (#1267).
+    Ellipse,
+    /// Five clicks: centre, X radius, Y radius, start, end (#1267).
+    EllipticalArc,
+    /// Two opposite corners, as the Rectangle (#1267).
+    RoundRectangle,
 }
 
 impl std::fmt::Display for Tool {
@@ -1130,6 +1136,9 @@ impl std::fmt::Display for Tool {
             Tool::HarnessConnector => write!(f, "Place Harness Connector"),
             Tool::HarnessEntry => write!(f, "Place Harness Entry"),
             Tool::NetParameters => write!(f, "Place Net Parameters"),
+            Tool::Ellipse => write!(f, "Draw Ellipse"),
+            Tool::EllipticalArc => write!(f, "Draw Elliptical Arc"),
+            Tool::RoundRectangle => write!(f, "Draw Round Rectangle"),
         }
     }
 }

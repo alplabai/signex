@@ -38,6 +38,14 @@ impl Signex {
             return Task::none();
         };
         let position = found.hit.position;
+        // A hit inside a rich text note opens its editor at the match once
+        // the note shows (#1114, mockup row 203); a plain note's is dropped.
+        if found.hit.item.kind == signex_types::schematic::SelectedKind::TextNote {
+            let at = (self.ui_state.find_replace.find_query().ok())
+                .and_then(|query| query.ranges(&found.hit.text).first().map(|r| r.start))
+                .unwrap_or(0);
+            self.open_rich_note_at_search_hit(found.hit.item.uuid, at);
+        }
         if let Some(sheet) = found.sheet.clone() {
             let held = self.resolve_held_spelling(sheet.clone());
             if self.document_state.active_path.as_deref() != Some(held.as_path()) {

@@ -25,6 +25,9 @@ impl Signex {
             ProjectTabMsg::ChecklistOpenRequested { project } => {
                 return self.open_design_checklist(project);
             }
+            ProjectTabMsg::Fonts { project_id, msg } => {
+                return self.dispatch_project_fonts(project_id, msg);
+            }
             ProjectTabMsg::AddSchematicRequested { project_id } => {
                 return self.add_schematic_from_tab(project_id);
             }
@@ -247,6 +250,7 @@ impl Signex {
             | ProjectTabMsg::Requirements { .. }
             | ProjectTabMsg::Checklist { .. }
             | ProjectTabMsg::ChecklistOpenRequested { .. }
+            | ProjectTabMsg::Fonts { .. }
             | ProjectTabMsg::PreviewActed { .. }
             | ProjectTabMsg::VariantPartsReadRequested { .. }
             | ProjectTabMsg::VariantManager { .. } => {}
@@ -419,6 +423,7 @@ impl Signex {
             tab.parameter_rename = None;
             tab.parameter_rename_refused = false;
             tab.requirements.clear_drafts();
+            tab.fonts.clear_drafts();
         }
     }
 

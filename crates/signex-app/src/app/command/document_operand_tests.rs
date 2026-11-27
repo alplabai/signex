@@ -444,6 +444,12 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
         "draw_line",
         "draw_graphic_line",
         "draw_rectangle",
+        // #1267: the curve drawings.
+        "draw_ellipse",
+        "draw_elliptical_arc",
+        "draw_round_rectangle",
+        "place_linear_dimension",
+        "place_aligned_dimension",
         "place_blanket",
         "edit_blanket",
         "edit_no_erc_rules",
@@ -462,10 +468,21 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
         "set_sheet_symbol_size",
         "set_symbol_parameter",
         "set_sheet_variable",
+        // #1114: a text note's Format row.
+        "set_text_note_format",
+        // #1114: a rich note's Frame and Size sections and its Apply.
+        "set_text_note_frame",
+        "set_text_note_size",
+        "apply_rich_note_edit",
         "set_net_tie",
         "repair_pin_junctions",
         "place_design_block",
         "import_graphics",
+        "place_graphic",
+        // #1116: the image commands act on the sheet in view or the named one.
+        "set_image",
+        "relink_image",
+        "show_image_in_folder",
         // #2665: Smart Paste's array, on the sheet in view or the named one.
         "smart_paste",
         // #1283: a snippet saved from, or placed on, the sheet in view or the
@@ -505,6 +522,8 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     "check_erc",
                     "check_drc",
                     "check_requirements",
+                    // #1116: the named sheet's project's image assets.
+                    "list_image_assets",
                     "find_items",
                     "apply_edits",
                     "revert",
@@ -622,6 +641,10 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     "project_export_checklist_csv",
                     "project_checklist_link_choices",
                     "project_open_checklist_link",
+                    // #1178: the Fonts section's commands.
+                    "project_add_font",
+                    "project_remove_font",
+                    "project_set_font_license",
                     // #1313: the project's power tree.
                     "query_power_tree",
                     // #2943: the project's rails and their budget.
@@ -666,7 +689,7 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     "board_report_components",
                     "export_board_report",
                     "export_board_pdf",
-                    // #1298, #2609: Export PDF of the named sheet.
+                    // #1298, #2609, #2663: Export PDF of the named sheet.
                     "export_schematic_pdf",
                     // #2486: the assembly drawings.
                     "export_assembly_svg",
@@ -701,6 +724,8 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     "notebook_fix_reference",
                     // Mockup row 202: the notebook of the named project.
                     "export_notebook_pdf",
+                    // #2817: the pins of a named symbol file.
+                    "edit_symbol_pins",
                     // #2470: the fabrication outputs into a folder.
                     "fabrication_outputs",
                     // #2410: DXF import onto a board.
@@ -744,6 +769,12 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     "export_notebook_timeline",
                     "mark_notebook_attachment_valid",
                     "attach_notebook_file",
+                    // #2838: the symbol editor's curve shapes, on the
+                    // symbol named.
+                    "symbol_draw_elliptical_arc",
+                    "symbol_draw_bezier",
+                    "symbol_draw_round_rectangle",
+                    "symbol_draw_pie",
                     // #2470: Update PCB for the named document's project
                     // (left out: the active project).
                     "update_pcb_from_schematic",

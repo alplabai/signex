@@ -10,8 +10,9 @@ use iced::advanced::text as core_text;
 use signex_notebook::{Highlights, Token};
 
 /// The parser the editor runs: the spans of line `line`, by the line
-/// counter the editor drives.
-pub(super) struct NotebookHighlighter {
+/// counter the editor drives. The rich note editor (#1114, mockup row 203)
+/// highlights its Typst with it too.
+pub(crate) struct NotebookHighlighter {
     line: usize,
     highlights: Arc<Highlights>,
 }

@@ -45,6 +45,8 @@ pub(crate) struct SceneInputs {
     designators: Option<HashMap<uuid::Uuid, String>>,
     defaults: signex_types::schematic::SchematicDefaults,
     designator_standard: Option<signex_types::designator::DesignatorStandard>,
+    /// The rich note renders' revision (#1114): a landed compile rebuilds.
+    rich_notes: Option<u64>,
     not_fitted: Option<HashSet<uuid::Uuid>>,
     variant_values: Option<signex_output::DrawnValueMap>,
 }
@@ -199,6 +201,7 @@ impl SceneInputs {
             designators: overrides.designators.cloned(),
             defaults: overrides.defaults,
             designator_standard: overrides.designator_standard,
+            rich_notes: overrides.rich_notes.map(|r| r.revision()),
             not_fitted: overrides.not_fitted.cloned(),
             variant_values: overrides.variant_values.cloned(),
         }
@@ -222,6 +225,7 @@ impl SceneInputs {
             && self.designators.as_ref() == overrides.designators
             && self.defaults == overrides.defaults
             && self.designator_standard == overrides.designator_standard
+            && self.rich_notes == overrides.rich_notes.map(|r| r.revision())
             && self.not_fitted.as_ref() == overrides.not_fitted
             && self.variant_values.as_ref() == overrides.variant_values
     }

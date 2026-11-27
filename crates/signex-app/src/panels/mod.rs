@@ -142,7 +142,7 @@ mod planned_tests;
 
 pub use element_properties::{
     AnnotationField, AnnotationPanelMsg, AnnotationPanelState, DIMENSION_OVERRIDE_INPUT,
-    DIMENSION_TEXT_SECTION, DimensionToolForm,
+    DIMENSION_TEXT_SECTION, DimensionToolForm, ImagePanelField, ImagePanelState,
 };
 pub(crate) use element_properties::{
     BODY_ALTERNATE, BODY_ALTERNATE_MISSING, BODY_NORMAL, BODY_NORMAL_CAN_SWITCH, sheet_file_missing,
@@ -245,8 +245,8 @@ pub use pcb_layers::{LayersPanelMsg, LayersPanelUi, LayersTab, PcbLayersPanel};
 pub use pcb_nets::{PcbNetsSummary, PcbPanelMode, PcbPanelMsg, PcbPanelUi};
 pub use pcb_primitive_properties::{PcbPrimitiveFacts, PcbPrimitiveMsg};
 pub use placed_edit::{
-    NoteDraft, NoteLayout, PlacedDraft, PlacedEditMsg, PlacedField, PlacedPanel, PortNameDraft,
-    RunNet,
+    NoteDraft, NoteLayout, NoteLength, PlacedDraft, PlacedEditMsg, PlacedField, PlacedPanel,
+    PortNameDraft, RunNet,
 };
 pub use pre_placement::{
     PlacementPosition, PositionField, PrePlacementData, PrePlacementKind, PrePlacementPositionMsg,
@@ -257,7 +257,7 @@ pub(crate) use projects::NOTEBOOK_ROW_KEY;
 pub(super) use projects::view_projects;
 pub use projects::{DiagramRow, LibraryNodeInfo, ProjectPanelInfo, SheetInfo, build_project_tree};
 pub(crate) use projects::{MISSING_MARK, UNREADABLE_MARK};
-pub use projects_graphite::{ProjectsMsg, ProjectsView};
+pub use projects_graphite::{AssetRow, ProjectsMsg, ProjectsView};
 pub use properties::DrawingFieldId;
 pub(super) use properties::{
     PROPERTY_CONTROL_PORTION, PROPERTY_LABEL_COLUMN, PROPERTY_LABEL_WIDTH, PROPERTY_ROW_GAP,

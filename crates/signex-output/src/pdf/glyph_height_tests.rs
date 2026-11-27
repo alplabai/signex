@@ -24,6 +24,8 @@ fn exported_em(family: &str) -> (String, f32) {
         justify_v: VAlign::Bottom,
         font_family: Some(family.to_string()),
         locked: false,
+        format: Default::default(),
+        rich: Default::default(),
     });
     let mut ctx = sample_ctx(1);
     ctx.sheets[0].schematic = sheet;

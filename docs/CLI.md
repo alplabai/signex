@@ -288,7 +288,10 @@ the dialog cannot be answered.
 The placements (`place_net_label` and the other labels, `place_power_symbol`,
 `place_junction`, `place_no_connect`, `place_no_erc`, `place_wire`, `draw_wire`,
 `place_bus`, `draw_bus`, `place_text`, `place_text_string`, `draw_line`,
-`draw_graphic_line`, `draw_rectangle`, and the directives `place_blanket`,
+`draw_graphic_line`, `draw_rectangle`, the curve drawings `draw_ellipse`,
+`draw_elliptical_arc` and `draw_round_rectangle` (#1267, see "Curve drawings"
+below), `place_linear_dimension` and `place_aligned_dimension` (#2836, see
+"Dimensions"), and the directives `place_blanket`,
 `place_compile_mask`, `place_diff_pair` and `edit_blanket` (#2420) and
 `place_parameter_set` (#1489: `at` on a wire, refused off one; optional
 `class`, `diff_pair_class`, `width`, `clearance`, `via_diameter` and
@@ -829,6 +832,54 @@ set_symbol_parameter id=<uuid> name=Manufacturer [value=..] [document=..]
   or empty `value`: the parameter stays, with no value). `reference`, `value`
   and `footprint` have their own rows and commands and are refused here.
 
+`set_text_note_format id=<uuid> format=plain|typst [document=..]` sets how a
+text note's text is read, as the Format row of the note in Properties does
+(Plain / Rich text, mockup row 203), in one undo step; none when the note
+already has that format. The text is never changed, so switching back keeps
+the source as it is. Any other kind, or another word, is refused with the
+reason. The answer is the placed-object answer above plus `format`.
+
+### Rich text notes
+
+A rich note (#1114, mockup row 203) has Frame and Size sections and an
+in-place editor; each has a command. The first three take an optional
+`document` like the placements and can be edits of `apply_edits`; the rest
+act on a note of the sheet in view. Rules:
+`docs/architecture/snxsch-note-format.md`.
+
+```
+set_text_note_frame id=<uuid> frame=none|border|filled [border=<mm>|auto] [padding=<mm>] [document=..]
+set_text_note_size id=<uuid> sizing=fit_text|fixed_width|fixed_box [width=<mm>] [height=<mm>] [document=..]
+apply_rich_note_edit id=<uuid> [source=..] [document=..]
+edit_rich_note id=<uuid> [line=<n>] [column=<n>]
+cancel_rich_note_edit id=<uuid>
+wrap_rich_note_selection id=<uuid> style=bold|italic|heading|list|math|link|table
+open_rich_note_link id=<uuid> target=<link>
+compile_rich_note id=<uuid>
+```
+
+- `set_text_note_frame` and `set_text_note_size` set the sections in one
+  undo step; a length is in mm, a finite number at or above zero. The answer
+  is the placed-object answer plus `frame`, `border_mm` (`null` is Auto),
+  `padding_mm`, `sizing`, `width_mm` and `height_mm`.
+- `apply_rich_note_edit` with `source` makes it the note's text; without, it
+  applies the text typed in the open editor. One undo step; a plain note is
+  refused. The answer adds `text` and `applied`.
+- `edit_rich_note` opens the editor, the cursor at 1-based `line` and
+  `column` (characters); the answer is `{"id", "editing", "source",
+  "edited", "cursor": {"line", "byte"}}`. `wrap_rich_note_selection` is a
+  toolbar button (the selection wrapped, or the empty markup at the cursor)
+  and answers the same plus `style`; `cancel_rich_note_edit` drops the
+  typing and answers `{"id", "cancelled"}`.
+- `open_rich_note_link` opens a link the note's source makes: an `http(s)`
+  address, or a file under the project folder; anything else is refused. It
+  answers `{"id", "target", "opens": "web"|"file"}`. A headless run launches
+  nothing.
+- `compile_rich_note` compiles the note off the UI thread (or answers from
+  the cache) with `{"id", "key", "compiled", "cached", "width_mm",
+  "height_mm", "shapes", "links", "problems", "compile_ms"}`; each problem
+  is `{"severity", "line", "column", "message"}`, lines counted in the note.
+
 `set_object_text id=<uuid> field=designator|value|text [value=..] [document=..]`
 sets a part's designator or value, a power port's name (its `value`), a
 label's name or a text note's text (`text`), with the engine edit the
@@ -913,6 +964,99 @@ set_pad_thermal_relief document=<board> ids=<pad uuids> [air_gap=rule|<mm>] [spo
   "spoke_width", "spokes"}`, a number or `"rule"`. A library footprint's pads
   are set in the footprint editor's pad Properties; placing it carries them.
 
+## Curve drawings
+
+`draw_ellipse center=x,y radius_x=.. radius_y=..`,
+`draw_elliptical_arc center=x,y radius_x=.. radius_y=.. start_angle=..
+end_angle=..` and `draw_round_rectangle start=x,y end=x,y
+[corner_radius=..]` (#1267) place one drawing, one undo step, as the clicks
+of the same tool do. The centre and corners are points, refused off the grid
+as for any placement; the radii and the corner radius are lengths in mm above
+zero. Angles are degrees within ±360, measured counter-clockwise from the
++X direction in sheet coordinates, and the arc runs counter-clockwise from
+the start angle to the end angle. A left-out corner radius is 1.27 mm; any
+radius is held to half the short side. Width and fill are the project's shape
+defaults. A shape with no visible size, or an arc whose two angles are the
+same, is `refused`. The run answers with the drawing's `id` and its `kind`
+(`ellipse`, `elliptical_arc` or `round_rect`):
+
+```json
+{"id": "0192f3a4-...", "kind": "ellipse"}
+```
+
+## Symbol shapes
+
+The symbol editor's curve tools (#2838) draw on the open symbol `document`
+names, a `.snxsym` id or path:
+
+```text
+symbol_draw_elliptical_arc document=.. center=x,y radius_x=.. radius_y=.. start_angle=.. end_angle=..
+symbol_draw_bezier document=.. start=x,y control_1=x,y control_2=x,y end=x,y
+symbol_draw_round_rectangle document=.. start=x,y end=x,y [corner_radius=..]
+symbol_draw_pie document=.. center=x,y radius=.. start_angle=.. end_angle=..
+```
+
+Points are in the symbol's own mm, as the editor's status bar reads them,
+taken as given; a pin reference is `refused`. Angles are degrees within
+±360, counter-clockwise from the start angle to the end angle, stored in
+`[0, 360)`. A left-out corner radius is the tool's 1.27 mm; any radius is
+held to half the short side. Each shape is one undo step of the symbol's
+editor, with the tool's stroke and no fill, on the part and body the editor
+shows. A shape with no visible size, an arc or pie whose angles are the same,
+or a Bezier whose four points are one is `refused`. A symbol that is not open
+in an editor is `refused`: open it first with `open_document`. The run
+answers with the graphic:
+
+```json
+{"document": "/lib/R.snxsym", "index": 3, "kind": "pie", "part": 1,
+ "body_style": 1, "stroke_width": 0.15, "shape": {"...": "..."}}
+```
+
+These commands are on the agent channel; `apply_edits` does not carry them,
+since a symbol keeps its own editor's undo stack.
+
+## Symbol pins
+
+`edit_symbol_pins` is the Pin table tab's bulk edit, Delete selected and
+Paste rows (mockup row 122b, #2817) on an open symbol file. Open the file
+first (`open_document path=<.snxsym>`); write it with `save_document`.
+
+```text
+edit_symbol_pins document=<.snxsym> [symbol=<name>] pins=<json> [dry_run=true]
+edit_symbol_pins document=<.snxsym> [symbol=<name>] paste=<rows> [fields=..] [mode=..] [dry_run=true]
+```
+
+- `pins` is a JSON object of pin number to the fields to set:
+  `{"1": {"name": "OUTA", "electrical": "output"}, "4": null}`. `null`
+  removes the pin. The fields are `number`, `name`, `electrical` (the type
+  ids `query_pins` answers with, such as `input`, `power_input`, `passive`),
+  `part` (0 to 255), `length` (mm, by the Properties field's rule),
+  `orientation` (`left`, `right`, `up`, `down`), `hidden` and
+  `description`. A row finds its pin by the number it has before the edit,
+  so two pins can swap numbers in one call.
+- `paste` is read as the Paste rows box reads it: a row per line, cells
+  split on a tab or a run of two or more spaces, datasheet type words (`I`,
+  `O`, `I/O`, `P`) and dashes read as there. An operand cannot carry a line
+  break or a tab, so write `\n` and `\t`; `\\` is a backslash. `fields` is
+  the column map, comma separated, from `number`, `name`, `electrical`,
+  `part`, `length`, `description` and `ignore`; columns past it are read as
+  number, name, type and description. `mode` is `update_by_number` (the
+  default), `append` or `replace_all`. New pins go on part 1's normal body,
+  whatever part the editor shows.
+- Give `pins` or `paste`, not both. A file of more than one symbol needs
+  `symbol`. A row naming a number no pin has, or one two pins share, a
+  field or value that cannot be read, or a length a pin cannot have refuses
+  the whole command and nothing is written. A pasted length a pin cannot
+  have keeps the pin's length, as in the tab, and is counted.
+- The edit is one undo step on the symbol file (`undo document=<.snxsym>`
+  takes it back); the same values again change nothing and make no step.
+  The answer is `{"document", "symbol", "changed", "dry_run", "updated",
+  "added", "removed", "replaced", "lengths_refused", "duplicate_numbers",
+  "pins"}`, each pin with the fields above. With `dry_run=true` the answer
+  is what the edit would leave, and the symbol is not changed.
+- In a window without operands it says what it needs and does nothing; a
+  person uses the Pin table tab.
+
 ## Placement extras
 
 The operand forms of three placement extras (#1667). Each is one undo step
@@ -947,6 +1091,77 @@ holds it; a point off the grid is refused as for any placement. The file is
 read off the UI thread before the edit runs. Without operands, in a window,
 `place_design_block` and `import_graphics` open a file dialog and put the
 content on the cursor; `autoplace_fields` acts on the selected parts.
+
+## Images
+
+```text
+place_graphic path=<PNG, JPEG, GIF or SVG file> at=x,y [width=<mm>] [document=..]
+```
+
+`place_graphic` (#1116) places an image as a project asset: the sheet stores
+the file's project-relative path and its content hash, never the picture. A
+file from outside the project gets a name under `assets/images/` and is
+copied there when the sheet is saved (`copied_on_save` in the answer); a file
+inside the project is placed where it is. `at` is the image's centre, refused
+off the grid; `width` is in mm and the height follows the aspect ratio;
+without it the image fills the sheet's free area. It answers
+`{"placed", "id", "file", "hash", "format", "width_px", "height_px", "size",
+"copied_on_save"}`. A file over 32 MiB or 64 Mpx, one that is not an image,
+and an SVG that refers to anything outside itself are refused with the
+reason. Without operands, in a window, it opens the Place Image dialog and
+puts the chosen image on the cursor. Rules in
+[SCHEMATIC_IMAGES.md](SCHEMATIC_IMAGES.md).
+
+```text
+set_image id=<image> field=<field> value=<value> [document=..]
+relink_image path=<image file> (file=<project file> | id=<image>) [document=..]
+show_image_in_folder id=<image> [document=..]
+list_image_assets document=<sheet>
+```
+
+`set_image` sets one field of a placed image (`width`, `height`, `scale`,
+`keep_aspect`, `opacity`, `border`, `placement`, `bounds`), as its
+Properties ▸ Image row does, one undo step; it answers with the image.
+`relink_image` points every image naming `file`, on every sheet of the
+project, at the new file (Relink…), or the one image `id` (Replace…), one
+undo step; it answers `{"relinked", "sheets", "file", "hash", …}`.
+`show_image_in_folder` answers the file's `path` and `folder`; a headless
+run launches nothing. `list_image_assets` is a query: it scans the project's
+`assets/images/` and every file its images name off the UI thread and
+answers each file's facts, use count and whether it is missing. Without
+operands, `set_image`, `relink_image` and `show_image_in_folder` say which
+Properties row runs them.
+
+## Dimensions
+
+The operand form of the sheet's two dimension tools (#2836). It is one undo
+step and ends in the commit the tool's third click ends in.
+
+```text
+place_linear_dimension start=x,y end=x,y at=x,y [direction=..] [units=..]
+    [precision=..] [arrows=..] [text=..] [document=..]
+place_aligned_dimension (the same operands)
+```
+
+- `start` and `end` are the two measured points and `at` a point the
+  dimension line runs through, the tool's three clicks. Each is refused off
+  the grid, as for any placement; a pin reference is the pin's tip.
+- `direction` is `horizontal`, `vertical` or `aligned`. Left out, a linear
+  dimension is horizontal or vertical by the axis its points are further apart
+  along (horizontal on a tie), and an aligned one measures the straight
+  distance.
+- `units` is `mm`, `mil` or `in`, `precision` the decimals written, 0 to 3,
+  and `arrows` is `filled_inside`, `filled_outside` or `open`: the words the
+  sheet file stores. `text` is written instead of the measured value; left
+  out or blank, the measured value is written.
+- What is left out takes the tool form's defaults (mm, two decimals, filled
+  arrows inside), never what the person typed in the armed tool's form.
+- Points that measure nothing in the dimension's direction, a precision above
+  3 and an unknown word are refused with the reason.
+
+The answer is `{"id", "kind": "dimension", "label", "measured_mm",
+"dimension"}`: `label` is the text on the sheet and `dimension` the dimension
+as stored. Without operands, in a window, each command arms its tool.
 
 ### Smart Paste {#smart-paste}
 

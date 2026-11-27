@@ -112,8 +112,11 @@ pub(crate) fn dimension_from_clicks(
 }
 
 impl Signex {
-    /// Feed one snapped click to the Bezier, dimension or table tool.
+    /// Feed one snapped click to the Bezier, curve, dimension or table tool.
     pub(crate) fn annotation_tool_point(&mut self, tool: Tool, p: Point) {
+        if let Some(curve) = super::curve_tool_of(tool) {
+            return self.curve_tool_point(curve, p);
+        }
         match tool {
             Tool::Table => self.place_table_click(p),
             Tool::Bezier => self.bezier_tool_point(p),
@@ -146,16 +149,23 @@ impl Signex {
             let d = dimension_from_clicks(tool, from, to, at, style);
             // Two clicks on one spot measure nothing: nothing is placed.
             if d.measured_mm() > 0.0 {
-                self.apply_engine_command(
-                    signex_engine::Command::PlaceSchDrawing {
-                        drawing: SchDrawing::Dimension(d),
-                    },
-                    false,
-                    false,
-                );
+                self.place_sheet_dimension(d);
             }
         }
         self.sync_annotation_draft();
+    }
+
+    /// Commit `d` to the sheet the edit targets, one undo step: what the
+    /// third click and `place_linear_dimension` / `place_aligned_dimension`
+    /// with operands both end in. `false` when nothing changed.
+    pub(crate) fn place_sheet_dimension(&mut self, d: SchDimension) -> bool {
+        self.apply_engine_command(
+            signex_engine::Command::PlaceSchDrawing {
+                drawing: SchDrawing::Dimension(d),
+            },
+            false,
+            false,
+        )
     }
 
     /// A dimension belongs to the window of its first point: a click from
@@ -201,10 +211,13 @@ impl Signex {
             Tool::Bezier => AnnotationDraftKind::Bezier,
             Tool::LinearDimension => AnnotationDraftKind::LinearDimension,
             Tool::AlignedDimension => AnnotationDraftKind::AlignedDimension,
-            _ => {
-                self.interaction_state.active_canvas_mut().annotation_draft = None;
-                return;
-            }
+            _ => match super::curve_tool_of(tool) {
+                Some(curve) => AnnotationDraftKind::Curve(curve),
+                None => {
+                    self.interaction_state.active_canvas_mut().annotation_draft = None;
+                    return;
+                }
+            },
         };
         let state = &self.interaction_state.annotation_tool;
         let i18n = &self.ui_state.i18n;
@@ -212,10 +225,14 @@ impl Signex {
             AnnotationDraftKind::Bezier => t!(i18n, ids::PROPERTIES_BEZIER_TITLE),
             AnnotationDraftKind::LinearDimension => t!(i18n, ids::PROPERTIES_DIMENSION_LINEAR),
             AnnotationDraftKind::AlignedDimension => t!(i18n, ids::PROPERTIES_DIMENSION_ALIGNED),
+            AnnotationDraftKind::Curve(curve) => t!(i18n, super::place_curve::title_id(curve)),
         }
         .into_string();
         let step = state.points.len();
         let hint = match (kind, step) {
+            (AnnotationDraftKind::Curve(curve), step) => {
+                t!(i18n, super::place_curve::hint_id(curve, step))
+            }
             (AnnotationDraftKind::Bezier, 0) => t!(i18n, ids::CANVAS_HINT_BEZIER_START),
             (AnnotationDraftKind::Bezier, 1) => t!(i18n, ids::CANVAS_HINT_BEZIER_C1),
             (AnnotationDraftKind::Bezier, 2) => t!(i18n, ids::CANVAS_HINT_BEZIER_C2),

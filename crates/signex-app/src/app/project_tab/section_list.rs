@@ -41,6 +41,7 @@ pub(super) const GROUPS: [&[ProjectSection]; 3] = [
     &[
         ProjectSection::ErcAnnotation,
         ProjectSection::SchematicDefaults,
+        ProjectSection::Fonts,
         ProjectSection::Setup,
     ],
     &[ProjectSection::VersionControl, ProjectSection::Requirements],
@@ -62,6 +63,8 @@ pub(super) struct SectionFacts {
     pub library_missing: bool,
     pub commit_on_save: bool,
     pub requirements_failed: usize,
+    /// Font families the project carries (#1178).
+    pub fonts: usize,
 }
 
 /// The status at the right of a section row.
@@ -87,6 +90,7 @@ pub(super) fn section_badge(section: ProjectSection, facts: &SectionFacts) -> Op
         ProjectSection::Requirements if facts.requirements_failed > 0 => {
             Some(SectionBadge::Failed(facts.requirements_failed))
         }
+        ProjectSection::Fonts if facts.fonts > 0 => Some(SectionBadge::Count(facts.fonts)),
         _ => None,
     }
 }
@@ -100,6 +104,7 @@ const fn section_glyph(section: ProjectSection) -> Glyph {
         ProjectSection::Libraries => Glyph::Library,
         ProjectSection::ErcAnnotation => Glyph::Shield,
         ProjectSection::SchematicDefaults => Glyph::Sliders,
+        ProjectSection::Fonts => Glyph::Font,
         ProjectSection::Setup => Glyph::Gear,
         ProjectSection::VersionControl => Glyph::Branch,
         ProjectSection::Requirements => Glyph::Target,
@@ -123,6 +128,7 @@ impl Signex {
                 &project.data.requirements,
                 tab.map(|tab| &tab.requirements),
             ),
+            fonts: project.data.project_fonts().map_or(0, |fonts| fonts.len()),
         }
     }
 }

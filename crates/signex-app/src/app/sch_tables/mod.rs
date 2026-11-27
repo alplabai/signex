@@ -5,6 +5,9 @@
 
 mod annotation_edit;
 mod csv;
+mod curve_edit;
+#[cfg(test)]
+mod curve_edit_tests;
 mod panel;
 mod refresh;
 mod rows;
@@ -19,6 +22,8 @@ pub(crate) use annotation_edit::{
     apply_annotation_edit, table_padding_holds, table_text_size_holds,
 };
 pub(crate) use rows::{designators, source_is_missing};
+#[cfg(test)]
+mod pin_edit_golden_tests;
 #[cfg(test)]
 mod tests;
 

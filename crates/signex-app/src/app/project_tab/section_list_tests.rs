@@ -38,7 +38,32 @@ const NO_FACTS: SectionFacts = SectionFacts {
     library_missing: false,
     commit_on_save: false,
     requirements_failed: 0,
+    fonts: 0,
 };
+
+/// #1178 (mockup row 205): Fonts sits after Schematic defaults and counts
+/// its families once there is one.
+#[test]
+fn the_fonts_row_follows_schematic_defaults_and_counts_its_families() {
+    assert_eq!(
+        GROUPS[1],
+        [
+            ProjectSection::ErcAnnotation,
+            ProjectSection::SchematicDefaults,
+            ProjectSection::Fonts,
+            ProjectSection::Setup,
+        ]
+    );
+    assert_eq!(section_badge(ProjectSection::Fonts, &NO_FACTS), None);
+    let facts = SectionFacts {
+        fonts: 3,
+        ..NO_FACTS
+    };
+    assert_eq!(
+        section_badge(ProjectSection::Fonts, &facts),
+        Some(SectionBadge::Count(3))
+    );
+}
 
 #[test]
 fn the_groups_list_every_section_once_in_list_order() {

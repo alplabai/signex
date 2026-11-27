@@ -41,6 +41,8 @@ fn note_at(n: u128, y: f64, locked: bool) -> TextNote {
         justify_h: HAlign::Left,
         justify_v: VAlign::Bottom,
         locked,
+        format: Default::default(),
+        rich: Default::default(),
     }
 }
 

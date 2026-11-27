@@ -219,6 +219,32 @@ fn set_page_operands(
     Ok(json!(pages))
 }
 
+/// The file each printed page prints, in print order, and the table rows the
+/// PDF carries as links to a page (#2663, docs/PDF_EXPORT.md, "Table of
+/// contents links"), pages and rows counted from 1. The pages were checked
+/// already, so an error here leaves both lists empty.
+fn table_link_answer(ctx: &ExportContext, options: &PdfOptions) -> (Vec<Value>, Vec<Value>) {
+    let current = ctx.current_sheet_index();
+    let page_files = signex_output::printed_sheet_paths(&options.page_range, &ctx.sheets, current)
+        .unwrap_or_default()
+        .iter()
+        .map(|file| json!(file.display().to_string()))
+        .collect();
+    let table_links = signex_output::pdf_table_links(ctx, options)
+        .unwrap_or_default()
+        .iter()
+        .map(|link| {
+            json!({
+                "page": link.page + 1,
+                "row": link.row + 1,
+                "link": link.link,
+                "target_page": link.target_page + 1,
+            })
+        })
+        .collect();
+    (page_files, table_links)
+}
+
 /// `export_schematic_pdf document=<sheet> path=<file> [options]`: the pages
 /// `pages` names (every page of the sheet's project when left out), as Export
 /// PDF opens on it, built and written off the UI thread; the answer says what
@@ -264,15 +290,18 @@ pub(crate) fn export_schematic_pdf(app: &mut Signex, args: &CommandArgs) -> Ran 
         .into_iter()
         .map(PdfLayer::group_name)
         .collect();
+    let (page_files, table_links) = table_link_answer(&ctx, &options);
     let answer = json!({
         "document": source.display().to_string(),
         "path": path.display().to_string(),
         "sheets": files.len(),
         "variant": options.variant,
         "pages": pages,
+        "page_files": page_files,
         "layers": layers,
         "watermark": watermark_answer(options.watermark.as_ref()),
         "links": options.links,
+        "table_links": table_links,
     });
     // The tab's descended placement picks the page `pages=current` prints.
     let request = Box::new(PdfExportRequest {

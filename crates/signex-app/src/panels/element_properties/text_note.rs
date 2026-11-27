@@ -21,7 +21,7 @@ use iced::Widget;
 use iced::widget::text_editor::{self, Binding, KeyPress};
 use signex_i18n::{Localized, ids, t};
 use signex_types::measure::length_field_text;
-use signex_types::schematic::{HAlign, SelectedItem, SelectedKind, VAlign};
+use signex_types::schematic::{HAlign, SelectedItem, SelectedKind, TextNoteFormat, VAlign};
 use signex_widgets::Label;
 
 const TS: TypeScale = TypeScale::DEFAULT;
@@ -41,6 +41,41 @@ pub(super) fn justification(info: &[(String, String)]) -> (HAlign, VAlign) {
     (h_align_from_row(&justify_h_row(info)), v)
 }
 
+/// The format a text note's rows report (`info_keys::NOTE_FORMAT`); a plain
+/// note reports none.
+pub(super) fn format_of(info: &[(String, String)]) -> TextNoteFormat {
+    TextNoteFormat::from_word(&info_row(info, signex_engine::info_keys::NOTE_FORMAT))
+        .unwrap_or_default()
+}
+
+/// Format: Plain / Rich text (mockup row 203). Switching keeps the text.
+fn format_row<'a>(
+    i18n: &'a signex_i18n::I18n,
+    current: TextNoteFormat,
+    picked: impl Fn(NoteLayout) -> PanelMsg + 'a,
+    st: PanelStyle,
+    read_only: bool,
+) -> Element<'a, PanelMsg> {
+    let formats = [
+        (
+            TextNoteFormat::Plain,
+            t!(i18n, ids::PROPERTIES_NOTE_FORMAT_PLAIN),
+        ),
+        (
+            TextNoteFormat::Typst,
+            t!(i18n, ids::PROPERTIES_NOTE_FORMAT_RICH),
+        ),
+    ];
+    segmented_row(
+        t!(i18n, ids::PROPERTIES_NOTE_FORMAT),
+        formats,
+        current,
+        move |format| picked(NoteLayout::Format(format)),
+        st,
+        read_only,
+    )
+}
+
 /// The quarter turn nearest `degrees`, as every Rotation control marks it.
 fn nearest_quarter_turn(degrees: f64) -> u32 {
     crate::panels::rotation_steps::nearest_rotation_step(degrees) as u32
@@ -58,6 +93,7 @@ pub(super) fn push_text_note_sections<'a>(
     let rotation = super::rows::rotation_degrees(&get("Rotation"));
     let (justify_h, justify_v) = justification(&ctx.selection_info);
     let note_font_family = Some(get("Font Family")).filter(|family| !family.is_empty());
+    let note_format = format_of(&ctx.selection_info);
     let Some(id) = uuid else {
         return col;
     };
@@ -114,6 +150,11 @@ pub(super) fn push_text_note_sections<'a>(
             &ctx.collapsed_sections,
             move || {
                 let c = Column::new().spacing(0).width(Length::Fill);
+                let mut c = c.push(format_row(i18n, note_format, picked, st, read_only));
+                // A rich note is edited in place over the sheet (mockup row 203).
+                if note_format == TextNoteFormat::Typst {
+                    c = c.push(super::rich_note::edit_row(ctx, item));
+                }
                 let Some(draft) = draft else {
                     // The box is seeded on the next selection refresh.
                     return c.push(form_input_row(
@@ -130,7 +171,7 @@ pub(super) fn push_text_note_sections<'a>(
     );
 
     // ── Text Properties ──: Justify H / V, Text Size and Font.
-    col.push(
+    col = col.push(
         ctx.collapsible(
             "sel_text",
             ids::PROPERTIES_SECTION_TEXT,
@@ -181,7 +222,12 @@ pub(super) fn push_text_note_sections<'a>(
             },
         )
         .boxed(),
-    )
+    );
+    // ── Frame, Size ──: a rich note's own sections (mockup row 203).
+    if note_format == TextNoteFormat::Typst {
+        return super::rich_note::push_sections(col, ctx, item, st);
+    }
+    col
 }
 
 /// The field values the illustration's callouts repeat, as the fields show
@@ -328,7 +374,7 @@ fn note_binding(key: KeyPress, item: SelectedItem) -> Option<Binding<PanelMsg>> 
 
 /// A label and a segmented control over `options`, `current` on. Read-only
 /// rows (a locked note) are veiled and take no input.
-fn segmented_row<'a, V, const N: usize>(
+pub(super) fn segmented_row<'a, V, const N: usize>(
     label: Localized,
     options: [(V, Localized); N],
     current: V,
@@ -401,6 +447,17 @@ mod tests {
         );
     }
 
+    /// #1114: the Format row reads the engine's key; a plain note has none.
+    #[test]
+    fn the_format_row_reads_the_engines_key() {
+        let key = signex_engine::info_keys::NOTE_FORMAT.to_string();
+        assert_eq!(format_of(&rows("Left", "Top")), TextNoteFormat::Plain);
+        let rich = vec![(key.clone(), "typst".to_string())];
+        assert_eq!(format_of(&rich), TextNoteFormat::Typst);
+        let unknown = vec![(key, "slides".to_string())];
+        assert_eq!(format_of(&unknown), TextNoteFormat::Plain);
+    }
+
     /// Mockup row 47: one long line wraps and the box grows to show it, up
     /// to its six-line cap.
     #[test]
@@ -436,6 +493,8 @@ mod tests {
             justify_h: HAlign::Center,
             justify_v: VAlign::Center,
             locked: false,
+            format: Default::default(),
+            rich: Default::default(),
         };
         let id = note.uuid;
         let sheet = signex_types::schematic::SchematicSheet {
@@ -520,6 +579,8 @@ mod tests {
             justify_h: HAlign::Left,
             justify_v: VAlign::Top,
             locked: false,
+            format: Default::default(),
+            rich: Default::default(),
         };
         let sheet = signex_types::schematic::SchematicSheet {
             paper_size: "A4".into(),

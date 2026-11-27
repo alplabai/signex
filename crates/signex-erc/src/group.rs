@@ -83,7 +83,9 @@ impl RuleKind {
             | RuleKind::PartWithoutMpn
             | RuleKind::PartWithoutLibraryBody
             | RuleKind::UnitsNotPlaced
-            | RuleKind::SymbolOutsideSheet => RuleGroup::Parts,
+            | RuleKind::SymbolOutsideSheet
+            // What else is placed on the sheet: an image (#1116).
+            | RuleKind::ImageFileMissing => RuleGroup::Parts,
         }
     }
 }
@@ -108,7 +110,7 @@ mod tests {
     #[test]
     fn every_group_holds_its_rules() {
         let sizes: Vec<usize> = RuleGroup::ALL.iter().map(|g| g.rules().count()).collect();
-        assert_eq!(sizes, [4, 10, 4, 6, 7, 8]);
+        assert_eq!(sizes, [4, 10, 4, 6, 7, 9]);
     }
 
     #[test]
@@ -154,6 +156,7 @@ mod tests {
             (RuleKind::HarnessTypeConflict, Hierarchy),
             (RuleKind::NetClassConflict, Nets),
             (RuleKind::DiffPairPartnerMissing, Nets),
+            (RuleKind::ImageFileMissing, Parts),
         ];
         assert_eq!(expected.len(), RuleKind::ALL.len());
         for (rule, group) in expected {

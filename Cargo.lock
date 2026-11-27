@@ -6833,6 +6833,7 @@ dependencies = [
  "signex-types",
  "thiserror 2.0.18",
  "toml 0.8.23",
+ "ttf-parser",
  "typst",
  "typst-assets",
  "typst-layout",
@@ -6845,16 +6846,20 @@ dependencies = [
 name = "signex-output"
 version = "26.11.1"
 dependencies = [
+ "gif",
+ "miniz_oxide",
  "pcb-geom",
  "pdf-writer 0.14.0",
  "rust_xlsxwriter",
  "serde",
  "serde_json",
  "signex-bom",
+ "signex-notebook",
  "signex-types",
  "thiserror 2.0.18",
  "tiny-skia 0.11.4",
  "ttf-parser",
+ "usvg 0.48.1",
  "uuid",
 ]
 

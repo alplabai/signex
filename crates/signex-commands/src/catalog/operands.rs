@@ -1,7 +1,10 @@
 //! A command's operands besides its id (#1934), for a CLI or an agent, in one
-//! naming convention (`OPERAND_CONVENTION`); the notebook's are in `notebook`.
+//! naming convention (`OPERAND_CONVENTION`); the notebook's are in `notebook`,
+//! a rich text note's in `rich_note`.
 mod notebook;
 pub use notebook::*;
+mod rich_note;
+pub use rich_note::*;
 
 /// The shape of one operand's value, as written in text.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -308,6 +311,12 @@ pub const SHEET_VARIABLE: &[Operand] = &[
     optional("remove", OperandKind::Bool),
     optional("document", OperandKind::Document),
 ];
+/// The `format` (`plain` or `typst`) of the text note `id` (#1114).
+pub const TEXT_NOTE_FORMAT: &[Operand] = &[
+    required("id", OperandKind::Text),
+    required("format", OperandKind::Text),
+    optional("document", OperandKind::Document),
+];
 /// The placed part `id` made a net tie (`on=true`) or an ordinary part
 /// (`on=false`, #1277).
 pub const NET_TIE: &[Operand] = &[
@@ -326,6 +335,15 @@ pub const PART_ON_DOCUMENT: &[Operand] = &[
 pub const PLACE_FILE: &[Operand] = &[
     required("path", OperandKind::Path),
     required("at", OperandKind::Point),
+    optional("document", OperandKind::Document),
+];
+/// An image file `path` placed with its centre on `at` (#1116): the
+/// dialog's answer and the click. `width` is in mm (the height follows the
+/// aspect ratio); without it the image fills the sheet's free area.
+pub const PLACE_IMAGE: &[Operand] = &[
+    required("path", OperandKind::Path),
+    required("at", OperandKind::Point),
+    optional("width", OperandKind::Text),
     optional("document", OperandKind::Document),
 ];
 /// An open dialog's answer.
@@ -1076,6 +1094,10 @@ pub const PROJECT_ENABLE_REQUIREMENT: &[Operand] = &[
     required("requirement", OperandKind::Text),
     required("on", OperandKind::Bool),
 ];
+// #1178: the Project tab's Fonts commands.
+mod fonts;
+pub use fonts::{PROJECT_ADD_FONT, PROJECT_FONT, PROJECT_FONT_LICENSE};
+
 /// `set_layer_stack` (#2401): the named board's whole stack, top to bottom,
 /// as JSON rows (`{"layers": [...]}` or the list); a copper row names the
 /// board layer it was, or none for a new layer.

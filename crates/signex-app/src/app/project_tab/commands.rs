@@ -284,11 +284,14 @@ impl Signex {
                 all.extend(part);
             }
         }
-        // #2339: the Requirements section.
-        if let (Value::Object(all), Value::Object(part)) =
-            (&mut answer, self.project_requirements_json(id))
-        {
-            all.extend(part);
+        // #2339: the Requirements section; #1178: the Fonts section.
+        for part in [
+            self.project_requirements_json(id),
+            self.project_fonts_json(id),
+        ] {
+            if let (Value::Object(all), Value::Object(part)) = (&mut answer, part) {
+                all.extend(part);
+            }
         }
         Ok(answer)
     }

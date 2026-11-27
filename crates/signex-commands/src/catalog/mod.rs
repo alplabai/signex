@@ -27,6 +27,7 @@ mod gerber_viewer;
 mod grid;
 mod hierarchy;
 mod history;
+mod images;
 mod job_operands;
 mod layers;
 mod library;
@@ -341,6 +342,7 @@ const TABLES: &[&[CommandMetadata]] = &[
     reuse::REUSE,
     wiring::WIRING,
     drawing::DRAWING,
+    images::IMAGES,
     tool::TOOL,
     hierarchy::HIERARCHY,
     annotate::ANNOTATE,

@@ -35,6 +35,7 @@ impl Signex {
                 let focus = self.advance_text_edit();
                 Task::batch([focus, self.finish_update()])
             }
+            TextEditMsg::RichNote(msg) => self.dispatch_rich_note_message(msg),
         }
     }
 

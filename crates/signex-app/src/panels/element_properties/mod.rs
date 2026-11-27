@@ -16,6 +16,7 @@ mod channel_variant_tests;
 mod channel_view;
 mod child_sheet;
 mod child_sheet_repeat;
+mod curve;
 mod design_notes;
 mod dimension;
 mod directive;
@@ -28,6 +29,9 @@ mod harness_definitions;
 mod harness_wire;
 pub(in crate::panels) mod header;
 mod illustrations;
+mod image;
+#[cfg(test)]
+mod image_tests;
 mod label;
 mod library_rows;
 #[cfg(test)]
@@ -40,6 +44,7 @@ mod placed_rows;
 #[cfg(test)]
 mod placed_rows_tests;
 mod power_port;
+mod rich_note;
 pub(in crate::panels) mod rows;
 mod selected;
 mod symbol;
@@ -59,6 +64,7 @@ pub(super) use channel_view::channel_view_properties;
 pub(crate) use child_sheet::sheet_file_missing;
 pub(super) use child_sheet::view_child_sheet_properties;
 pub use directive::BlanketEdit;
+pub use image::{ImagePanelField, ImagePanelState};
 // #1281, #1489: the Net Parameters and Net Blanket surfaces.
 mod blanket;
 #[cfg(test)]

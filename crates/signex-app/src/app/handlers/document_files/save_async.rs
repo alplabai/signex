@@ -113,13 +113,11 @@ impl Signex {
             job = job.writing_a_missing_file();
         }
         let hold = self.document_state.autosave.hold_for_save();
-        Ok(Self::spawn_document_write(
-            job,
-            target,
-            revision,
-            save_as_from,
-            hold,
-        ))
+        // Picked images the sheet places are copied into the project beside
+        // the write (#1116).
+        let image_copies = self.begin_image_copies(&source);
+        let write = Self::spawn_document_write(job, target, revision, save_as_from, hold);
+        Ok(Task::batch([image_copies, write]))
     }
 
     /// Snapshot the board of the PCB at `path` (its tab's, or the one parked

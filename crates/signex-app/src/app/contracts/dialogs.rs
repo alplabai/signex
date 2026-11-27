@@ -734,6 +734,9 @@ pub enum EditMsg {
     RailRename(crate::app::RailRenameMsg),
     /// Schematic tables (#1300): contents sheet, CSV, cell edits.
     Tables(crate::app::TablesMsg),
+    /// Images as project assets (#1116): Place ▸ Graphic…, the picture
+    /// reads and the copy into the project on save.
+    Images(crate::app::ImagesMsg),
     /// Named unions (mockup row 158): the canvas menu rows, the keymap and the Create
     /// Union popover.
     Unions(crate::app::unions::UnionsMsg),

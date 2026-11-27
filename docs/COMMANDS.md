@@ -284,6 +284,10 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `show_current_command_shortcuts` | Show valid shortcuts for the current interactive command | help | `Shift+F1` | — |
 | `smart_paste` | Smart Paste | edit | `Mod+Shift+V` | — |
 | `switch_segment_posture` | Flip the wire/bus corner: horizontal or vertical first | interactive | — | `/` |
+| `symbol_draw_bezier` | Draw a Bezier curve on a symbol | place | — | — |
+| `symbol_draw_elliptical_arc` | Draw an elliptical arc on a symbol | place | — | — |
+| `symbol_draw_pie` | Draw a pie chart on a symbol | place | — | — |
+| `symbol_draw_round_rectangle` | Draw a round rectangle on a symbol | place | — | — |
 | `tile_windows_horizontally` | Tile windows one above the other | window | `W H` | `Shift+Alt+H` |
 | `tile_windows_vertically` | Tile windows side by side | window | `W V` | `Shift+Alt+V` |
 | `toggle_auto_focus` | Toggle AutoFocus | view | `F9` | `F9` |

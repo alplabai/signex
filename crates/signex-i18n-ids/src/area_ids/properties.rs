@@ -534,4 +534,47 @@ define_ids! {
     PROPERTIES_FP_PAD_SCOPE_SOURCE = "properties-fp-pad-scope-source";
     PROPERTIES_FP_PAD_SCOPE_NUMBERING = "properties-fp-pad-scope-numbering";
     PROPERTIES_FP_PAD_SCOPE_PASTE = "properties-fp-pad-scope-paste";
+    // mockup row 203 (#1114)
+    PROPERTIES_NOTE_FORMAT = "properties-note-format";
+    PROPERTIES_NOTE_FORMAT_PLAIN = "properties-note-format-plain";
+    PROPERTIES_NOTE_FORMAT_RICH = "properties-note-format-rich";
+    PROPERTIES_NOTE_SOURCE = "properties-note-source";
+    PROPERTIES_NOTE_EDIT = "properties-note-edit";
+    PROPERTIES_NOTE_FRAME_SECTION = "properties-note-frame-section";
+    PROPERTIES_NOTE_FRAME = "properties-note-frame";
+    PROPERTIES_NOTE_FRAME_NONE = "properties-note-frame-none";
+    PROPERTIES_NOTE_FRAME_BORDER = "properties-note-frame-border";
+    PROPERTIES_NOTE_FRAME_FILLED = "properties-note-frame-filled";
+    PROPERTIES_NOTE_BORDER = "properties-note-border";
+    PROPERTIES_NOTE_BORDER_AUTO = "properties-note-border-auto";
+    PROPERTIES_NOTE_PADDING = "properties-note-padding";
+    PROPERTIES_NOTE_SIZE_SECTION = "properties-note-size-section";
+    PROPERTIES_NOTE_SIZE = "properties-note-size";
+    PROPERTIES_NOTE_SIZE_FIT = "properties-note-size-fit";
+    PROPERTIES_NOTE_SIZE_WIDTH = "properties-note-size-width";
+    PROPERTIES_NOTE_SIZE_BOX = "properties-note-size-box";
+    PROPERTIES_NOTE_WIDTH = "properties-note-width";
+    PROPERTIES_NOTE_HEIGHT = "properties-note-height";
+    // Ellipse, elliptical arc and round rectangle drawings (#1267).
+    CANVAS_HINT_ELLIPSE_CENTER = "properties-curve-hint-ellipse-center";
+    CANVAS_HINT_ELLIPSE_CORNER = "properties-curve-hint-ellipse-corner";
+    CANVAS_HINT_ARC_CENTER = "properties-curve-hint-arc-center";
+    CANVAS_HINT_ARC_RADIUS_X = "properties-curve-hint-arc-radius-x";
+    CANVAS_HINT_ARC_RADIUS_Y = "properties-curve-hint-arc-radius-y";
+    CANVAS_HINT_ARC_START = "properties-curve-hint-arc-start";
+    CANVAS_HINT_ARC_END = "properties-curve-hint-arc-end";
+    CANVAS_HINT_ROUND_RECT_FIRST = "properties-curve-hint-round-rect-first";
+    CANVAS_HINT_ROUND_RECT_SECOND = "properties-curve-hint-round-rect-second";
+    PROPERTIES_ELLIPSE_TITLE = "properties-ellipse-title";
+    PROPERTIES_ELLIPTICAL_ARC_TITLE = "properties-elliptical-arc-title";
+    PROPERTIES_ROUND_RECT_TITLE = "properties-round-rect-title";
+    PROPERTIES_PIE_TITLE = "properties-pie-title";
+    PROPERTIES_CURVE_CAPTION = "properties-curve-caption";
+    PROPERTIES_CURVE_SECTION_SHAPE = "properties-curve-section-shape";
+    PROPERTIES_CURVE_RADIUS_X = "properties-curve-radius-x";
+    PROPERTIES_CURVE_RADIUS_Y = "properties-curve-radius-y";
+    PROPERTIES_CURVE_FIRST_CORNER = "properties-curve-first-corner";
+    PROPERTIES_CURVE_OPPOSITE_CORNER = "properties-curve-opposite-corner";
+    PROPERTIES_CURVE_CORNER_RADIUS = "properties-curve-corner-radius";
+    PROPERTIES_CURVE_ANGLES_NOTE = "properties-curve-angles-note";
 }

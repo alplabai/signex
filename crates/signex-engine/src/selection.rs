@@ -28,6 +28,8 @@ pub mod info_keys {
     /// Prefix of a pin's geometry row, `Pin Geometry: <number>`: the length
     /// in mm and the library rotation in whole degrees, tab-separated.
     pub const PIN_GEOMETRY_PREFIX: &str = "Pin Geometry: ";
+    /// A text note's format word (`typst`, #1114); absent on a plain note.
+    pub const NOTE_FORMAT: &str = "Note Format";
 }
 
 // ---------------------------------------------------------------------------
@@ -410,6 +412,10 @@ impl Engine {
                     info_keys::JUSTIFY_V.into(),
                     v_align_label(text_note.justify_v).into(),
                 ));
+                if !text_note.format.is_plain() {
+                    let word = text_note.format.as_str();
+                    info.push((info_keys::NOTE_FORMAT.into(), word.into()));
+                }
             }
             SelectedKind::ChildSheet => {
                 let child_sheet = self
@@ -592,6 +598,9 @@ impl Engine {
                         ));
                         info.push(("Width".into(), format!("{:.3}", b.width)));
                     }
+                    SchDrawing::Curve(c) => {
+                        info.extend(crate::curve_info::rows(c, |y| self.document.page_y(y)));
+                    }
                     SchDrawing::Dimension(dim) => {
                         info.push(("Type".into(), "Dimension".into()));
                         info.push(("Length".into(), format!("{:.3}", dim.measured_mm())));
@@ -602,6 +611,12 @@ impl Engine {
                         info.push(("Type".into(), "Table".into()));
                         info.push(("Rows".into(), rows.to_string()));
                         info.push(("Columns".into(), columns.to_string()));
+                    }
+                    SchDrawing::Image(i) => {
+                        info.push(("Type".into(), "Image".into()));
+                        info.push(("File".into(), i.file.clone()));
+                        info.push(("Width".into(), format!("{:.3}", i.width)));
+                        info.push(("Height".into(), format!("{:.3}", i.height)));
                     }
                 }
             }
@@ -905,6 +920,8 @@ mod tests {
             justify_h: HAlign::Left,
             justify_v: VAlign::Top,
             locked: false,
+            format: Default::default(),
+            rich: Default::default(),
         };
         let engine = Engine::new(SchematicSheet {
             text_notes: vec![note],

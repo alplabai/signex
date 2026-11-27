@@ -205,8 +205,9 @@ or the Pages list; `layers` is `all` or the ids of the groups visible on open
 variant the project defines. The watermark and link operands are under
 "Links" and in `docs/DECISIONS.md`. The answer names the sheet count, the
 sheet numbers printed, the variant, the groups written, the watermark and
-whether links are written. In a window the command opens the dialog, as
-File ▸ Export ▸ PDF does.
+whether links are written, and the printed pages' files and the table rows
+written as links ("Table of contents links"). In a window the command opens
+the dialog, as File ▸ Export ▸ PDF does.
 
 ## Bookmarks
 
@@ -313,3 +314,28 @@ page number and frame zone of each partner (#1273).
 `query_cross_references document=<sheet>` answers the same table for an
 open sheet: each Global label with, per placement, the printed text and its
 targets (page, zone, position).
+
+## Table of contents links
+
+A table row that opens a sheet (a contents table's row,
+`docs/SCHEMATIC_TABLES.md`) is a link in the PDF (#2663): a borderless
+`/Link` annotation over the whole row whose GoTo action shows the page that
+prints that sheet, fitted in the window. The row's link is resolved from the
+folder of the sheet holding the table, the same way a double-click on the
+canvas resolves it.
+
+- A row whose sheet no exported page prints (a page range that leaves it
+  out, a sheet the project does not reach) stays plain text.
+- When several pages print one file (the channels of a repeated sheet), the
+  table's first row naming that file goes to the first such page, the second
+  to the second, and a row past the last goes to the first.
+- The row links go in the page's one `/Annots` array after the links of
+  "Links" and the cross-reference entries, numbered after them, and are left
+  out with `links: false`, as every other link is.
+
+Headless and CLI: `export_schematic_pdf document=<sheet> path=<file>` (the
+command of "Links" above, with all its operands) also answers with
+`page_files`, the sheet file of each printed page in print order, and
+`table_links`, each entry `{"page", "row", "link", "target_page"}`, pages and
+rows counted from 1 (empty with `links=false`). In a window the command opens
+Export PDF on the sheet, the sheet Print Preview.

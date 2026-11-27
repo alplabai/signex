@@ -373,6 +373,16 @@ pub(in crate::format) struct SheetExtras {
     /// `docs/architecture/snxsch-object-lock.md`.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub(in crate::format) locked_objects: Vec<String>,
+    /// Text-note formats by note uuid (#1114); only rich notes are written,
+    /// beside the notes for the reason [`Self::note_font_families`] is.
+    /// Format: `docs/architecture/snxsch-note-format.md`.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub(in crate::format) note_formats: BTreeMap<String, String>,
+    /// The Frame and Size sections of rich notes by note uuid (#1114); only
+    /// what differs from the default is written. Same format document.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub(in crate::format) note_layouts:
+        BTreeMap<String, super::note_layout_extras::NoteLayoutEntry>,
     /// Frame settings (`[extras.sheet.frame]`); omitted at the default so a
     /// sheet that never changed them re-saves byte-identical.
     #[serde(default, skip_serializing_if = "FrameExtras::is_default")]
@@ -400,6 +410,9 @@ pub(in crate::format) struct SheetExtras {
     pub(in crate::format) harness_entry_types: BTreeMap<String, String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub(in crate::format) unions: Vec<crate::schematic::SchUnion>,
+    /// Placed images (#1116), omitted when there are none (`image_rows`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(in crate::format) images: Vec<super::image_rows::ImageRow>,
     /// Keys this build does not recognise (`[extras.sheet]`).
     #[serde(flatten)]
     pub(in crate::format) unknown: UnknownFields,
@@ -423,6 +436,8 @@ impl SheetExtras {
             && self.text_extents.is_empty()
             && self.drawing_placements.is_empty()
             && self.locked_objects.is_empty()
+            && self.note_formats.is_empty()
+            && self.note_layouts.is_empty()
             && self.frame.is_default()
             && self.page.is_default()
             && self.variables.is_empty()
@@ -430,6 +445,7 @@ impl SheetExtras {
             && self.harness_wires.is_empty()
             && self.harness_entry_types.is_empty()
             && self.unions.is_empty()
+            && self.images.is_empty()
             && self.unknown.is_empty()
     }
 
@@ -444,6 +460,8 @@ impl SheetExtras {
                 .map(|mut note| {
                     note.font_family = None;
                     note.locked = false;
+                    note.format = crate::schematic::TextNoteFormat::Plain;
+                    note.rich = crate::schematic::RichNoteLayout::default();
                     note
                 })
                 .collect(),
@@ -452,6 +470,7 @@ impl SheetExtras {
             drawings: s
                 .drawings
                 .iter()
+                .filter(|d| super::image_rows::is_drawing_row(d))
                 .cloned()
                 .map(|mut drawing| {
                     drawing.set_locked(false);
@@ -486,7 +505,11 @@ impl SheetExtras {
                 .drawing_placements
                 .iter()
                 .filter(|(_, placement)| **placement == crate::schematic::DrawingPlacement::Above)
-                .filter(|(id, _)| s.drawings.iter().any(|d| d.uuid() == **id))
+                .filter(|(id, _)| {
+                    s.drawings
+                        .iter()
+                        .any(|d| d.uuid() == **id && super::image_rows::is_drawing_row(d))
+                })
                 .map(|(id, _)| (id.to_string(), "above".to_string()))
                 .collect(),
             locked_objects: s
@@ -497,11 +520,13 @@ impl SheetExtras {
                 .chain(
                     s.drawings
                         .iter()
-                        .filter(|d| d.is_locked())
+                        .filter(|d| d.is_locked() && super::image_rows::is_drawing_row(d))
                         .map(|d| d.uuid()),
                 )
                 .map(|id| id.to_string())
                 .collect(),
+            note_formats: super::note_format_extras::encode(s),
+            note_layouts: super::note_layout_extras::encode(s),
             frame: FrameExtras {
                 settings: s.frame,
                 unknown: s.unknown.frame.clone(),
@@ -512,6 +537,7 @@ impl SheetExtras {
             harness_wires: s.harness.wires.clone(),
             harness_entry_types: super::refinement_extras::entry_types_for_write(s),
             unions: s.unions.clone(),
+            images: super::image_rows::rows_of(s),
             unknown: {
                 // A kept non-table `page` gives way to a real page table.
                 let mut extras = s.unknown.extras.clone();

@@ -10,8 +10,8 @@ use signex_widgets::{raw, text};
 use super::preview_ui::{self, PreviewPopup, ProjectPreviewMsg, preview_message};
 use super::section_list::section_list;
 use super::{
-    ProjectSection, ProjectTabMsg, RowDragMsg, erc_annotation, general, libraries, parameters,
-    requirements, schematic_defaults, setup, sheets, variants, version_control,
+    ProjectSection, ProjectTabMsg, RowDragMsg, erc_annotation, fonts, general, libraries,
+    parameters, requirements, schematic_defaults, setup, sheets, variants, version_control,
 };
 use crate::app::state::ProjectId;
 use crate::app::{Message, Signex};
@@ -109,6 +109,7 @@ impl Signex {
             ProjectSection::Requirements => {
                 requirements::view(project, tab.map(|tab| &tab.requirements), i18n, tokens)
             }
+            ProjectSection::Fonts => fonts::view(project, tab.map(|tab| &tab.fonts), i18n, tokens),
         };
         // The Variant Manager fills the tab; the other sections sit on top.
         let body = if selected == ProjectSection::Variants {

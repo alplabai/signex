@@ -19,6 +19,7 @@ pub mod erc;
 mod expression;
 pub mod fab;
 pub mod field_value;
+pub mod font_file;
 mod markup_escape;
 pub mod netlist;
 pub mod parameter_csv;
@@ -61,8 +62,9 @@ pub use pdf::{
     ColourMode, MAX_PAGE_EDGE_MM, MAX_SCALE_PERCENT, MIN_CUSTOM_EDGE_MM, MIN_PRINTABLE_MM,
     MarginEdge, MarginUpdate, Margins, PageRange, PageSetupError, PageSize, PageSizeKind,
     PartBookmarkOrder, PdfExporter, PdfLayer, PdfLayerVisibility, PdfOptions, PdfOutput, PdfScale,
-    PdfScaleMode, SchematicPalette, Watermark, WatermarkPages, WatermarkPlacement, WatermarkText,
-    check_page_range, parse_custom_edge_mm, parse_mm, parse_percent, printed_sheet_numbers,
+    PdfScaleMode, PdfTableLink, SchematicPalette, Watermark, WatermarkPages, WatermarkPlacement,
+    WatermarkText, check_page_range, parse_custom_edge_mm, parse_mm, parse_percent,
+    pdf_table_links, printed_sheet_numbers, printed_sheet_paths,
 };
 pub use preview::{
     MAX_PREVIEW_EDGE_PX, PreviewOptions, PreviewPage, PreviewPageInfo, PreviewRasterizer, SheetPng,

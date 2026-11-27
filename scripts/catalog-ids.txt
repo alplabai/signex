@@ -22,6 +22,7 @@ apply_layout_board
 apply_layout_notebook
 apply_layout_review
 apply_layout_schematic
+apply_rich_note_edit
 apply_selection_filter_preset
 arrange_in_box
 arrange_in_room
@@ -65,6 +66,7 @@ bring_drawings_to_front
 bring_to_front
 bring_to_front_of
 cancel_current_tool
+cancel_rich_note_edit
 center_on_cursor
 center_view_at_cursor
 change_component
@@ -83,6 +85,7 @@ color_net
 compare_board_with_schematic
 compare_variants
 compile_project
+compile_rich_note
 copy
 copy_attributes_or_add_vertex
 copy_board_3d_screenshot
@@ -133,8 +136,10 @@ edit_library_symbol
 edit_no_erc_rules
 edit_object_properties
 edit_reference_designator
+edit_rich_note
 edit_selected_object_properties
 edit_selected_symbol_in_symbol_editor
+edit_symbol_pins
 edit_text_in_place
 edit_value
 equalize_panes
@@ -202,6 +207,7 @@ length_matching
 list_annotations
 list_diff_pairs
 list_documents
+list_image_assets
 list_snippets
 list_templates
 lock_board_items
@@ -265,6 +271,7 @@ open_output_job
 open_parameter_manager
 open_preferences
 open_project_options
+open_rich_note_link
 open_rules
 open_schematic_preferences
 open_second_view
@@ -347,6 +354,7 @@ previous_highlighted_net_item
 previous_sheet
 print
 project_add_checklist_item
+project_add_font
 project_add_requirement
 project_add_variant
 project_checklist
@@ -360,6 +368,7 @@ project_move_library
 project_move_sheet
 project_open_checklist_link
 project_remove_checklist_item
+project_remove_font
 project_remove_requirement
 project_remove_variant
 project_rename_variant
@@ -373,6 +382,7 @@ project_set_annotate_undo
 project_set_checklist_item
 project_set_checklist_state
 project_set_default_variant
+project_set_font_license
 project_set_rail
 project_set_requirement
 project_set_variant_alternate
@@ -398,6 +408,7 @@ reannotate_board
 redo
 refresh_view
 regenerate_block_diagram
+relink_image
 remove_board_panel
 remove_from_union
 remove_last_vertex
@@ -470,6 +481,7 @@ set_footprint_position
 set_footprint_rotation
 set_footprint_side
 set_footprint_text
+set_image
 set_job_gerber_apertures
 set_job_gerber_format
 set_job_gerber_layers
@@ -503,6 +515,9 @@ set_sheet_symbol_size
 set_sheet_variable
 set_symbol_parameter
 set_teardrop_rule
+set_text_note_format
+set_text_note_frame
+set_text_note_size
 set_via_span
 sheet_navigation_back
 sheet_navigation_forward
@@ -513,6 +528,7 @@ show_current_command_shortcuts
 show_drc_violation
 show_gerber_drills_on_top
 show_gerber_open_menu
+show_image_in_folder
 show_layer_group
 show_layer_set
 show_used_layers_only
@@ -527,6 +543,10 @@ swap_pins
 swap_schematic_gates
 swap_schematic_pins
 switch_segment_posture
+symbol_draw_bezier
+symbol_draw_elliptical_arc
+symbol_draw_pie
+symbol_draw_round_rectangle
 sync_pane_zoom
 sync_sheet_entries
 sync_sheet_pins
@@ -570,6 +590,7 @@ view_rotate_180
 view_rotate_ccw
 view_rotate_reset
 waive_drc_violation
+wrap_rich_note_selection
 zoom_in_at_cursor
 zoom_out_at_cursor
 zoom_to_all_objects

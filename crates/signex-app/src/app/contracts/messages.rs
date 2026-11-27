@@ -204,6 +204,9 @@ pub enum TextEditMsg {
     /// Tab in the editor on a part's field: keep the text and go on to the
     /// part's next field (mockup row 65).
     NextFieldRequested,
+    /// A rich text note, its compiles and its in-place editor (#1114,
+    /// mockup row 203).
+    RichNote(crate::app::rich_note::RichNoteMsg),
 }
 
 /// Which text a field-edit command asks for (#1670).

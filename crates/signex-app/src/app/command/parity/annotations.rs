@@ -16,8 +16,11 @@ use super::forms::Form::{AgentWindowLayout, Check, CloseInWindow, HeadlessNewDoc
 use super::forms::Form::{Operand, Query, SplitCore, StillRunsRefusal, StillRunsUnavailable};
 use super::inputs::Input::{self, *};
 
+mod checklist;
 mod gerber_viewer;
 mod output_job;
+mod rich_note;
+mod symbol_shape;
 
 /// `(ids, form, inputs)`: each id's row of `form` reads `inputs` too.
 pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
@@ -239,6 +242,9 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "set_object_transparency",
             "set_board_graphic",
             "set_footprint_text",
+            // #2817: the symbol file `document` names; new pasted pins go
+            // on part 1's normal body, not the editor's view.
+            "edit_symbol_pins",
             "repour_all",
             "panelize_board",
             "remove_board_panel",
@@ -254,6 +260,13 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "sync_sheet_pins",
             "set_sheet_symbol_size",
             "set_symbol_parameter",
+            "set_text_note_format",
+            "set_text_note_frame",
+            "set_text_note_size",
+            // #1116: an image's field, Relink and its folder, by `id`.
+            "set_image",
+            "relink_image",
+            "show_image_in_folder",
             "set_net_tie",
             "project_move_sheet",
             "project_add_variant",
@@ -590,6 +603,8 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "compare_variants",
             "find_items",
             "find_similar_items",
+            // #1116: the named sheet's project, scanned off the UI thread.
+            "list_image_assets",
             // #2952: the named project's open sheets and classes.
             "list_diff_pairs",
             "layout_plan_get",
@@ -623,13 +638,6 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             // notebook files, read from disk.
             "list_annotations",
         ],
-        Query,
-        &[],
-    ),
-    // The checklist's last run is check results, core-bound session state
-    // (scripts/uifree-state.txt), so it is no implicit input.
-    (
-        &["project_checklist", "project_checklist_link_choices"],
         Query,
         &[],
     ),
@@ -791,6 +799,12 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "draw_line",
             "draw_graphic_line",
             "draw_rectangle",
+            // #1267: the curve drawings.
+            "draw_ellipse",
+            "draw_elliptical_arc",
+            "draw_round_rectangle",
+            "place_linear_dimension",
+            "place_aligned_dimension",
             "place_net_label",
             "place_local_net_label",
             "place_global_label",
@@ -811,6 +825,7 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "place_sheet_entry",
             "place_design_block",
             "import_graphics",
+            "place_graphic",
             // #1283: a snippet is placed as a design block.
             "place_snippet",
         ],
@@ -1159,14 +1174,7 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
     (PLANNED, StillRunsUnavailable, &[]),
 ];
 
-const PLANNED: &[&str] = &[
-    "draw_ellipse",
-    "draw_elliptical_arc",
-    "draw_round_rectangle",
-    "place_device_sheet_symbol",
-    "place_graphic",
-    "place_reuse_block",
-];
+const PLANNED: &[&str] = &["place_device_sheet_symbol", "place_reuse_block"];
 
 pub(super) type Annotation = (&'static [&'static str], Form, &'static [Input]);
 
@@ -1174,8 +1182,11 @@ pub(super) type Annotation = (&'static [&'static str], Form, &'static [Input]);
 pub(super) fn all() -> impl Iterator<Item = &'static Annotation> {
     ANNOTATIONS
         .iter()
+        .chain(checklist::CHECKLIST)
         .chain(gerber_viewer::GERBER_VIEWER)
         .chain(output_job::OUTPUT_JOB)
+        .chain(rich_note::RICH_NOTE)
+        .chain(symbol_shape::SYMBOL_SHAPE)
 }
 
 /// The hand annotation of `(id, form)`, if any.

@@ -148,8 +148,21 @@ impl Signex {
             ActiveBarAction::DrawBezier => {
                 follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Bezier)));
             }
+            ActiveBarAction::DrawEllipse => {
+                follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Ellipse)));
+            }
+            ActiveBarAction::DrawEllipticalArc => {
+                follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::EllipticalArc)));
+            }
+            ActiveBarAction::DrawRoundRectangle => {
+                follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::RoundRectangle)));
+            }
             ActiveBarAction::DrawTable => {
                 follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Table)));
+            }
+            // #1116: ask for the image file; the image lands on the cursor.
+            ActiveBarAction::PlaceGraphic => {
+                follow = self.update(crate::app::ImagesMsg::PlaceRequested.into());
             }
             ActiveBarAction::PlaceLinearDimension => {
                 follow = self.update(Message::Tool(ToolMessage::SelectTool(

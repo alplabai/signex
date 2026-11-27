@@ -19,13 +19,15 @@ fn builtin_profile_lists_every_rule_and_hashes_stably() {
 /// net class conflict rule (#2656), profile 1.4, moved it again, from
 /// `8d8a0a838d8ebcffe929e2c7f88b5f51c80ed5a091c208b05a87ba84bb4d9c7d`. The
 /// differential pair partner rule (#2951), profile 1.5, moved it again, from
-/// `9cf4b1e7ab547b10273923a79db43363a2beff64841271f8511fb35bf378f3f2`.
+/// `9cf4b1e7ab547b10273923a79db43363a2beff64841271f8511fb35bf378f3f2`. The
+/// missing image file rule (#1116), profile 1.6, moved it again, from
+/// `50fb2ad61832bde7de3a7045fb1af85ae6e59483c60fce54ee833a96c09812ab`.
 #[test]
 fn builtin_profile_hash_and_bytes_are_unchanged_by_the_drc_section() {
     let p = builtin_profile();
     assert_eq!(
         p.content_sha256(),
-        "50fb2ad61832bde7de3a7045fb1af85ae6e59483c60fce54ee833a96c09812ab"
+        "ef2afb4f0c977a5c7d2c88e4714fb527b7d2632a4cf1fbeaa1e034549dc61983"
     );
     assert!(
         !String::from_utf8(p.to_json_bytes())

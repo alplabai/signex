@@ -134,6 +134,8 @@ const SAVES: &[&str] = &[
     // With `save`, writes notebook/generated/design-report.snxnbk (mockup
     // row 201).
     "generate_design_notebook",
+    // Copies the font file into the project's `assets/fonts` folder (#1178).
+    "project_add_font",
     // Write a binding into a custom profile of `keyboard_shortcuts.toml` (#2495).
     "keymap_assign",
     "keymap_clear",
@@ -370,6 +372,7 @@ mod tests {
             (Capability::Save, "mark_notebook_attachment_valid"),
             (Capability::Save, "attach_notebook_file"),
             (Capability::Save, "generate_design_notebook"),
+            (Capability::Save, "project_add_font"),
             (Capability::Save, "keymap_assign"),
             (Capability::Save, "keymap_clear"),
             (Capability::Export, "print"),

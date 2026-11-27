@@ -337,6 +337,7 @@ fn is_harness_drawing(element: &SvgElement, palette: &SchematicPalette) -> bool 
                 || style.fill_rgb.is_some_and(|c| harness.contains(&c))
         }
         SvgElement::Text { fill_rgb, .. } => harness.contains(fill_rgb),
+        SvgElement::Image { .. } => false,
     }
 }
 

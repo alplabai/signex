@@ -163,6 +163,11 @@ pub struct TextNoteProps {
     pub rotation_degrees: Option<f64>,
     /// Must be above zero; a size at or below zero is ignored.
     pub font_size_mm: Option<f64>,
+    /// Plain or rich text (#1114); the text itself is never changed.
+    pub format: Option<signex_types::schematic::TextNoteFormat>,
+    /// The Frame and Size sections of a rich note (#1114, mockup row 203);
+    /// ignored whole when a length is not a finite number at or above zero.
+    pub rich: Option<signex_types::schematic::RichNoteLayout>,
 }
 
 #[derive(Debug, Clone)]
@@ -393,7 +398,8 @@ pub enum Command {
     /// keeps that property. One undo step, none when nothing changes.
     UpdateTextNoteProps {
         note_id: Uuid,
-        props: TextNoteProps,
+        /// Boxed: the rich layout makes the props large (clippy large_enum_variant).
+        props: Box<TextNoteProps>,
     },
     PlaceWireSegment {
         wire: Wire,

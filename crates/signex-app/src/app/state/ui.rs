@@ -643,6 +643,10 @@ pub struct UiState {
     /// editor shows for the first few. Not persisted: no preference stores
     /// such counters.
     pub text_edit_opens: u32,
+    /// Rich text notes (#1114, mockup row 203): the compiles by key, the
+    /// drawings the canvas shows and the in-place editor. Boxed: the
+    /// `UiState` size ceiling.
+    pub rich_notes: Box<crate::app::rich_note::RichNotes>,
     /// v0.18.14.1 — Custom Selection Filter modal draft. `Some`
     /// while the dialog is visible; the eight-bool draft mirror
     /// commits on Apply, discards on Cancel. Boxed as `find_similar`.
@@ -862,6 +866,9 @@ pub struct UiState {
     /// Workspace layouts (mockup row 166): the list, its store, and the Save Layout
     /// and Manage Layouts dialogs while open. Boxed: the size budget (#2412).
     pub workspace_layouts: Box<crate::workspace_layouts::WorkspaceLayoutsState>,
+    /// The pictures of placed images the canvas draws (#1116). Boxed: the
+    /// size budget (#2412).
+    pub(crate) image_cache: Box<crate::app::images::ImageCache>,
 }
 
 impl UiState {

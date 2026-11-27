@@ -188,6 +188,7 @@ impl Signex {
                 .map(|p| crate::app::saved_channel_naming::SavedChannelNaming::of(&p.data))
                 .unwrap_or_default(),
             fold: crate::app::state::project_case::fold_of(ds.active_document_project()),
+            pending_images: crate::app::images::pending_image_keys(ds),
         }
     }
 

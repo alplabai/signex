@@ -91,6 +91,8 @@ impl Signex {
                     self.apply_port_name_draft(draft);
                 }
             }
+            // Opened with its focus task by the dock router.
+            PlacedEditMsg::RichNoteEditRequested { .. } => {}
         }
         true
     }
@@ -286,6 +288,9 @@ impl Signex {
         if let PlacedField::Parameter(name) = field {
             return self.set_symbol_parameter(item, name, text).map(|_| ());
         }
+        if let PlacedField::NoteLength(length) = field {
+            return self.commit_note_length(item, *length, text);
+        }
         let unit = self.ui_state.unit;
         let typed = signex_types::measure::parse_length_field_mm(text, unit)
             .ok_or_else(|| PlacedRefusal::new(format!("`{}` is not a number", text.trim())))?;
@@ -330,9 +335,36 @@ impl Signex {
             }
             PlacedField::Width => self.set_sheet_symbol_size(item, (typed, size.1)),
             PlacedField::Height => self.set_sheet_symbol_size(item, (size.0, typed)),
-            PlacedField::Parameter(_) => return Ok(()),
+            PlacedField::Parameter(_) | PlacedField::NoteLength(_) => return Ok(()),
         };
         placed.map(|_| ())
+    }
+
+    /// A rich note's Border, Padding, Width or Height box, read in the
+    /// panel's unit; an empty or `auto` Border is Auto. One undo step.
+    fn commit_note_length(
+        &mut self,
+        item: SelectedItem,
+        length: crate::panels::NoteLength,
+        text: &str,
+    ) -> Result<(), PlacedRefusal> {
+        use crate::panels::NoteLength;
+        let unit = self.ui_state.unit;
+        let auto = text.trim().is_empty() || text.trim().eq_ignore_ascii_case("auto");
+        let typed = || {
+            signex_types::measure::parse_length_field_mm(text, unit)
+                .filter(|mm| mm.is_finite() && *mm >= 0.0)
+                .ok_or_else(|| PlacedRefusal::new(format!("`{}` is not a length", text.trim())))
+        };
+        let mut layout = self.text_note_layout(item).map_err(PlacedRefusal::new)?;
+        match length {
+            NoteLength::Border if auto => layout.border_mm = None,
+            NoteLength::Border => layout.border_mm = Some(typed()?),
+            NoteLength::Padding => layout.padding_mm = typed()?,
+            NoteLength::Width => layout.width_mm = typed()?,
+            NoteLength::Height => layout.height_mm = typed()?,
+        }
+        self.set_text_note_layout(item, layout).map(|_| ())
     }
 }
 

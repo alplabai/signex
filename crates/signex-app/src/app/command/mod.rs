@@ -34,6 +34,12 @@ mod change_component_operand_tests;
 mod change_component_operands;
 mod component_operand;
 #[cfg(test)]
+mod curve_operand_tests;
+mod curve_operands;
+#[cfg(test)]
+mod dimension_operand_tests;
+mod dimension_operands;
+#[cfg(test)]
 mod directive_operand_tests;
 mod directive_operands;
 #[cfg(test)]
@@ -62,6 +68,7 @@ mod headless_gui_only_tests;
 #[cfg(test)]
 mod hierarchy_operand_tests;
 mod hierarchy_operands;
+mod image_operands;
 #[cfg(test)]
 pub(in crate::app) mod interaction_snapshot_tests;
 #[cfg(test)]
@@ -88,6 +95,7 @@ mod opened;
 #[cfg(test)]
 mod operand_handler_tests;
 mod operand_handlers;
+mod operand_reasons;
 pub(crate) mod operand_mm;
 mod operands;
 #[cfg(test)]
@@ -126,7 +134,10 @@ mod repair_reset_operands;
 mod replay;
 pub mod request;
 mod reuse_operands;
+mod rich_note_operands;
 mod routing;
+#[cfg(test)]
+mod schematic_pdf_operand_tests;
 #[cfg(test)]
 mod selection_filter_operand_tests;
 mod selection_filter_operands;
@@ -147,6 +158,14 @@ mod sheet_variable_operand_tests;
 #[cfg(test)]
 mod smart_paste_operand_tests;
 mod smart_paste_operands;
+#[cfg(test)]
+mod symbol_pin_operand_tests;
+mod symbol_pin_operands;
+#[cfg(test)]
+mod symbol_shape_operand_tests;
+mod symbol_shape_operands;
+#[cfg(test)]
+mod text_note_format_tests;
 #[cfg(test)]
 mod thermal_operand_tests;
 mod thermal_operands;

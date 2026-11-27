@@ -176,12 +176,12 @@ Place/Directives/Compile Mask	item	Compile Mask	-	-	PlaceCompileMask	01-00000	cm
 Place/Graphics	submenu	Graphics	-	-	-	-	-
 Place/Graphics/Arc	item	Arc	-	-	DrawArc	01-00000	cmd:draw_arc
 Place/Graphics/Full Circle	item	Full Circle	-	-	DrawFullCircle	01-00000	cmd:draw_full_circle
-Place/Graphics/Elliptical Arc	stub	Elliptical Arc	-	-	-	00-00000	never
-Place/Graphics/Ellipse	stub	Ellipse	-	-	-	00-00000	never
+Place/Graphics/Elliptical Arc	item	Elliptical Arc	-	-	DrawEllipticalArc	01-00000	cmd:draw_elliptical_arc
+Place/Graphics/Ellipse	item	Ellipse	-	-	DrawEllipse	01-00000	cmd:draw_ellipse
 Place/Graphics/---	separator	-	-	-	-	-	-
 Place/Graphics/Line	item	Line	-	-	DrawLine	01-00000	cmd:draw_line
 Place/Graphics/Rectangle	item	Rectangle	-	-	DrawRectangle	01-00000	cmd:draw_rectangle
-Place/Graphics/Round Rectangle	stub	Round Rectangle	-	-	-	00-00000	never
+Place/Graphics/Round Rectangle	item	Round Rectangle	-	-	DrawRoundRectangle	01-00000	cmd:draw_round_rectangle
 Place/Graphics/Polygon	item	Polygon	-	-	DrawPolygon	01-00000	cmd:draw_polygon
 Place/Graphics/Bezier	item	Bezier	-	-	DrawBezier	01-00000	cmd:draw_bezier
 Place/Graphics/Table	item	Table	-	-	PlaceTable	01-00000	cmd:place_table
@@ -189,7 +189,7 @@ Place/Graphics/Dimension	submenu	Dimension	-	-	-	-	-
 Place/Graphics/Dimension/Linear	item	Linear	-	-	PlaceLinearDimension	01-00000	cmd:place_linear_dimension
 Place/Graphics/Dimension/Aligned	item	Aligned	-	-	PlaceAlignedDimension	01-00000	cmd:place_aligned_dimension
 Place/Graphics/---	separator	-	-	-	-	-	-
-Place/Graphics/Graphic...	stub	Graphic...	-	-	-	00-00000	never
+Place/Graphics/Graphic...	item	Graphic...	-	-	PlaceGraphic	01-00000	cmd:place_graphic
 Design	menu	Design	-	-	-	-	-
 Design/Update PCB Document	item	Update PCB Document	-	-	UpdatePcb	01000000	cmd:update_pcb_from_schematic
 Design/Update Schematics	item	Update Schematics	-	-	BackAnnotate	01000000	cmd:back_annotate_schematics

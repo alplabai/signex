@@ -46,8 +46,14 @@ edit.
 ## Selecting
 
 A click on any member selects every member of its union, and a click on the
-union's name tab selects the union. The union whose members are all selected
-is drawn in the accent colour and becomes the panel's picked union.
+union's name tab selects the union. Every canvas gesture that adds to the
+selection does the same: a box, a lasso, Ctrl+click or Shift+click, Select
+Connected and the pick of a click-click Move. So a union moves as one,
+whether it is dragged, nudged or moved with Move. Ctrl+click on a selected
+member takes that member alone off the selection; that is how a selection
+narrows to some members for Remove Selection. The union whose members are
+all selected is drawn in the accent colour and becomes the panel's picked
+union.
 
 ## Locking
 
@@ -84,4 +90,6 @@ the unions that carry any chip that is on. Each row shows the union's name,
 member count and tags, and three actions: Select members, Lock / Unlock and
 Hide / Show. The foot edits the picked union: its name (a rename is one undo
 step), the member pills and wire count, Add selection, Remove selection and
-Break union.
+Break union. The name field keeps what is typed, a trailing space or an
+empty field included, while the union takes the trimmed text; an empty field
+renames nothing. A locked union's name field is read-only.

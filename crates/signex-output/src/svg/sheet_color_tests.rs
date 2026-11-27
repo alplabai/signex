@@ -35,7 +35,9 @@ fn page_fill(color: Option<Color>, theme: ThemeId) -> (f32, f32, f32) {
     assert_eq!(page.paper, {
         match &page.elements[0] {
             SvgElement::Path { style, .. } => style.fill_rgb.expect("page fill"),
-            SvgElement::Text { .. } => panic!("the page fill comes first"),
+            SvgElement::Text { .. } | SvgElement::Image { .. } => {
+                panic!("the page fill comes first")
+            }
         }
     });
     page.paper

@@ -534,7 +534,8 @@ fn current_color(drawing: Option<&SchDrawing>) -> Option<StrokeColor> {
         | SchDrawing::Polyline { stroke_color, .. } => *stroke_color,
         SchDrawing::Bezier(b) => b.stroke_color,
         SchDrawing::Dimension(d) => d.stroke_color,
-        SchDrawing::Table(_) => None,
+        SchDrawing::Curve(c) => c.stroke_color,
+        SchDrawing::Table(_) | SchDrawing::Image(_) => None,
     })
 }
 

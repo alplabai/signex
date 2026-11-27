@@ -55,6 +55,21 @@ pub fn printed_sheet_numbers(
         .collect())
 }
 
+/// The file each page of [`printed_sheet_numbers`] prints, in printed order:
+/// a page's 1-based position in this list is the page a table link goes to
+/// (#2663).
+pub fn printed_sheet_paths(
+    range: &PageRange,
+    sheets: &[SheetSnapshot],
+    current: usize,
+) -> Result<Vec<std::path::PathBuf>, PdfError> {
+    let indices = resolve_page_range(range, sheets, current)?;
+    Ok(indices
+        .into_iter()
+        .filter_map(|index| sheets.get(index).map(|sheet| sheet.path.clone()))
+        .collect())
+}
+
 /// [`resolve_page_range`] for the preview, which never fails: an unprinted
 /// number in `Specific` selects nothing, an unprinted range endpoint empties
 /// the range.

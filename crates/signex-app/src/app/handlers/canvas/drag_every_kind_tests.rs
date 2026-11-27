@@ -534,6 +534,8 @@ fn a_text_note_drags() {
         justify_h: HAlign::Left,
         justify_v: VAlign::Bottom,
         locked: false,
+        format: Default::default(),
+        rich: Default::default(),
     });
     drag_one(s, SelectedItem::new(id(1), SelectedKind::TextNote));
 }

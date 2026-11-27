@@ -50,6 +50,8 @@ pub enum UndoGroupKind {
     SheetEntrySync,
     /// A power port's rename across its rail (mockup row 45).
     RailRename,
+    /// Relink: every image naming one file points at another (#1116).
+    ImageRelink,
     /// A Parameter Manager edit across several sheets (#1784).
     Parameters,
 }
@@ -68,6 +70,7 @@ impl UndoGroupSheets {
             UndoGroupKind::PartSwap => "pin or gate swap",
             UndoGroupKind::SheetEntrySync => "sheet entry sync",
             UndoGroupKind::RailRename => "power rail rename",
+            UndoGroupKind::ImageRelink => "image relink",
             UndoGroupKind::Parameters => "parameter edit",
         }
     }
@@ -94,6 +97,7 @@ impl UndoGroupSheets {
             UndoGroupKind::PartSwap => "Pin or gate swap",
             UndoGroupKind::SheetEntrySync => "Sheet entry sync",
             UndoGroupKind::RailRename => "Rename power rail",
+            UndoGroupKind::ImageRelink => "Relink image",
             UndoGroupKind::Parameters => "Parameter Manager",
         }
     }

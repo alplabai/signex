@@ -23,17 +23,25 @@ mod geometry;
 #[cfg(test)]
 mod glyph_height_tests;
 mod harness;
+mod images;
+#[cfg(test)]
+mod images_tests;
 mod labels;
 mod markers;
 mod not_fitted;
 mod repeat_stack;
+mod rich_note;
 mod sch_table;
 mod symbols;
 mod text;
 mod wire_style;
 pub(crate) use drawings::annotation_extent;
+pub(crate) use images::decode_rgba;
+pub use images::{ExportImages, SvgPicture};
 #[cfg(test)]
 mod annotation_drawing_tests;
+#[cfg(test)]
+mod curve_drawing_tests;
 
 #[derive(Debug, Clone, Copy)]
 pub enum SvgTextAlign {
@@ -88,6 +96,17 @@ pub enum SvgElement {
         rotation_deg: f32,
         fill_rgb: (f32, f32, f32),
         text: String,
+    },
+    /// A placed image's pixels (#1116): its top-left corner and size in
+    /// page units. An SVG picture is drawn as paths instead.
+    Image {
+        x: f32,
+        y: f32,
+        width: f32,
+        height: f32,
+        /// 0.0 to 1.0.
+        opacity: f32,
+        picture: std::sync::Arc<SvgPicture>,
     },
 }
 
@@ -353,6 +372,8 @@ mod tests {
                 justify_h: Default::default(),
                 justify_v: Default::default(),
                 locked: false,
+                format: Default::default(),
+                rich: Default::default(),
             });
         let opts = PdfOptions::default();
         let (w_mm, h_mm) = opts.page_size.dimensions_mm(opts.orientation);

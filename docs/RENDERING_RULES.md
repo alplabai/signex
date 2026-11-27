@@ -707,9 +707,9 @@ Checks: `signex_gfx::scene3d::tests`, `signex_gfx::ring_fill::tests`, `signex_gf
 `pcb_board_3d_toolbar`, `styles::board_palette::tests`,
 `app::handlers::board_3d_screenshot::tests`.
 
-## sch-annotations — Bezier, dimension and table drawings (#1267, #1300)
+## sch-annotations — Bezier, curve, dimension and table drawings (#1267, #1300)
 
-Three drawing kinds that are annotation only: no connectivity, no ERC, drawn
+Four drawing kinds that are annotation only: no connectivity, no ERC, drawn
 and exported like the other drawings and ordered with them (Behind / Above,
 Arrange). Their geometry is computed once in `signex-types`, so the canvas,
 the hit box, SVG and PDF place every line and cell at the same spot.
@@ -743,14 +743,28 @@ in the value colour, a bound pin table's net cell that names a power port's
 net in the power colour. A table never turns or mirrors: its centre follows
 the transform.
 
+**Curves.** An ellipse, elliptical arc or round rectangle (#1267) is drawn
+from `CurveShape::flatten`, the outline the symbol editor's curve kinds use
+too: an ellipse in 64 segments, an elliptical arc in 48 (sampled evenly in
+the ellipse parameter, so a narrow ellipse stays smooth), each round corner in
+8. A closed shape is one polygon on the canvas and one closed path in SVG and
+PDF, filled by its fill (Outline in the stroke colour, Solid in the body
+colour); an elliptical arc is an open polyline and never filled. With no own
+colour a curve takes the sheet's drawing colour. A quarter turn swaps the
+radii and turns the angles; a mirror swaps the arc's ends so it covers the
+mirrored points.
+
 **While placing.** The Bezier tool draws the clicked points, the control
-lines and the curve through the cursor; a dimension tool draws the dimension
+lines and the curve through the cursor; a curve tool draws the clicked points
+and the shape the cursor would give (an elliptical arc shows its whole
+ellipse until the start click); a dimension tool draws the dimension
 the cursor would place with its value in an accent tag set off the line on
 its outer side (so it clears text next to the line), and a hint bar at the
 canvas's bottom-left names the tool and the next click.
 
-Checks: `schematic::drawing_kinds_tests`, `signex_output::svg::annotation_drawing_tests`,
-`annotation_drawing_tests` (engine), `app::sch_tables::tests`.
+Checks: `schematic::drawing_kinds_tests`, `schematic::curve_shape_tests`,
+`signex_output::svg::annotation_drawing_tests`, `annotation_drawing_tests`
+(engine), `app::sch_tables::tests`, `app::sch_tables::curve_edit_tests`.
 
 ## sch-not-fitted — Not-fitted parts (#1294)
 

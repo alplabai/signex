@@ -202,7 +202,9 @@ impl Signex {
                 }
                 return Task::none();
             }
-            AnnotationPanelMsg::CsvImportRequested | AnnotationPanelMsg::CsvExportRequested => {}
+            AnnotationPanelMsg::CsvImportRequested
+            | AnnotationPanelMsg::CsvExportRequested
+            | AnnotationPanelMsg::Image(_) => {}
         }
         self.sync_annotation_draft();
         Task::none()

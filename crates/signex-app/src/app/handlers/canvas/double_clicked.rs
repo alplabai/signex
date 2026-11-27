@@ -76,8 +76,13 @@ impl Signex {
                 self.directive_region_point(tool, p, ClickKind::DoubleClick);
                 return Task::none();
             }
-            // A quick next click of the Bezier or dimension tool (#1267).
-            tool @ (Tool::Bezier | Tool::LinearDimension | Tool::AlignedDimension) => {
+            // A quick next click of the Bezier, curve or dimension tool (#1267).
+            tool @ (Tool::Bezier
+            | Tool::Ellipse
+            | Tool::EllipticalArc
+            | Tool::RoundRectangle
+            | Tool::LinearDimension
+            | Tool::AlignedDimension) => {
                 // The single-click path has this gate too: a pause takes no point.
                 if self.interaction_state.active_canvas().placement_paused {
                     return Task::none();

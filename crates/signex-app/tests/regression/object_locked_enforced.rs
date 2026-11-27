@@ -46,6 +46,8 @@ fn app_with_locked_objects(y: f64) -> (Signex, Vec<SelectedItem>) {
             justify_h: HAlign::Left,
             justify_v: VAlign::Bottom,
             locked: true,
+            format: Default::default(),
+            rich: Default::default(),
         }],
         drawings: vec![SchDrawing::Line {
             uuid: drawing,

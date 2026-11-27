@@ -123,6 +123,7 @@ impl SvgRenderContext {
             &xform,
             palette,
             &opts.schematic_defaults,
+            &opts.images,
         );
         // The parts not fitted in the printed variant: in the Not-fitted
         // parts layer (#2610), and greyed and crossed out (#1294).
@@ -313,6 +314,20 @@ impl SvgRenderContext {
         // from the export when the user unchecks the Notes toggle.
         if opts.include_notes {
             for note in &sheet.schematic.text_notes {
+                // A rich note draws as vector paths (#1114); one that does
+                // not compile prints its source as a plain note does.
+                if note.format == signex_types::schematic::TextNoteFormat::Typst
+                    && let Some(rich) = super::rich_note::rich_note_elements(
+                        note,
+                        &xform,
+                        palette.note_text,
+                        palette.paper,
+                        &opts.schematic_defaults,
+                    )
+                {
+                    elements.extend(rich);
+                    continue;
+                }
                 let font_alias =
                     alias_for_family(note.font_family.as_deref(), document_family, "F1");
                 let size_pt =
@@ -551,6 +566,7 @@ impl SvgRenderContext {
             &xform,
             palette,
             &opts.schematic_defaults,
+            &opts.images,
         );
 
         (
@@ -637,6 +653,19 @@ impl SvgRenderContext {
                     };
                     draw_text_outline(&mut pixmap, &style, text);
                 }
+                SvgElement::Image {
+                    x,
+                    y,
+                    width,
+                    height,
+                    opacity,
+                    picture,
+                } => super::images::draw_raster(
+                    &mut pixmap,
+                    picture,
+                    (*x, *y, *width, *height),
+                    *opacity,
+                ),
             }
         }
 
@@ -672,6 +701,20 @@ fn encode_svg_document(width: f32, height: f32, elements: &[SvgElement]) -> Stri
                     out,
                     "  <path d=\"{}\" stroke=\"{}\"{} fill=\"{}\" stroke-width=\"{}\" stroke-linejoin=\"miter\" stroke-linecap=\"square\" />",
                     d, stroke, opacity, fill, style.stroke_width
+                );
+            }
+            SvgElement::Image {
+                x,
+                y,
+                width,
+                height,
+                opacity,
+                picture,
+            } => {
+                let _ = writeln!(
+                    out,
+                    "  {}",
+                    super::images::image_tag(picture, (*x, *y, *width, *height), *opacity)
                 );
             }
             SvgElement::Text {
