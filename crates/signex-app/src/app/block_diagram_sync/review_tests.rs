@@ -117,7 +117,12 @@ fn resync_applies_the_new_block_and_reviews_the_unlink() {
         &file,
         TabEvent::Review(ReviewEvent::RowToggled(beta, false)),
     );
-    let review = app.diagram_view(&file).review.as_ref().expect("open");
+    let review = app
+        .open_diagram_view(&file)
+        .expect("open")
+        .review
+        .as_ref()
+        .expect("open");
     let shown = previews(review);
     assert!(
         !shown.iter().any(|(_, p)| *p == Preview::Unlinked),
@@ -163,7 +168,8 @@ fn an_unchecked_row_is_listed_again_next_time_and_nothing_to_change_closes() {
     change_hierarchy(dir.path());
     send(&mut app, &file, TabEvent::ResyncPressed);
     let beta = app
-        .diagram_view(&file)
+        .open_diagram_view(&file)
+        .expect("open")
         .review
         .as_ref()
         .expect("open")
@@ -179,7 +185,8 @@ fn an_unchecked_row_is_listed_again_next_time_and_nothing_to_change_closes() {
 
     send(&mut app, &file, TabEvent::ResyncPressed);
     let review = app
-        .diagram_view(&file)
+        .open_diagram_view(&file)
+        .expect("open")
         .review
         .clone()
         .expect("listed again");
@@ -198,11 +205,11 @@ fn an_unchecked_row_is_listed_again_next_time_and_nothing_to_change_closes() {
     send(&mut app, &file, TabEvent::ResyncPressed);
     assert!(texts(&app, &file).iter().any(|t| t == "Nothing to change"));
     send(&mut app, &file, TabEvent::Review(ReviewEvent::Closed));
-    assert!(app.diagram_view(&file).review.is_none());
+    assert!(app.open_diagram_view(&file).expect("open").review.is_none());
 
     // With nothing to unlink no review opens.
     send(&mut app, &file, TabEvent::ResyncPressed);
-    assert!(app.diagram_view(&file).review.is_none());
+    assert!(app.open_diagram_view(&file).expect("open").review.is_none());
 }
 
 #[test]
@@ -331,7 +338,8 @@ fn hovering_a_row_outlines_its_block() {
     change_hierarchy(dir.path());
     send(&mut app, &file, TabEvent::ResyncPressed);
     let beta = app
-        .diagram_view(&file)
+        .open_diagram_view(&file)
+        .expect("open")
         .review
         .as_ref()
         .expect("open")
@@ -366,7 +374,8 @@ fn hovering_a_row_outlines_its_block() {
     );
 
     let hovered = |app: &Signex| {
-        app.diagram_view(&file)
+        app.open_diagram_view(&file)
+            .expect("open")
             .review
             .as_ref()
             .expect("open")

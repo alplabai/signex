@@ -188,6 +188,7 @@ impl Signex {
         }
         let editor = BlockDiagramEditor::created(BlockDiagram::new());
         diagrams.editors.insert(path.clone(), editor);
+        super::view_of(&mut self.document_view.block_diagrams, &path);
         self.document_state.sync_block_diagram_dirty(&path);
         self.show_block_diagram_tab(&path);
         Ok(path)

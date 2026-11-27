@@ -99,6 +99,7 @@ impl Signex {
             return;
         }
         editors.insert(path.to_path_buf(), BlockDiagramEditor::opened(file.read));
+        super::view_of(&mut self.document_view.block_diagrams, path);
         self.document_state
             .document_saves
             .set_baseline_from_read(path.to_path_buf(), file.hash);

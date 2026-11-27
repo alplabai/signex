@@ -180,7 +180,12 @@ fn the_export_popover_runs_export_block_diagram_with_its_settings() {
         &path,
         TabEvent::Export(ExportEvent::MonochromePicked(true)),
     );
-    let draft = app.diagram_view(&path).export.clone().expect("open");
+    let draft = app
+        .open_diagram_view(&path)
+        .expect("open")
+        .export
+        .clone()
+        .expect("open");
     assert_eq!(draft.file, "outputs/ProjectA_blocks.svg");
     assert!(draft.monochrome);
 
@@ -198,7 +203,7 @@ fn the_export_popover_runs_export_block_diagram_with_its_settings() {
     let svg = std::fs::read_to_string(&written).expect("the SVG");
     assert!(svg.contains("Block 1"), "{svg}");
     assert!(
-        app.diagram_view(&path).export.is_none(),
+        app.open_diagram_view(&path).expect("open").export.is_none(),
         "the popover closed"
     );
 }

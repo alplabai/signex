@@ -50,7 +50,11 @@ fn editor<'a>(app: &'a Signex, path: &Path) -> &'a super::BlockDiagramEditor {
 
 fn add_block(app: &mut Signex, path: &Path) -> Uuid {
     let _ = send(app, path, TabEvent::AddBlockPressed);
-    match app.diagram_view(path).single_selection() {
+    match app
+        .open_diagram_view(path)
+        .expect("open")
+        .single_selection()
+    {
         Some(DiagramItem::Block(id)) => id,
         other => panic!("the new block is not selected: {other:?}"),
     }
@@ -106,7 +110,12 @@ fn a_dragged_block_lands_as_one_edit_and_selection_changes_nothing() {
             add: false,
         },
     );
-    assert!(app.diagram_view(&path).selection.is_empty());
+    assert!(
+        app.open_diagram_view(&path)
+            .expect("open")
+            .selection
+            .is_empty()
+    );
     assert_eq!(editor(&app, &path).undo.len(), steps, "a pick is no edit");
     let to = Point::new(12.5, -7.0);
     let _ = send(&mut app, &path, TabEvent::BlockMoved { block: a, to });
@@ -131,7 +140,10 @@ fn the_connect_tool_joins_two_picked_ends_with_a_signal_connection() {
         port: None,
     };
     let _ = send(&mut app, &path, TabEvent::EndPicked(from));
-    assert_eq!(app.diagram_view(&path).connect_from, Some(from));
+    assert_eq!(
+        app.open_diagram_view(&path).expect("open").connect_from,
+        Some(from)
+    );
     assert!(editor(&app, &path).diagram.connections.is_empty());
     let _ = send(&mut app, &path, TabEvent::EndPicked(to));
     let diagram = &editor(&app, &path).diagram;
@@ -139,7 +151,10 @@ fn the_connect_tool_joins_two_picked_ends_with_a_signal_connection() {
     assert_eq!(diagram.connections[0].from, from);
     assert_eq!(diagram.connections[0].to, to);
     assert_eq!(diagram.connections[0].interface, Interface::Signal);
-    assert_eq!(app.diagram_view(&path).connect_from, None);
+    assert_eq!(
+        app.open_diagram_view(&path).expect("open").connect_from,
+        None
+    );
 
     // Properties: the interface picker and the label field.
     let _ = send(&mut app, &path, TabEvent::InterfacePicked("i2c"));
@@ -185,7 +200,10 @@ fn properties_commit_a_field_and_a_refused_value_leaves_the_block_as_it_was() {
     assert_eq!(editor(&app, &path).diagram.block(a), Some(&block));
     assert_eq!(editor(&app, &path).undo.len(), steps);
     assert!(
-        app.diagram_view(&path).drafts.is_empty(),
+        app.open_diagram_view(&path)
+            .expect("open")
+            .drafts
+            .is_empty(),
         "a commit drops its draft"
     );
 }
@@ -223,7 +241,12 @@ fn group_and_delete_act_on_the_selection_as_one_step_each() {
     assert!(diagram.groups.is_empty());
     assert_eq!(diagram.blocks[0].group, None, "its group went with it");
     assert_eq!(editor(&app, &path).undo.len(), steps + 1);
-    assert!(app.diagram_view(&path).selection.is_empty());
+    assert!(
+        app.open_diagram_view(&path)
+            .expect("open")
+            .selection
+            .is_empty()
+    );
 }
 
 #[test]

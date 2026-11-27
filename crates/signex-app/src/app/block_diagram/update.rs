@@ -95,7 +95,9 @@ impl Signex {
             TabEvent::AddPortPressed => self.add_port_from_toolbar(&path),
             TabEvent::GroupPressed => self.group_from_toolbar(&path),
             TabEvent::DeletePressed => {
-                let items = self.diagram_view(&path).selection.clone();
+                let items = (self.open_diagram_view(&path))
+                    .map(|tab| tab.selection.clone())
+                    .unwrap_or_default();
                 if items.is_empty() {
                     Ok(())
                 } else {
@@ -178,7 +180,10 @@ impl Signex {
         let Some(editor) = self.diagram_editor(path) else {
             return Ok(());
         };
-        let Some(DiagramItem::Block(block)) = self.diagram_view(path).single_selection() else {
+        let Some(DiagramItem::Block(block)) = self
+            .open_diagram_view(path)
+            .and_then(|tab| tab.single_selection())
+        else {
             return Ok(());
         };
         let Some(owner) = editor.diagram.block(block) else {
@@ -199,7 +204,9 @@ impl Signex {
         let Some(editor) = self.diagram_editor(path) else {
             return Ok(());
         };
-        let blocks = self.diagram_view(path).selected_blocks();
+        let blocks = (self.open_diagram_view(path))
+            .map(|tab| tab.selected_blocks())
+            .unwrap_or_default();
         if blocks.is_empty() {
             return Ok(());
         }
@@ -267,7 +274,10 @@ impl Signex {
         path: &Path,
         fill: impl FnOnce(&mut BlockPatch),
     ) -> Result<(), Refusal> {
-        let Some(DiagramItem::Block(block)) = self.diagram_view(path).single_selection() else {
+        let Some(DiagramItem::Block(block)) = self
+            .open_diagram_view(path)
+            .and_then(|tab| tab.single_selection())
+        else {
             return Ok(());
         };
         let mut patch = BlockPatch::default();
@@ -281,7 +291,10 @@ impl Signex {
         interface: Option<Interface>,
         label: Option<String>,
     ) -> Result<(), Refusal> {
-        let Some(DiagramItem::Connection(id)) = self.diagram_view(path).single_selection() else {
+        let Some(DiagramItem::Connection(id)) = self
+            .open_diagram_view(path)
+            .and_then(|tab| tab.single_selection())
+        else {
             return Ok(());
         };
         let edit = DiagramEdit::SetConnection {
@@ -297,7 +310,10 @@ impl Signex {
         path: &Path,
         color: Option<signex_types::theme::Color>,
     ) -> Result<(), Refusal> {
-        match self.diagram_view(path).single_selection() {
+        match self
+            .open_diagram_view(path)
+            .and_then(|tab| tab.single_selection())
+        {
             Some(DiagramItem::Block(block)) => {
                 let patch = BlockPatch {
                     color: Some(color),

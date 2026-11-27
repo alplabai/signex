@@ -168,7 +168,7 @@ fn show_gnd_hides_ground_connections_until_ticked() {
 
     let dir = tempfile::tempdir().unwrap();
     let (mut app, path) = with_rails(&dir);
-    assert!(!app.diagram_view(&path).show_ground);
+    assert!(!app.open_diagram_view(&path).expect("open").show_ground);
     let clicked: Vec<TabEvent> =
         messages_on_click(app.view_block_diagram_tab(path.clone()), WINDOW, "Show GND")
             .into_iter()
@@ -290,7 +290,12 @@ fn the_popover_sends_its_pages_and_paper() {
     send(&mut app, &path, TabEvent::Export(budget));
     let paper = ExportEvent::PaperPicked(ExportPaper::A3);
     send(&mut app, &path, TabEvent::Export(paper));
-    let draft = app.diagram_view(&path).export.clone().expect("open");
+    let draft = app
+        .open_diagram_view(&path)
+        .expect("open")
+        .export
+        .clone()
+        .expect("open");
     assert_eq!(
         draft.pages,
         [

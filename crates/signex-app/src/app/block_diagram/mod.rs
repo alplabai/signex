@@ -209,26 +209,19 @@ pub enum TabEvent {
     Export(ExportEvent),
 }
 
-/// The view of a diagram no tab state is held for yet: a fresh one.
-static FRESH_VIEW: std::sync::LazyLock<BlockDiagramViewState> =
-    std::sync::LazyLock::new(BlockDiagramViewState::default);
-
 impl crate::app::Signex {
-    /// What the tab shows of the diagram at `path`; a fresh view while none
-    /// is held.
-    pub(crate) fn diagram_view(&self, path: &Path) -> &BlockDiagramViewState {
-        self.document_view
-            .block_diagrams
-            .get(path)
-            .unwrap_or(&FRESH_VIEW)
-    }
-
-    /// The view of the diagram at `path` while it is open; `None` when it
-    /// is not.
+    /// What the tab shows of the diagram at `path` while it is open (the
+    /// view is held from the moment the diagram is); `None` when it is not.
     pub(crate) fn open_diagram_view(&self, path: &Path) -> Option<&BlockDiagramViewState> {
-        (self.document_state.block_diagrams.editors)
+        if !self
+            .document_state
+            .block_diagrams
+            .editors
             .contains_key(path)
-            .then(|| self.diagram_view(path))
+        {
+            return None;
+        }
+        self.document_view.block_diagrams.get(path)
     }
 
     /// [`Self::open_diagram_view`], to change.
@@ -248,10 +241,9 @@ impl crate::app::Signex {
 
     /// The diagram at `path` and its tab's view, while it is open.
     pub(crate) fn open_diagram(&self, path: &Path) -> Option<OpenDiagram<'_>> {
-        let doc = self.document_state.block_diagrams.editors.get(path)?;
         Some(OpenDiagram {
-            doc,
-            tab: self.diagram_view(path),
+            doc: self.document_state.block_diagrams.editors.get(path)?,
+            tab: self.document_view.block_diagrams.get(path)?,
         })
     }
 }
