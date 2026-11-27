@@ -668,7 +668,9 @@ fn clean_sheet_with_a_wire(dir: &Path) -> (Signex, PathBuf, uuid::Uuid) {
         ..Default::default()
     });
     engine
-        .execute(signex_engine::Command::ReplaceDocument { document })
+        .execute(signex_engine::Command::ReplaceDocument {
+            document: Box::new(document),
+        })
         .expect("wire");
     app.document_state.mark_document_clean(&sheet);
     app.document_state.active_path = Some(sheet.clone());

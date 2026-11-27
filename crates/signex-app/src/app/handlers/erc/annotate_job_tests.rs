@@ -182,7 +182,9 @@ fn an_edit_to_an_open_sheet_while_the_sheets_are_read_is_numbered_not_lost() {
     let mut document = engine.document().clone();
     document.symbols.push(unit("R1", 1, 20.0));
     engine
-        .execute(signex_engine::Command::ReplaceDocument { document })
+        .execute(signex_engine::Command::ReplaceDocument {
+            document: Box::new(document),
+        })
         .expect("edit");
 
     let task = app.update(message);
@@ -312,7 +314,9 @@ fn a_sheet_symbol_placed_while_the_sheets_are_read_cancels_the_run() {
         engine.document().symbols.clone(),
     );
     engine
-        .execute(signex_engine::Command::ReplaceDocument { document })
+        .execute(signex_engine::Command::ReplaceDocument {
+            document: Box::new(document),
+        })
         .expect("edit");
     let on_disk = std::fs::read(child_path(&dir)).expect("child");
 

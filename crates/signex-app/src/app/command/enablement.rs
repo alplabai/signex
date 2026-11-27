@@ -525,7 +525,9 @@ mod tests {
         let engine = app.document_state.active_engine_mut().unwrap();
         let document = engine.document().clone();
         engine
-            .execute(signex_engine::Command::ReplaceDocument { document })
+            .execute(signex_engine::Command::ReplaceDocument {
+                document: Box::new(document),
+            })
             .unwrap();
         assert!(enabled(&app, "undo"));
 
@@ -997,7 +999,9 @@ mod tests {
             signex_engine::Engine::new(signex_types::schematic::SchematicSheet::default()).unwrap();
         let document = engine.document().clone();
         engine
-            .execute(signex_engine::Command::ReplaceDocument { document })
+            .execute(signex_engine::Command::ReplaceDocument {
+                document: Box::new(document),
+            })
             .unwrap();
         app.document_state.engines.insert(path.clone(), engine);
         app.document_state.tabs.insert(

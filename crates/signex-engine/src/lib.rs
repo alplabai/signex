@@ -804,7 +804,7 @@ impl Engine {
 
     pub fn execute(&mut self, cmd: Command) -> Result<CommandResult, EngineError> {
         let incoming = match &cmd {
-            Command::ReplaceDocument { document } => Some(document),
+            Command::ReplaceDocument { document } => Some(&**document),
             _ => None,
         };
         self.refuse_if_read_only(incoming)?;
@@ -1097,7 +1097,7 @@ mod tests {
         let mut engine = Engine::new(test_sheet()).unwrap();
         let revision = engine.revision();
         let refused = engine.execute(Command::ReplaceDocument {
-            document: read_only_sheet(),
+            document: Box::new(read_only_sheet()),
         });
         assert!(matches!(refused, Err(EngineError::ReadOnly)));
         assert_eq!(engine.revision(), revision);

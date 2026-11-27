@@ -222,7 +222,9 @@ impl Signex {
             }
             Some((path, sheet)) => {
                 let group = self.mint_undo_group();
-                let commands = vec![signex_engine::Command::ReplaceDocument { document: sheet }];
+                let commands = vec![signex_engine::Command::ReplaceDocument {
+                    document: Box::new(sheet),
+                }];
                 let sheets = BTreeMap::from([(path.clone(), commands)]);
                 let changed = self.run_linked_footprints(sheets, group, &what);
                 if changed.is_empty() {

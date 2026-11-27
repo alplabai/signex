@@ -778,7 +778,9 @@ fn samples() -> Vec<(String, Command)> {
     doc.paper_size = "A3".into();
     add(
         "ReplaceDocument",
-        Command::ReplaceDocument { document: doc },
+        Command::ReplaceDocument {
+            document: Box::new(doc),
+        },
     );
 
     for (name, target) in [

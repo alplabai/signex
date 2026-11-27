@@ -127,7 +127,9 @@ fn closing_another_dirty_sheet_parks_it_with_its_edits_and_the_person_is_as_they
     });
     let engine = app.document_state.engines.get_mut(&b).unwrap();
     engine
-        .execute(signex_engine::Command::ReplaceDocument { document })
+        .execute(signex_engine::Command::ReplaceDocument {
+            document: Box::new(document),
+        })
         .unwrap();
     let logged = || crate::diagnostics::logged_count(unique);
     let person = person_without_tabs(&app);

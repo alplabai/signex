@@ -173,7 +173,8 @@ pub struct TextNoteProps {
 #[derive(Debug, Clone)]
 pub enum Command {
     ReplaceDocument {
-        document: SchematicSheet,
+        // Boxed: a whole sheet dwarfs every other variant.
+        document: Box<SchematicSheet>,
     },
     MoveSelection {
         items: Vec<SelectedItem>,

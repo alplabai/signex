@@ -158,7 +158,7 @@ impl Engine {
     ) -> Result<CommandResult, EngineError> {
         match cmd {
             Command::ReplaceDocument { document } => {
-                self.document = document;
+                self.document = *document;
 
                 let patch_pair = PatchPair {
                     semantic: SemanticPatch::DocumentReplaced,

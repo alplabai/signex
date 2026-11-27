@@ -114,7 +114,9 @@ fn engine_with_a_step() -> signex_engine::Engine {
         signex_engine::Engine::new(signex_types::schematic::SchematicSheet::default()).unwrap();
     let document = engine.document().clone();
     engine
-        .execute(signex_engine::Command::ReplaceDocument { document })
+        .execute(signex_engine::Command::ReplaceDocument {
+            document: Box::new(document),
+        })
         .unwrap();
     engine
 }

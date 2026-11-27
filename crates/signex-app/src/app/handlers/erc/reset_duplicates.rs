@@ -153,7 +153,9 @@ impl Signex {
             self.write_sheets_as_group(&write, edits, |document, places| {
                 let mut sheet = document.clone();
                 reset_in(&mut sheet, &duplicates, places);
-                vec![signex_engine::Command::ReplaceDocument { document: sheet }]
+                vec![signex_engine::Command::ReplaceDocument {
+                    document: Box::new(sheet),
+                }]
             })
         };
         match result {
