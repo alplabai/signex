@@ -201,7 +201,7 @@ pub fn dragged(
         return None;
     }
     if layout == TileLayout::Grid {
-        if count < 2 || count > MAX_PANES || index > 1 || (index == 1 && count < 3) {
+        if !(2..=MAX_PANES).contains(&count) || index > 1 || (index == 1 && count < 3) {
             return None;
         }
         let (column, row) = grid_split(shares).unwrap_or((0.5, 0.5));

@@ -354,6 +354,9 @@ pub(crate) fn set_job_output(app: &mut Signex, args: &CommandArgs) -> Ran {
     )
 }
 
+/// A profile flag the edit sets, by the field it writes.
+type ProfileSwitch = fn(&mut JobProfile) -> &mut bool;
+
 /// The settings `set_job_profile` reads, taken from the operands.
 struct ProfileSettings {
     from: Option<String>,
@@ -367,7 +370,7 @@ struct ProfileSettings {
     on_warnings: Option<OnWarnings>,
     folder: Option<String>,
     naming: Option<String>,
-    switches: [(Option<bool>, fn(&mut JobProfile) -> &mut bool); 4],
+    switches: [(Option<bool>, ProfileSwitch); 4],
 }
 
 fn policy<T>(text: Option<String>, name: &str, all: &[(&str, T)]) -> Result<Option<T>, String>
