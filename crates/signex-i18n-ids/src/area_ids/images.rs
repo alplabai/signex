@@ -85,4 +85,5 @@ define_ids! {
     IMAGES_TREE_NEW = "images-tree-new";
     IMAGES_TREE_USES = "images-tree-uses";
     IMAGES_STATUS_MISSING = "images-status-missing";
+    IMAGES_ASSETS_UNREADABLE = "images-assets-unreadable";
 }

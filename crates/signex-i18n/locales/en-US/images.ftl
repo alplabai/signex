@@ -119,3 +119,6 @@ images-status-missing = { $count ->
         [one] 1 missing asset
        *[other] { $count } missing assets
     }
+# Why list_image_assets answered nothing: the scan could not read the
+# project's images. $why is the system's words.
+images-assets-unreadable = the assets could not be read: { $why }

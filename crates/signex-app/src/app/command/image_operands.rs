@@ -164,13 +164,13 @@ pub(super) fn relink_image(app: &mut Signex, args: &CommandArgs) -> Ran {
 pub(super) fn show_image_in_folder(app: &mut Signex, args: &CommandArgs) -> Ran {
     let id = match image_id(args) {
         Ok(id) => id,
-        Err(reason) => return (CommandOutcome::disabled(reason), Task::none()),
+        Err(reason) => return super::operand_handlers::refused(reason),
     };
     let sheet = match args.operand("document") {
         Some(OperandValue::Document(_)) => {
             match super::document_operands::named_sheet(app, args, "show_image_in_folder") {
                 Ok(path) => Some(path),
-                Err(reason) => return (CommandOutcome::disabled(reason), Task::none()),
+                Err(reason) => return super::operand_handlers::refused(reason),
             }
         }
         _ => None,
@@ -185,7 +185,7 @@ pub(super) fn show_image_in_folder(app: &mut Signex, args: &CommandArgs) -> Ran 
             };
             (CommandOutcome::Answered(answer), task)
         }
-        Err(reason) => (CommandOutcome::disabled(reason), Task::none()),
+        Err(reason) => super::operand_handlers::refused(reason),
     };
     match sheet {
         Some(path) => app.on_edit_target(&path, run),

@@ -14,6 +14,7 @@ use serde_json::{Value, json};
 use signex_library::{Symbol, SymbolPin};
 
 use super::document_operands::named;
+use super::operand_handlers::refused;
 use super::{CommandArgs, CommandOutcome, OperandValue};
 use crate::app::document::DocumentKey;
 use crate::app::{Message, Signex};
@@ -25,8 +26,9 @@ use crate::library::editor::symbol::{
 
 type Ran = (CommandOutcome, Task<Message>);
 
-fn refused(reason: impl Into<String>) -> Ran {
-    (CommandOutcome::disabled(reason), Task::none())
+/// A refusal with a catalog reason.
+fn refused_with(reason: signex_i18n::Translatable) -> Ran {
+    (CommandOutcome::Disabled { reason }, Task::none())
 }
 
 fn text<'a>(args: &'a CommandArgs, name: &str) -> Option<&'a str> {
@@ -203,7 +205,9 @@ pub(super) fn edit_symbol_pins(app: &mut Signex, args: &CommandArgs) -> Ran {
         return refused(reason);
     }
     let Some(editor) = app.document_state.symbol_editors.get(&path) else {
-        return refused("the symbol file is not open");
+        return refused_with(signex_i18n::Translatable::new(
+            signex_i18n::ids::EDITORS_SYMBOL_FILE_NOT_OPEN,
+        ));
     };
     let idx = match symbol_index(&editor.draft.file.symbols, text(args, "symbol")) {
         Ok(idx) => idx,

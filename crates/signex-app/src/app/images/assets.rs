@@ -340,7 +340,10 @@ impl Signex {
                 "assets": report.entries,
                 "missing": report.missing_count(),
             })),
-            Err(why) => CommandOutcome::disabled(format!("the assets could not be read: {why}")),
+            Err(why) => CommandOutcome::Disabled {
+                reason: signex_i18n::Translatable::new(signex_i18n::ids::IMAGES_ASSETS_UNREADABLE)
+                    .arg("why", why),
+            },
         })
     }
 

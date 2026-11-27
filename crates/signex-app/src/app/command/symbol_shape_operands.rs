@@ -13,6 +13,7 @@ use iced::Task;
 use serde_json::{Value, json};
 use signex_library::SymbolGraphicKind;
 
+use super::operand_handlers::refused;
 use super::{CommandArgs, CommandOutcome, OperandValue};
 use crate::app::document_ids::DocumentKind;
 use crate::app::{Message, Signex};
@@ -20,8 +21,9 @@ use crate::library::editor::symbol::place_shape;
 
 type Ran = (CommandOutcome, Task<Message>);
 
-fn refused(reason: impl Into<String>) -> Ran {
-    (CommandOutcome::disabled(reason), Task::none())
+/// A refusal with a catalog reason.
+fn refused_with(reason: signex_i18n::Translatable) -> Ran {
+    (CommandOutcome::Disabled { reason }, Task::none())
 }
 
 /// A point operand in the symbol's mm. A pin reference names a pin of a
@@ -160,7 +162,9 @@ impl Signex {
             Err(reason) => return refused(reason),
         };
         let Some(editor) = self.document_state.symbol_editors.get_mut(&path) else {
-            return refused("the symbol is not open");
+            return refused_with(signex_i18n::Translatable::new(
+                signex_i18n::ids::EDITORS_SYMBOL_NOT_OPEN,
+            ));
         };
         let index = match place_shape(editor, kind) {
             Ok(index) => index,
