@@ -193,6 +193,63 @@ fn read_only_by_operands_is_git_missings_skip() {
     assert!(!state(&by_command).0, "the recovery is answered");
 }
 
+/// Re-init on Git Repository Missing: the command presses the dialog's
+/// button, `git init` and the first commit run off the UI thread under the
+/// test Git identity, and both paths leave the library with its history.
+#[test]
+fn reinit_by_operands_is_git_missings_reinit() {
+    signex_library::git_identity::test_identity::install();
+    let dir = tempfile::tempdir().expect("tempdir");
+    // Each path re-inits its own library, since a re-init changes the disk.
+    let without_history = |name: &str| {
+        let lib = dir.path().join(name).join(format!("{name}.snxlib"));
+        crate::library::commands::create_library_file(&lib, &Default::default()).expect("library");
+        assert!(!lib.parent().expect("folder").join(".git").exists());
+        lib
+    };
+    let git_missing = |path: &Path| RecoveryDialog::GitMissing {
+        path: path.to_path_buf(),
+        remote: None,
+        error: None,
+    };
+    let state = |app: &Signex, lib: &Path| {
+        (
+            app.library.recovery.is_some(),
+            lib.parent().expect("folder").join(".git").exists(),
+            app.library.library_at(lib).is_some(),
+            app.library.is_read_only(lib),
+        )
+    };
+
+    let dialog_lib = without_history("dialog");
+    let (mut by_dialog, _boot) = Signex::new();
+    by_dialog.library.recovery = Some(git_missing(&dialog_lib));
+    send(
+        &mut by_dialog,
+        LibraryMessage::RecoveryGitMissing(GitMissingChoice::ReInit),
+    );
+
+    let command_lib = without_history("command");
+    let (mut by_command, _boot) = Signex::new();
+    by_command.library.recovery = Some(git_missing(&command_lib));
+    let outcome = headless(
+        &mut by_command,
+        &[&arg("path", &command_lib), "action=reinit"],
+    );
+    let CommandOutcome::Answered(answer) = outcome else {
+        panic!("not answered: {outcome:?}");
+    };
+    assert_eq!(answer["action"], "reinit");
+    assert_eq!(
+        state(&by_command, &command_lib),
+        state(&by_dialog, &dialog_lib)
+    );
+    let (open, has_history, _, read_only) = state(&by_command, &command_lib);
+    assert!(!open, "the recovery is answered");
+    assert!(has_history, "the worker ran `git init`");
+    assert!(!read_only, "a re-init library is writable");
+}
+
 #[test]
 fn what_no_recovery_asks_is_refused_with_nothing_changed() {
     let dir = tempfile::tempdir().expect("tempdir");

@@ -264,3 +264,70 @@ fn without_operands_it_says_what_it_needs() {
     let why = super::operand_handlers::needs_operands_reason(&command).expect("a reason");
     assert!(why.contains("Library Updates dialog"), "{why}");
 }
+
+/// On a Team-mode library whose symbol moved on after the part was placed,
+/// the command adopts the library's copy: the new pin is on the sheet, the
+/// version stamp moves, and no update waits or is offered again.
+#[test]
+fn a_team_library_update_adopts_the_librarys_symbol() {
+    use super::part_operand_tests::{app as app_on_library, place, team_library};
+    use crate::app::handlers::canvas::placement_tests::grid;
+    use signex_library::primitive::{SymbolFile, SymbolPin};
+
+    let lib = team_library();
+    let mut app = app_on_library(&lib);
+    let placed = place(&mut app, &lib, grid(8.0, 16.0), &[]);
+    assert!(matches!(placed, CommandOutcome::Answered(_)), "{placed:?}");
+    let sheet = app.document_state.active_path.clone().expect("a sheet");
+    // Stamped older than the row, as after a library bump.
+    let engine = app.document_state.active_engine_mut().expect("engine");
+    let mut stale = engine.document().clone();
+    stale.symbols[0].library_version = "0.0.1".into();
+    engine.set_document(stale);
+    // The library's symbol gains a pin.
+    let mut moved = lib.symbol.clone();
+    let mut pin = SymbolPin::new("4", "P4");
+    pin.position = [0.0, 15.24];
+    pin.part_number = 1;
+    moved.pins.push(pin);
+    let text = SymbolFile::from_symbol(moved)
+        .to_toml_string()
+        .expect("emit");
+    std::fs::write(&lib.symbol_file, text).expect("write symbol");
+
+    let pins = |app: &Signex| {
+        let document = app.document_state.engines[&sheet].document();
+        document
+            .body_of(&document.symbols[0])
+            .expect("body")
+            .pins
+            .len()
+    };
+    let before = pins(&app);
+    app.scan_library_updates_for_open_schematic(sheet.clone());
+    let waiting = app
+        .library
+        .library_updates
+        .as_ref()
+        .expect("Team mode asks");
+    assert!(
+        waiting.entries.iter().all(|entry| !entry.selected),
+        "a major bump starts unticked"
+    );
+
+    let outcome = headless(&mut app, &[&document(&sheet), "designators=all"]);
+    let CommandOutcome::Answered(answer) = outcome else {
+        panic!("not answered: {outcome:?}");
+    };
+    assert_eq!(answer["updating"][0]["from"], "0.0.1");
+    assert_eq!(answer["updating"][0]["to"], "1.2.3");
+    assert_eq!(pins(&app), before + 1, "the library's copy is adopted");
+    let stamped = &app.document_state.engines[&sheet].document().symbols[0];
+    assert_eq!(stamped.library_version, "1.2.3");
+    assert_eq!(left(&app, &sheet), (true, false));
+    app.scan_library_updates_for_open_schematic(sheet.clone());
+    assert!(
+        app.library.library_updates.is_none(),
+        "no update offered again"
+    );
+}
