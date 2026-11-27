@@ -578,11 +578,24 @@ jobs:
 
       # Every app/core/ type is reachable from DocumentState or a port type in
       # scripts/core-closure-roots.txt (#2326, ADR-0006 H7); the baseline of
-      # unreachable types may only shrink. Needs ast-grep, so it runs after the
+      # unreachable types may only shrink, also against the base: a baseline
+      # line the base lacks fails. Needs ast-grep, so it runs after the
       # install. Rules and blind spots live in the script. Hard gate.
       - name: Core closure guard
         if: ${{ !cancelled() && steps.install-ast-grep.outcome == 'success' }}
-        run: bash scripts/check_core_closure.sh
+        env:
+          EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          # A pull_request run checks out the PR merged into its base and a
+          # merge_group run the queued merge: either way HEAD^1 is the branch
+          # it lands on, as of this merge. A push compares with the tip before
+          # it. fetch-depth: 0 above keeps both in the clone.
+          base=HEAD^1
+          if [ "$EVENT" = push ] && [ -n "$BEFORE" ] && [ "$BEFORE" != 0000000000000000000000000000000000000000 ]; then
+            base="$BEFORE"
+          fi
+          bash scripts/check_core_closure.sh --no-growth "$base"
 
       - name: Core closure guard controls
         if: ${{ !cancelled() && steps.install-ast-grep.outcome == 'success' }}

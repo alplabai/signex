@@ -29,11 +29,18 @@
 
 # The application core and its closure guard (#2326, ADR-0006 H7): a type in
 # app/core/, a new root or a baseline change needs a maintainer's approval.
+# `*` above already names both; these lines record the intent and must stay
+# if a narrower owner is ever added above. state/mod.rs holds DocumentState,
+# the root source; the .awk and .yml are the guard's own dependencies.
 /crates/signex-app/src/app/core/                 @hkngln @alpCaner
 /crates/signex-app/src/app/core.rs               @hkngln @alpCaner
+/crates/signex-app/src/app/state/mod.rs          @hkngln @alpCaner
 /scripts/check_core_closure.sh                   @hkngln @alpCaner
+/scripts/test_check_core_closure.sh              @hkngln @alpCaner
 /scripts/core-closure-roots.txt                  @hkngln @alpCaner
 /scripts/core-closure-baseline.txt               @hkngln @alpCaner
+/scripts/check_core_guard.awk                    @hkngln @alpCaner
+/scripts/uifree-test-item.yml                    @hkngln @alpCaner
 
 # The edit-tail wrapper exception (#2704): the list may only shrink, and its
 # cap and name checksum live in the guard, so both need a maintainer.
