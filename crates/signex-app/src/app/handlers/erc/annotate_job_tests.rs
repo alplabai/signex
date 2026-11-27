@@ -283,7 +283,7 @@ fn run_requests_from_the_dialog_are_refused_in_messages_while_a_run_is_going() {
     let (mut app, dir) = project(vec![unit("R?", 1, 0.0)], vec![unit("R?", 1, 0.0)]);
     let read = app.handle_annotate(ResetAndRenumber);
     assert!(app.ui_state.annotate_runs.is_running());
-    app.document_state.error_notice = None;
+    app.document_view.error_notice = None;
 
     let _ = crate::diagnostics::init_logging();
     let since = crate::diagnostics::newest_entry_id();
@@ -365,7 +365,7 @@ fn a_second_run_while_one_is_going_is_refused_and_the_first_completes() {
     let refused = notice_detail(&app);
     settle_task(&mut app, second);
     settle_task(&mut app, reset);
-    app.document_state.error_notice = None;
+    app.document_view.error_notice = None;
     settle_task(&mut app, first);
 
     let (root, child) = (root_refs(&app, &dir), held_child_refs(&app, &dir));

@@ -166,10 +166,7 @@ impl Signex {
         placement: Option<InstancePath>,
     ) -> Task<Message> {
         if let Some(why) = self.descent_no_longer_applies(window, from, symbol, &path, &placement) {
-            crate::diagnostics::log_warning(format!(
-                "The descent into {} was not done: {why}. Repeat it in the window that shows the sheet.",
-                path.display()
-            ));
+            crate::diagnostics::log_warning(refused_descent_line(why, &path));
             return Task::none();
         }
         self.descend_to_child_sheet(symbol, path, placement)
@@ -239,8 +236,8 @@ impl Signex {
         path: PathBuf,
         placement: Option<InstancePath>,
     ) {
-        let switched = self.document_state.tab_placements.get(&path) != placement.as_ref();
-        self.document_state.tab_placements.record(&path, placement);
+        let switched = self.document_view.tab_placements.get(&path) != placement.as_ref();
+        self.document_view.tab_placements.record(&path, placement);
         // Jumping within the shown placement keeps an open edit's text.
         if switched {
             self.close_text_edit("the sheet is shown through another placement now");
@@ -265,7 +262,7 @@ impl Signex {
             .active_path
             .clone()
             .or_else(|| self.active_tab_path())?;
-        self.shown_placement_of(&active, &self.document_state.panel_ctx)
+        self.shown_placement_of(&active, &self.document_view.panel_ctx)
     }
 
     /// The placement the sheet at `active` is shown through (see
@@ -277,10 +274,32 @@ impl Signex {
         active: &std::path::Path,
         ctx: &crate::panels::PanelContext,
     ) -> Option<InstancePath> {
-        if let Some(recorded) = self.document_state.tab_placements.get(active) {
+        if let Some(recorded) = self.document_view.tab_placements.get(active) {
             return Some(recorded.clone());
         }
         let hierarchy = ctx.navigator.hierarchy.as_ref()?;
         hierarchy.starts_a_walk(active).then(InstancePath::root)
+    }
+}
+
+/// The Messages line for a queued descent that no longer applies. The reason
+/// comes before the path because the Messages panel cuts a line at 160 bytes.
+pub(crate) fn refused_descent_line(why: &str, path: &std::path::Path) -> String {
+    format!(
+        "The descent was not done: {why}. Repeat it in the window that shows the sheet. Sheet: {}",
+        path.display()
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn a_refused_descent_line_keeps_its_reason_after_compaction() {
+        let why = "the sheet is entered through another placement now";
+        let path = std::path::PathBuf::from(format!("/{}/child.snxsch", "d".repeat(200)));
+        let line = super::refused_descent_line(why, &path);
+        let out = crate::diagnostics::compact_message(&line);
+        assert_ne!(out, line, "the line must need compacting");
+        assert!(out.contains(why), "{out}");
     }
 }

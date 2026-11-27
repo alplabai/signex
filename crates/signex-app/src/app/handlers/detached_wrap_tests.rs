@@ -19,7 +19,7 @@ fn app_on(theme_id: ThemeId) -> Signex {
     app.ui_state.main_window_opened = true;
     app.ui_state.first_run_tour_open = false;
     app.ui_state.theme_id = theme_id;
-    app.document_state.panel_ctx.tokens = app.tokens_for(theme_id);
+    app.document_view.panel_ctx.tokens = app.tokens_for(theme_id);
     app
 }
 

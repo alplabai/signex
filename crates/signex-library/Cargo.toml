@@ -15,6 +15,9 @@ toml_edit = { workspace = true }
 uuid = { workspace = true }
 chrono = { workspace = true }
 sha2 = { workspace = true }
+# Embedded STEP models in `.snxfpt` (`[[models]]`, #3107): raw deflate + base64.
+flate2 = { workspace = true }
+base64 = { workspace = true }
 thiserror = { workspace = true }
 anyhow = { workspace = true }
 url = { version = "2", features = ["serde"] }
@@ -104,6 +107,23 @@ required-features = ["local-git"]
 
 [[test]]
 name = "pricing_refresh"
+required-features = ["local-git"]
+
+# Golden test for docs/LIBRARY_FORMAT.md; bless with SIGNEX_BLESS_LIBRARY_FORMAT=1.
+[[test]]
+name = "library_format_conformance"
+path = "tests/library_format_conformance/main.rs"
+required-features = ["local-git"]
+
+# Bulk writer (#3110) and library check (#3111).
+[[test]]
+name = "library_writer"
+path = "tests/library_writer/main.rs"
+required-features = ["local-git"]
+
+# Own binary: it points libgit2's global config at a file of its own (#3190).
+[[test]]
+name = "snapshot_line_endings"
 required-features = ["local-git"]
 
 # GH #548 — inherit [workspace.lints.rust] (unused_must_use = deny).

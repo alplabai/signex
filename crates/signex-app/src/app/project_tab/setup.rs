@@ -218,7 +218,7 @@ impl Signex {
         }
         let stored = project.data.project_defaults.clone();
         let stored_designators = project.data.designator_standard();
-        let fresh = NewProjectState::of_project(&project.data, &self.ui_state.setup_profiles);
+        let fresh = NewProjectState::of_project(&project.data, &self.document_state.setup_profiles);
         let part = SetupPart::of(&msg);
         let typing = match &msg {
             NewProjectMsg::RuleEdited(field, _) => Some(*field),
@@ -233,12 +233,12 @@ impl Signex {
             _ => None,
         };
         let tab = self
-            .document_state
+            .document_view
             .project_tabs
             .entry(project_id)
             .or_default();
         let draft = tab.setup_draft.get_or_insert(fresh);
-        let users = &mut self.ui_state.setup_profiles;
+        let users = &mut self.document_state.setup_profiles;
         // A card pick, the Fab tier field that mirrors it and a card's layer
         // stepper name the project's default profile.
         let picked = matches!(
@@ -354,7 +354,7 @@ impl Signex {
 
     /// The section shows `project_id`'s stored values again.
     fn drop_setup_draft(&mut self, project_id: ProjectId) {
-        if let Some(tab) = self.document_state.project_tabs.get_mut(&project_id) {
+        if let Some(tab) = self.document_view.project_tabs.get_mut(&project_id) {
             tab.setup_draft = None;
         }
     }

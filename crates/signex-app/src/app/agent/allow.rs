@@ -1,8 +1,9 @@
 //! Which commands the agent channel accepts (#1924), derived from the command
 //! catalog: the #2172 queries, and a command that names its document with the
 //! `document` operand and no file path (`apply_edits` and `revert` are two of
-//! them), plus the window-layout commands (#2249). Everything else is refused
-//! with the reason. See
+//! them), plus the window-layout commands (#2249) and the writers whose path
+//! stays inside the project (#2470). Everything else is refused with the
+//! reason. See
 //! `docs/AGENT_SOCKET.md`, "Allowlist".
 
 use crate::app::command::queries::is_query;
@@ -13,20 +14,36 @@ use crate::keymap::{AppCommandId, CatalogTextExt, OperandKind, metadata_for};
 /// `consistency` in the tests keeps this list to ids the catalog has.
 pub(super) const PERSON_ONLY: &[&str] = &["undo", "redo"];
 
-/// The window-layout commands (#2249): they name no document and act on the
-/// main window's layout, open to agents by the maintainer's rule that
-/// everything is AI-controllable. Each answers with the layout it left.
+/// The window-layout commands (#2249, #2470): they name no document and act
+/// on the main window's layout, its view or its dock, open to agents by the
+/// maintainer's rule that everything is AI-controllable. Each answers with
+/// what it left (`window_layout.rs`).
 pub(super) const WINDOW_LAYOUT: &[&str] = &[
     "tile_windows_horizontally",
     "tile_windows_vertically",
     "untile_documents",
+    "zoom_to_fit",
+    "set_dock_panel",
 ];
 
 /// Commands whose `document` is optional in the catalog, for a script's old
 /// call, but which the channel takes only with it named: the agent gate
 /// (`check_agent_document`) refuses them without one. `update_pcb_from_schematic`
 /// takes the active project's board elsewhere (Caner, 2026-11-25), never here.
-pub(super) const DOCUMENT_NAMED_ON_CHANNEL: &[&str] = &["update_pcb_from_schematic"];
+pub(super) const DOCUMENT_NAMED_ON_CHANNEL: &[&str] =
+    &["update_pcb_from_schematic", "annotate_schematic_quietly"];
+
+/// Commands that write files into a `path` (#2470): on the channel the path
+/// must lie inside the folder of the named document's project
+/// (`write_target.rs`), and the write is confined there again when it runs.
+pub(super) const WRITES_IN_PROJECT: &[&str] = &[
+    "export_board_pdf",
+    "export_board_report",
+    "fabrication_outputs",
+];
+
+/// A window-only command and the form the channel takes in its place.
+const CHANNEL_FORM: &[(&str, &str)] = &[("annotate_schematic", "annotate_schematic_quietly")];
 /// Why an extension's command is refused on the agent channel.
 pub(super) const EXTENSION_COMMANDS_CLOSED: &str =
     "extension commands are not open to the agent socket in version 1";
@@ -34,6 +51,24 @@ pub(super) const EXTENSION_COMMANDS_CLOSED: &str =
 /// Is `command` one of [`WINDOW_LAYOUT`]?
 pub(in crate::app) fn is_window_layout(command: &AppCommandId) -> bool {
     WINDOW_LAYOUT.contains(&command.as_str())
+}
+
+/// Is `id` a window-layout command, which the channel takes though it only
+/// works in a window? `signex-cli run --attach` lets it through (#2470).
+pub fn is_agent_window_command(id: &str) -> bool {
+    WINDOW_LAYOUT.contains(&id)
+}
+
+/// Does the channel take `id` only with its optional `document` named
+/// ([`DOCUMENT_NAMED_ON_CHANNEL`])? `signex-cli run --attach` then sends it
+/// as a command, not as an edit of `apply_edits`.
+pub fn names_document_on_channel(id: &str) -> bool {
+    DOCUMENT_NAMED_ON_CHANNEL.contains(&id)
+}
+
+/// Does `id` write into its `path` inside the project ([`WRITES_IN_PROJECT`])?
+pub(super) fn writes_in_project(id: &str) -> bool {
+    WRITES_IN_PROJECT.contains(&id)
 }
 
 /// Why `command` is not on the agent channel, or `None` when it is.
@@ -57,10 +92,15 @@ pub(super) fn refusal(command: &AppCommandId) -> Option<String> {
     if is_query(command) || is_window_layout(command) {
         return None;
     }
+    if let Some((_, form)) = CHANNEL_FORM.iter().find(|(window, _)| *window == id) {
+        return Some(format!(
+            "`{id}` opens a dialog; on the agent channel send `{form}` with its `document`"
+        ));
+    }
     if let Some(reason) = meta.headless_refusal() {
         return Some(reason);
     }
-    if meta.operands.iter().any(|op| op.kind == OperandKind::Path) {
+    if !writes_in_project(id) && meta.operands.iter().any(|op| op.kind == OperandKind::Path) {
         return Some(format!(
             "`{id}` takes a file path; the agent channel does not read or write a path it names"
         ));
@@ -109,6 +149,8 @@ mod tests {
                 "add_board_graphic",
                 "add_net_class",
                 "add_teardrops",
+                // #2470: numbering on the named sheet's project.
+                "annotate_schematic_quietly",
                 // #2462: Compare Board with Schematic's Apply, by row id.
                 "apply_board_schematic_differences",
                 "apply_edits",
@@ -124,6 +166,18 @@ mod tests {
                 // #2470: Back Annotate and Re-Annotate Board on the named
                 // project or board.
                 "back_annotate_schematics",
+                // #2796: the block diagram edits, on the named diagram.
+                "block_add",
+                "block_group",
+                "block_group_set",
+                "block_link",
+                "block_link_set",
+                "block_port_add",
+                "block_port_remove",
+                "block_remove",
+                "block_set",
+                "block_ungroup",
+                "block_unlink",
                 "board_assembly_drawing",
                 "board_panel",
                 "board_report_bom",
@@ -135,6 +189,8 @@ mod tests {
                 "board_status",
                 // #2938: a BOM line's alternates, on the named project.
                 "bom_add_alternate",
+                // #1988: the BOM lines of the named sheet's project, a query.
+                "bom_lines",
                 "bom_remove_alternate",
                 "bom_set_alternate_order",
                 // #2326 slice 6.P2b: the drawing order and Delete, on the
@@ -153,16 +209,24 @@ mod tests {
                 "clear_all_net_colors",
                 "close_active_document",
                 "color_net",
+                // #2949: the Variant Manager's top bar actions.
+                "compare_variants",
                 "create_rooms_from_sheets",
                 "delete_net_class",
                 "delete_selection",
                 "document_info",
+                // #2470: the board writers, into a path inside the project.
+                "export_board_pdf",
+                "export_board_report",
+                "fabrication_outputs",
                 "filter_drc_results",
                 "find_items",
                 "find_similar_items",
                 // #2940: the DRC fixes, on the named board.
                 "fix_drc",
                 "fix_drc_violation",
+                // #2945: the design report of the named project.
+                "generate_design_notebook",
                 "gloss_selected_routes",
                 // #2394: the board view's layers, on the named board.
                 "hide_layer",
@@ -173,9 +237,32 @@ mod tests {
                 "layout_plan_get",
                 "layout_plan_set",
                 "layout_plan_status",
+                // Mockup row 198: the notebook's review records, by typed id.
+                "list_annotations",
+                // #2952: a query.
+                "list_diff_pairs",
                 "list_documents",
+                // #1283: the snippets and templates in view, as JSON.
+                "list_snippets",
+                "list_templates",
                 "lock_board_items",
+                // Mockup row 199: the notebook's measurements, timelines and
+                // attachments, and Mark still valid, on the named project.
+                "mark_notebook_attachment_valid",
                 "measure_board",
+                // #2795, mockup rows 195-199: the Design Notebook tab, its
+                // references, badges and measurements, on the named project.
+                "notebook_attachments",
+                "notebook_badges",
+                "notebook_compile",
+                "notebook_fix_reference",
+                "notebook_insert",
+                "notebook_measurements",
+                "notebook_reference_card",
+                "notebook_reference_picker",
+                "notebook_references",
+                "notebook_timeline",
+                "notebook_view",
                 "panelize_board",
                 // #2470: the routing tools, the via and the area tools, on
                 // the named board.
@@ -196,6 +283,8 @@ mod tests {
                 // #2339: the Requirements section's edits and run.
                 "project_add_requirement",
                 "project_add_variant",
+                // #3038: the Variant Manager's part edits and Duplicate.
+                "project_duplicate_variant",
                 "project_enable_requirement",
                 "project_move_library",
                 "project_move_sheet",
@@ -204,20 +293,31 @@ mod tests {
                 "project_rename_variant",
                 "project_run_requirements",
                 "project_set_active_variant",
+                "project_set_annotate_numbering",
                 "project_set_annotate_undo",
+                "project_set_default_variant",
                 // #2943: the project's rails and their budget.
                 "project_set_rail",
                 "project_set_requirement",
+                "project_set_variant_alternate",
+                "project_set_variant_fit",
+                "project_set_variant_override",
                 "project_set_version_control",
                 "project_settings",
+                // #2796: a block diagram as JSON.
+                "query_block_diagram",
                 "query_board_nets",
                 // #2938: the priced BOM of the named project.
                 "query_bom",
                 "query_footprint_assignments",
                 // #2944, #2939: an open library's rows; each part's height.
                 "query_library",
+                // #1277: a sheet's or a board's net ties, as JSON.
+                "query_net_ties",
                 "query_part_heights",
                 "query_pins",
+                // #1313: the project's power tree.
+                "query_power_tree",
                 "query_rail_budget",
                 "read_document",
                 "reannotate_board",
@@ -258,6 +358,8 @@ mod tests {
                 "set_active_layer",
                 "set_board_graphic",
                 "set_board_panel",
+                // #2470: a dock panel opened, closed, collapsed or expanded.
+                "set_dock_panel",
                 // #2936: a footprint placed by id on the named board.
                 "set_footprint_position",
                 "set_footprint_rotation",
@@ -279,6 +381,9 @@ mod tests {
                 "stitch_vias",
                 "swap_gates",
                 "swap_pins",
+                // #1261: the same swaps started on the named sheet.
+                "swap_schematic_gates",
+                "swap_schematic_pins",
                 // #2249: the window layout, by the maintainer's rule that
                 // everything is AI-controllable.
                 "tile_windows_horizontally",
@@ -292,9 +397,45 @@ mod tests {
                 // #2470: Update PCB for the project of the named document,
                 // answered with the change list.
                 "update_pcb_from_schematic",
+                "variant_bom",
                 "waive_drc_violation",
+                // #2470: Fit on the main window's view.
+                "zoom_to_fit",
             ]
         );
+    }
+
+    /// #2470: the Annotate dialog is refused with the form the channel
+    /// takes, and a file path is refused unless the command writes inside
+    /// the project.
+    #[test]
+    fn the_dialog_names_its_channel_form_and_only_the_project_writers_take_a_path() {
+        let why = refusal(&id("annotate_schematic")).expect("refused");
+        assert!(why.contains("`annotate_schematic_quietly`"), "{why}");
+        for name in WRITES_IN_PROJECT {
+            let meta = metadata_for(&id(name)).expect("in the catalog");
+            assert!(
+                meta.operands
+                    .iter()
+                    .any(|op| op.name == "path" && op.kind == OperandKind::Path),
+                "`{name}` takes no path, so it needs no entry here"
+            );
+            assert!(
+                meta.operands
+                    .iter()
+                    .any(|op| op.name == "document" && op.required),
+                "`{name}` must name its document"
+            );
+        }
+        for name in [
+            "export_assembly_svg",
+            "export_block_diagram",
+            "export_board_step",
+            "save_document_as",
+        ] {
+            let why = refusal(&id(name)).unwrap_or_else(|| panic!("`{name}` was accepted"));
+            assert!(why.contains("takes a file path"), "{name}: {why}");
+        }
     }
 
     /// #2495: no extension command is on the agent channel in version 1,

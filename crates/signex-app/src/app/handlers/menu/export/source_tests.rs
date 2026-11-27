@@ -78,7 +78,7 @@ fn a_closed_source_document_refuses_the_pdf_export_and_says_so() {
 
     assert!(!out.exists(), "nothing is written for a vanished source");
     assert!(
-        app.document_state.error_notice.is_some(),
+        app.document_view.error_notice.is_some(),
         "the refusal must be visible to the user"
     );
     assert!(
@@ -191,7 +191,7 @@ fn a_cancelled_save_dialog_writes_nothing() {
     let request = Box::new(pdf_request_all_sheets(&app, &a));
     let task = app.handle_export_pdf_finished(request, Err("cancelled".into()));
     crate::app::handlers::menu::export::settle(&mut app, task);
-    assert!(app.document_state.error_notice.is_none());
+    assert!(app.document_view.error_notice.is_none());
 }
 
 #[test]
@@ -201,7 +201,7 @@ fn a_detached_bom_preview_exports_the_document_it_was_built_for() {
 
     let _ = app.handle_bom_preview_open();
     assert_eq!(
-        app.document_state.bom_preview.as_ref().map(|p| &p.source),
+        app.document_view.bom_preview.as_ref().map(|p| &p.source),
         Some(&a)
     );
     app.document_state.active_path = Some(b);
@@ -222,7 +222,7 @@ fn a_detached_print_preview_records_the_document_it_was_built_for() {
     let _ = app.handle_print_preview_requested();
     app.document_state.active_path = Some(b);
     assert_eq!(
-        app.document_state.preview.as_ref().map(|p| &p.source),
+        app.document_view.preview.as_ref().map(|p| &p.source),
         Some(&a)
     );
 }
@@ -239,13 +239,13 @@ fn the_pdf_is_built_off_the_ui_thread() {
 
     let task = app.handle_export_pdf_finished(Box::new(request), Ok(out.clone()));
     assert!(
-        app.document_state.error_notice.is_none(),
+        app.document_view.error_notice.is_none(),
         "the exporter must not have run inside update"
     );
     assert_eq!(task.units(), 1);
 
     crate::app::handlers::menu::export::settle(&mut app, task);
-    let notice = app.document_state.error_notice.as_ref().expect("failure");
+    let notice = app.document_view.error_notice.as_ref().expect("failure");
     assert!(
         notice.detail.render_en_us().contains("PDF export failed"),
         "{}",

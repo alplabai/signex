@@ -147,7 +147,7 @@ fn a_menu_opens_at_the_cursor_and_clamps_only_at_its_own_windows_edge() {
 /// The app as the maintainer ran it: Graphite, a tall window.
 fn graphite_app() -> (Signex, iced::window::Id) {
     let (mut app, _boot) = Signex::new();
-    app.document_state.panel_ctx.tokens = theme_tokens(ThemeId::GraphiteLight);
+    app.document_view.panel_ctx.tokens = theme_tokens(ThemeId::GraphiteLight);
     let main = app
         .ui_state
         .main_window_id
@@ -160,6 +160,7 @@ fn open_canvas_menu(app: &mut Signex, at: (f32, f32)) {
         x: at.0,
         y: at.1,
         world: None,
+        hit_object: false,
         window: None,
     });
 }
@@ -362,7 +363,7 @@ fn app_with_menu(which: usize, window: iced::Size) -> (Signex, iced::window::Id)
             app.interaction_state.last_mouse_pos = (100.0, 100.0);
             let _ = app.update(part_message(crate::panels::PartPanelMsg::MenuToggled(PART)));
             // The panel shows the part as selected.
-            app.document_state.panel_ctx.selected_uuid = Some(PART);
+            app.document_view.panel_ctx.selected_uuid = Some(PART);
         }
     }
     (app, main)
@@ -498,7 +499,7 @@ fn the_part_menu_opens_at_its_press_and_a_row_runs_its_action() {
         )),
         "{sent:?}"
     );
-    app.document_state.panel_ctx.selected_uuid = None;
+    app.document_view.panel_ctx.selected_uuid = None;
     assert!(app.part_menu_overlay(main).is_empty());
 }
 
@@ -528,7 +529,7 @@ fn editors() -> Editors {
     footprint.state.active_bar_menu = Some(FpActiveBarMenu::Filter);
     let file = signex_library::SymbolFile::from_symbol(signex_library::Symbol::empty("menu"));
     let mut symbol = crate::app::SymbolDocument::new("menu.snxsym".into(), file);
-    symbol.active_bar_menu = Some(crate::library::editor::symbol::SymActiveBarMenu::Filter);
+    symbol.gui.active_bar_menu = Some(crate::library::editor::symbol::SymActiveBarMenu::Filter);
     let mut sketch = footprint_doc("sketch");
     let id = ConstraintId::new();
     let kind = ConstraintKind::DistancePtPt {

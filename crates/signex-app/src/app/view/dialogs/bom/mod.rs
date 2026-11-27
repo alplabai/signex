@@ -9,6 +9,8 @@ use signex_i18n::{ids, t};
 
 use super::widgets::{draggable_header, os_title_bar_slot};
 
+#[cfg(test)]
+mod computed_tests;
 mod footer;
 #[cfg(test)]
 mod names_tests;
@@ -54,10 +56,10 @@ impl Signex {
     }
 
     fn view_bom_preview_body_inner(&self, draggable: bool) -> Element<'_, Message> {
-        let Some(ref preview) = self.document_state.bom_preview else {
+        let Some(ref preview) = self.document_view.bom_preview else {
             return container(Space::new()).boxed();
         };
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let i18n = self.ui_state.i18n.as_ref();
         let line = crate::styles::tokens::resolve(tokens).line_soft;
 

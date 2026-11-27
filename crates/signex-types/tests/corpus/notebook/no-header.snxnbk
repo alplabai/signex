@@ -1,0 +1,7 @@
+= Bring-up notes
+
+Plain Typst with no header reads as snxnbk/1 and saves back unchanged.
+
+#annotation(kind: "issue", status: "open", date: "2026-11-17")[
+  U3 runs warm: case reaches 71 °C at 300 mA from #net("VBUS").
+]

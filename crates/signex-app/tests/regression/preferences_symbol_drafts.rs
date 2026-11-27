@@ -117,7 +117,7 @@ fn discarding_puts_all_three_symbol_drafts_back() {
         "nothing is pending once the drafts are back"
     );
     assert_eq!(
-        app.document_state.panel_ctx.symbol_grid_style, committed_style,
+        app.document_view.panel_ctx.symbol_grid_style, committed_style,
         "Cancel must also put the live-preview render input back, or the \
          editor keeps rendering the discarded style"
     );

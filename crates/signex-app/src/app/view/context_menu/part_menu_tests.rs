@@ -22,8 +22,8 @@ fn app_with_part_menu(at: (f32, f32)) -> (Signex, iced::window::Id) {
     app.interaction_state.last_mouse_pos = at;
     let _ = app.update(part(PartPanelMsg::MenuToggled(PART)));
     // The panel shows the part as selected.
-    app.document_state.panel_ctx.selected_uuid = Some(PART);
-    assert_eq!(app.document_state.panel_ctx.part_panel.menu_for, Some(PART));
+    app.document_view.panel_ctx.selected_uuid = Some(PART);
+    assert_eq!(app.document_view.panel_ctx.part_panel.menu_for, Some(PART));
     (app, main)
 }
 
@@ -41,7 +41,7 @@ fn esc_closes_the_part_menu() {
         "{esc:?}"
     );
     let _ = app.update(esc);
-    assert_eq!(app.document_state.panel_ctx.part_panel.menu_for, None);
+    assert_eq!(app.document_view.panel_ctx.part_panel.menu_for, None);
 }
 
 #[test]
@@ -49,7 +49,7 @@ fn closing_every_context_menu_closes_the_part_menu() {
     let (mut app, main) = app_with_part_menu((100.0, 100.0));
     assert!(!app.part_menu_overlay(main).is_empty());
     app.close_all_context_menus();
-    assert_eq!(app.document_state.panel_ctx.part_panel.menu_for, None);
+    assert_eq!(app.document_view.panel_ctx.part_panel.menu_for, None);
     assert!(app.part_menu_overlay(main).is_empty());
 }
 
@@ -81,7 +81,7 @@ fn a_detached_properties_window_opens_the_menu_in_itself() {
     // Its Esc and its scrim close the menu the detached panel shows.
     let esc = app.escape_overlay_message().expect("the menu claims Esc");
     let _ = app.update(esc);
-    assert_eq!(app.document_state.panel_ctx.part_panel.menu_for, None);
+    assert_eq!(app.document_view.panel_ctx.part_panel.menu_for, None);
 }
 
 /// Opening the ⋯ menu closes the menu that was open, as every other menu's
@@ -99,8 +99,8 @@ fn opening_the_part_menu_closes_another_open_menu() {
     let _ = app.update(part(PartPanelMsg::MenuToggled(PART)));
     assert!(app.interaction_state.tab_context_menu.is_none());
     assert!(!app.ui_state.tab_overflow_menu_open);
-    assert_eq!(app.document_state.panel_ctx.part_panel.menu_for, Some(PART));
+    assert_eq!(app.document_view.panel_ctx.part_panel.menu_for, Some(PART));
     // The same toggle again closes it.
     let _ = app.update(part(PartPanelMsg::MenuToggled(PART)));
-    assert_eq!(app.document_state.panel_ctx.part_panel.menu_for, None);
+    assert_eq!(app.document_view.panel_ctx.part_panel.menu_for, None);
 }

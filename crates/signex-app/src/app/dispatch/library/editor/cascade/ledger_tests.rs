@@ -41,6 +41,7 @@ fn run(foreign: Foreign) -> Run {
         library: LibrarySection {
             name: "cells".into(),
             description: None,
+            ..Default::default()
         },
         mode: LibraryMode::default(),
         workflow: WorkflowConfig::default(),

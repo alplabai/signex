@@ -249,7 +249,7 @@ Gerber Viewer tab is open at a time, in the main window only. It holds no
 document, so nothing saves, undoes or restores from History through it,
 and it does not undock. Its path is the package's first
 path and its title the package's name ("Gerber Viewer" with nothing open).
-Its state is `DocumentState::gerber_viewer`; closing the tab drops the
+Its state is `DocumentViewState::gerber_viewer`; closing the tab drops the
 package and keeps the recent list.
 
 - **Open paths.** A double-click on a Projects row named like fabrication

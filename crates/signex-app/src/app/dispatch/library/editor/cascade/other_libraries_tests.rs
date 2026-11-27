@@ -23,6 +23,7 @@ fn library(dir: &Path, name: &str, mode: WorkflowMode) -> (LocalGitAdapter, Path
         library: LibrarySection {
             name: name.into(),
             description: None,
+            ..Default::default()
         },
         mode: LibraryMode::default(),
         workflow,

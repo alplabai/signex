@@ -19,7 +19,7 @@ fn app_with_sheets() -> Signex {
 /// The key of the sheet row for `filename`, found by label so the lookup does
 /// not depend on row order.
 fn sheet_key(app: &Signex, filename: &str) -> TreeKey {
-    let tree = app.document_state.panel_ctx.project_tree.as_slice();
+    let tree = app.document_view.panel_ctx.project_tree.as_slice();
     let docs = &tree[0].children[0];
     let idx = docs
         .children
@@ -92,10 +92,7 @@ fn open_selects_the_keyed_sheet_after_a_reorder() {
 
     pick(&mut app, ProjectTreeAction::OpenNode(key.clone()));
 
-    assert_eq!(
-        app.document_state.panel_ctx.project_tree_selected,
-        Some(key)
-    );
+    assert_eq!(app.document_view.panel_ctx.project_tree_selected, Some(key));
 }
 
 /// #2777: one pick of Open opens the row's document and leaves no memo for
@@ -116,10 +113,7 @@ fn one_pick_of_open_opens_the_document() {
     pick(&mut app, ProjectTreeAction::OpenNode(key.clone()));
 
     assert!(app.document_state.tabs.iter().any(|tab| tab.path == path));
-    assert_eq!(
-        app.document_state.panel_ctx.project_tree_selected,
-        Some(key)
-    );
+    assert_eq!(app.document_view.panel_ctx.project_tree_selected, Some(key));
     assert_eq!(app.interaction_state.last_tree_click.key(), None);
 }
 
@@ -131,11 +125,11 @@ fn toggle_flips_the_keyed_branch_after_a_reorder() {
         "Source Documents".to_string(),
     ];
     reorder(&mut app);
-    let before = app.document_state.panel_ctx.project_tree[0].children[0].expanded;
+    let before = app.document_view.panel_ctx.project_tree[0].children[0].expanded;
 
     pick(&mut app, ProjectTreeAction::ToggleNode(key));
 
-    let after = app.document_state.panel_ctx.project_tree[0].children[0].expanded;
+    let after = app.document_view.panel_ctx.project_tree[0].children[0].expanded;
     assert_ne!(before, after);
 }
 

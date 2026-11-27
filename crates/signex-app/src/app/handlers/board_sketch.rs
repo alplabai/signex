@@ -281,7 +281,7 @@ impl Signex {
         let held = Translatable::new(ids::BOARD_SKETCH_HELD).arg("board", name.as_str());
         crate::diagnostics::log_warning(held.render_en_us());
         let detail = self.board_sketch_held_detail(name);
-        self.document_state.error_notice = Some(ErrorNotice::new(ids::BOARD_SKETCH_TITLE, detail));
+        self.document_view.error_notice = Some(ErrorNotice::new(ids::BOARD_SKETCH_TITLE, detail));
     }
 
     /// Why a board named `name` holds: the hold and the bake's refusal, which

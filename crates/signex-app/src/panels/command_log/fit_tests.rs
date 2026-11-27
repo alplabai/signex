@@ -49,7 +49,7 @@ fn in_pane(texts: &[LaidOutText], window: Size) -> Vec<LaidOutText> {
 fn app_with_a_failed_row() -> Signex {
     let (mut app, _boot) = Signex::new();
     let _ = app.update(Message::Menu(MenuMessage::command("place_wire")));
-    let log = &app.document_state.panel_ctx.command_log.log;
+    let log = &app.document_view.panel_ctx.command_log.log;
     let row = log.rows().next_back().expect("the GUI logged a row");
     assert!(row.outcome.is_failed(), "{row:?}");
     app
@@ -70,7 +70,7 @@ fn only_a_pane_tall_enough_pins_the_actions() {
 #[test]
 fn the_default_dock_scrolls_the_whole_detail_pane_actions_first() {
     let app = app_with_a_failed_row();
-    let ctx = &app.document_state.panel_ctx;
+    let ctx = &app.document_view.panel_ctx;
     let row = ctx.command_log.log.rows().next_back().expect("a row");
     let error = plain(row.outcome.text().expect("a failed row says why"));
     let texts = laid_out(ctx, DEFAULT_DOCK);
@@ -102,7 +102,7 @@ fn the_default_dock_scrolls_the_whole_detail_pane_actions_first() {
 #[test]
 fn a_tall_dock_pins_replay_under_the_body() {
     let app = app_with_a_failed_row();
-    let ctx = &app.document_state.panel_ctx;
+    let ctx = &app.document_view.panel_ctx;
     let row = ctx.command_log.log.rows().next_back().expect("a row");
     let error = plain(row.outcome.text().expect("a failed row says why"));
     let texts = laid_out(ctx, MOCK_DOCK);
@@ -125,7 +125,7 @@ fn a_tall_dock_pins_replay_under_the_body() {
 #[test]
 fn the_empty_card_keeps_its_key_line() {
     let (app, _boot) = Signex::new();
-    let ctx = &app.document_state.panel_ctx;
+    let ctx = &app.document_view.panel_ctx;
     assert!(ctx.command_log.log.is_empty());
     for window in [DEFAULT_DOCK, MOCK_DOCK] {
         let texts = laid_out(ctx, window);

@@ -81,6 +81,7 @@ fn app_with_browser() -> (Signex, PathBuf) {
         display: LibraryDisplaySettings::default(),
         dangling: Default::default(),
         pricing: Default::default(),
+        provenance: Default::default(),
     });
     app.library.touch_data();
     app.library

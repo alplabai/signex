@@ -33,7 +33,7 @@ fn shape(app: &Signex) -> Vec<(String, Vec<String>)> {
 }
 
 fn source_documents(app: &Signex) -> &[TreeNode] {
-    &app.document_state.panel_ctx.project_tree[0].children[0].children
+    &app.document_view.panel_ctx.project_tree[0].children[0].children
 }
 
 pub(crate) fn write_sheet(dir: &Path, name: &str, children: &[&str]) {
@@ -172,7 +172,7 @@ fn a_missing_file_does_not_mark_its_namesake_in_another_folder() {
     settle(&mut app, false);
     settle(&mut app, true);
 
-    let projects = &app.document_state.panel_ctx.projects;
+    let projects = &app.document_view.panel_ctx.projects;
     let healthy = tmp.path().join("a").join("debug.snxsch");
     let absent = tmp.path().join("b").join("debug.snxsch");
     assert!(!crate::panels::sheet_file_missing(projects, &healthy));
@@ -197,7 +197,7 @@ fn a_missing_row_follows_the_file_being_created_and_stops_offering_create() {
 
     let top = &source_documents(&app)[0];
     assert_eq!(top.children[0].label, "later.snxsch", "no longer missing");
-    let info = &app.document_state.panel_ctx.projects[0].sheets[0].children[0];
+    let info = &app.document_view.panel_ctx.projects[0].sheets[0].children[0];
     assert!(info.is_child_reference && !info.missing);
 }
 

@@ -90,7 +90,7 @@ fn new_part_and_remove_part_edit_the_symbols_parts() {
     let _ = click(&mut app, "Tools/New Part");
     assert_eq!(parts(&app), before + 1);
     assert_eq!(
-        app.document_state.symbol_editors[&path].active_part,
+        app.document_state.symbol_editors[&path].draft.active_part,
         before + 1
     );
 
@@ -168,7 +168,7 @@ fn up_hierarchy_reports_when_the_sheet_is_not_in_a_loaded_project() {
     let _ = crate::diagnostics::init_logging();
     let needle = "Up Hierarchy: the focused sheet is not part of a loaded project";
     let mut app = one_symbol_selected();
-    app.document_state
+    app.document_view
         .panel_ctx
         .navigator
         .replace_hierarchy(placed_child_hierarchy(), None, &[]);

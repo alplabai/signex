@@ -39,7 +39,7 @@ mod step;
 
 pub use explode::{Explode, Layer3d};
 pub use layers::mask_over_copper;
-pub use model_file::read_model_file;
+pub use model_file::{read_model_file, read_step_bytes};
 pub use parts::model_point_on_footprint;
 pub use signex_mcad::{McadError, StepHeader, StepSchema};
 pub use step::{BoardStep, BoardStepInput, board_step};

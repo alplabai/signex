@@ -28,7 +28,7 @@ pub(super) fn apply(editor: &mut crate::app::FootprintDocument, msg: FootprintEd
         }
         // v0.26-E — clipboard ops intercepted at the call site
         // (apply_footprint_clipboard_op needs split-borrow with
-        // document_state.pad_clipboard). The match arm here is
+        // document_view.pad_clipboard). The match arm here is
         // unreachable in practice but required for exhaustiveness.
         FootprintEditorMsg::CopyPad | FootprintEditorMsg::CutPad | FootprintEditorMsg::PastePad => {
         }

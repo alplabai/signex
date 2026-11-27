@@ -172,10 +172,17 @@ impl StockCopyJob {
             }
             StockPrimitiveKind::Footprint => {
                 let file = FootprintFile::from_bytes(&bytes).map_err(backend)?;
-                let copy = file.copy_for_library(&taken_names, self.now);
+                let mut copy = file.copy_for_library(&taken_names, self.now);
+                // #3107: the copy carries its models; one the stock library
+                // keeps only in `step/` is embedded, else copied as a file.
+                copy.embed_models_from_step_dir(&self.source_library_dir.join("step"));
                 let name = copy.footprints[0].name.clone();
                 let stem = copy.footprints[0].uuid.to_string();
-                let hashes = copy.step_hashes();
+                let hashes = copy
+                    .step_hashes()
+                    .into_iter()
+                    .filter(|hash| copy.models.get(hash).is_none())
+                    .collect();
                 (copy.to_toml_string().map_err(backend)?, name, stem, hashes)
             }
         };
@@ -242,9 +249,10 @@ fn backend(error: impl std::fmt::Display) -> LibraryError {
     LibraryError::Backend(error.to_string())
 }
 
-/// Bring `step/<hash>.step` from the source library to the target. A model
-/// the stock library does not hold stays a reference only; one the target
-/// already holds is left as it is (addressed by content hash).
+/// Bring `step/<hash>.step` from the source library to the target, for a
+/// model the copy could not embed (its file does not match its hash). A
+/// model the stock library does not hold stays a reference only; one the
+/// target already holds is left as it is (addressed by content hash).
 fn copy_step_model(
     source_dir: &Path,
     target_dir: &Path,

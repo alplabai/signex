@@ -51,7 +51,7 @@ impl Signex {
             return Space::new().boxed();
         };
         let i18n = self.ui_state.i18n.as_ref();
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let plan = self.parameter_import_plan();
         let count = plan.as_ref().map_or(0, |plan| plan.changes.len());
         let body: Element<'_, Message> = match &plan {
@@ -97,7 +97,7 @@ impl Signex {
         plan: &ImportPlan,
     ) -> Element<'a, Message> {
         let i18n = self.ui_state.i18n.as_ref();
-        let r = tokens::resolve(&self.document_state.panel_ctx.tokens);
+        let r = tokens::resolve(&self.document_view.panel_ctx.tokens);
         let sheet = shown_name(&state.sheet);
         let mut content: Column<Element<'a, Message>> =
             column![].spacing(SP.m).height(Length::Fill);
@@ -161,7 +161,7 @@ impl Signex {
     /// set) and the value Apply writes.
     fn parameter_import_table<'a>(&'a self, changes: &[ParameterChange]) -> Element<'a, Message> {
         let i18n = self.ui_state.i18n.as_ref();
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let r = tokens::resolve(tokens);
         let head = |id: MessageId| text(t!(i18n, id)).size(TS.caption).color(r.ink4).boxed();
         let sunken = r.sunken;

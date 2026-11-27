@@ -145,7 +145,7 @@ mod tests {
     #[test]
     fn the_length_matching_panel_shows_its_empty_state() {
         let (app, _boot) = crate::app::Signex::new();
-        let ctx = app.document_state.panel_ctx.clone();
+        let ctx = app.document_view.panel_ctx.clone();
         let texts: Vec<String> = crate::layout_probe::lay_out_texts(
             length_matching_view(&ctx),
             iced::Size::new(300.0, 600.0),
@@ -171,7 +171,7 @@ mod tests {
         let kind = crate::panels::PanelKind::LengthMatching;
         assert_eq!(t!(i18n, kind.message()).into_string(), "Length Matching");
         let (app, _boot) = crate::app::Signex::new();
-        let ctx = app.document_state.panel_ctx.clone();
+        let ctx = app.document_view.panel_ctx.clone();
         let texts = crate::layout_probe::lay_out_texts(
             crate::panels::view_panel(kind, &ctx),
             iced::Size::new(300.0, 600.0),

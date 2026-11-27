@@ -72,7 +72,7 @@ impl Signex {
     /// selected Net Parameters directive or Net Blanket of the sheet in view,
     /// keeping its hover and a draft that still stands.
     pub(crate) fn refresh_directive_panel(&mut self) {
-        let previous = self.document_state.panel_ctx.directive_panel.take();
+        let previous = self.document_view.panel_ctx.directive_panel.take();
         let selected = &self.interaction_state.active_canvas().selected;
         let [item] = selected.as_slice() else {
             return;
@@ -132,12 +132,12 @@ impl Signex {
                 .as_ref()
                 .is_some_and(|(field, text)| draft_refused(*field, text));
         }
-        self.document_state.panel_ctx.directive_panel = Some(Box::new(panel));
+        self.document_view.panel_ctx.directive_panel = Some(Box::new(panel));
     }
 
     /// A Net Blanket edit from its Properties.
     pub(crate) fn blanket_panel_edited(&mut self, id: uuid::Uuid, edit: &BlanketEdit) {
-        if let Some(panel) = self.document_state.panel_ctx.directive_panel.as_mut() {
+        if let Some(panel) = self.document_view.panel_ctx.directive_panel.as_mut() {
             panel.draft = blanket_draft(edit);
         }
         self.edit_blanket_field(id, edit);
@@ -148,7 +148,7 @@ impl Signex {
     pub(crate) fn directive_panel_event(&mut self, event: &DirectivePanelMsg) {
         match event {
             DirectivePanelMsg::NetParametersEdited(id, edit) => {
-                if let Some(panel) = self.document_state.panel_ctx.directive_panel.as_mut() {
+                if let Some(panel) = self.document_view.panel_ctx.directive_panel.as_mut() {
                     panel.draft = match edit {
                         NetParametersEdit::Rule(rule, text) => {
                             Some((DraftField::Rule(*rule), text.clone()))
@@ -161,7 +161,7 @@ impl Signex {
             }
             DirectivePanelMsg::NetRowHovered(name) => self.directive_net_row_hovered(name.clone()),
             DirectivePanelMsg::Illustration(m) => {
-                if let Some(panel) = self.document_state.panel_ctx.directive_panel.as_mut() {
+                if let Some(panel) = self.document_view.panel_ctx.directive_panel.as_mut() {
                     panel.hover.update(m.clone());
                 }
             }
@@ -172,7 +172,7 @@ impl Signex {
     /// put back the net highlight the Net Inspector owns when it is left.
     fn directive_net_row_hovered(&mut self, name: Option<String>) {
         let elements = self
-            .document_state
+            .document_view
             .panel_ctx
             .directive_panel
             .as_mut()

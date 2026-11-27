@@ -39,6 +39,7 @@ fn symbol(uuid: uuid::Uuid, ref_text: TextProp) -> Symbol {
         on_board: true,
         exclude_from_sim: false,
         locked: false,
+        net_tie: false,
         fields: HashMap::new(),
         custom_properties: Vec::new(),
         pin_uuids: HashMap::new(),

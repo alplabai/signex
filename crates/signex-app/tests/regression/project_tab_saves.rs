@@ -102,7 +102,7 @@ fn a_failed_write_keeps_the_project_dirty_and_is_reported() {
     );
     assert!(
         f.app
-            .document_state
+            .document_view
             .panel_ctx
             .diagnostics
             .iter()
@@ -151,7 +151,7 @@ fn a_failed_write_is_recorded_and_the_queued_save_that_follows_clears_it() {
     // Kept on purpose: the first write really failed, so its Save Failed
     // card stays until the user dismisses it.
     assert!(
-        f.app.document_state.error_notice.is_some(),
+        f.app.document_view.error_notice.is_some(),
         "the card of the failed write is still shown"
     );
 }

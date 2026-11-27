@@ -111,7 +111,8 @@ impl PreviewRasterizer {
             return Vec::new();
         }
         let expr_tables = build_expression_tables(&ctx.sheets, ctx.netlist.as_ref())
-            .with_placed_fits(ctx, opts.pdf.variant.as_deref(), opts.pdf.draw_not_fitted);
+            .with_placed_fits(ctx, opts.pdf.variant.as_deref(), opts.pdf.draw_not_fitted)
+            .with_drawn_values(ctx, opts.pdf.variant.as_deref());
         wanted
             .into_iter()
             .filter_map(|(pos, sheet)| {

@@ -35,7 +35,7 @@ fn blocked_board(dir: &Path) -> (Signex, PathBuf) {
 /// The card names the file in its sentence and keeps the path and the
 /// error in its system block.
 fn assert_names_the_file(app: &Signex, path: &Path) {
-    let notice = app.document_state.error_notice.as_ref().expect("a card");
+    let notice = app.document_view.error_notice.as_ref().expect("a card");
     assert_eq!(notice.title.render_en_us(), "Save Failed");
     assert_eq!(notice.detail.render_en_us(), SENTENCE);
     let en = signex_i18n::I18n::en_us();
@@ -104,7 +104,7 @@ fn a_headless_save_document_that_cannot_write_names_the_file() {
     assert_names_the_file(&app, &path);
     // The reason signex-cli reports: the sentence, its period giving way to
     // the colon, then the system part.
-    let notice = app.document_state.error_notice.as_ref().expect("a card");
+    let notice = app.document_view.error_notice.as_ref().expect("a card");
     let line = notice.detail_line_en_us();
     assert!(
         line.starts_with("board.snxpcb could not be written: ")

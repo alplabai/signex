@@ -207,7 +207,7 @@ impl Signex {
             .copied()
             .unwrap_or_default();
         let window = self.ui_state.window_size;
-        let scrim = super::header::dialog_scrim(&self.document_state.panel_ctx.tokens);
+        let scrim = super::header::dialog_scrim(&self.document_view.panel_ctx.tokens);
         wrap_modal_scrim(body, offset, window, fit_modal_size(window, desired), scrim)
     }
 
@@ -218,7 +218,7 @@ impl Signex {
         desired: (f32, f32),
     ) -> Element<'a, Message> {
         let window = self.ui_state.window_size;
-        let scrim = super::header::dialog_scrim(&self.document_state.panel_ctx.tokens);
+        let scrim = super::header::dialog_scrim(&self.document_view.panel_ctx.tokens);
         wrap_modal_scrim(
             body,
             (0.0, 0.0),

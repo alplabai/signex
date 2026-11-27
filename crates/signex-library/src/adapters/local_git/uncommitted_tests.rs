@@ -13,6 +13,7 @@ fn adapter(dir: &tempfile::TempDir) -> LocalGitAdapter {
         library: LibrarySection {
             name: "Race".into(),
             description: None,
+            ..Default::default()
         },
         mode: LibraryMode::default(),
         workflow: WorkflowConfig::default(),
@@ -179,6 +180,7 @@ fn a_failed_commit_on_an_unborn_head_is_recorded_by_the_first_commit() {
             library: LibrarySection {
                 name: "Fresh".into(),
                 description: None,
+                ..Default::default()
             },
             mode: LibraryMode::default(),
             workflow: WorkflowConfig::default(),

@@ -345,6 +345,7 @@ fn manifest(name: &str) -> SnxlibManifest {
         library: LibrarySection {
             name: name.into(),
             description: Some("synthetic library for issue #99 timing".into()),
+            ..Default::default()
         },
         mode: LibraryMode::default(),
         workflow: WorkflowConfig::default(),

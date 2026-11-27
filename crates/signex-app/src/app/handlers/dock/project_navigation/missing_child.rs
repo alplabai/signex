@@ -29,7 +29,7 @@ impl Signex {
         }
         let parent_path = tree_path.split_last()?.1;
         let parent_label = signex_widgets::tree_view::get_node(
-            self.document_state.panel_ctx.project_tree.as_slice(),
+            self.document_view.panel_ctx.project_tree.as_slice(),
             parent_path,
         )?
         .label

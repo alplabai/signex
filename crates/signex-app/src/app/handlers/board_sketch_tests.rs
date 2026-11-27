@@ -93,7 +93,7 @@ fn the_canvas_cursor_follows_the_pointer() {
         let session = app.interaction_state.board_sketch.as_ref().expect("on");
         let view = crate::library::editor::standalone::view_board_sketch(
             &session.editor,
-            &app.document_state.panel_ctx.tokens,
+            &app.document_view.panel_ctx.tokens,
             &app.ui_state.i18n,
             None,
         )
@@ -131,7 +131,7 @@ fn the_canvas_cursor_follows_the_pointer() {
 #[test]
 fn properties_show_the_board_not_footprint_fields() {
     let (app, _tmp) = sketching();
-    let ctx = &app.document_state.panel_ctx;
+    let ctx = &app.document_view.panel_ctx;
     assert!(
         ctx.footprint_editor.is_some(),
         "the sketch drives Properties"
@@ -314,7 +314,7 @@ fn properties_read_a_sketch_point_from_the_board_origin() {
         )),
     );
     let shown = app
-        .document_state
+        .document_view
         .panel_ctx
         .footprint_editor
         .as_ref()
@@ -511,7 +511,7 @@ fn a_guide_shows_and_takes_its_position_from_the_board_origin() {
         session.editor.state.guides[i].position_mm
     };
     let shown = |app: &Signex, i: usize| {
-        let ctx = app.document_state.panel_ctx.footprint_editor.as_ref();
+        let ctx = app.document_view.panel_ctx.footprint_editor.as_ref();
         ctx.expect("the panel").guides[i].position_mm
     };
     send(&mut app, panel(PanelMsg::FpEditorGuideAddVertical));
@@ -677,7 +677,7 @@ fn the_held_save_card_renders_its_refusal_in_the_view() {
             BoardSketchAttrMsg::OutlineToggled { id: line, on: true },
         ))),
     );
-    app.document_state.error_notice = None;
+    app.document_view.error_notice = None;
     send(&mut app, Message::File(FileMsg::Save));
 
     const REFUSED: &str = "The sketch was not applied to the board";
@@ -703,7 +703,7 @@ fn the_held_save_card_renders_its_refusal_in_the_view() {
         .expect("the refusal")
         .render(&*app.ui_state.i18n);
     let card = app
-        .document_state
+        .document_view
         .error_notice
         .as_ref()
         .expect("the card")

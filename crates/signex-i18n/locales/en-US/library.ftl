@@ -19,6 +19,17 @@ library-browser-summary =
        *[other] { $tables } tables
     }
 
+# Caption under the summary of a converted library: the content's licence,
+# an SPDX identifier such as CC-BY-SA-4.0, verbatim from the library file.
+library-browser-license = License: { $license }
+# Next to it: where the content came from, a URL or a description, verbatim.
+library-browser-source = Source: { $source }
+
+# Messages line after mounting a library whose manifest requires another
+# library that is not open. $library is the library's name, $required the
+# required library's id (a UUID).
+library-requires-missing = Library { $library } needs library { $required }, which is not open; its parts that use it do not resolve
+
 # Caption in front of the lifecycle filter pills.
 library-browser-show = Show
 
@@ -836,6 +847,16 @@ library-change-component-datasheet = Datasheet
 library-change-component-kept = Kept
 # What the change keeps; $matched and $total are whole numbers of pins.
 library-change-component-kept-summary = Designator { $reference } · position and rotation · pins matched by number, { $matched } of { $total }
+# The same with the pins that keep a net (mockup row 155); $pins is a comma-separated list of kept-pin lines.
+library-change-component-kept-summary-pins = Designator { $reference } · position and rotation · { $pins } (pins matched by number, { $matched } of { $total })
+# The same when the pins were mapped by hand.
+library-change-component-kept-summary-mapped = Designator { $reference } · position and rotation · { $pins } (pins as mapped, { $matched } of { $total })
+# One pin of the new part and the net it keeps; $pin is a pin number, $net a net name.
+library-change-component-kept-pin = pin { $pin } on { $net }
+# One pin of the new part on a net no label names.
+library-change-component-kept-pin-unnamed = pin { $pin } on an unnamed net
+# The pin list of a hand mapping that keeps no pin on a net.
+library-change-component-kept-no-nets = no pin on a net
 # Section heading of the scope choice.
 library-change-component-apply-to = Apply to
 # Scope choice: only the part the change started on.
@@ -857,6 +878,64 @@ library-change-component-warn-unit = The new part has no drawing for unit { $uni
 library-change-component-warn-dangling = Connected pins with no match, their wires will dangle: { $pins }
 library-change-component-warn-moved = Connected pins that sit elsewhere on the new part, their wires will no longer reach them: { $pins }
 library-change-component-warn-gained = New pins landing on a wire they were not mapped to: { $pins }
+# A hand pin mapping carries these connected pins' wires to their new pins.
+library-change-component-warn-carried = Connected pins whose wires move with them to the new pin: { $pins }
+# A hand pin mapping the sheet cannot follow; $reason says why. Change is refused.
+library-change-component-warn-refused = The pin mapping cannot be followed: { $reason }
 # range-filter-chip glyph
 # The × that removes an applied range filter chip.
 library-range-filter-remove = ✕
+
+# Library import (#3113, #3114). $env is an environment variable.
+library-import-not-installed = No library converter was found. Install one as a program named signex-<format>-import on PATH, or list converter programs in { $env }.
+# $env is an environment variable, $path a file path.
+library-import-override-not-a-file = { $env } is set to { $path }, which is not a file. Point it at the converter, or unset it to search PATH.
+# $converter is a program name, $error the reason.
+library-import-describe-failed = Could not ask { $converter } what it imports: { $error }
+# $contract is a version such as 2.0.
+library-import-unsupported-contract = { $converter } speaks converter contract { $contract }, which this Signex does not support. Update Signex, or install an older converter.
+library-import-path-not-absolute = { $path } is not an absolute path.
+library-import-start-failed = Could not start { $path }: { $error }
+library-import-cancelled = The import was cancelled.
+# $seconds is a whole number.
+library-import-silent = The converter reported nothing for { $seconds } s and was stopped.
+# $error is the converter's own message.
+library-import-converter-failed = The converter failed: { $error }
+# $status is the process exit status, $stderr the end of its error output.
+library-import-no-summary = The converter ended without a result ({ $status }). { $stderr }
+# $code is the exit code, $exit the result the converter printed.
+library-import-exit-mismatch = The converter exited with { $code } but reported { $exit }; the import is treated as failed.
+# $output is the folder the library was written to.
+library-import-path-outside = The converter reported { $path }, which is not inside { $output }.
+library-import-path-unreadable = The converter reported { $path }, which cannot be read: { $error }
+library-import-wait-failed = Could not wait for the converter: { $error }
+# $count is a whole number, $paths a comma-separated list of files.
+library-import-uncommitted = { $count ->
+        [one] The library has an uncommitted change ({ $paths }). An update would overwrite it: commit or discard it first.
+       *[other] The library has { $count } uncommitted changes ({ $paths }). An update would overwrite them: commit or discard them first.
+    } While an update runs, files added to the library folder from outside Signex are removed if it fails, and replaced by the imported snapshot if it succeeds.
+library-import-git-failed = The library was written, but its version history could not be recorded: { $error }
+library-import-no-library-file = { $path } holds no .snxlib library file.
+library-import-failed-title = Library Import Failed
+library-import-done-title = Library Imported
+# $name is the library name, $parts and $skipped whole numbers.
+library-import-done = Imported { $name } to { $path }: { $parts } parts, { $skipped } skipped. See import-report.md there for what was approximated or left out.
+# $count is a whole number.
+library-import-local-commits = { $count ->
+        [one] The library has { $count } commit that is not an import. Updating replaces its content with the source; the commit stays in the history.
+       *[other] The library has { $count } commits that are not imports. Updating replaces their content with the source; the commits stay in the history.
+    } Files added to the library folder from outside Signex during the update are removed if it fails, and replaced by the imported snapshot if it succeeds.
+# $path is the library being imported.
+library-import-running = An import of { $path } is still running; wait for it to finish or cancel it.
+library-import-no-project = No project is open to add the library to; it was added for all projects instead.
+# $path is the folder the converter reported, $output the one it was given.
+library-import-library-not-output = The converter reported the library at { $path }, not in { $output } where it was asked to write it.
+library-import-not-a-repository = { $path } has no version history, so it is not an imported library that can be updated. Import into a new folder instead.
+# $what names an unsaved document or editor.
+library-import-unsaved = The library has unsaved changes in Signex ({ $what }). Save or close them before updating it.
+# $error is why the update failed.
+library-import-update-restored = The update failed, and the library was restored to its last import: { $error } Files added to the library folder from outside Signex while the update ran were removed too.
+# $error is why the update failed, $reason why the restore did not happen.
+library-import-update-not-restored = The update failed: { $error } The library could not be restored to its last import ({ $reason }); check its folder before using it.
+# $path is the imported library, $other the mounted library with the same id.
+library-import-id-clash = The imported library { $path } has the same library id as { $other }, which is already open, so it was not added. Close the other library first.

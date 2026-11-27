@@ -51,6 +51,7 @@ pub mod gpu_backend;
 pub mod headless;
 pub mod icons;
 pub mod io_ports;
+pub mod library_import;
 pub mod pan_zoom_bench;
 pub mod paste_array;
 pub mod paste_prefs;

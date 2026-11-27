@@ -47,7 +47,7 @@ pub(crate) fn app_with_faulty_bom() -> Signex {
 
 fn issue_rules(app: &Signex) -> Vec<BomRule> {
     let preview = app
-        .document_state
+        .document_view
         .bom_preview
         .as_ref()
         .expect("preview open");
@@ -88,7 +88,7 @@ fn a_rollup_change_refreshes_the_report() {
     assert_eq!(issue_rules(&app).len(), 2);
     // Clear the stored report, then trigger a rollup: the handler must
     // recompute it rather than leave it stale.
-    app.document_state
+    app.document_view
         .bom_preview
         .as_mut()
         .expect("preview open")
@@ -112,7 +112,7 @@ fn the_not_fitted_option_reaches_the_export_with_both_flags() {
         BomPreviewMsg::NotFittedIncludedToggled(true),
     ));
     let options = &app
-        .document_state
+        .document_view
         .bom_preview
         .as_ref()
         .expect("preview open")
@@ -135,7 +135,7 @@ fn a_filter_hiding_every_line_still_exports_every_part() {
         "matches nothing".into(),
     )));
     let preview = app
-        .document_state
+        .document_view
         .bom_preview
         .as_ref()
         .expect("preview open");
@@ -168,7 +168,7 @@ fn export_with_issues_still_writes_and_reports_the_summary() {
     let _ = app.update(Message::Menu(MenuMessage::ExportBom));
     set_rule(&mut app, BomRule::MissingMpn, false);
     let options = app
-        .document_state
+        .document_view
         .bom_preview
         .as_ref()
         .expect("preview open")
@@ -186,7 +186,7 @@ fn export_with_issues_still_writes_and_reports_the_summary() {
 
     assert!(out.exists(), "advisory validation must not block the write");
     let notice = app
-        .document_state
+        .document_view
         .error_notice
         .as_ref()
         .expect("summary must be surfaced, not dropped");
@@ -219,7 +219,7 @@ fn column_resize_ends_on_a_global_release_away_from_the_handle() {
 
     let _ = app.update(Message::Ui(UiMsg::DragMove(160.0, 10.0)));
     let width_while_dragging = app
-        .document_state
+        .document_view
         .bom_preview
         .as_ref()
         .unwrap()
@@ -227,7 +227,7 @@ fn column_resize_ends_on_a_global_release_away_from_the_handle() {
 
     // The release arrives through the global drag-end path, not the handle.
     let _ = app.update(Message::Ui(UiMsg::DragEnd(iced::window::Id::unique())));
-    let preview = app.document_state.bom_preview.as_ref().unwrap();
+    let preview = app.document_view.bom_preview.as_ref().unwrap();
     assert!(
         preview.column_resize.is_none(),
         "DragEnd must end the resize"
@@ -235,7 +235,7 @@ fn column_resize_ends_on_a_global_release_away_from_the_handle() {
     assert!(!app.is_pointer_drag_active());
 
     let _ = app.update(Message::Ui(UiMsg::DragMove(400.0, 10.0)));
-    let preview = app.document_state.bom_preview.as_ref().unwrap();
+    let preview = app.document_view.bom_preview.as_ref().unwrap();
     assert_eq!(
         preview.column_widths[&0], width_while_dragging,
         "the column must stop following the cursor after the release"
@@ -249,7 +249,7 @@ fn a_dragged_column_takes_the_slot_of_the_header_it_is_dropped_on() {
     let mut app = app_with_faulty_bom();
     let _ = app.update(Message::Menu(MenuMessage::ExportBom));
     let columns = |app: &Signex| {
-        app.document_state
+        app.document_view
             .bom_preview
             .as_ref()
             .unwrap()
@@ -287,7 +287,7 @@ fn a_failed_bom_write_reaches_the_user_after_the_task_runs() {
     let mut app = app_with_faulty_bom();
     let _ = app.update(Message::Menu(MenuMessage::ExportBom));
     let options = app
-        .document_state
+        .document_view
         .bom_preview
         .as_ref()
         .expect("preview open")
@@ -300,13 +300,13 @@ fn a_failed_bom_write_reaches_the_user_after_the_task_runs() {
     });
     let task = app.update(finished);
     assert!(
-        app.document_state.error_notice.is_none(),
+        app.document_view.error_notice.is_none(),
         "the write has not run yet"
     );
     crate::settle_support::settle_task(&mut app, task);
 
     let notice = app
-        .document_state
+        .document_view
         .error_notice
         .as_ref()
         .expect("a failed write must be reported");

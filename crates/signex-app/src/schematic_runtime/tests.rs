@@ -170,6 +170,7 @@ fn field_symbol(ref_text: Option<TextProp>) -> Symbol {
         on_board: true,
         exclude_from_sim: false,
         locked: false,
+        net_tie: false,
         fields: HashMap::new(),
         custom_properties: Vec::new(),
         pin_uuids: HashMap::new(),

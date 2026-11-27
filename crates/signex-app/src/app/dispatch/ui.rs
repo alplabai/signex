@@ -317,7 +317,7 @@ impl Signex {
             // On a board Shift+E is `cycle_board_snapping` (#2879).
             UiMsg::ToggleSnapHotspots => {
                 self.ui_state.snap_hotspots = !self.ui_state.snap_hotspots;
-                self.document_state.panel_ctx.snap_hotspots = self.ui_state.snap_hotspots;
+                self.document_view.panel_ctx.snap_hotspots = self.ui_state.snap_hotspots;
                 self.finish_update()
             }
             UiMsg::KeymapStroke { window, stroke } => self.resolve_keymap_stroke(window, stroke),
@@ -831,23 +831,20 @@ impl Signex {
         }
         // The window's panel context goes into the main slot with its canvas,
         // so the panels and the handlers see the sheet the window shows.
-        let fresh_ctx = !self
-            .document_state
-            .window_panel_ctx
-            .contains_key(&window_id);
+        let fresh_ctx = !self.document_view.window_panel_ctx.contains_key(&window_id);
         let mut swapped_ctx = self
-            .document_state
+            .document_view
             .window_panel_ctx
             .remove(&window_id)
             .unwrap_or_else(|| self.new_window_panel_ctx(window_id));
-        std::mem::swap(&mut self.document_state.panel_ctx, &mut swapped_ctx);
+        std::mem::swap(&mut self.document_view.panel_ctx, &mut swapped_ctx);
         // So does its History panel state (generation, pending restore).
         let mut swapped_history = self
-            .document_state
+            .document_view
             .window_history
             .remove(&window_id)
             .unwrap_or_default();
-        std::mem::swap(&mut self.document_state.history, &mut swapped_history);
+        std::mem::swap(&mut self.document_view.history, &mut swapped_history);
         let saved_active_path = self.document_state.active_path.take();
         let revision_before = self
             .document_state
@@ -870,17 +867,17 @@ impl Signex {
             handler(self)
         }));
         self.interaction_state.acting_window = saved_acting;
-        std::mem::swap(&mut self.document_state.panel_ctx, &mut swapped_ctx);
-        std::mem::swap(&mut self.document_state.history, &mut swapped_history);
+        std::mem::swap(&mut self.document_view.panel_ctx, &mut swapped_ctx);
+        std::mem::swap(&mut self.document_view.history, &mut swapped_history);
         // The handler may have closed the window (Close Document): its
         // context and canvas are then dropped, not put back; its typed note
         // boxes are still owed to their sheets (#2649).
         let window_alive = self.ui_state.windows.contains_key(&window_id);
         if window_alive {
-            self.document_state
+            self.document_view
                 .window_history
                 .insert(window_id, swapped_history);
-            self.document_state
+            self.document_view
                 .window_panel_ctx
                 .insert(window_id, swapped_ctx);
         } else {

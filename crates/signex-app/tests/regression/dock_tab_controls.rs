@@ -73,7 +73,7 @@ fn the_close_x_on_a_dirty_tab_keeps_the_draft_like_the_menu_close() {
 }
 
 fn left_panels(app: &Signex) -> Vec<signex_app::panels::PanelKind> {
-    app.document_state
+    app.document_view
         .dock
         .panel_kinds(PanelPosition::Left)
         .to_vec()
@@ -94,7 +94,7 @@ fn right_click_on_a_dock_tab_opens_its_menu() {
     let (mut app, _) = app_with_main_window();
     assert!(!left_panels(&app).is_empty());
     open_menu(&mut app, PanelPosition::Left, 0);
-    let menu = app.document_state.dock.tab_menu.expect("menu open");
+    let menu = app.document_view.dock.tab_menu.expect("menu open");
     assert_eq!(menu.position, PanelPosition::Left);
     assert_eq!(menu.kind, left_panels(&app)[0]);
 }
@@ -106,7 +106,7 @@ fn dock_menu_close_removes_the_panel_and_dismisses() {
     open_menu(&mut app, PanelPosition::Left, 0);
     pick(&mut app, DockTabAction::Close);
     assert_eq!(left_panels(&app).len(), before - 1);
-    assert!(app.document_state.dock.tab_menu.is_none());
+    assert!(app.document_view.dock.tab_menu.is_none());
 }
 
 #[test]
@@ -116,14 +116,14 @@ fn dock_menu_float_leaves_a_resting_floating_panel() {
     open_menu(&mut app, PanelPosition::Left, 0);
     pick(&mut app, DockTabAction::Float);
     let fp = app
-        .document_state
+        .document_view
         .dock
         .floating
         .last()
         .expect("floating panel");
     assert_eq!(fp.kind, kind);
     assert!(!fp.dragging);
-    assert!(app.document_state.dock.tab_menu.is_none());
+    assert!(app.document_view.dock.tab_menu.is_none());
 }
 
 #[test]
@@ -132,7 +132,7 @@ fn dock_menu_move_sends_the_panel_to_the_other_region() {
     let kind = left_panels(&app)[0];
     open_menu(&mut app, PanelPosition::Left, 0);
     pick(&mut app, DockTabAction::MoveTo(PanelPosition::Bottom));
-    let dock = &app.document_state.dock;
+    let dock = &app.document_view.dock;
     assert!(dock.panel_kinds(PanelPosition::Bottom).contains(&kind));
     assert!(!dock.panel_kinds(PanelPosition::Left).contains(&kind));
 }
@@ -142,13 +142,13 @@ fn dismissing_or_escaping_closes_the_dock_menu() {
     let (mut app, win) = app_with_main_window();
     open_menu(&mut app, PanelPosition::Left, 0);
     let _ = app.update(Message::Dock(DockMessage::TabMenuDismissed));
-    assert!(app.document_state.dock.tab_menu.is_none());
+    assert!(app.document_view.dock.tab_menu.is_none());
 
     open_menu(&mut app, PanelPosition::Left, 0);
     let _ = app.update(Message::Input(InputMsg::EscapePressed {
         window: Some(win),
     }));
-    assert!(app.document_state.dock.tab_menu.is_none());
+    assert!(app.document_view.dock.tab_menu.is_none());
 }
 
 fn drag_to(app: &mut Signex, x: f32, y: f32) {
@@ -163,19 +163,19 @@ fn dragging_a_floating_panel_previews_and_release_docks_there() {
         PanelPosition::Left,
         0,
     )));
-    assert!(app.document_state.dock.floating[0].dragging);
+    assert!(app.document_view.dock.floating[0].dragging);
 
     drag_to(&mut app, 600.0, 300.0);
-    assert_eq!(app.document_state.dock.drop_preview, None);
+    assert_eq!(app.document_view.dock.drop_preview, None);
 
     drag_to(&mut app, 1190.0, 300.0);
     assert_eq!(
-        app.document_state.dock.drop_preview,
+        app.document_view.dock.drop_preview,
         Some(PanelPosition::Right)
     );
 
     let _ = app.update(Message::Ui(UiMsg::DragEnd(iced::window::Id::unique())));
-    let dock = &app.document_state.dock;
+    let dock = &app.document_view.dock;
     assert_eq!(dock.drop_preview, None);
     assert!(dock.floating.is_empty());
     assert!(dock.panel_kinds(PanelPosition::Right).contains(&kind));
@@ -194,14 +194,14 @@ fn a_tab_dragged_out_of_a_region_previews_from_the_moment_it_floats() {
     )));
     drag_to(&mut app, 600.0, 790.0);
 
-    assert_eq!(app.document_state.dock.floating.len(), 1);
+    assert_eq!(app.document_view.dock.floating.len(), 1);
     assert_eq!(
-        app.document_state.dock.drop_preview,
+        app.document_view.dock.drop_preview,
         Some(PanelPosition::Bottom)
     );
 
     let _ = app.update(Message::Ui(UiMsg::DragEnd(iced::window::Id::unique())));
-    let dock = &app.document_state.dock;
+    let dock = &app.document_view.dock;
     assert_eq!(dock.drop_preview, None);
     assert!(dock.panel_kinds(PanelPosition::Bottom).contains(&kind));
 }
@@ -215,12 +215,12 @@ fn escape_mid_drag_clears_the_preview_and_leaves_the_panel_floating() {
     )));
     drag_to(&mut app, 10.0, 300.0);
     assert_eq!(
-        app.document_state.dock.drop_preview,
+        app.document_view.dock.drop_preview,
         Some(PanelPosition::Left)
     );
 
     let _ = app.update(Message::Input(InputMsg::EscapePressed { window: None }));
-    let dock = &app.document_state.dock;
+    let dock = &app.document_view.dock;
     assert_eq!(dock.drop_preview, None);
     assert_eq!(dock.floating.len(), 1);
     assert!(!dock.floating[0].dragging);
@@ -240,7 +240,7 @@ fn open_menus(app: &Signex) -> Vec<&'static str> {
     if i.project_tree_context_menu.is_some() {
         open.push("project-tree");
     }
-    if app.document_state.dock.tab_menu.is_some() {
+    if app.document_view.dock.tab_menu.is_some() {
         open.push("dock-tab");
     }
     if app.library.components_panel.row_menu.is_some() {
@@ -329,7 +329,7 @@ fn a_dock_menu_for_a_vanished_panel_just_dismisses() {
     // Re-open nothing: the stored panel is gone, so the pick is a no-op.
     pick(&mut app, DockTabAction::Close);
     assert_eq!(left_panels(&app).len(), before - 1);
-    assert!(app.document_state.dock.tab_menu.is_none());
+    assert!(app.document_view.dock.tab_menu.is_none());
 }
 
 /// Review of #1906: a panel dragged past the window edge detaches into its
@@ -343,12 +343,12 @@ fn detaching_a_dragged_panel_clears_the_drop_preview() {
     )));
     drag_to(&mut app, -20.0, 300.0);
     assert_eq!(
-        app.document_state.dock.drop_preview,
+        app.document_view.dock.drop_preview,
         Some(PanelPosition::Left)
     );
     let _detach = app.update(Message::Window(
         signex_app::app::WindowMsg::DetachFloatingPanel(0),
     ));
-    assert!(app.document_state.dock.floating.is_empty());
-    assert_eq!(app.document_state.dock.drop_preview, None);
+    assert!(app.document_view.dock.floating.is_empty());
+    assert_eq!(app.document_view.dock.drop_preview, None);
 }

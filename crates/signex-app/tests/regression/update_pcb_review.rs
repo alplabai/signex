@@ -131,12 +131,12 @@ fn new_pcb_remakes_a_named_board_that_is_gone() {
     send(&mut f.app, menu_row("update_pcb_from_schematic"));
     assert!(state(&f).failure().is_some(), "the board is missing");
     // The user dismisses the open-failed card, if one came up.
-    f.app.document_state.error_notice = None;
+    f.app.document_view.error_notice = None;
 
     send(&mut f.app, menu_row("new_pcb_document"));
     crate::document_setup::create_if_asked(&mut f.app);
     assert!(
-        f.app.document_state.error_notice.is_none(),
+        f.app.document_view.error_notice.is_none(),
         "New PCB is not refused"
     );
     assert!(

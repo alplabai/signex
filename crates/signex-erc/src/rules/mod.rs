@@ -48,6 +48,8 @@ mod harness;
 pub(crate) use harness::{harness_entry_mismatch, harness_type_conflict};
 mod net_class_conflict;
 pub(crate) use net_class_conflict::{conflict_finding, conflict_net, net_class_conflict};
+mod diff_pair_partner;
+pub(crate) use diff_pair_partner::diff_pair_partner_missing;
 
 use std::collections::{HashMap, HashSet};
 

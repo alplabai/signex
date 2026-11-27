@@ -227,16 +227,16 @@ fn every_machine_rules_notice_has_single_spaces() {
 fn run_erc_from_the_dialog_closes_it_and_shows_the_erc_panel() {
     use crate::panels::PanelKind;
     let mut app = workspace("run");
-    app.document_state.dock.close_panel(PanelKind::Erc);
+    app.document_view.dock.close_panel(PanelKind::Erc);
     let _ = app.handle_open_erc_dialog();
     assert!(app.ui_state.erc_dialog_open);
     assert!(!app.is_panel_open(PanelKind::Erc));
     let _ = app.update(crate::app::Message::Erc(ErcMsg::Run));
     assert!(!app.ui_state.erc_dialog_open, "the dialog closed");
     assert!(app.ui_state.erc_running, "the run started");
-    assert!(app.document_state.dock.is_frontmost(PanelKind::Erc));
+    assert!(app.document_view.dock.is_frontmost(PanelKind::Erc));
 
-    app.document_state.dock.close_panel(PanelKind::Erc);
+    app.document_view.dock.close_panel(PanelKind::Erc);
     let _ = app.update(crate::app::Message::Erc(ErcMsg::Run));
     assert!(
         !app.is_panel_open(PanelKind::Erc),

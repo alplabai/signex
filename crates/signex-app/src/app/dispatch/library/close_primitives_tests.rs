@@ -149,6 +149,7 @@ pub(super) fn mount_library_at(f: &mut Fixture, root: PathBuf) -> PathBuf {
         own_edit_stamp: None,
         display: LibraryDisplaySettings::default(),
         pricing: Default::default(),
+        provenance: Default::default(),
     });
     root
 }

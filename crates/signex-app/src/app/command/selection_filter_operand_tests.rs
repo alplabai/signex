@@ -14,7 +14,7 @@ use crate::panels::{FilterEditor, NetClassMsg, PanelContext, PanelKind, PanelMsg
 
 /// The panel context with the Filter panel following a schematic tab.
 fn on_sheet(app: &Signex) -> PanelContext {
-    let mut ctx = app.document_state.panel_ctx.clone();
+    let mut ctx = app.document_view.panel_ctx.clone();
     ctx.selection_filter.editor = FilterEditor::Schematic;
     ctx
 }
@@ -45,7 +45,7 @@ fn app() -> Signex {
         ),
         CustomFilterPreset::capture(String::new(), &set(&[SelectionFilter::Components])),
     ];
-    app.document_state.panel_ctx.custom_filter_presets =
+    app.document_view.panel_ctx.custom_filter_presets =
         app.interaction_state.custom_filter_presets.clone();
     app
 }
@@ -58,7 +58,7 @@ fn panel(app: &mut Signex, msg: SchFilterMsg) {
 /// draw from.
 fn filters(app: &Signex) -> HashSet<SelectionFilter> {
     assert_eq!(
-        app.interaction_state.selection_filters, app.document_state.panel_ctx.selection_filters,
+        app.interaction_state.selection_filters, app.document_view.panel_ctx.selection_filters,
         "the panels show the filter the canvas uses"
     );
     app.interaction_state.selection_filters.clone()
@@ -300,7 +300,7 @@ fn the_net_classes_panel_shows_the_class_table() {
     let app = net_class_app();
     let shown = texts(crate::panels::view_panel(
         PanelKind::NetClasses,
-        &app.document_state.panel_ctx,
+        &app.document_view.panel_ctx,
     ));
     for label in [
         "Name",
@@ -323,7 +323,7 @@ fn the_net_classes_panel_shows_the_class_table() {
 fn a_row_click_in_the_net_classes_panel_selects_the_class_to_edit() {
     let mut app = net_class_app();
     let clicked = crate::layout_probe::messages_on_click(
-        crate::panels::view_panel(PanelKind::NetClasses, &app.document_state.panel_ctx),
+        crate::panels::view_panel(PanelKind::NetClasses, &app.document_view.panel_ctx),
         WINDOW,
         "Signal",
     );
@@ -333,7 +333,7 @@ fn a_row_click_in_the_net_classes_panel_selects_the_class_to_edit() {
         PanelMsg::NetClass(NetClassMsg::Select(1))
     ));
     let _ = app.update(Message::Dock(DockMessage::Panel(clicked[0].clone())));
-    let shown = &app.document_state.panel_ctx.net_classes;
+    let shown = &app.document_view.panel_ctx.net_classes;
     assert_eq!(shown.selected, 1);
     assert_eq!(shown.draft.name, "Signal");
 
@@ -342,7 +342,7 @@ fn a_row_click_in_the_net_classes_panel_selects_the_class_to_edit() {
     ))));
     let classes = &app.document_state.projects[0].data.net_classes;
     assert_eq!(classes.len(), 1);
-    assert!(app.document_state.panel_ctx.net_classes.can_undo);
+    assert!(app.document_view.panel_ctx.net_classes.can_undo);
     let _ = app.update(Message::Dock(DockMessage::Panel(PanelMsg::NetClass(
         NetClassMsg::Undo,
     ))));

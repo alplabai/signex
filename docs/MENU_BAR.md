@@ -20,7 +20,10 @@ shortcut typed there does. Only some ids act on that window's own document:
 Save, Save As, Print, Close Document and the tab steppers, Undo and Redo, and
 the commands that send a canvas event (Fit All). Cut, Copy, Paste, Delete,
 Select All, Find, the Place rows, Zoom In / Out and AutoFocus still act on the
-main window's active tab, as their shortcuts do.
+main window's active tab, as their shortcuts do. Every board Tools row (Via
+Stitching, Add and Remove Teardrops, Gloss, Board Shape, Keepout, Arrange),
+Repour Selected, Repour All and the two Tune rows edit the board an undocked
+board window shows, never the main window's (#2629).
 
 A menu click that cannot run is not silent: `run_menu_command` logs a command
 the window cannot act on to the Messages panel ("Menu: <id> did nothing:
@@ -93,6 +96,8 @@ greyed.
   Check. See `SCHEMATIC_TABLES.md`.
 - Compare Board with Schematic… (`compare_board_with_schematic`, see
   [below](#project-compare-board))
+- Design Notebook ▸ Open Design Notebook, Generate from Project… (see
+  [below](#project-design-notebook))
 - Project Options... (greyed with no project, like Close Project)
 - Close Project
 
@@ -142,14 +147,18 @@ greyed with no project open; see [DRC_RULES.md](DRC_RULES.md#rules-manager), #23
 then, after a separator, Create Sheet Symbol From Sheet... and Synchronize
 Sheet Entries and Ports..., greyed with no sheet in view (see
 [Bottom-up hierarchy](#bottom-up-hierarchy), #1276). **File ▸ New** has Schematic (`new_schematic_sheet`) and PCB
-(`new_pcb_document`), each opening its setup dialog (#2232). **File ▸
+(`new_pcb_document`), each opening its setup dialog (#2232), and Block
+Diagram (`new_block_diagram`, mockup row 171, #2796): an empty `.snxblk`
+named after the project, in its folder, opened unsaved; greyed with no
+project open. **File ▸
 Import** adds DXF to Current Layer... (`import_dxf`) and DXF as Board
 Outline... (`import_dxf_outline`), greyed without a board in view; each asks
 for the file and imports it as one undo step (#2410, see
 [BOARD_IMPORT_AND_REUSE.md](BOARD_IMPORT_AND_REUSE.md)). **File ▸
 Export** has PDF…, Export BOM… (the BOM export dialog, named by its result,
-greyed without a schematic; mockup row 112, Caner 2026-11-20) and STEP 3D
-Model….
+greyed without a schematic; mockup row 112, Caner 2026-11-20), STEP 3D
+Model… and Design Notebook PDF… (see
+[Project ▸ Design Notebook](#project-design-notebook)).
 Project tree actions with no menu message or command id (add or remove a
 document, Enable Version Control, History, Validate Project) stay in the tree's
 context menu; the menu gets no stub for them.
@@ -346,6 +355,33 @@ Footprint mismatches start skipped. Apply asks first when a chosen
 row deletes from the board, then runs the PCB side as one board undo step
 and the schematic side as one undo group. Rows, defaults and Apply:
 [UPDATE_PCB.md](UPDATE_PCB.md#compare-board-with-schematic).
+
+## Project ▸ Design Notebook {#project-design-notebook}
+
+A project has one Design Notebook, `notebook/design.snxnbk` (mockup row 195).
+These rows and commands reach it; all are in the palette. Only the badges
+toggle has a default key, `B` in Signex Standard (Classic keeps `B` for
+Place Bus):
+
+| Row | Command | Greyed |
+|---|---|---|
+| Project ▸ Design Notebook ▸ Open Design Notebook | `open_design_notebook` | with no project open |
+| Project ▸ Design Notebook ▸ Generate from Project… | `generate_design_notebook` | with no project open |
+| File ▸ Export ▸ Design Notebook PDF… | `export_notebook_pdf` | with no project open |
+| View ▸ Notebook Badges, after AutoFocus, checked while the badges show | `toggle_notebook_badges` | with no sheet in view |
+
+Each acts on the project of the active document, else the active project,
+by the same rule as Design ▸ Rules. The Projects tree reaches the same
+notebook for the project it is on: Add New ▸ Design Notebook (live since
+the notebook landed; before, a planned row) and a double-click on the
+notebook's row. The row shows under a Notebook group, after PCB, once the
+project probe finds the file; a notebook that was never saved has no row.
+A palette search for "notebook" or "wiki" finds `open_design_notebook`:
+"Wiki" is the old dock panel's name (mockup row 60b). Open Design Notebook
+and Notebook Badges are window-only, so a headless run is refused with a
+reason; `generate_design_notebook` and `export_notebook_pdf` also run
+headless with operands (`docs/DESIGN_NOTEBOOK_GENERATE.md`,
+`docs/NOTEBOOK_PDF.md`). Each request is also said in Messages.
 
 ## Board Properties: designator and value {#board-properties}
 
@@ -705,6 +741,17 @@ says so. It has no command id and no default key. The panel lists the
 annotation blocks of the project's `notebook/*.snxnbk` files; see
 [NOTEBOOK_ANNOTATIONS.md](NOTEBOOK_ANNOTATIONS.md).
 
+## View ▸ Notebook Badges {#view-notebook-badges}
+
+A toggle row (`toggle_notebook_badges`, mockup row 197) after AutoFocus: it
+shows or hides the Notebook badges on every sheet and is checked while they
+show, which they do by default. It is greyed with no sheet in view, as the
+Design Notebook rows table above says; the catalog gives the command the
+same rule (`RequiresDocument(Schematic)`), so the command palette greys it
+too. B in the Signex Standard
+profile, on a schematic; Classic keeps B for Place Bus. See
+[NOTEBOOK_ANNOTATIONS.md](NOTEBOOK_ANNOTATIONS.md), "Notebook badges".
+
 ## Tools ▸ Repair Pin Junctions {#tools-repair-pin-junctions}
 
 Right after Assign Footprints, Tools ▸ Repair Pin Junctions runs
@@ -957,7 +1004,11 @@ tools…" row whose tooltip names them.
 Part Actions holds Open Datasheet, Edit Symbol and Change Component, then
 Autoplace Fields and Copy Attributes (#1667), live with one placed part
 selected. Copy Attributes copies the object at the point the menu was opened
-over, else the selected part. Sheet Actions holds Open Child Sheet, Create Sheet
+over, else the selected part. Swap Pins and Swap Gates (#1261) follow: Swap
+Pins is live when the clicked pin of the selected part has one other pin in
+its swap group, Swap Gates with two units of one part selected, or one unit
+whose gate swap group has one other gate placed on the sheet (see
+`docs/PCB_TOOLS.md`, "Pin and gate swap"). Sheet Actions holds Open Child Sheet, Create Sheet
 From Sheet Symbol, Sync Sheet Pins and Synchronize Sheet Entries and Ports...,
 live with a sheet symbol selected, then Create Sheet Symbol From Sheet... and
 Number Schematic Sheets (#1276). When the symbol's file is missing, Open Child
@@ -967,9 +1018,13 @@ the file (#2847).
 
 In variant: <name> (mockup row 62) names the project's active variant, Base
 when none is, and shows only when the project defines a variant. Its flyout is
-headed "<part> in <variant>" for one selected part. Fitted, Not fitted,
-Alternate part… and Edit value for this variant… are greyed with a "Planned"
-tooltip: changing a part's fit, part or value in one variant is not built.
+headed "<part> in <variant>" for one selected part. On a repeated sheet Fitted
+and Not fitted set this channel's copy or every channel's (#2662); on a sheet
+that is not repeated they are greyed with a "Planned" tooltip. Alternate…
+opens the Alternate part picker and Edit value for this variant… a popover on
+the part (mockup rows 208, 209; `docs/PROJECT_TAB.md`, "Alternate part and
+variant value on the canvas"); both are greyed in Base, without one part
+selected, and on a repeated sheet before a compile, each saying why.
 Show in Variant Manager opens the project's tab on its Variants section; New
 variant… opens it and adds the first free "Variant N" from Base with its name
 open for typing, as the section's `+` does.
@@ -992,7 +1047,10 @@ missing declared page no symbol places does not stop it, and keeping the net
 names rewrites nothing and is not stopped. Its Paste puts every copy on the cursor and one click places them as one undo
 step; Esc cancels. A headless run of `smart_paste` places the copy at once
 beside the sheet's content, as before; it keeps the copied net names, so an
-unread sheet does not stop it. Duplicate keeps its fixed offset.
+unread sheet does not stop it. With operands (`at`, `delta`, `copies`,
+`designators`, `nets`, `net_pattern`, `net_start`, #2665) it places the
+dialog's choices at once instead, with the dialog's checks; see
+[CLI.md](CLI.md#smart-paste). Duplicate keeps its fixed offset.
 
 ## Bottom-up hierarchy {#bottom-up-hierarchy}
 

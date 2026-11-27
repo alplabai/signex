@@ -27,11 +27,13 @@ pub type ComponentId = Uuid;
 pub type Version = u32;
 
 mod datasheet;
+mod import;
 mod library_message;
 mod placed_part;
 mod range_filter;
 pub use crate::app::core::resolved_placement::ResolvedPlacement;
 pub use datasheet::{DatasheetMsg, PickedFile, PickedPdf};
+pub use import::LibraryImportMsg;
 pub use library_message::{
     BoardPartError, LibraryMessage, ResolvedBoardPart, ResolvedSymbolChoice,
 };

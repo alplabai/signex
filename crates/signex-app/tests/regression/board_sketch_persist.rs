@@ -73,7 +73,7 @@ fn held_message(f: &Fixture) -> String {
 pub(crate) fn notice_says_held(f: &Fixture) -> bool {
     let held = held_message(f);
     f.app
-        .document_state
+        .document_view
         .error_notice
         .as_ref()
         .is_some_and(|notice| {
@@ -239,16 +239,16 @@ fn a_refused_bake_holds_save_save_all_quit_close_and_undock() {
 
     send(&mut f, Message::File(FileMsg::Save));
     assert!(notice_says_held(&f), "Ctrl+S says why it waits");
-    f.app.document_state.error_notice = None;
+    f.app.document_view.error_notice = None;
 
     send(&mut f, Message::Menu(MenuMessage::SaveAll));
     assert!(notice_says_held(&f), "Save All says why it waits");
-    f.app.document_state.error_notice = None;
+    f.app.document_view.error_notice = None;
 
     send(&mut f, Message::Window(WindowMsg::CloseMainWindow));
     assert!(f.app.ui_state.app_quit_confirm.is_none(), "no quit prompt");
     assert!(notice_says_held(&f), "the quit says why it waits");
-    f.app.document_state.error_notice = None;
+    f.app.document_view.error_notice = None;
 
     let tabs = f.app.document_state.tabs.len();
     let idx = f.app.document_state.active_tab;
@@ -260,7 +260,7 @@ fn a_refused_bake_holds_save_save_all_quit_close_and_undock() {
     );
     assert_eq!(f.app.document_state.tabs.len(), tabs, "the tab stays open");
     assert!(notice_says_held(&f), "the close says why it waits");
-    f.app.document_state.error_notice = None;
+    f.app.document_view.error_notice = None;
 
     assert!(undock(&mut f).is_none(), "the board stays docked");
     assert!(notice_says_held(&f), "the undock says why it waits");

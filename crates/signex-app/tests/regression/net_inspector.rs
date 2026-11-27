@@ -56,13 +56,13 @@ fn inspector(app: &mut Signex, msg: NetInspectorMsg) {
 /// The panel is open and lists the project's one net.
 fn assert_listed(app: &Signex) {
     assert!(
-        app.document_state
+        app.document_view
             .dock
             .locate(PanelKind::NetInspector)
             .is_some(),
         "panel open"
     );
-    let view = &app.document_state.panel_ctx.net_inspector;
+    let view = &app.document_view.panel_ctx.net_inspector;
     assert_eq!(view.status, NetListStatus::Ready);
     assert_eq!(view.total, 1, "VCC is the project's one net");
     assert_eq!(view.nets[0].name, "VCC");
@@ -74,7 +74,7 @@ fn the_menu_row_opens_the_panel_and_lists_the_projects_nets() {
     let (mut app, _a, _b) = open_project(tmp.path());
     settle(&mut app, crate::menu_support::menu_row(COMMAND));
     assert_listed(&app);
-    let vcc = &app.document_state.panel_ctx.net_inspector.nets[0];
+    let vcc = &app.document_view.panel_ctx.net_inspector.nets[0];
     assert_eq!(vcc.pins, 0, "two labels, no component pin");
     assert!(!vcc.expanded && vcc.members.is_empty());
 }
@@ -86,7 +86,7 @@ fn a_net_expands_to_its_members_on_every_sheet_and_the_filter_narrows_the_list()
     settle(&mut app, crate::menu_support::menu_row(COMMAND));
     inspector(&mut app, NetInspectorMsg::NetToggled("VCC".into()));
 
-    let vcc = &app.document_state.panel_ctx.net_inspector.nets[0];
+    let vcc = &app.document_view.panel_ctx.net_inspector.nets[0];
     assert!(vcc.expanded);
     let mut sheets: Vec<&str> = vcc.members.iter().map(|m| m.sheet.as_str()).collect();
     sheets.sort_unstable();
@@ -102,11 +102,11 @@ fn a_net_expands_to_its_members_on_every_sheet_and_the_filter_narrows_the_list()
     );
 
     inspector(&mut app, NetInspectorMsg::FilterChanged("gnd".into()));
-    let view = &app.document_state.panel_ctx.net_inspector;
+    let view = &app.document_view.panel_ctx.net_inspector;
     assert!(view.nets.is_empty(), "no net matches");
     assert_eq!(view.total, 1, "the total still counts every net");
     inspector(&mut app, NetInspectorMsg::FilterChanged("vc".into()));
-    assert_eq!(app.document_state.panel_ctx.net_inspector.nets.len(), 1);
+    assert_eq!(app.document_view.panel_ctx.net_inspector.nets.len(), 1);
 }
 
 #[test]
@@ -115,7 +115,7 @@ fn clicking_a_member_on_another_sheet_goes_there_and_highlights_the_net() {
     let (mut app, _a, b) = open_project(tmp.path());
     settle(&mut app, crate::menu_support::menu_row(COMMAND));
     inspector(&mut app, NetInspectorMsg::NetToggled("VCC".into()));
-    let on_b = app.document_state.panel_ctx.net_inspector.nets[0]
+    let on_b = app.document_view.panel_ctx.net_inspector.nets[0]
         .members
         .iter()
         .find(|m| m.sheet.contains('b'))
@@ -135,7 +135,7 @@ fn clicking_a_member_on_another_sheet_goes_there_and_highlights_the_net() {
         app.interaction_state.active_canvas().selected,
         vec![SelectedItem::new(on_b.anchor.id, SelectedKind::Label)]
     );
-    let highlight = app.document_state.net_nav.highlight.as_ref();
+    let highlight = app.document_view.net_nav.highlight.as_ref();
     assert_eq!(highlight.map(|h| h.name.as_str()), Some("VCC"));
 }
 
@@ -184,13 +184,13 @@ fn a_loose_sheet_has_no_project_nets() {
     let (mut app, _boot) = Signex::new();
     settle(&mut app, crate::menu_support::menu_row(COMMAND));
     assert!(
-        app.document_state
+        app.document_view
             .dock
             .locate(PanelKind::NetInspector)
             .is_some()
     );
     assert_eq!(
-        app.document_state.panel_ctx.net_inspector.status,
+        app.document_view.panel_ctx.net_inspector.status,
         NetListStatus::NoProject
     );
 }
@@ -199,7 +199,7 @@ fn a_loose_sheet_has_no_project_nets() {
 fn member_on_b(app: &mut Signex) -> signex_app::panels::net_inspector::NetMemberRow {
     settle(app, crate::menu_support::menu_row(COMMAND));
     inspector(app, NetInspectorMsg::NetToggled("VCC".into()));
-    app.document_state.panel_ctx.net_inspector.nets[0]
+    app.document_view.panel_ctx.net_inspector.nets[0]
         .members
         .iter()
         .find(|m| m.sheet.contains('b'))
@@ -263,7 +263,7 @@ fn a_member_that_left_its_net_is_said_and_nothing_moves() {
     );
 
     assert_eq!(app.document_state.active_path.as_deref(), Some(a.as_path()));
-    assert!(app.document_state.net_nav.highlight.is_none());
+    assert!(app.document_view.net_nav.highlight.is_none());
     assert!(
         signex_app::diagnostics::recent_entries()
             .iter()
@@ -343,7 +343,7 @@ fn switching_to_by_component_and_expanding_a_part_lists_its_pins() {
     );
     inspector(&mut app, NetInspectorMsg::ComponentToggled("U1".into()));
 
-    let view = &app.document_state.panel_ctx.net_inspector;
+    let view = &app.document_view.panel_ctx.net_inspector;
     assert_eq!(view.tab, NetInspectorTab::ByComponent);
     assert_eq!(view.component_total, 1);
     let u1 = &view.components[0];

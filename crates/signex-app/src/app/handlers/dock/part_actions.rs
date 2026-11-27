@@ -23,7 +23,7 @@ impl Signex {
     /// Properties panel in a window of its own paints the menu there.
     pub(crate) fn part_menu_site(&self) -> Option<PartMenuSite> {
         let is_open = |owner: Option<iced::window::Id>| {
-            let ctx = owner.map_or(&self.document_state.panel_ctx, |w| self.panel_ctx_for(w));
+            let ctx = owner.map_or(&self.document_view.panel_ctx, |w| self.panel_ctx_for(w));
             crate::panels::open_part_menu(ctx).is_some()
         };
         let detached = self.ui_state.windows.iter().find_map(|(id, kind)| {
@@ -45,7 +45,7 @@ impl Signex {
             });
         }
         // One menu is open at a time: a press outside one closes it.
-        (self.document_state.window_panel_ctx.keys().copied())
+        (self.document_view.window_panel_ctx.keys().copied())
             .find(|w| self.is_document_window(*w) && is_open(Some(*w)))
             .map(|window| PartMenuSite {
                 window,
@@ -78,11 +78,11 @@ impl Signex {
         // Opening the ⋯ menu closes every other menu first, as each menu's
         // open handler does; a toggle that closes it closes nothing else.
         if let PartPanelMsg::MenuToggled(part) = msg
-            && self.document_state.panel_ctx.part_panel.menu_for != Some(*part)
+            && self.document_view.panel_ctx.part_panel.menu_for != Some(*part)
         {
             self.close_all_context_menus();
         }
-        let part_panel = &mut self.document_state.panel_ctx.part_panel;
+        let part_panel = &mut self.document_view.panel_ctx.part_panel;
         let effect = part_panel.update(msg.clone());
         // The ⋯ menu opens level with the press (#3063).
         if matches!(msg, PartPanelMsg::MenuToggled(_)) && part_panel.menu_for.is_some() {
@@ -111,7 +111,7 @@ impl Signex {
     /// Fold the part sections while a pin of the selected part is focused,
     /// and give the user's state back when the focus ends.
     pub(crate) fn sync_pin_focus_sections(&mut self, is_pin_focused: bool) {
-        let ctx = &mut self.document_state.panel_ctx;
+        let ctx = &mut self.document_view.panel_ctx;
         ctx.part_panel
             .sync_pin_focus(&mut ctx.collapsed_sections, is_pin_focused);
     }

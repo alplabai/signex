@@ -28,16 +28,19 @@ pub(crate) enum DocumentKind {
     Footprint,
     Project,
     Component,
+    /// A `.snxblk` block diagram (mockup row 171), held by its slice.
+    BlockDiagram,
 }
 
 impl DocumentKind {
-    pub(crate) const ALL: [Self; 6] = [
+    pub(crate) const ALL: [Self; 7] = [
         Self::Schematic,
         Self::Pcb,
         Self::Symbol,
         Self::Footprint,
         Self::Project,
         Self::Component,
+        Self::BlockDiagram,
     ];
 
     pub(crate) const fn as_str(self) -> &'static str {
@@ -48,6 +51,7 @@ impl DocumentKind {
             Self::Footprint => "footprint",
             Self::Project => "project",
             Self::Component => "component",
+            Self::BlockDiagram => "block_diagram",
         }
     }
 
@@ -214,7 +218,7 @@ impl Signex {
         for (path, editor) in &docs.symbol_editors {
             entries.push(self.entry_of_held(
                 DocumentKey::Symbol(path.clone()),
-                DocumentId::from_uuid(editor.file.file_uuid),
+                DocumentId::from_uuid(editor.draft.file.file_uuid),
                 DocumentKind::Symbol,
                 Some(path.clone()),
                 file_stem(path),
@@ -259,6 +263,7 @@ impl Signex {
                 false,
             ));
         }
+        self.push_block_diagrams(&mut entries);
         self.push_referenced_files(&mut entries);
         entries.sort_by(|a, b| {
             (a.kind as u8, a.path.as_deref(), a.name.as_str()).cmp(&(
@@ -268,6 +273,58 @@ impl Signex {
             ))
         });
         entries
+    }
+
+    /// The open block diagrams. A diagram has no [`DocumentKey`]: its slice
+    /// saves and undoes it, and a command names it by path or id. Its
+    /// project is the open project whose folder holds it.
+    fn push_block_diagrams(&self, entries: &mut Vec<DocumentEntry>) {
+        let docs = &self.document_state;
+        let diagrams = &docs.block_diagrams;
+        for (path, editor) in &diagrams.editors {
+            let project = crate::app::block_diagram::project_holding(docs, path).map(project_ref);
+            entries.push(DocumentEntry {
+                id: Some(editor.diagram.id),
+                kind: DocumentKind::BlockDiagram,
+                key: None,
+                name: file_stem(path),
+                project,
+                loaded: true,
+                dirty: editor.is_dirty(),
+                read_only: editor.is_read_only(),
+                saving: diagrams.saving.contains(path),
+                open_in_window: false,
+                path: Some(path.clone()),
+            });
+        }
+    }
+
+    /// A `.snxblk` at `path`, inside an open project's folder, that is not
+    /// open: a command naming it opens it on demand
+    /// (`block_diagram::on_demand`). Nothing is read here; a file that is not
+    /// there fails that read. An absolute path with no `..` only.
+    pub(crate) fn unopened_block_diagram(&self, path: &Path) -> Option<DocumentEntry> {
+        let climbs = path
+            .components()
+            .any(|c| matches!(c, std::path::Component::ParentDir));
+        if !path.is_absolute() || climbs || !crate::app::block_diagram::is_block_diagram_path(path)
+        {
+            return None;
+        }
+        let project = crate::app::block_diagram::project_holding(&self.document_state, path)?;
+        Some(DocumentEntry {
+            id: None,
+            kind: DocumentKind::BlockDiagram,
+            key: None,
+            name: file_stem(path),
+            project: Some(project_ref(project)),
+            loaded: false,
+            dirty: false,
+            read_only: false,
+            saving: false,
+            open_in_window: false,
+            path: Some(path.to_path_buf()),
+        })
     }
 
     /// The files an open project references that no loaded document covers,

@@ -21,30 +21,33 @@
 
 # Documents (slice 4a).
 struct crates/signex-app/src/app/state/mod.rs DocumentState
-struct crates/signex-app/src/app/state/mod.rs LoadedProject
-struct crates/signex-app/src/app/document_ids/mod.rs DocumentIds
-struct crates/signex-app/src/app/document_ids/mod.rs HeaderRecord
+struct crates/signex-app/src/app/core/loaded_project.rs LoadedProject
+struct crates/signex-app/src/app/core/document_ids.rs DocumentIds
+struct crates/signex-app/src/app/core/document_ids.rs HeaderRecord
 # Each project's design reuse blocks and their writes (#2410).
 struct crates/signex-app/src/app/board_reuse/store.rs ReuseBlockStore
 struct crates/signex-app/src/app/board_reuse/store.rs ProjectBlocks
 enum crates/signex-app/src/app/board_reuse/store.rs ReadState
 struct crates/signex-app/src/app/board_reuse/mod.rs SavedBlock
 # Drafts: the symbol and footprint drafts (split before 4a) and their history steps.
+# The symbol draft is split (#2974): its GUI half, SymbolEditorView, is not scanned.
+struct crates/signex-app/src/app/symbol_draft.rs SymbolDraft
+# The container stays scanned so a core field added to it later is counted (#2326).
 struct crates/signex-app/src/app/documents.rs SymbolDocument
 struct crates/signex-app/src/app/symbol_history.rs SymbolHistorySnapshot
 struct crates/signex-app/src/app/documents.rs FootprintDocument
 struct crates/signex-app/src/app/documents.rs FootprintHistorySnapshot
 # Dirty state, and the disk facts a document's dirty and changed-on-disk
 # answers rest on.
-struct crates/signex-app/src/app/state/dirty.rs DirtyDocuments
+struct crates/signex-app/src/app/core/dirty_documents.rs DirtyDocuments
 struct crates/signex-app/src/persist/disk_baseline.rs ContentHash
 enum crates/signex-app/src/persist/disk_baseline.rs DiskDrift
 struct crates/signex-app/src/app/handlers/document_files/disk_poll.rs DiskPoll
 # Histories: project rules and undo groups. The project General history is
 # DocumentState::general_history (#2975); ProjectTabState is GUI-only since.
-struct crates/signex-app/src/app/state/rules_history.rs RulesHistory
-struct crates/signex-app/src/app/undo_groups.rs UndoGroupSheets
-enum crates/signex-app/src/app/undo_groups.rs UndoGroupKind
+struct crates/signex-app/src/app/core/rules_history.rs RulesHistory
+struct crates/signex-app/src/app/core/undo_groups.rs UndoGroupSheets
+enum crates/signex-app/src/app/core/undo_groups.rs UndoGroupKind
 # Owed and in-flight work (ADR-0003 D1): the agent's owed refresh, its reads
 # and outcomes, git commits waiting to run, reads, path operations, case
 # probes and imports in flight, a parked Save All settle, recovery sidecars.
@@ -63,8 +66,8 @@ struct crates/signex-app/src/app/path_ops.rs PendingPathOps
 struct crates/signex-app/src/app/path_ops.rs PendingPathOp
 struct crates/signex-app/src/app/path_ops.rs PathOpId
 enum crates/signex-app/src/app/path_ops.rs PathOpKind
-struct crates/signex-app/src/app/state/dir_case.rs DirCases
-enum crates/signex-app/src/app/state/project_case.rs CaseProbeOutcome
+struct crates/signex-app/src/app/core/dir_case.rs DirCases
+enum crates/signex-app/src/app/core/case_probe.rs CaseProbeOutcome
 struct crates/signex-app/src/app/contracts/state.rs SaveAllSettle
 enum crates/signex-app/src/app/contracts/state.rs SaveAllNext
 struct crates/signex-app/src/app/contracts/state.rs CaseVariants
@@ -92,8 +95,8 @@ struct crates/signex-app/src/app/state/mod.rs MovedProjectDir
 # diagnostics cursor and the Preferences profile manager (selection, name
 # input, confirmations). `pending_profile_update` is an "Update from profile"
 # confirmation waiting on the person, so it stays out.
-struct crates/signex-app/src/app/state/check_runs.rs CheckRuns
-struct crates/signex-app/src/app/state/check_runs.rs KeptRun
+struct crates/signex-app/src/app/core/check_runs.rs CheckRuns
+struct crates/signex-app/src/app/core/check_runs.rs KeptRun
 struct crates/signex-app/src/app/handlers/erc/erc_job.rs ErcRunOutcome
 struct crates/signex-app/src/app/handlers/erc/erc_job.rs WaivedFinding
 struct crates/signex-app/src/app/state/pcb_drc.rs PcbDrc

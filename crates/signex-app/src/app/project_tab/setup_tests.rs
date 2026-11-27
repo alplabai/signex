@@ -381,7 +381,7 @@ fn rules_the_loader_would_refuse_are_not_stored() {
         "the last good rules stay stored"
     );
     let id = app.document_state.projects[0].id;
-    let draft = app.document_state.project_tabs[&id]
+    let draft = app.document_view.project_tabs[&id]
         .setup_draft
         .as_ref()
         .unwrap();
@@ -516,7 +516,7 @@ fn re_picking_the_same_tier_restores_an_edited_fab_rule() {
 
 fn setup_draft_open(app: &Signex) -> bool {
     let id = app.document_state.projects[0].id;
-    app.document_state
+    app.document_view
         .project_tabs
         .get(&id)
         .is_some_and(|tab| tab.setup_draft.is_some())
@@ -575,7 +575,7 @@ fn a_saved_profile_edit_changes_the_profile_only() {
     );
     edit(&mut app, NewProjectMsg::ProfileEditSaved);
     assert!(
-        app.ui_state
+        app.document_state
             .setup_profiles
             .iter()
             .any(|p| p.edited && p.id == "advanced" && p.pcb.clearance_mm == 0.12),
@@ -686,7 +686,7 @@ fn the_board_rules_preview_redraws_on_a_pick_a_step_and_a_bad_drill() {
 fn saved_profile(app: &mut Signex) -> String {
     let setup = signex_types::project::ProjectSetup::default();
     signex_types::project::save_user_profile(
-        &mut app.ui_state.setup_profiles,
+        &mut app.document_state.setup_profiles,
         "Mine",
         setup.pcb,
         setup.sheet,

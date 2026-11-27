@@ -47,6 +47,9 @@ pub struct RequirementsRun {
     /// outline.
     pub board_mm: Option<(f64, f64)>,
     pub finished_at: DateTime<Utc>,
+    /// Each entry's stored value as the run checked it, in list order: a
+    /// card whose entry differs now says its edits are not checked yet.
+    pub checked: Vec<serde_json::Value>,
 }
 
 /// The Requirements section's own state: what is typed and not committed,
@@ -223,7 +226,7 @@ impl Signex {
 
     fn requirements_tab(&mut self, project_id: ProjectId) -> &mut RequirementsTabState {
         &mut self
-            .document_state
+            .document_view
             .project_tabs
             .entry(project_id)
             .or_default()
@@ -291,6 +294,7 @@ impl Signex {
         command: &ProjectRequirementCommand,
     ) -> Result<bool, RequirementProblem> {
         let document = &mut self.document_state;
+        let document_view = &mut self.document_view;
         document.note_project_clean_state(project_id);
         let Some(project) = document.projects.iter_mut().find(|p| p.id == project_id) else {
             crate::diagnostics::log_warning(
@@ -298,7 +302,7 @@ impl Signex {
             );
             return Ok(false);
         };
-        let tab = document.project_tabs.entry(project_id).or_default();
+        let tab = document_view.project_tabs.entry(project_id).or_default();
         let history = document.general_history.entry(project_id).or_default();
         let before = project.data.requirements.clone();
         if !history.apply_requirement(&mut project.data, command)? {
@@ -323,7 +327,7 @@ impl Signex {
             return Task::none();
         };
         if self
-            .document_state
+            .document_view
             .project_tabs
             .get(&project_id)
             .is_some_and(|tab| tab.requirements.running)
@@ -331,6 +335,12 @@ impl Signex {
             return Task::none();
         }
         let job = self.requirements_measured_check_job(project);
+        let checked = project
+            .data
+            .requirements
+            .iter()
+            .map(|entry| entry.raw().clone())
+            .collect();
         self.requirements_tab(project_id).running = true;
         Task::perform(
             async move {
@@ -342,6 +352,7 @@ impl Signex {
                     report: ran.map(|(report, _)| report),
                     board_mm,
                     finished_at: Utc::now(),
+                    checked,
                 }
             },
             move |run| message(project_id, RequirementsMsg::RunFinished(Arc::new(run))),

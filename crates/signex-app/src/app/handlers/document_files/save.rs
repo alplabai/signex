@@ -102,6 +102,11 @@ impl Signex {
             }
             None => None,
         };
+        if let Some(path) = self.block_diagram_tab_in_window(true) {
+            return self
+                .begin_block_diagram_save(&path)
+                .map_err(|refusal| anyhow::anyhow!(refusal.english()));
+        }
         match key {
             // A Project tab writes its `.snxprj` off the UI thread.
             Some(DocumentKey::Project(project_id)) => self.begin_project_save(project_id),
@@ -242,7 +247,7 @@ impl Signex {
         log_foreign_column_offenders(error);
         // The first failure of a save sequence is the one that explains it;
         // a follow-up write (e.g. the project file) must not replace it.
-        if self.document_state.error_notice.is_none() {
+        if self.document_view.error_notice.is_none() {
             // `context` is the caller's English log label (#2061); the error
             // chain (path line, OS error line) is the card's system block. A
             // read-only project's refusal says so in its own sentence (#2904)
@@ -252,7 +257,7 @@ impl Signex {
                 context,
                 error,
             );
-            self.document_state.error_notice = Some(notice);
+            self.document_view.error_notice = Some(notice);
         }
     }
 
@@ -265,13 +270,13 @@ impl Signex {
         context: &str,
         error: &anyhow::Error,
     ) {
-        let raised_here = self.document_state.error_notice.is_none();
+        let raised_here = self.document_view.error_notice.is_none();
         self.report_save_failure(context, error);
         if !raised_here || crate::app::read_only_project::ReadOnlyProjectSave::find(error).is_some()
         {
             return;
         }
-        if let Some(notice) = self.document_state.error_notice.as_mut() {
+        if let Some(notice) = self.document_view.error_notice.as_mut() {
             notice.detail = write_failed_sentence(path);
         }
     }

@@ -166,6 +166,7 @@ impl Signex {
     /// Every path and directory the project tree reads from the disk. Pure:
     /// the paths come from project data, so building it does no IO.
     fn project_fs_request(&self) -> crate::app::state::project_fs::ProjectFsRequest {
+        use crate::app::notebook_project::notebook_file;
         use crate::app::state::project_fs::git_marker;
         let mut request = crate::app::state::project_fs::ProjectFsRequest::default();
         for p in &self.document_state.projects {
@@ -177,8 +178,10 @@ impl Signex {
                 .chain(p.data.pcb_file.iter())
                 .chain(p.data.sheets.iter().map(|s| &s.filename));
             request.exists.extend(files.map(|f| dir.join(f)));
+            request.exists.push(notebook_file(p));
             if let Some(project_dir) = p.path.parent() {
                 request.exists.push(git_marker(project_dir));
+                request.diagram_dirs.push(p.dir().to_path_buf());
             }
             for entry in &p.data.libraries {
                 let resolved = p.data.resolve_library_path(entry);
@@ -199,7 +202,8 @@ impl Signex {
     /// carried over, the table and history flags read from the active project.
     fn net_class_panel_state(&self) -> crate::panels::NetClassPanel {
         let document = &self.document_state;
-        let mut panel = document.panel_ctx.net_classes.clone();
+        let document_view = &self.document_view;
+        let mut panel = document_view.panel_ctx.net_classes.clone();
         let project = document
             .active_project
             .and_then(|id| document.projects.iter().find(|p| p.id == id));
@@ -280,7 +284,7 @@ impl Signex {
                 }
             }
         };
-        let ctx = &mut self.document_state.panel_ctx;
+        let ctx = &mut self.document_view.panel_ctx;
         ctx.lib_symbol_names = names;
         ctx.placed_symbols = placed;
     }
@@ -301,7 +305,7 @@ impl Signex {
             key,
             active_tab,
             build_symbol_editor_panel_ctx(self).as_ref(),
-            self.document_state.panel_ctx.pre_placement.as_ref(),
+            self.document_view.panel_ctx.pre_placement.as_ref(),
         )
     }
 
@@ -351,10 +355,10 @@ impl Signex {
                 _ => None,
             };
             if let Some(context) = context {
-                self.document_state.dock.seed_for_editor(context);
+                self.document_view.dock.seed_for_editor(context);
             }
         }
-        let previous_navigator = std::mem::take(&mut self.document_state.panel_ctx.navigator);
+        let previous_navigator = std::mem::take(&mut self.document_view.panel_ctx.navigator);
         let navigator = if main_level {
             self.drop_pending_profile_update_for_other_project();
             let fs_request = self.project_fs_request();
@@ -422,10 +426,8 @@ impl Signex {
                     .map(lookup)
                     .unwrap_or((false, false, false));
 
-                // F24 — a file the project lists that is neither on disk nor
-                // held by an open or unsaved document shows as `(missing)`.
-                // Read from the cache, never the disk (#111): the off-thread
-                // probe keeps it current.
+                // F24: a listed file not on disk nor held shows `(missing)`;
+                // read from the probe's cache, never the disk (#111).
                 let fs_facts = &self.document_state.project_fs.facts;
                 let missing =
                     |filename: &str| marks.is_missing(fs_facts, &project_dir.join(filename));
@@ -454,20 +456,8 @@ impl Signex {
                                 .unwrap_or_else(|| entry.path.display().to_string()),
                         };
                         let missing = fs_facts.is_missing(&resolved);
-                        // F30 — list `.snxsym` / `.snxfpt` FILES, not
-                        // individual primitives. Each file can hold
-                        // hundreds-to-thousands of symbols, so
-                        // enumerating cached_symbols would explode the
-                        // tree. The user opens a `.snxsym` file to
-                        // browse the symbols inside it via the SCH
-                        // Library panel, not via the project tree.
-                        //
-                        // F34 (2026-05-03) — Add New ▸ Symbol Library
-                        // now opens a Save-As dialog so the user names
-                        // the file at create time and the `.snxsym`
-                        // lands on disk immediately. No in-memory
-                        // merging needed; the next refresh after the
-                        // dialog confirm picks up the new file.
+                        // F30: one row per library file, never per
+                        // primitive (a file can hold thousands).
                         let resolved_clone = resolved.clone();
                         let is_open = open_paths.contains(&resolved_clone);
                         let is_dirty = dirty_paths.contains(&resolved_clone);
@@ -492,9 +482,7 @@ impl Signex {
                         display_name: format!("{} (pending)", spec.display_name),
                         root: spec.lib_path.clone(),
                         mounted: false,
-                        // Pending entries are intentionally absent on
-                        // disk (they materialise at save time) — not
-                        // a missing-orphan situation.
+                        // Absent until save, not missing.
                         missing: false,
                         is_open: false,
                         is_dirty: false,
@@ -514,11 +502,13 @@ impl Signex {
                     pcb_file_dirty,
                     pcb_file_active,
                     pcb_file_missing,
+                    has_notebook: crate::app::notebook_project::has_notebook(p, fs_facts),
                     sheets: super::sheet_tree::project_sheet_rows(p, fs_facts, &marks),
                     libraries,
                     is_active: Some(p.id) == active_id,
                     is_dirty: dirty_paths.contains(&p.path),
                     version_control: p.data.enable_git,
+                    block_diagrams: self.block_diagram_rows(p),
                 }
             })
             .collect();
@@ -535,9 +525,9 @@ impl Signex {
             (cache.revision() != 0).then(|| (engine.instance_id(), cache.revision()))
         });
         let reuse_symbol_lists = symbol_lists_key.is_some()
-            && symbol_lists_key == self.document_state.panel_ctx.symbol_lists_key;
+            && symbol_lists_key == self.document_view.panel_ctx.symbol_lists_key;
         let kept_symbol_lists = reuse_symbol_lists.then(|| {
-            let ctx = &mut self.document_state.panel_ctx;
+            let ctx = &mut self.document_view.panel_ctx;
             (
                 std::mem::take(&mut ctx.lib_symbol_names),
                 std::mem::take(&mut ctx.placed_symbols),
@@ -547,7 +537,7 @@ impl Signex {
         // The tree is a pure function of `projects`; keep the previous one
         // (and its expand/collapse state) while they are unchanged (#1383).
         let (kept_tree, previous_projects, project_tree_builds) = {
-            let ctx = &mut self.document_state.panel_ctx;
+            let ctx = &mut self.document_view.panel_ctx;
             (
                 std::mem::take(&mut ctx.project_tree),
                 std::mem::take(&mut ctx.projects),
@@ -558,70 +548,66 @@ impl Signex {
             && (project_tree_builds > 0 || projects_panel.is_empty());
         let kept_project_tree = if tree_unchanged { kept_tree } else { vec![] };
         // Taken before the snapshot below borrows `self`.
-        let directive_panel = self.document_state.panel_ctx.directive_panel.take();
+        let directive_panel = self.document_view.panel_ctx.directive_panel.take();
         let active_schematic_snapshot = self.active_render_snapshot();
         let active_pcb_snapshot = self.active_pcb_snapshot();
 
-        let canvas_font_popup_open = self.document_state.panel_ctx.canvas_font_popup_open;
-        let properties_tab = self.document_state.panel_ctx.properties_tab;
-        let document_options = self.document_state.panel_ctx.document_options.clone();
-        let projects_view = self.document_state.panel_ctx.projects_view.clone();
-        let mut pcb_layers_ui = self.document_state.panel_ctx.pcb_layers_ui.clone();
-        let pcb_panel = self.document_state.panel_ctx.pcb_panel.clone();
-        let selection_count = self.document_state.panel_ctx.selection_count;
-        let selected_uuid = self.document_state.panel_ctx.selected_uuid;
-        let selected_kind = self.document_state.panel_ctx.selected_kind;
-        let selection_info = self.document_state.panel_ctx.selection_info.clone();
-        let multi_groups = self.document_state.panel_ctx.multi_groups.clone();
-        let placed = self.document_state.panel_ctx.placed.clone();
-        let multi_draft = self.document_state.panel_ctx.multi_draft.clone();
-        let multi_footprint_choices = self
-            .document_state
-            .panel_ctx
-            .multi_footprint_choices
-            .clone();
-        let visible_grid_draft = self.document_state.panel_ctx.visible_grid_draft.clone();
-        let snap_grid_draft = self.document_state.panel_ctx.snap_grid_draft.clone();
-        let symbol_choices = self.document_state.panel_ctx.symbol_choices.clone();
-        let footprint_choices = self.document_state.panel_ctx.footprint_choices.clone();
-        let footprint_card = self.document_state.panel_ctx.footprint_card.clone();
+        let canvas_font_popup_open = self.document_view.panel_ctx.canvas_font_popup_open;
+        let properties_tab = self.document_view.panel_ctx.properties_tab;
+        let document_options = self.document_view.panel_ctx.document_options.clone();
+        let projects_view = self.document_view.panel_ctx.projects_view.clone();
+        let mut pcb_layers_ui = self.document_view.panel_ctx.pcb_layers_ui.clone();
+        let pcb_panel = self.document_view.panel_ctx.pcb_panel.clone();
+        let selection_count = self.document_view.panel_ctx.selection_count;
+        let selected_uuid = self.document_view.panel_ctx.selected_uuid;
+        let selected_kind = self.document_view.panel_ctx.selected_kind;
+        let selection_info = self.document_view.panel_ctx.selection_info.clone();
+        let multi_groups = self.document_view.panel_ctx.multi_groups.clone();
+        let placed = self.document_view.panel_ctx.placed.clone();
+        let multi_draft = self.document_view.panel_ctx.multi_draft.clone();
+        let multi_footprint_choices = self.document_view.panel_ctx.multi_footprint_choices.clone();
+        let visible_grid_draft = self.document_view.panel_ctx.visible_grid_draft.clone();
+        let snap_grid_draft = self.document_view.panel_ctx.snap_grid_draft.clone();
+        let symbol_choices = self.document_view.panel_ctx.symbol_choices.clone();
+        let footprint_choices = self.document_view.panel_ctx.footprint_choices.clone();
+        let footprint_card = self.document_view.panel_ctx.footprint_card.clone();
         let drawing_edit_buf_page =
             active_schematic_snapshot.map(|sheet| (sheet.page.origin, sheet.paper_size.clone()));
         let drawing_edit_buf =
-            if self.document_state.panel_ctx.drawing_edit_buf_page == drawing_edit_buf_page {
-                self.document_state.panel_ctx.drawing_edit_buf.clone()
+            if self.document_view.panel_ctx.drawing_edit_buf_page == drawing_edit_buf_page {
+                self.document_view.panel_ctx.drawing_edit_buf.clone()
             } else {
                 Default::default()
             };
-        let drawing_edit_buf_for = self.document_state.panel_ctx.drawing_edit_buf_for;
-        let selected_drawing = self.document_state.panel_ctx.selected_drawing.clone();
-        let selected_drawing_placement = self.document_state.panel_ctx.selected_drawing_placement;
+        let drawing_edit_buf_for = self.document_view.panel_ctx.drawing_edit_buf_for;
+        let selected_drawing = self.document_view.panel_ctx.selected_drawing.clone();
+        let selected_drawing_placement = self.document_view.panel_ctx.selected_drawing_placement;
         let annotation = self.annotation_panel_state();
-        let selected_child_sheet = self.document_state.panel_ctx.selected_child_sheet.clone();
+        let selected_child_sheet = self.document_view.panel_ctx.selected_child_sheet.clone();
         let selected_child_sheet_file = self
-            .document_state
+            .document_view
             .panel_ctx
             .selected_child_sheet_file
             .clone();
         let child_sheet_border_picker_open =
-            self.document_state.panel_ctx.child_sheet_border_picker_open;
-        let wire_color_picker = self.document_state.panel_ctx.wire_color_picker;
-        let selected_wire_style = self.document_state.panel_ctx.selected_wire_style;
+            self.document_view.panel_ctx.child_sheet_border_picker_open;
+        let wire_color_picker = self.document_view.panel_ctx.wire_color_picker;
+        let selected_wire_style = self.document_view.panel_ctx.selected_wire_style;
         let child_sheet_fill_picker_open =
-            self.document_state.panel_ctx.child_sheet_fill_picker_open;
+            self.document_view.panel_ctx.child_sheet_fill_picker_open;
         let child_sheet_border_advanced_open = self
-            .document_state
+            .document_view
             .panel_ctx
             .child_sheet_border_advanced_open;
         let child_sheet_fill_advanced_open =
-            self.document_state.panel_ctx.child_sheet_fill_advanced_open;
+            self.document_view.panel_ctx.child_sheet_fill_advanced_open;
         let child_sheet_stroke_width_buf = self
-            .document_state
+            .document_view
             .panel_ctx
             .child_sheet_stroke_width_buf
             .clone();
-        let child_sheet_name_buf = self.document_state.panel_ctx.child_sheet_name_buf.clone();
-        let child_sheet_file_buf = self.document_state.panel_ctx.child_sheet_file_buf.clone();
+        let child_sheet_name_buf = self.document_view.panel_ctx.child_sheet_name_buf.clone();
+        let child_sheet_file_buf = self.document_view.panel_ctx.child_sheet_file_buf.clone();
         let title_block: std::collections::BTreeMap<String, String> = active_schematic_snapshot
             .map(|snapshot| {
                 snapshot
@@ -657,36 +643,36 @@ impl Signex {
             .unwrap_or_default();
         // Drafts stay with the sheet they were typed on (shown and committed
         // only there); a closed sheet's drafts are dropped.
-        self.document_state
+        self.document_view
             .drafts
             .retain_sheets(|sheet| self.document_state.engines.contains_key(sheet));
-        let drafts = self.document_state.drafts.clone();
+        let drafts = self.document_view.drafts.clone();
         let numeric_draft = self
-            .document_state
+            .document_view
             .panel_ctx
             .numeric_draft
             .clone()
             .filter(|draft| draft.is_live(self.numeric_field_state(draft.key)));
         let title_block_sheet = self.document_state.active_path.clone();
-        let collapsed_sections = self.document_state.panel_ctx.collapsed_sections.clone();
-        let part_panel = self.document_state.panel_ctx.part_panel.clone();
-        let pre_placement = self.document_state.panel_ctx.pre_placement.clone();
+        let collapsed_sections = self.document_view.panel_ctx.collapsed_sections.clone();
+        let part_panel = self.document_view.panel_ctx.part_panel.clone();
+        let pre_placement = self.document_view.panel_ctx.pre_placement.clone();
         // A typed hex code lives only while its row is on screen.
         let has_tab_form = pre_placement.is_some();
-        let color_hex_draft = (self.document_state.panel_ctx.color_hex_draft.clone())
+        let color_hex_draft = (self.document_view.panel_ctx.color_hex_draft.clone())
             .filter(|draft| draft.key.is_shown_for(selected_uuid, has_tab_form));
-        let page_format_mode = self.document_state.panel_ctx.page_format_mode;
+        let page_format_mode = self.document_view.panel_ctx.page_format_mode;
         let erc_diagnostics = self.build_erc_diagnostic_entries();
         let erc_waivers = self.erc_waiver_entries();
         let erc_violation_waivers = self.erc_violation_waiver_entries();
 
         let net_classes = self.with_board_net_classes(self.net_class_panel_state());
         let pcb_layers = self.pcb_layers_panel_state();
-        let shown_board = self.document_state.panel_ctx.pcb_layers.board.as_deref();
+        let shown_board = self.document_view.panel_ctx.pcb_layers.board.as_deref();
         pcb_layers_ui.follow_board(shown_board, &pcb_layers);
 
         let (panel_tokens, panel_theme_id) = self.panel_theme();
-        self.document_state.panel_ctx = crate::panels::PanelContext {
+        self.document_view.panel_ctx = crate::panels::PanelContext {
             projects: projects_panel,
             sym_count: active_schematic_snapshot
                 .map(|snapshot| snapshot.symbols.len())
@@ -736,7 +722,7 @@ impl Signex {
             // Editor grid back to the committed value. Seeded from
             // `ui_state.symbol_grid_style` at boot; every later write
             // goes through the Preferences handler.
-            symbol_grid_style: self.document_state.panel_ctx.symbol_grid_style,
+            symbol_grid_style: self.document_view.panel_ctx.symbol_grid_style,
             snap_hotspots: self.ui_state.snap_hotspots,
             ui_font_name: self.ui_state.ui_font_name.clone(),
             component_classes: self.ui_state.component_classes.clone(),
@@ -754,24 +740,25 @@ impl Signex {
             pcb_layers_ui,
             project_tree: kept_project_tree,
             project_tree_builds,
-            project_tree_selected: self.document_state.panel_ctx.project_tree_selected.clone(),
+            project_tree_selected: self.document_view.panel_ctx.project_tree_selected.clone(),
             navigator,
             library_row_detail: self.compute_library_row_detail(),
             component_sheet: self.compute_component_sheet(),
             pcb_nets: self.pcb_nets_summary(),
             pcb_panel,
             // Kept in step with the net index by `refresh_net_nav`.
-            net_inspector: self.document_state.panel_ctx.net_inspector.clone(),
+            net_inspector: self.document_view.panel_ctx.net_inspector.clone(),
             // Kept: `sync_unions_panel` and `refresh_harness_panel` own these.
-            unions: self.document_state.panel_ctx.unions.clone(),
-            harness: self.document_state.panel_ctx.harness.clone(),
+            unions: self.document_view.panel_ctx.unions.clone(),
+            harness: self.document_view.panel_ctx.harness.clone(),
             compiled_design: Box::new(self.compiled_design_view()),
             // Kept in step with the documents by `sync_object_list`.
-            object_list: self.document_state.panel_ctx.object_list.clone(),
+            object_list: self.document_view.panel_ctx.object_list.clone(),
             // Replaced by `sync_command_log_panel_ctx` after each change.
-            command_log: std::sync::Arc::clone(&self.document_state.panel_ctx.command_log),
+            command_log: std::sync::Arc::clone(&self.document_view.panel_ctx.command_log),
             // Kept in step with the scan and filters by `handlers/annotations.rs`.
-            annotations: std::sync::Arc::clone(&self.document_state.panel_ctx.annotations),
+            annotations: std::sync::Arc::clone(&self.document_view.panel_ctx.annotations),
+            notebook_badges: std::sync::Arc::clone(&self.ui_state.annotations.badges),
             pcb_board: self.pcb_board_summary().map(Box::new),
             layer_stack: self.layer_stack_facts(),
             polygons: self.polygon_facts(),
@@ -845,27 +832,29 @@ impl Signex {
             ),
             symbol_editor: build_symbol_editor_panel_ctx(self),
             footprint_editor: build_footprint_editor_panel_ctx(self).map(Box::new),
-            history: self.document_state.history.clone(),
+            history: self.document_view.history.clone(),
             selection_filter: self.selection_filter_facts(),
-            illustration_hover: self.document_state.panel_ctx.illustration_hover.clone(),
+            illustration_hover: self.document_view.panel_ctx.illustration_hover.clone(),
             selection_form: crate::panels::SelectionForm {
                 kinds: crate::panels::SelectionKinds::of(
                     &self.interaction_state.active_canvas().selected,
                 ),
-                ..self.document_state.panel_ctx.selection_form.clone()
+                ..self.document_view.panel_ctx.selection_form.clone()
             },
         };
         self.fill_symbol_lists(kept_symbol_lists);
         if !tree_unchanged {
-            let ctx = &mut self.document_state.panel_ctx;
+            let ctx = &mut self.document_view.panel_ctx;
             ctx.project_tree = crate::panels::build_project_tree(ctx);
             ctx.project_tree_builds = ctx.project_tree_builds.wrapping_add(1);
         }
         // Sheet N of M and the project's title block can change with it.
         self.refresh_canvas_sheet_frame();
         self.refresh_canvas_designators();
-        // The active variant, its settings or a shown sheet may have changed.
+        // The active variant, its settings, its values or a shown sheet may
+        // have changed.
         self.refresh_all_not_fitted();
+        self.refresh_all_variant_values();
     }
 }
 

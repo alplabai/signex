@@ -7,5 +7,6 @@
 pub mod board3d;
 pub mod pcb;
 pub mod pcb3d;
+pub mod scene_svg;
 pub mod schematic;
 pub mod theme;

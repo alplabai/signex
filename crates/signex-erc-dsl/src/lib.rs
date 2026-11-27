@@ -112,6 +112,7 @@ mod tests {
             key: None,
             harness: Default::default(),
             class_conflicts: vec![],
+            lone_pairs: vec![],
         }
     }
 

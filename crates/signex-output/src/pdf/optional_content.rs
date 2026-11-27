@@ -15,6 +15,9 @@ use pdf_writer::{Finish, Name, Pdf, Ref, TextStr};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum PdfLayer {
     WiresAndBuses,
+    /// Harness wires, connectors and their entries, and harness-typed sheet
+    /// entries (#2690).
+    SignalHarnesses,
     Parts,
     NetLabelsAndPorts,
     PowerPorts,
@@ -24,8 +27,9 @@ pub enum PdfLayer {
 
 impl PdfLayer {
     /// Every group, in the order the reader lists them.
-    pub const ALL: [PdfLayer; 6] = [
+    pub const ALL: [PdfLayer; 7] = [
         PdfLayer::WiresAndBuses,
+        PdfLayer::SignalHarnesses,
         PdfLayer::Parts,
         PdfLayer::NetLabelsAndPorts,
         PdfLayer::PowerPorts,
@@ -38,6 +42,7 @@ impl PdfLayer {
     pub fn group_name(self) -> &'static str {
         match self {
             PdfLayer::WiresAndBuses => "Wires and buses",
+            PdfLayer::SignalHarnesses => "Signal harnesses",
             PdfLayer::Parts => "Parts",
             PdfLayer::NetLabelsAndPorts => "Net labels and ports",
             PdfLayer::PowerPorts => "Power ports",

@@ -285,7 +285,7 @@ impl Signex {
         // one to push back. Grid size and pin selection reach the editor
         // through `LibraryDisplaySettings` when a library is opened, so
         // restoring their draft fields above is enough.
-        self.document_state.panel_ctx.symbol_grid_style = self.ui_state.symbol_grid_style;
+        self.document_view.panel_ctx.symbol_grid_style = self.ui_state.symbol_grid_style;
         // `sync_theme` re-derives the canvas colours from the saved
         // theme, clears BOTH content caches (schematic + PCB) and every
         // schematic and PCB bg cache — don't clear them again here.

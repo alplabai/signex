@@ -140,7 +140,7 @@ impl Signex {
         self.drop_placement_session();
         // Drop any configured pre-placement defaults so the next tool
         // session starts fresh instead of inheriting the previous one.
-        self.document_state.panel_ctx.pre_placement = None;
+        self.document_view.panel_ctx.pre_placement = None;
         self.interaction_state.editing_text = None;
         // Escape / right-click also cancels the net-colour pen, the
         // z-order reference picker, and any in-flight lasso —

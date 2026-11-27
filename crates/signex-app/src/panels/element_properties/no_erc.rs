@@ -74,7 +74,7 @@ mod tests {
     /// The No-ERC Properties view with `listed` rules, as `picking` says.
     fn view_with(listed: &str, picking: bool) -> (PanelContext, uuid::Uuid) {
         let (app, _boot) = crate::app::Signex::new();
-        let mut ctx = app.document_state.panel_ctx.clone();
+        let mut ctx = app.document_view.panel_ctx.clone();
         let id = uuid::Uuid::now_v7();
         ctx.selected_kind = Some(signex_types::schematic::SelectedKind::NoErcDirective);
         ctx.selected_uuid = Some(id);

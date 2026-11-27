@@ -296,7 +296,7 @@ impl Signex {
     pub(crate) fn palette_panel_ctx(&self) -> &crate::panels::PanelContext {
         match self.ui_state.command_palette.window {
             Some(window) => self.panel_ctx_for(window),
-            None => &self.document_state.panel_ctx,
+            None => &self.document_view.panel_ctx,
         }
     }
 }
@@ -390,14 +390,14 @@ mod tests {
     #[test]
     fn an_open_palette_follows_the_symbols_behind_its_rows() {
         let (mut app, _task) = Signex::new();
-        app.document_state.panel_ctx.placed_symbols = vec![symbol_row("QZX1")];
+        app.document_view.panel_ctx.placed_symbols = vec![symbol_row("QZX1")];
         let _focus = app.open_command_palette();
         app.ui_state.command_palette.query = "QZX".into();
         app.refresh_command_palette_results();
         assert_eq!(app.ui_state.command_palette.total_matches, 1);
 
         // A symbol is placed while the palette is open.
-        app.document_state.panel_ctx.placed_symbols = vec![symbol_row("QZX1"), symbol_row("QZX2")];
+        app.document_view.panel_ctx.placed_symbols = vec![symbol_row("QZX1"), symbol_row("QZX2")];
         app.refresh_command_palette_if_stale();
 
         assert_eq!(app.ui_state.command_palette.total_matches, 2);

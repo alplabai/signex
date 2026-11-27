@@ -39,6 +39,7 @@ fn make_library(dir: &Path, name: &str) -> (PathBuf, Uuid, LocalGitAdapter) {
         library: LibrarySection {
             name: name.into(),
             description: None,
+            ..Default::default()
         },
         mode: LibraryMode::default(),
         workflow: WorkflowConfig::default(),
@@ -173,6 +174,7 @@ fn owing_editor(t: &mut Two) {
         .symbol_editors
         .get_mut(&t.symbol_path)
         .unwrap()
+        .draft
         .cascade_owed = vec![uuid];
 }
 
@@ -198,7 +200,7 @@ fn closing_an_editor_that_owes_rows_keeps_the_debt_for_the_next_save() {
 
     let editor = &t.app.document_state.symbol_editors[&t.symbol_path];
     assert_eq!(
-        editor.cascade_owed,
+        editor.draft.cascade_owed,
         vec![uuid],
         "the reopened editor owes it"
     );
@@ -214,7 +216,10 @@ fn closing_an_editor_that_owes_rows_keeps_the_debt_for_the_next_save() {
         "the next save moved the row"
     );
     let editor = &t.app.document_state.symbol_editors[&t.symbol_path];
-    assert!(editor.cascade_owed.is_empty(), "nothing is owed any more");
+    assert!(
+        editor.draft.cascade_owed.is_empty(),
+        "nothing is owed any more"
+    );
 }
 
 #[test]
@@ -337,7 +342,7 @@ fn a_far_library_that_cannot_be_read_for_now_keeps_the_cascade_owed() {
     std::fs::set_permissions(&t.far, std::fs::Permissions::from_mode(mode)).unwrap();
     let editor = &t.app.document_state.symbol_editors[&t.symbol_path];
     assert_eq!(
-        editor.cascade_owed,
+        editor.draft.cascade_owed,
         vec![uuid],
         "the far rows are still owed"
     );
@@ -434,14 +439,14 @@ fn a_replaced_editors_write_clears_the_debt_it_paid() {
     t.app.seed_owed_cascade(&t.symbol_path);
     let reopened = &t.app.document_state.symbol_editors[&t.symbol_path];
     assert_eq!(
-        reopened.cascade_owed,
+        reopened.draft.cascade_owed,
         vec![uuid],
         "the reopened editor owes it"
     );
 
     settle(&mut t.app, task);
     let editor = &t.app.document_state.symbol_editors[&t.symbol_path];
-    assert!(editor.cascade_owed.is_empty(), "the write paid it");
+    assert!(editor.draft.cascade_owed.is_empty(), "the write paid it");
     assert!(!editor.is_dirty());
     assert!(!t.app.document_state.is_document_dirty(&t.symbol_path));
 }

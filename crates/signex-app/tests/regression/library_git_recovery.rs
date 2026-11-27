@@ -30,6 +30,7 @@ fn valid_snxlib_bytes(scratch: &std::path::Path) -> Vec<u8> {
         library: LibrarySection {
             name: "seed".into(),
             description: None,
+            ..Default::default()
         },
         mode: LibraryMode::default(),
         workflow: WorkflowConfig::default(),
@@ -190,14 +191,14 @@ fn skip_for_now_opens_the_library_read_only_and_refuses_an_edit() {
         "the library is read-only"
     );
 
-    app.document_state.error_notice = None;
+    app.document_view.error_notice = None;
     let task = app.update(Message::Library(LibraryMessage::BrowserAddComponent {
         library_path: snxlib.clone(),
         table: Some(TABLE.to_string()),
     }));
     crate::drive::drive(&mut app, task);
     let notice = app
-        .document_state
+        .document_view
         .error_notice
         .as_ref()
         .expect("the refused edit must say why");

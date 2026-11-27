@@ -6,10 +6,10 @@
 
 use iced::Task;
 use signex_engine::{
-    Command, ComponentChangePreview, ComponentReplacement, change_component_preview,
-    placed_unit_ids,
+    Command, ComponentChangePreview, ComponentReplacement, change_component_preview, pin_choices,
+    pin_table, placed_unit_ids,
 };
-use signex_types::schematic::{Symbol, normalized_lib_id};
+use signex_types::schematic::{PinMapping, Symbol, normalized_lib_id};
 use uuid::Uuid;
 
 use super::change_session::compare_rows;
@@ -169,6 +169,7 @@ impl Signex {
             preview,
             Vec::new(),
             ChangeScope::default(),
+            None,
         );
         Task::none()
     }
@@ -186,7 +187,8 @@ impl Signex {
     /// engine batch (one undo step), if the sheet still gives the preview
     /// the user saw; otherwise show the fresh preview instead of committing
     /// something unreviewed. A user parameter whose Keep now box is cleared
-    /// is cleared by the swap.
+    /// is cleared by the swap; a pin mapping given by hand is followed, and
+    /// one the sheet cannot follow is refused with the dialog left open.
     pub(super) fn confirm_change_component(&mut self) -> Task<Message> {
         let Some(PickerState {
             mode: PickerMode::ChangePreview(change),
@@ -204,10 +206,12 @@ impl Signex {
             preview: shown,
             dropped,
             scope,
+            pin_map,
             ..
         } = *change;
         let (target, reference) = (session.target.clone(), session.reference.clone());
-        let replacement = replacement_of(&resolved);
+        let mut replacement = replacement_of(&resolved);
+        replacement.pin_map.clone_from(&pin_map);
         let Some(doc) = self.target_document(&target) else {
             self.drop_change(&reference, "the sheet or part changed meanwhile");
             return Task::none();
@@ -227,7 +231,13 @@ impl Signex {
             crate::diagnostics::log_warning(format!(
                 "Review the changed pins and confirm again: the sheet changed since the preview of {reference}."
             ));
-            self.show_preview(session, resolved, fresh, dropped, scope);
+            self.show_preview(session, resolved, fresh, dropped, scope, pin_map);
+            return Task::none();
+        }
+        if let Some(why) = &shown.refused {
+            crate::diagnostics::log_warning(format!(
+                "Change the pin mapping of {reference}: {why}"
+            ));
             return Task::none();
         }
         let parts = match scope {
@@ -311,15 +321,16 @@ impl Signex {
     }
 
     /// Show the comparison of the placed part with `resolved`: the Now /
-    /// After table, the user parameters' Keep now boxes (`dropped` cleared)
-    /// and the Apply to choice.
-    fn show_preview(
+    /// After table, the user parameters' Keep now boxes (`dropped` cleared),
+    /// the Apply to choice and the pin mapping (`pin_map` when given by hand).
+    pub(super) fn show_preview(
         &mut self,
         session: ChangeSession,
         resolved: ResolvedPlacement,
         preview: ComponentChangePreview,
         dropped: Vec<String>,
         scope: ChangeScope,
+        pin_map: Option<PinMapping>,
     ) {
         let symbol_id = session.target.symbol_id;
         let Some(doc) = self.target_document(&session.target) else {
@@ -328,10 +339,13 @@ impl Signex {
         let Some(symbol) = doc.symbols.iter().find(|s| s.uuid == symbol_id) else {
             return;
         };
-        let replacement = replacement_of(&resolved);
+        let mut replacement = replacement_of(&resolved);
+        replacement.pin_map.clone_from(&pin_map);
         let user = replacement.user_parameters(doc, symbol_id);
         let rows = compare_rows(symbol, &replacement, &user);
         let dropped = dropped.into_iter().filter(|d| user.contains(d)).collect();
+        let pins = pin_table(doc, symbol_id, &replacement);
+        let pin_choices = pin_choices(doc, symbol_id, &replacement);
         if let Some(picker) = self.library.picker.as_mut() {
             picker.mode = PickerMode::ChangePreview(Box::new(ChangePreview {
                 session,
@@ -340,6 +354,9 @@ impl Signex {
                 rows,
                 dropped,
                 scope,
+                pin_map,
+                pins,
+                pin_choices,
             }));
         }
     }
@@ -355,12 +372,12 @@ impl Signex {
     /// they reference. A single-unit part cannot have siblings (a duplicate
     /// designator is another part, as in `group_into_parts`), and an
     /// unannotated one is a part of its own.
-    pub(super) fn change_blocker(
+    pub(crate) fn change_blocker(
         &self,
         target: &PlacedPartTarget,
         symbol: &Symbol,
     ) -> Option<String> {
-        let doc = self.target_document(target)?;
+        let doc = self.held_document(target)?;
         self.change_blocker_on(&target.sheet, doc, target.symbol_id, symbol)
     }
 
@@ -479,7 +496,10 @@ impl Signex {
     /// The undocked window showing the sheet a Change Component started on,
     /// when the main window's active sheet is another one: the dialog paints
     /// in the main window, so its follow-ups come back untagged (#1910).
-    fn undocked_window_of_change(&self, target: &PlacedPartTarget) -> Option<iced::window::Id> {
+    pub(super) fn undocked_window_of_change(
+        &self,
+        target: &PlacedPartTarget,
+    ) -> Option<iced::window::Id> {
         if self.document_state.active_path.as_deref() == Some(target.sheet.as_path()) {
             return None;
         }
@@ -488,14 +508,23 @@ impl Signex {
 
     /// The sheet of `target`, if it is still the active one on the engine
     /// the change started on and still holds the symbol.
-    fn target_document(
+    pub(super) fn target_document(
         &self,
         target: &PlacedPartTarget,
     ) -> Option<&signex_types::schematic::SchematicSheet> {
         if self.document_state.active_path.as_deref() != Some(target.sheet.as_path()) {
             return None;
         }
-        let engine = self.document_state.active_engine()?;
+        self.held_document(target)
+    }
+
+    /// The sheet of `target` while the engine the change started on holds
+    /// it and the symbol, active or not (a CLI edit names its sheet).
+    fn held_document(
+        &self,
+        target: &PlacedPartTarget,
+    ) -> Option<&signex_types::schematic::SchematicSheet> {
+        let engine = self.document_state.engines.get(&target.sheet)?;
         let doc = engine.document();
         (engine.instance_id() == target.engine_instance
             && doc.symbols.iter().any(|s| s.uuid == target.symbol_id))
@@ -515,7 +544,7 @@ impl Signex {
             .map_or_else(|| "the part".to_string(), part_name)
     }
 
-    fn drop_change(&mut self, name: &str, why: &str) {
+    pub(super) fn drop_change(&mut self, name: &str, why: &str) {
         self.library.picker = None;
         crate::diagnostics::log_warning(format!(
             "Start Change Component again: {why}, so {name} was not changed."
@@ -535,6 +564,7 @@ pub(crate) fn replacement_of(resolved: &ResolvedPlacement) -> ComponentReplaceme
         footprint: resolved.footprint.clone(),
         datasheet: resolved.datasheet.clone(),
         fields: resolved.fields.clone(),
+        pin_map: None,
     }
 }
 

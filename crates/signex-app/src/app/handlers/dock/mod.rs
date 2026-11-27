@@ -27,6 +27,7 @@ mod net_classes;
 mod note_draft_persist_tests;
 #[cfg(test)]
 mod note_draft_window_close_tests;
+pub(crate) mod panel_command;
 mod panel_controls;
 mod panel_open;
 mod part_actions;
@@ -118,6 +119,10 @@ impl Signex {
                 let task = self.handle_annotations_message(annotations_msg.clone());
                 return Task::batch([task, self.finish_update()]);
             }
+            if let crate::panels::PanelMsg::NotebookReferences(reference_msg) = panel_msg {
+                let task = self.handle_notebook_reference_message(reference_msg.clone());
+                return Task::batch([task, self.finish_update()]);
+            }
             if let crate::panels::PanelMsg::History(history_msg) = panel_msg {
                 let task = self.handle_history_panel(history_msg.clone());
                 return Task::batch([task, self.finish_update()]);
@@ -202,7 +207,7 @@ impl Signex {
             return self.finish_update();
         }
 
-        self.document_state.dock.update(msg);
+        self.document_view.dock.update(msg);
         // Persist the layout so it survives restart — only when it really
         // changed, debounced, and off the UI thread (#692).
         let persist = self.persist_dock_layout_soon();

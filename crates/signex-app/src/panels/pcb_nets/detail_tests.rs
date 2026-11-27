@@ -72,7 +72,7 @@ fn board() -> PcbBoard {
 
 fn ctx(mode: PcbPanelMode) -> PanelContext {
     let (app, _boot) = crate::app::Signex::new();
-    let mut ctx = app.document_state.panel_ctx.clone();
+    let mut ctx = app.document_view.panel_ctx.clone();
     ctx.pcb_nets = Some(PcbNetsSummary::of(&board()));
     ctx.pcb_layers.board = Some("board.snxpcb".into());
     ctx.pcb_panel.mode = mode;

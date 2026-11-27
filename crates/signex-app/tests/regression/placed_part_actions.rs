@@ -336,7 +336,7 @@ fn saving_the_edited_symbol_makes_the_placed_part_drift_so_the_update_flow_offer
     let mut pin = SymbolPin::new("4", "P4");
     pin.position = [0.0, 15.24];
     pin.part_number = 1;
-    editor.file.symbols[0].pins.push(pin);
+    editor.draft.file.symbols[0].pins.push(pin);
     editor.mark_dirty();
     settle(&mut app, Message::File(FileMsg::Save));
 
@@ -1200,6 +1200,7 @@ fn edit_symbol_on_a_stock_part_edits_a_copy_in_the_picked_library() {
             library: LibrarySection {
                 name: "Mine".into(),
                 description: None,
+                ..Default::default()
             },
             mode: LibraryMode::default(),
             workflow: WorkflowConfig::default(),

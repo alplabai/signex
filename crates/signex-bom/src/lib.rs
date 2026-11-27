@@ -3,6 +3,11 @@ use std::collections::{BTreeMap, HashMap};
 use serde::{Deserialize, Serialize};
 use signex_types::designator::compare_references;
 
+mod computed;
+pub use computed::{
+    ComputedCell, ComputedColumn, ComputedColumnError, ComputedIssue, MemberVariables,
+    apply_computed_columns, computed_issues,
+};
 mod priced;
 mod pricing;
 pub use priced::{
@@ -305,6 +310,10 @@ pub struct BomRow {
     /// The cached price, once [`apply_prices`] has run and found one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub price: Option<BomPrice>,
+    /// The cells of the computed columns (#1988), by column name, once
+    /// [`apply_computed_columns`] has run.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub computed: BTreeMap<String, ComputedCell>,
     /// The line's alternate parts (library row keys, most preferred first),
     /// once [`apply_alternates`] has run (#2938).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -366,100 +375,108 @@ fn shared_library_row(components: &[&BomComponent]) -> Option<String> {
 
 /// Build a BOM table from a normalized BOM context.
 pub fn build_table(ctx: &BomContext, opts: &BomEngineOptions) -> BomTable {
-    let mut components = ctx
-        .components
-        .iter()
-        .filter(|component| opts.admits(component))
-        .cloned()
-        .collect::<Vec<_>>();
+    build_table_with_members(ctx, opts).0
+}
 
-    components.sort_by(|a, b| compare_references(&a.reference, &b.reference));
+/// [`build_table`], with the members of each row: the indices into
+/// `ctx.components` of the parts it lists, in its designator order. The
+/// computed columns evaluate per member ([`apply_computed_columns`]).
+pub fn build_table_with_members(
+    ctx: &BomContext,
+    opts: &BomEngineOptions,
+) -> (BomTable, Vec<Vec<usize>>) {
+    let components = &ctx.components;
+    let mut admitted: Vec<usize> = (0..components.len())
+        .filter(|&index| opts.admits(&components[index]))
+        .collect();
+    admitted
+        .sort_by(|&a, &b| compare_references(&components[a].reference, &components[b].reference));
 
-    let rows = match opts.grouping {
+    let mut lines: Vec<(BomRow, Vec<usize>)> = match opts.grouping {
         BomGrouping::Grouped => {
-            let mut grouped: HashMap<GroupKey, Vec<&BomComponent>> = HashMap::new();
-
-            for component in &components {
+            let mut grouped: HashMap<GroupKey, Vec<usize>> = HashMap::new();
+            for &index in &admitted {
                 grouped
-                    .entry(GroupKey::of(component))
+                    .entry(GroupKey::of(&components[index]))
                     .or_default()
-                    .push(component);
+                    .push(index);
             }
-
-            let mut rows = grouped
+            grouped
                 .into_iter()
-                .map(|(key, grouped_components)| {
-                    let GroupKey {
-                        name,
-                        value,
-                        footprint,
-                        lib_ref,
-                        description,
-                        custom,
-                    } = key;
-                    let references = grouped_components
-                        .iter()
-                        .map(|component| component.reference.clone())
-                        .collect::<Vec<_>>();
-
-                    let fitted_qty = grouped_components
-                        .iter()
-                        .filter(|component| component.is_fitted())
-                        .count() as u32;
-                    let qty = grouped_components.len() as u32;
-
-                    BomRow {
-                        references,
-                        name,
-                        qty,
-                        fitted_qty,
-                        not_fitted_qty: qty.saturating_sub(fitted_qty),
-                        value,
-                        footprint,
-                        lib_ref,
-                        description,
-                        custom,
-                        library_row: shared_library_row(&grouped_components),
-                        price: None,
-                        alternates: Vec::new(),
-                    }
+                .map(|(key, members)| {
+                    let parts: Vec<&BomComponent> =
+                        members.iter().map(|&index| &components[index]).collect();
+                    (grouped_row(key, &parts), members)
                 })
-                .collect::<Vec<_>>();
-
-            rows.sort_by(|a, b| compare_references(first_reference(a), first_reference(b)));
-            rows
+                .collect()
         }
-        BomGrouping::Ungrouped | BomGrouping::Flat => {
-            let mut rows = components
-                .iter()
-                .map(|component| BomRow {
-                    references: vec![component.reference.clone()],
-                    name: component.name.clone(),
-                    qty: 1,
-                    fitted_qty: if component.is_fitted() { 1 } else { 0 },
-                    not_fitted_qty: if component.is_fitted() { 0 } else { 1 },
-                    value: component.value.clone(),
-                    footprint: component.footprint.clone(),
-                    lib_ref: component.lib_ref.clone(),
-                    description: component.description.clone(),
-                    custom: component.custom.clone(),
-                    library_row: component.library_row.clone(),
-                    price: None,
-                    alternates: Vec::new(),
-                })
-                .collect::<Vec<_>>();
-
-            if opts.grouping == BomGrouping::Flat {
-                rows.sort_by(|a, b| compare_references(first_reference(a), first_reference(b)));
-            }
-
-            rows
-        }
+        BomGrouping::Ungrouped | BomGrouping::Flat => admitted
+            .iter()
+            .map(|&index| (single_row(&components[index]), vec![index]))
+            .collect(),
     };
+    // Ungrouped keeps the designator order of `admitted`.
+    if opts.grouping != BomGrouping::Ungrouped {
+        lines.sort_by(|a, b| compare_references(first_reference(&a.0), first_reference(&b.0)));
+    }
+    let (rows, members): (Vec<BomRow>, Vec<Vec<usize>>) = lines.into_iter().unzip();
+    (
+        BomTable {
+            rows,
+            metadata: ctx.metadata.clone(),
+        },
+        members,
+    )
+}
 
-    BomTable {
-        rows,
-        metadata: ctx.metadata.clone(),
+/// The grouped row of the parts that share `key`.
+fn grouped_row(key: GroupKey, parts: &[&BomComponent]) -> BomRow {
+    let GroupKey {
+        name,
+        value,
+        footprint,
+        lib_ref,
+        description,
+        custom,
+    } = key;
+    let fitted_qty = parts.iter().filter(|part| part.is_fitted()).count() as u32;
+    let qty = parts.len() as u32;
+    BomRow {
+        references: parts.iter().map(|part| part.reference.clone()).collect(),
+        name,
+        qty,
+        fitted_qty,
+        not_fitted_qty: qty.saturating_sub(fitted_qty),
+        value,
+        footprint,
+        lib_ref,
+        description,
+        custom,
+        library_row: shared_library_row(parts),
+        price: None,
+        computed: BTreeMap::new(),
+        alternates: Vec::new(),
+    }
+}
+
+/// The row of one part, as Ungrouped and Flat list it.
+fn single_row(component: &BomComponent) -> BomRow {
+    let fitted = component.is_fitted();
+    BomRow {
+        references: vec![component.reference.clone()],
+        name: component.name.clone(),
+        qty: 1,
+        fitted_qty: u32::from(fitted),
+        not_fitted_qty: u32::from(!fitted),
+        value: component.value.clone(),
+        footprint: component.footprint.clone(),
+        lib_ref: component.lib_ref.clone(),
+        description: component.description.clone(),
+        custom: component.custom.clone(),
+        library_row: component.library_row.clone(),
+        price: None,
+        computed: BTreeMap::new(),
+        alternates: Vec::new(),
     }
 }
 

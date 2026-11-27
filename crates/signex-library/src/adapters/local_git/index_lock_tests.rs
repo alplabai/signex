@@ -18,6 +18,7 @@ fn manifest() -> crate::library_file::SnxlibManifest {
         library: crate::library_file::LibrarySection {
             name: "lib".into(),
             description: None,
+            ..Default::default()
         },
         mode: crate::manifest::LibraryMode::default(),
         workflow: crate::manifest::WorkflowConfig::default(),

@@ -87,7 +87,7 @@ fn an_open_outline_is_refused_with_a_toast_that_places_the_gap() {
         "the mode stays on"
     );
     assert!(
-        app.document_state.error_notice.is_none(),
+        app.document_view.error_notice.is_none(),
         "no modal card (mockup row 110)"
     );
     let gap = toast_gap(&app).expect("the toast places the gap");
@@ -176,7 +176,7 @@ fn a_refusal_off_view_goes_on_the_notice_card() {
     let session = app.interaction_state.board_sketch.as_ref().expect("on");
     assert!(session.toast.is_none());
     let card = app
-        .document_state
+        .document_view
         .error_notice
         .as_ref()
         .expect("the card")

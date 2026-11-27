@@ -227,7 +227,7 @@ impl Signex {
             let detail = signex_i18n::Translatable::new(signex_i18n::ids::NOTICE_PASTE_READ_ONLY)
                 .arg("path", target.display().to_string());
             crate::diagnostics::log_warning(format!("Paste failed: {}", detail.render_en_us()));
-            self.document_state.error_notice = Some(crate::app::state::ErrorNotice::new(
+            self.document_view.error_notice = Some(crate::app::state::ErrorNotice::new(
                 signex_i18n::ids::NOTICE_PASTE_FAILED,
                 detail,
             ));
@@ -239,7 +239,7 @@ impl Signex {
 }
 
 /// The paste-numbering rule of a Smart Paste choice.
-fn designator_rule(
+pub(crate) fn designator_rule(
     choice: crate::smart_paste::DesignatorChoice,
 ) -> crate::paste_prefs::PasteDesignators {
     match choice {
@@ -351,18 +351,40 @@ impl Signex {
         let Some(target) = self.document_state.active_path.clone() else {
             return;
         };
-        let grid = crate::canvas::grid::pitch_mm_exact(self.ui_state.grid_size_mm.max(1.27));
-        let (_, ((x0, _), (x1, _))) = preview_shapes(copied.payload.fragment());
-        let step = ((x1 - x0) / grid).ceil() * grid + grid;
-        let step = if step.is_finite() && step > 0.0 {
-            step
-        } else {
-            DEFAULT_PASTE_OFFSET_MM
-        };
+        let step = self.smart_paste_step_mm(copied.payload.fragment());
         self.ui_state.smart_paste = Some(Box::new(crate::smart_paste::SmartPasteState::new(
             target, step,
         )));
         self.refresh_smart_paste();
+    }
+
+    /// The offset and step Smart Paste starts with for `fragment`: its width
+    /// on the grid plus one grid step, so the copies do not touch.
+    pub(crate) fn smart_paste_step_mm(
+        &self,
+        fragment: &signex_types::schematic::SchematicSheet,
+    ) -> f64 {
+        let grid = crate::canvas::grid::pitch_mm_exact(self.ui_state.grid_size_mm.max(1.27));
+        let (_, ((x0, _), (x1, _))) = preview_shapes(fragment);
+        let step = ((x1 - x0) / grid).ceil() * grid + grid;
+        if step.is_finite() && step > 0.0 {
+            step
+        } else {
+            DEFAULT_PASTE_OFFSET_MM
+        }
+    }
+
+    /// The net names a paste onto `target` could join: `read`, the project's
+    /// as read, and the target sheet's as they are now.
+    pub(crate) fn paste_names_in_use(
+        &self,
+        target: &std::path::Path,
+        mut read: std::collections::HashSet<String>,
+    ) -> std::collections::HashSet<String> {
+        if let Some(live) = self.document_state.engines.get(target) {
+            read.extend(signex_net::sheet_net_names(live.document()).map(str::to_owned));
+        }
+        read
     }
 
     /// The dialog's derived text and drawing: the clipboard summary, the
@@ -408,16 +430,14 @@ impl Signex {
         let copied_nets = crate::smart_paste::plan::copied_nets(&source);
         // The project's names from the read made when the dialog opened, and
         // the target sheet's as they are now.
-        let mut names_in_use = self
+        let read = self
             .interaction_state
             .paste_counters
             .as_ref()
             .filter(|c| c.target == state.target)
             .map(|c| c.net_names.clone())
             .unwrap_or_default();
-        if let Some(live) = self.document_state.engines.get(&state.target) {
-            names_in_use.extend(signex_net::sheet_net_names(live.document()).map(str::to_owned));
-        }
+        let names_in_use = self.paste_names_in_use(&state.target, read);
         let unread_sheets = self
             .interaction_state
             .paste_unread_sheets

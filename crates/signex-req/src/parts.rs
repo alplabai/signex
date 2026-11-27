@@ -5,18 +5,30 @@
 use std::collections::HashMap;
 
 use serde_json::{Value, json};
-use signex_bom::BomTable;
+use signex_bom::{BomRow, BomTable};
 use signex_types::check::Finding;
 
 pub use signex_types::project::LIFECYCLE_STATES;
 
 use crate::Miss;
 
-/// `parts_state`. `parts` is the ungrouped BOM (one row per part).
+/// What one `parts_state` asks, past its allowed states.
+#[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct PartsScope<'a> {
+    /// The variant whose BOM is checked, as the requirement names it;
+    /// `None`: the active variant.
+    pub(crate) variant: Option<&'a str>,
+    /// Only the parts the variant fits are checked.
+    pub(crate) fitted_only: bool,
+}
+
+/// `parts_state`. `parts` is the ungrouped BOM (one row per part) of the
+/// variant `scope` names.
 pub(crate) fn parts_state(
     parts: Option<&Result<BomTable, String>>,
     row_states: &HashMap<String, String>,
     states: &[String],
+    scope: PartsScope<'_>,
 ) -> Vec<Miss> {
     if states.is_empty() {
         return vec![Miss::new(
@@ -45,13 +57,14 @@ pub(crate) fn parts_state(
         Some(Ok(table)) => table,
     };
     let allowed = states.join(", ");
-    let checked: usize = table
+    let rows: Vec<&BomRow> = table
         .rows
         .iter()
-        .map(|row| part_count(&row.references))
-        .sum();
+        .filter(|row| !scope.fitted_only || row.fitted_qty > 0)
+        .collect();
+    let checked: usize = rows.iter().map(|row| part_count(&row.references)).sum();
     let mut misses = Vec::new();
-    for row in &table.rows {
+    for row in rows {
         let designator = row.references.join(",");
         let library_row = row.library_row.as_deref();
         let state = library_row.and_then(|key| row_states.get(key));
@@ -70,6 +83,8 @@ pub(crate) fn parts_state(
             .with("allowed", json!(states))
             .with("count", json!(part_count(&row.references)))
             .with("parts", json!(checked))
+            .with("variant", json!(scope.variant))
+            .with("fitted_only", json!(scope.fitted_only))
             .about(format!("part:{designator}"));
         misses.push(miss);
     }
@@ -123,6 +138,8 @@ pub struct PartsShortfall {
     pub of: usize,
     pub allowed: Vec<String>,
     pub lines: Vec<PartMiss>,
+    /// Only fitted parts were checked, so `of` counts fitted parts.
+    pub fitted_only: bool,
 }
 
 /// `findings` read as a [`PartsShortfall`]. `None` unless there is at
@@ -152,11 +169,17 @@ pub fn parts_shortfall(findings: &[&Finding]) -> Option<PartsShortfall> {
         .and_then(Value::as_u64)
         .map_or(missed, |parts| usize::try_from(parts).unwrap_or(usize::MAX))
         .max(missed);
+    let fitted_only = first
+        .evidence
+        .get("fitted_only")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
     Some(PartsShortfall {
         missed,
         of,
         allowed,
         lines,
+        fitted_only,
     })
 }
 

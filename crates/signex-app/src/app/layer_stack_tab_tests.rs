@@ -86,7 +86,7 @@ fn the_panel_list_row_opens_the_tab_and_never_docks() {
     )));
     assert_eq!(pages(&app), 1);
     assert!(
-        app.document_state
+        app.document_view
             .dock
             .locate(PanelKind::LayerStack)
             .is_none()
@@ -191,7 +191,7 @@ fn the_unit_reads_a_typed_thickness_and_the_board_stays_in_mm() {
             unit: StackUnit::Um,
         },
     );
-    let shown = app.document_state.panel_ctx.layer_stack.clone().unwrap();
+    let shown = app.document_view.panel_ctx.layer_stack.clone().unwrap();
     let row = shown
         .stack
         .layers
@@ -232,7 +232,7 @@ fn the_drill_sub_tab_is_picked_and_lists_the_through_pair() {
             tab: StackSubTab::Drills,
         },
     );
-    let shown = app.document_state.panel_ctx.layer_stack.clone().unwrap();
+    let shown = app.document_view.panel_ctx.layer_stack.clone().unwrap();
     assert_eq!(shown.sub_tab, StackSubTab::Drills);
     assert_eq!(shown.drill_pairs.len(), 1);
     assert_eq!(shown.drill_pairs[0].span, (1, 2));

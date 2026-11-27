@@ -68,7 +68,7 @@ fn undo(app: &mut Signex, id: ProjectId, back: bool) -> bool {
 }
 
 fn tab(app: &Signex, id: ProjectId) -> &super::RequirementsTabState {
-    &app.document_state.project_tabs[&id].requirements
+    &app.document_view.project_tabs[&id].requirements
 }
 
 fn add(app: &mut Signex, id: ProjectId, kind: &'static str) {
@@ -357,7 +357,7 @@ fn the_section_renders_every_kind_an_unreadable_entry_drafts_and_a_run() {
 
     // A passed entry with nothing typed renders closed to its header.
     let state = &mut app
-        .document_state
+        .document_view
         .project_tabs
         .get_mut(&id)
         .expect("the tab")
@@ -408,6 +408,7 @@ fn the_failed_count_reads_the_last_finished_run() {
             report,
             board_mm: None,
             finished_at: chrono::Utc::now(),
+            checked: Vec::new(),
         })),
         ..RequirementsTabState::default()
     };

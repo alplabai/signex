@@ -3,7 +3,7 @@
 //! Open and Ctrl+S decide "is this the file a document already holds" with
 //! [`Signex::identity_fold_for`]; the answer comes from a probe of the
 //! document's directory that runs off the update thread. See
-//! `state/dir_case.rs` for the cache and `state/project_case.rs` for why
+//! `core/dir_case.rs` for the cache and `state/project_case.rs` for why
 //! identity and netlist keys differ on an unknown volume.
 
 use std::path::{Path, PathBuf};
@@ -218,8 +218,8 @@ impl Signex {
             }
             let message = save_skipped_message(&path);
             crate::diagnostics::log_warning(&message);
-            if self.document_state.error_notice.is_none() {
-                self.document_state.error_notice = Some(crate::app::state::ErrorNotice::save(
+            if self.document_view.error_notice.is_none() {
+                self.document_view.error_notice = Some(crate::app::state::ErrorNotice::save(
                     crate::app::state::untranslated(message),
                 ));
             }
@@ -263,7 +263,7 @@ impl Signex {
             Ok(task) => task,
             Err(error) => {
                 crate::diagnostics::log_error("Failed to open document path", &error);
-                self.document_state.error_notice = Some(crate::app::state::ErrorNotice::open(
+                self.document_view.error_notice = Some(crate::app::state::ErrorNotice::open(
                     crate::app::state::verbatim(format!("{error:#}")),
                 ));
                 // No SchematicOpened will come: a descent parked on this

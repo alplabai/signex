@@ -298,7 +298,7 @@ mod tests {
     /// `diff` open under the strip.
     fn context(diff: Option<HistoryDiff>) -> PanelContext {
         let (app, _boot) = crate::app::Signex::new();
-        let mut ctx = app.document_state.panel_ctx.clone();
+        let mut ctx = app.document_view.panel_ctx.clone();
         let history = &mut ctx.history;
         history.mode = HistoryRenderMode::Ready;
         history.repo = Some(Arc::new(HistoryRepoView {

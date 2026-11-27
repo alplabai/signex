@@ -26,6 +26,7 @@ fn app_with_library_tab(dir: &std::path::Path) -> (Signex, std::path::PathBuf, U
         library: LibrarySection {
             name: "Lib".into(),
             description: None,
+            ..Default::default()
         },
         mode: LibraryMode::default(),
         workflow: WorkflowConfig::default(),
@@ -60,6 +61,7 @@ fn app_with_library_tab(dir: &std::path::Path) -> (Signex, std::path::PathBuf, U
         pricing: Default::default(),
         own_edit_stamp: None,
         display: LibraryDisplaySettings::default(),
+        provenance: Default::default(),
     });
     app.document_state.tabs.push(TabInfo {
         title: "Lib".into(),
@@ -183,6 +185,7 @@ fn a_restored_library_tab_whose_library_was_closed_meanwhile_is_dropped() {
         pricing: Default::default(),
         own_edit_stamp: None,
         display: LibraryDisplaySettings::default(),
+        provenance: Default::default(),
     });
     crate::app::path_ops::settle_task(&mut app, task);
 

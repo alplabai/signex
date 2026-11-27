@@ -1,12 +1,21 @@
 //! Annotations panel (mockup row 165): every annotation block of the project's Design
-//! Notebook files (`notebook/*.snxnbk`), grouped by file, newest first,
-//! filtered by kind, part, status, date and text. A reference chip goes to
-//! its part or net. A pure view over [`AnnotationsView`], which
-//! `app/handlers/annotations.rs` builds from the last scan and the filters;
-//! the grammar the scan reads is in `docs/NOTEBOOK_ANNOTATIONS.md`.
+//! Notebook files (`notebook/**/*.snxnbk`, chapters included), grouped by
+//! file, newest first, filtered by kind, part, status, date and text. A row
+//! shows the block's typed id, and expanded its review record (mockup row
+//! 198, `fields`). A reference chip goes to its part or net. A pure view
+//! over [`AnnotationsView`], which `app/handlers/annotations.rs` builds from
+//! the last scan and the filters; the grammar the scan reads is in
+//! `docs/NOTEBOOK_ANNOTATIONS.md`.
 
+mod badges;
+mod fields;
 mod filters;
 mod rows;
+
+pub(crate) use badges::notebook_badges;
+pub(crate) use fields::record_fields;
+pub use fields::{FieldLabel, RowField, RowValue};
+pub use signex_notebook::Badge;
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -21,10 +30,11 @@ use signex_widgets::theme_ext::AnnotationTone;
 
 pub use signex_notebook::{
     Annotation, AnnotationKind, DateWindow, Filter, IsoDate, Reference, ScanProblem, Status,
+    Verdict,
 };
 
 use super::{PanelContext, PanelMsg};
-use crate::schematic_runtime::annotation_flags::{FlagMark, PartFlags};
+use crate::schematic_runtime::notebook_badges::NotebookBadges;
 use crate::styles::{ChromeMetrics, Radii, Spacing, TypeScale, ti, tokens::resolve};
 
 const TS: TypeScale = TypeScale::DEFAULT;
@@ -83,6 +93,12 @@ pub struct NotebookScan {
     /// Every designator of the design and where its part is; `None` when
     /// the design could not be read whole (no part is then called gone).
     pub parts: Option<PartIndex>,
+    /// The design the references resolve against (mockup row 196); `None`
+    /// when it could not be read whole.
+    pub design: Option<Arc<signex_notebook::DesignIndex>>,
+    /// Each notebook file's references and where they stand; empty without
+    /// a design.
+    pub references: Vec<crate::app::notebook_references::FileReferences>,
 }
 
 /// One notebook file and what was read from it.
@@ -148,52 +164,17 @@ pub struct AnnotationsState {
     pub target: Option<(crate::app::ProjectId, PathBuf)>,
     /// The panel was open at the last look, so a later open is a new show.
     pub shown: bool,
-    /// The flags the last scan puts on the parts of the design (mockup row 165).
-    pub flags: Arc<PartFlags>,
+    /// The Notebook badges of the last scan's design (mockup row 197): the
+    /// blocks per part and net, and the marks the canvas draws from them.
+    pub badges: Arc<Vec<Badge>>,
+    pub badge_marks: Arc<NotebookBadges>,
+    /// View ▸ Notebook Badges is off. The badges are on by default.
+    pub badges_hidden: bool,
+    /// The badge under the pointer on the sheet in view, for its card.
+    pub hovered_badge: Option<signex_notebook::BadgeTarget>,
     /// The project whose Close Project is resolving its sheets: a change of
     /// the project in view does not read its notebook meanwhile.
     pub closing: Option<crate::app::ProjectId>,
-}
-
-/// The flags of every part the scan's annotations name: per designator, one
-/// mark per kind (in kind order) with how many blocks of that kind name the
-/// part. A block naming a part twice (`#component("U1")` and
-/// `#pin("U1", "3")`) counts once.
-pub(crate) fn part_flags(scan: &NotebookScan) -> PartFlags {
-    let mut counts: HashMap<&str, [u32; AnnotationKind::ALL.len()]> = HashMap::new();
-    for annotation in scan.files.iter().flat_map(|f| &f.annotations) {
-        let Some(slot) = AnnotationKind::ALL
-            .iter()
-            .position(|&k| k == annotation.kind)
-        else {
-            continue;
-        };
-        let mut named: Vec<&str> = annotation
-            .references
-            .iter()
-            .filter_map(Reference::component)
-            .collect();
-        named.sort_unstable();
-        named.dedup();
-        for part in named {
-            counts.entry(part).or_default()[slot] += 1;
-        }
-    }
-    counts
-        .into_iter()
-        .map(|(part, by_kind)| {
-            let marks = AnnotationKind::ALL
-                .iter()
-                .zip(by_kind)
-                .filter(|(_, count)| *count > 0)
-                .map(|(&kind, count)| FlagMark {
-                    tone: tone(kind),
-                    count,
-                })
-                .collect();
-            (part.to_string(), marks)
-        })
-        .collect()
 }
 
 /// A kind chip: its count over every annotation and whether it is shown.
@@ -218,10 +199,16 @@ pub struct RefChip {
 pub struct AnnotationRow {
     pub key: RowKey,
     pub kind: AnnotationKind,
+    /// The typed id (`DEC-002`), shown in mono before the title.
+    pub id: Option<String>,
     pub title: String,
     pub snippet: String,
     pub chips: Vec<RefChip>,
     pub status: Option<Status>,
+    /// Pass, Warn or Fail of a Calculation or Measurement.
+    pub verdict: Option<Verdict>,
+    /// The review record an expanded row lists above its source.
+    pub fields: Vec<RowField>,
     pub date: Option<IsoDate>,
     pub expanded: bool,
     /// The block as written; shown when expanded.
@@ -469,59 +456,9 @@ mod tests {
 
     const WINDOW: iced::Size = iced::Size::new(320.0, 240.0);
 
-    fn scan_of(text: &str) -> NotebookScan {
-        let (annotations, problems) = signex_notebook::scan(text);
-        assert!(problems.is_empty(), "{problems:?}");
-        NotebookScan {
-            folder_found: true,
-            files: vec![NotebookFile {
-                path: PathBuf::from("notebook/bringup.snxnbk"),
-                label: "notebook/bringup.snxnbk".into(),
-                annotations,
-                problems,
-                read_error: None,
-            }],
-            unlisted: Vec::new(),
-            parts: None,
-        }
-    }
-
-    #[test]
-    fn a_part_gets_one_mark_per_kind_counting_the_blocks_that_name_it() {
-        let scan = scan_of(
-            "#annotation(kind: \"issue\")[#component(\"U3\") runs warm.]\n\
-             #annotation(kind: \"decision\")[Use the LDO for #component(\"U3\").]\n\
-             #annotation(kind: \"issue\")[#component(\"C6\") is missing near #component(\"U3\").]\n\
-             #annotation(kind: \"note\")[#component(\"U1\") pin #pin(\"U1\", \"3\") on #net(\"VBUS\").]\n",
-        );
-        let flags = part_flags(&scan);
-        let mark = |tone, count| FlagMark { tone, count };
-        assert_eq!(
-            flags.get("U3"),
-            Some(&vec![
-                mark(AnnotationTone::Issue, 2),
-                mark(AnnotationTone::Decision, 1)
-            ]),
-            "kinds in kind order, Issue before Decision"
-        );
-        assert_eq!(flags.get("C6"), Some(&vec![mark(AnnotationTone::Issue, 1)]));
-        assert_eq!(
-            flags.get("U1"),
-            Some(&vec![mark(AnnotationTone::Note, 1)]),
-            "a part and its pin in one block count once"
-        );
-        assert!(!flags.contains_key("VBUS"), "a net carries no flag");
-        assert_eq!(flags.len(), 3);
-    }
-
-    #[test]
-    fn no_annotations_no_flags() {
-        assert!(part_flags(&NotebookScan::default()).is_empty());
-    }
-
     fn ready_context() -> PanelContext {
         let (app, _boot) = crate::app::Signex::new();
-        let mut ctx = app.document_state.panel_ctx.clone();
+        let mut ctx = app.document_view.panel_ctx.clone();
         ctx.annotations = Arc::new(AnnotationsView {
             status: ListStatus::Ready,
             date: DateWindow::Last7Days,

@@ -164,15 +164,20 @@ impl Signex {
         output: BoardPdfOutput,
         path: PathBuf,
     ) -> Task<Message> {
-        let log = format!(
-            "Wrote {} ({} page(s), {} bytes)",
-            path.display(),
-            output.pages.len(),
-            output.bytes.len()
-        );
+        let log = pdf_written_log(&output, &path);
         let warnings = pdf_warnings(&output);
         self.write_export(path, output.bytes, "PDF", log, None, warnings)
     }
+}
+
+/// The Messages line of a board PDF written to `path`.
+pub(super) fn pdf_written_log(output: &BoardPdfOutput, path: &std::path::Path) -> String {
+    format!(
+        "Wrote {} ({} page(s), {} bytes)",
+        path.display(),
+        output.pages.len(),
+        output.bytes.len()
+    )
 }
 
 /// What a made PDF warns of: characters no font covers, and pages the

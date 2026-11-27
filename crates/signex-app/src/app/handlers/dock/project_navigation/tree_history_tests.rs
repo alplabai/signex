@@ -17,14 +17,14 @@ fn project_app(tmp: &Path, listed: &[&str]) -> Signex {
     let dir = tmp.to_string_lossy().into_owned();
     let mut app = app_workspace(&dir, listed);
     settle(&mut app, false);
-    let _ = app.document_state.dock.close_panel(PanelKind::History);
+    let _ = app.document_view.dock.close_panel(PanelKind::History);
     assert!(!app.is_panel_open(PanelKind::History));
     app
 }
 
 /// The first Source Documents row.
 fn first_document(app: &Signex) -> TreeKey {
-    key_of(&app.document_state.panel_ctx.project_tree, &[0, 0, 0]).expect("a document row")
+    key_of(&app.document_view.panel_ctx.project_tree, &[0, 0, 0]).expect("a document row")
 }
 
 fn show_history(app: &mut Signex, key: TreeKey) -> Task<Message> {
@@ -33,7 +33,7 @@ fn show_history(app: &mut Signex, key: TreeKey) -> Task<Message> {
 
 fn history_untouched(app: &Signex) {
     assert!(!app.is_panel_open(PanelKind::History));
-    assert!(!app.document_state.history.ui.filter.this_file_only);
+    assert!(!app.document_view.history.ui.filter.this_file_only);
     assert!(app.ui_state.pending_tree_history.is_none());
 }
 
@@ -50,13 +50,13 @@ fn show_history_on_a_closed_sheet_waits_for_its_read() {
     assert!(opening.units() > 0, "the sheet is read on a worker");
     let waiting = app.ui_state.pending_tree_history.clone();
     assert!(!app.is_panel_open(PanelKind::History), "not yet");
-    assert!(!app.document_state.history.ui.filter.this_file_only);
+    assert!(!app.document_view.history.ui.filter.this_file_only);
     assert_eq!(waiting, Some(top.clone()));
     run_to_end(&mut app, opening);
     assert_eq!(app.history_target_path(), Some(top));
     assert!(app.is_panel_open(PanelKind::History));
-    assert!(app.document_state.history.ui.filter.this_file_only);
-    let shown = &app.document_state.panel_ctx.history;
+    assert!(app.document_view.history.ui.filter.this_file_only);
+    let shown = &app.document_view.panel_ctx.history;
     assert!(shown.ui.filter.this_file_only, "the panel reads it");
     assert!(app.ui_state.pending_tree_history.is_none());
 }
@@ -66,7 +66,7 @@ fn show_history_on_a_file_that_fails_to_open_leaves_the_panel_as_it_was() {
     let tmp = tempfile::tempdir().expect("tempdir");
     let mut app = project_app(tmp.path(), &["gone.snxsch"]);
     let key = first_document(&app);
-    let tree = app.document_state.panel_ctx.project_tree.as_slice();
+    let tree = app.document_view.panel_ctx.project_tree.as_slice();
     let row = signex_widgets::tree_view::get_node(tree, &[0, 0, 0]).expect("the row");
     assert!(row.label.starts_with("gone.snxsch"));
 

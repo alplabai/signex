@@ -95,7 +95,7 @@ fn a_typed_hex_colour_is_a_board_colour_and_one_undo_step() {
         None,
         "the view state holds no colour"
     );
-    let panel = &app.document_state.panel_ctx.pcb_layers;
+    let panel = &app.document_view.panel_ctx.pcb_layers;
     assert_eq!(panel.colour(BOTTOM), iced::Color::from_rgb8(255, 0, 255));
     assert_eq!(panel.hex_of(BOTTOM), "#FF00FF");
 
@@ -128,7 +128,7 @@ fn a_swatch_and_palette_colour_are_board_undo_steps() {
 
     // The swatch closed the card; open it again for Palette colour.
     layers(&mut app, LayersPanelMsg::ColourChipToggled(BOTTOM));
-    let ctx = app.document_state.panel_ctx.clone();
+    let ctx = app.document_view.panel_ctx.clone();
     let sent = messages_on_click(view_panel(PanelKind::Layers, &ctx), PANEL, "Palette color");
     assert!(
         matches!(
@@ -187,7 +187,7 @@ fn redo(app: &mut Signex) {
 
 /// The text of the open card's hex field.
 fn hex_field(app: &Signex) -> String {
-    app.document_state.panel_ctx.pcb_layers_ui.hex.clone()
+    app.document_view.panel_ctx.pcb_layers_ui.hex.clone()
 }
 
 /// An undo or a redo while the card is open puts the layer's colour back in
@@ -204,7 +204,7 @@ fn an_undo_or_redo_with_the_card_open_rereads_the_hex_field() {
 
     undo(&mut app);
     assert_eq!(board_colour(&app, &path, BOTTOM), None);
-    let ui = &app.document_state.panel_ctx.pcb_layers_ui;
+    let ui = &app.document_view.panel_ctx.pcb_layers_ui;
     assert_eq!(ui.picker, Some(BOTTOM), "the card stays open");
     assert_eq!(
         hex_field(&app),
@@ -230,7 +230,7 @@ fn a_switch_of_board_closes_the_colour_card() {
     let (mut app, first) = app_with_board(dir.path());
     layers(&mut app, LayersPanelMsg::ColourChipToggled(BOTTOM));
     assert_eq!(
-        app.document_state.panel_ctx.pcb_layers_ui.picker,
+        app.document_view.panel_ctx.pcb_layers_ui.picker,
         Some(BOTTOM)
     );
 
@@ -238,7 +238,7 @@ fn a_switch_of_board_closes_the_colour_card() {
     app.open_pcb_tab(second.clone(), "second".into(), board());
     assert_eq!(app.active_tab_path(), Some(second.clone()));
     assert_eq!(
-        app.document_state.panel_ctx.pcb_layers_ui.picker, None,
+        app.document_view.panel_ctx.pcb_layers_ui.picker, None,
         "the card closed with the switch"
     );
     layers(&mut app, LayersPanelMsg::HexEdited("#FF00FF".to_string()));

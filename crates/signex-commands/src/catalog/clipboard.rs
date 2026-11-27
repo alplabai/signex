@@ -1,8 +1,26 @@
 //! Clipboard commands: copy, cut, the paste variants, duplicate, delete
 //! and rubber-stamp copies of the selection.
 
-use super::{CommandFlags, CommandGroup, CommandMetadata, Enablement};
+use super::operands::optional;
+use super::{CommandFlags, CommandGroup, CommandMetadata, Enablement, Operand, OperandKind};
 use signex_i18n_ids::command_ids;
+
+/// The Smart Paste dialog's answer (#2665, mockup row 155), placed at once:
+/// `at` where the click lands (else the copy's own place), `delta` the offset
+/// of copy 1 and the step between copies (`<x>,<y>` mm), `copies` an array's
+/// count, `designators` `next_free` or `keep_if_free`, `nets` `keep` or
+/// `rewrite` with `net_pattern` and `net_start`. Left out, a choice is the
+/// dialog's default.
+const SMART_PASTE: &[Operand] = &[
+    optional("at", OperandKind::Point),
+    optional("delta", OperandKind::Text),
+    optional("copies", OperandKind::Text),
+    optional("designators", OperandKind::Text),
+    optional("nets", OperandKind::Text),
+    optional("net_pattern", OperandKind::Text),
+    optional("net_start", OperandKind::Text),
+    optional("document", OperandKind::Document),
+];
 
 pub(super) const CLIPBOARD: &[CommandMetadata] = &[
     CommandMetadata {
@@ -63,6 +81,7 @@ pub(super) const CLIPBOARD: &[CommandMetadata] = &[
         group: CommandGroup::General,
         enable: Enablement::Always,
         flags: CommandFlags::MUTATES,
+        operands: SMART_PASTE,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {

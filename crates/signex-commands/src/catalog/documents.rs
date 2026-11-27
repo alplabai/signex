@@ -1,8 +1,30 @@
 //! Document commands: create, open, save, revert, close and print a
 //! document or project, plus the project options and report dialogs.
 
-use super::{CommandFlags, CommandGroup, CommandMetadata, DocumentKind, Enablement, operands};
+use super::operands::{Operand, OperandKind, optional, required};
+use super::{
+    CommandFlags, CommandGroup, CommandMetadata, DocumentKind, Enablement, operands,
+    variant_operands,
+};
 use signex_i18n_ids::{command_ids, menu_ids};
+
+/// A block diagram written as SVG or PDF (#2796): the `.snxblk` and the
+/// file; `kind` is `svg` or `pdf` (else the file's extension), `monochrome`
+/// draws every mark in black, `title_block=false` leaves the PDF's off.
+const BLOCK_DIAGRAM_EXPORT: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("path", OperandKind::Path),
+    optional("kind", OperandKind::Text),
+    optional("monochrome", OperandKind::Bool),
+    optional("title_block", OperandKind::Bool),
+    // A PDF's pages (`blocks,power_tree,budget`), its paper
+    // (`a4|a3|a2|letter|tabloid`), `landscape|portrait`, and the variant
+    // the power tree pages read (mockup row 171).
+    optional("pages", OperandKind::Text),
+    optional("paper", OperandKind::Text),
+    optional("orientation", OperandKind::Text),
+    optional("variant", OperandKind::Text),
+];
 
 pub(super) const DOCUMENTS: &[CommandMetadata] = &[
     CommandMetadata {
@@ -302,6 +324,21 @@ pub(super) const DOCUMENTS: &[CommandMetadata] = &[
         operands: super::operands::BOARD_STEP,
         ..CommandMetadata::DEFAULT
     },
+    // #2796, mockup row 171: a block diagram (`.snxblk`) as an SVG or PDF
+    // file. In a window it asks for the diagram and the file; headless it
+    // writes `document` to `path`. No menu row: the diagram tab's toolbar
+    // (mockup row 171) is its home.
+    CommandMetadata {
+        id: "export_block_diagram",
+        category: "reports",
+        label: command_ids::CMD_EXPORT_BLOCK_DIAGRAM,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: BLOCK_DIAGRAM_EXPORT,
+        ..CommandMetadata::DEFAULT
+    },
     CommandMetadata {
         id: "project_settings",
         category: "design",
@@ -368,6 +405,87 @@ pub(super) const DOCUMENTS: &[CommandMetadata] = &[
         operands: operands::PROJECT_ACTIVE_VARIANT,
         ..CommandMetadata::DEFAULT
     },
+    // #2949: the Variant Manager's variant defaults, Compare variants and
+    // Open in BOM Studio.
+    CommandMetadata {
+        id: "project_set_default_variant",
+        category: "design",
+        label: command_ids::CMD_PROJECT_SET_DEFAULT_VARIANT,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::MUTATES,
+        operands: operands::PROJECT_DEFAULT_VARIANT,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "compare_variants",
+        category: "design",
+        label: command_ids::CMD_COMPARE_VARIANTS,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: operands::COMPARE_VARIANTS,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "variant_bom",
+        category: "design",
+        label: command_ids::CMD_VARIANT_BOM,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: operands::VARIANT_BOM,
+        ..CommandMetadata::DEFAULT
+    },
+    // #3038: the Variant Manager's part edits and Duplicate, each a General
+    // step of the project.
+    CommandMetadata {
+        id: "project_set_variant_fit",
+        category: "design",
+        label: command_ids::CMD_PROJECT_SET_VARIANT_FIT,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::MUTATES,
+        operands: variant_operands::PROJECT_VARIANT_FIT,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "project_set_variant_alternate",
+        category: "design",
+        label: command_ids::CMD_PROJECT_SET_VARIANT_ALTERNATE,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::MUTATES,
+        operands: variant_operands::PROJECT_VARIANT_ALTERNATE,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "project_set_variant_override",
+        category: "design",
+        label: command_ids::CMD_PROJECT_SET_VARIANT_OVERRIDE,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::MUTATES,
+        operands: variant_operands::PROJECT_VARIANT_OVERRIDE,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "project_duplicate_variant",
+        category: "design",
+        label: command_ids::CMD_PROJECT_DUPLICATE_VARIANT,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::MUTATES,
+        operands: variant_operands::PROJECT_DUPLICATE_VARIANT,
+        ..CommandMetadata::DEFAULT
+    },
     CommandMetadata {
         id: "project_move_library",
         category: "design",
@@ -388,6 +506,18 @@ pub(super) const DOCUMENTS: &[CommandMetadata] = &[
         enable: Enablement::Always,
         flags: CommandFlags::MUTATES,
         operands: operands::PROJECT_ANNOTATE_UNDO,
+        ..CommandMetadata::DEFAULT
+    },
+    // #1292: the project's annotation numbering scheme.
+    CommandMetadata {
+        id: "project_set_annotate_numbering",
+        category: "design",
+        label: command_ids::CMD_PROJECT_SET_ANNOTATE_NUMBERING,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::MUTATES,
+        operands: operands::PROJECT_ANNOTATE_NUMBERING,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {

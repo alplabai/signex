@@ -33,6 +33,9 @@ pub enum EngineError {
         parts.join(", ")
     )]
     ChangeComponentUnitMissing { parts: Vec<String> },
+    /// The pin mapping given by hand cannot be followed (#2954).
+    #[error("component change refused, {detail}")]
+    ChangeComponentPins { detail: String },
     #[error("a sheet symbol needs a name")]
     EmptyChildSheetName,
     #[error("sheet file '{0}' must end in .snxsch")]
@@ -67,6 +70,9 @@ pub enum EngineError {
     OpenFailed(#[source] anyhow::Error),
     #[error("designator counter for prefix {prefix:?} would pass u32::MAX; annotate refused")]
     DesignatorOverflow { prefix: String },
+    /// A page numbering scheme (#1292) could not hand out a `prefix` number.
+    #[error("no {prefix} designator left for this sheet: {reason}; annotate refused")]
+    DesignatorBlock { prefix: String, reason: String },
     #[error("failed to save schematic: {0}")]
     SaveFailed(#[source] std::io::Error),
     #[error("this symbol has no stored {0} text, so it cannot take a font family")]

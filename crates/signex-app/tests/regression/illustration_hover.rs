@@ -21,7 +21,7 @@ fn hover(app: &mut Signex, msg: IllustrationMsg) {
 
 /// Whether the panel shows the row of `field` lit now.
 fn is_lit(app: &Signex, field: &FieldId) -> bool {
-    let ctx = &app.document_state.panel_ctx;
+    let ctx = &app.document_view.panel_ctx;
     ctx.illustration_hover
         .for_subject(HoverSubject::of(ctx))
         .is_some_and(|h| h.is_field_highlighted(field))
@@ -32,7 +32,7 @@ fn a_field_hover_lights_its_row_until_it_leaves() {
     let mut app = app_with_empty_sheet();
     let _ = app.update(Message::Tool(ToolMessage::SelectTool(Tool::Wire)));
     let _ = app.update(Message::Tool(ToolMessage::PrePlacementTab));
-    assert!(app.document_state.panel_ctx.pre_placement.is_some());
+    assert!(app.document_view.panel_ctx.pre_placement.is_some());
 
     hover(&mut app, IllustrationMsg::FieldHovered(WIDTH));
     assert!(is_lit(&app, &WIDTH), "the hovered field is lit");
@@ -50,6 +50,6 @@ fn a_hover_of_another_subject_reads_as_none() {
     assert!(is_lit(&app, &WIDTH));
 
     // The Tab form closes: the panel shows another subject.
-    app.document_state.panel_ctx.pre_placement = None;
+    app.document_view.panel_ctx.pre_placement = None;
     assert!(!is_lit(&app, &WIDTH), "a stale hover lights nothing");
 }

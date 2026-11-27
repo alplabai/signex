@@ -398,6 +398,9 @@ define_ids! {
     LIBRARY_BROWSER_SEARCH = "library-browser-search";
     LIBRARY_BROWSER_ADD_COMPONENT = "library-browser-add-component";
     LIBRARY_BROWSER_SUMMARY = "library-browser-summary";
+    LIBRARY_BROWSER_LICENSE = "library-browser-license";
+    LIBRARY_BROWSER_SOURCE = "library-browser-source";
+    LIBRARY_REQUIRES_MISSING = "library-requires-missing";
     LIBRARY_BROWSER_SHOW = "library-browser-show";
     LIBRARY_BROWSER_SHOWN = "library-browser-shown";
     LIBRARY_BROWSER_SHOWN_SORTED = "library-browser-shown-sorted";
@@ -1009,6 +1012,7 @@ define_ids! {
     UPDATE_PCB_VALIDATE = "update-pcb-validate";
     UPDATE_PCB_EXECUTE = "update-pcb-execute";
     UPDATE_PCB_DONE = "update-pcb-done";
+    UPDATE_PCB_PADS_LOCKED = "update-pcb-pads-locked";
     UPDATE_PCB_REFUSED = "update-pcb-refused";
     UPDATE_PCB_COMMAND_MODE = "update-pcb-command-mode";
     UPDATE_PCB_BUSY = "update-pcb-busy";

@@ -54,7 +54,7 @@ fn at(i: f64, j: f64) -> String {
 #[test]
 fn a_click_places_what_the_persons_form_holds() {
     let mut app = app_with_tool(Tool::Label);
-    app.document_state.panel_ctx.pre_placement = Some(persons_form(PrePlacementKind::Other));
+    app.document_view.panel_ctx.pre_placement = Some(persons_form(PrePlacementKind::Other));
     let p = grid(8.0, 16.0);
     click(&mut app, (p.x, p.y));
     let label = &doc(&app).labels[0];
@@ -68,7 +68,7 @@ fn a_click_places_what_the_persons_form_holds() {
     );
 
     let mut app = app_with_tool(Tool::Rectangle);
-    app.document_state.panel_ctx.pre_placement = Some(persons_form(PrePlacementKind::Other));
+    app.document_view.panel_ctx.pre_placement = Some(persons_form(PrePlacementKind::Other));
     for p in [grid(8.0, 16.0), grid(24.0, 24.0)] {
         click(&mut app, (p.x, p.y));
     }
@@ -80,7 +80,7 @@ fn a_click_places_what_the_persons_form_holds() {
     }
 
     let mut app = app_with_tool(Tool::Wire);
-    app.document_state.panel_ctx.pre_placement = Some(persons_form(PrePlacementKind::Wire));
+    app.document_view.panel_ctx.pre_placement = Some(persons_form(PrePlacementKind::Wire));
     for p in [grid(0.0, 10.0), grid(10.0, 10.0)] {
         click(&mut app, (p.x, p.y));
     }
@@ -104,7 +104,7 @@ fn project_app(form: PrePlacementKind) -> (Signex, String, tempfile::TempDir) {
     defaults.shape_stroke_mm = Some(0.3);
     defaults.shape_fill = Some(FillType::Background);
     defaults.font_family = Some("Roboto".into());
-    app.document_state.panel_ctx.pre_placement = Some(persons_form(form));
+    app.document_view.panel_ctx.pre_placement = Some(persons_form(form));
     let document = format!("document={}", sheet.display());
     (app, document, dir)
 }

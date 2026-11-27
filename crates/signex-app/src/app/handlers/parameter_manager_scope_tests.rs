@@ -372,7 +372,7 @@ fn on_a_placed_child_sheet_every_list_names_the_placement_designator() {
     };
     let engine = signex_engine::Engine::new(child).expect("engine");
     app.document_state.engines.insert(PathBuf::from(B), engine);
-    app.document_state
+    app.document_view
         .tab_placements
         .record(&PathBuf::from(B), Some(second));
     edit_across_sheets(&mut app);

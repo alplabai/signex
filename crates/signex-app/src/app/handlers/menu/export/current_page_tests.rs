@@ -51,7 +51,7 @@ fn current_page_on_an_undeclared_child_renders_the_child() {
         &issues,
         &app.document_state,
         &child,
-        app.document_state.tab_placements.get(&child),
+        app.document_view.tab_placements.get(&child),
         &PageRange::Current
     ));
 
@@ -79,7 +79,7 @@ fn other_ranges_and_declared_pages_are_left_alone() {
         &issues,
         &app.document_state,
         &child,
-        app.document_state.tab_placements.get(&child),
+        app.document_view.tab_placements.get(&child),
         &PageRange::All
     ));
     let top = Path::new("/w/a").join("top.snxsch");
@@ -89,7 +89,7 @@ fn other_ranges_and_declared_pages_are_left_alone() {
         &issues,
         &app.document_state,
         &top,
-        app.document_state.tab_placements.get(&top),
+        app.document_view.tab_placements.get(&top),
         &PageRange::Current
     ));
 }
@@ -116,7 +116,7 @@ fn the_preview_rasterises_its_source_after_a_tab_switch() {
     app.document_state.active_path = Some(b);
     let _ = app.handle_print_preview_rerender();
 
-    let preview = app.document_state.preview.as_ref().expect("preview");
+    let preview = app.document_view.preview.as_ref().expect("preview");
     let files: Vec<&PathBuf> = preview.sheet_files.iter().map(|(p, _)| &p.0).collect();
     assert_eq!(files, vec![&a], "the picker and pages stay on the source");
 }

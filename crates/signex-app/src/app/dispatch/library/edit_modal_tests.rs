@@ -82,6 +82,7 @@ fn app_with_browser() -> (Signex, PathBuf, RowId) {
         own_edit_stamp: None,
         display: LibraryDisplaySettings::default(),
         pricing: Default::default(),
+        provenance: Default::default(),
     });
     app.library
         .library_browsers

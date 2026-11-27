@@ -37,7 +37,7 @@ fn a_refused_exclude_reaches_the_messages_panel() {
 
     assert_eq!(confirmed.units(), 0);
     assert!(
-        app.document_state
+        app.document_view
             .panel_ctx
             .diagnostics
             .iter()

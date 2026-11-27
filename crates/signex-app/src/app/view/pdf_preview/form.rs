@@ -420,7 +420,7 @@ impl Signex {
         summary: Option<Label<'a>>,
         body: impl FnOnce() -> Element<'a, Message>,
     ) -> Element<'a, Message> {
-        let look = Look::of(&self.document_state.panel_ctx.tokens);
+        let look = Look::of(&self.document_view.panel_ctx.tokens);
         let is_open = preview.dialog.sections.is_open(section);
         let mut col: iced::widget::Column<Element<'a, Message>> = column![].width(Length::Fill);
         if section != PdfSection::Sheets {
@@ -456,7 +456,7 @@ impl Signex {
         is_open: bool,
     ) -> Element<'a, Message> {
         let i18n = self.ui_state.i18n.as_ref();
-        let look = Look::of(&self.document_state.panel_ctx.tokens);
+        let look = Look::of(&self.document_view.panel_ctx.tokens);
         let title = i18n.upper_for_display(&i18n.message_plain(title, &[]));
         let is_new = is_new(section);
         let mut line = row![

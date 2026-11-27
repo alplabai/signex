@@ -23,6 +23,9 @@ pub struct SheetNumberingState {
     pub(crate) child_sheets: ChildSheetSignature,
     /// The name manual entries are scoped to.
     pub(crate) project_name: String,
+    /// The sheet the project was found from. A stale read starts again from
+    /// it, never from what the main window shows by then (#2629).
+    pub(crate) source: PathBuf,
     /// `None` while the read runs.
     pub(crate) read: Option<Arc<NumberingRead>>,
     /// The number typed for each row, as text.
@@ -118,12 +121,14 @@ impl SheetNumberingState {
         epoch: u64,
         child_sheets: ChildSheetSignature,
         project_name: String,
+        source: PathBuf,
     ) -> Self {
         Self {
             generation,
             epoch,
             child_sheets,
             project_name,
+            source,
             read: None,
             drafts: Vec::new(),
             clear_manual: false,

@@ -160,6 +160,14 @@ impl Signex {
             self.commit_text_edit(state);
             return Task::none();
         }
+        // Mockup row 197: a click on a Notebook badge opens the notebook at
+        // its first block instead of selecting.
+        if self.interaction_state.current_tool == Tool::Select
+            && self.interaction_state.placement.is_none()
+            && let Some(task) = self.click_notebook_badge(world_x, world_y)
+        {
+            return task;
+        }
         let (wx, wy) = if self.interaction_state.current_tool == Tool::Wire {
             self.snap_wire_point(self.active_render_snapshot(), world_x, world_y)
         } else {
@@ -275,7 +283,7 @@ impl Signex {
             }
             Tool::Text => {
                 let note_text = self
-                    .document_state
+                    .document_view
                     .panel_ctx
                     .pre_placement
                     .as_ref()

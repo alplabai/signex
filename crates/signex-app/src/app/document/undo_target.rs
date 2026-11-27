@@ -75,7 +75,7 @@ impl Signex {
             UndoTarget::Document(key) => match key {
                 DocumentKey::Symbol(path) => {
                     docs.symbol_editors.get(path).map_or((false, false), |e| {
-                        (e.history.can_undo(), e.history.can_redo())
+                        (e.draft.history.can_undo(), e.draft.history.can_redo())
                     })
                 }
                 DocumentKey::Footprint(path) => docs

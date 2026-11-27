@@ -75,7 +75,7 @@ define_ids! {
     PREFERENCES_PAGE_LANGUAGE = "preferences-page-language";
     PREFERENCES_LANGUAGE_FOOTER_NOTE = "preferences-language-footer-note";
     PREFERENCES_RULE_PROFILES_FOOTER_NOTE = "preferences-rule-profiles-footer-note";
-    PREFERENCES_FILE_WHERE = "preferences-file-where";
+    PREFERENCES_FILE_REASON = "preferences-file-reason";
     PREFERENCES_FILE_OPEN_FOLDER = "preferences-file-open-folder";
     PREFERENCES_FILE_OPEN_FOLDER_FAILED = "preferences-file-open-folder-failed";
     PREFERENCES_FILE_OPEN_FOLDER_UNFINISHED = "preferences-file-open-folder-unfinished";

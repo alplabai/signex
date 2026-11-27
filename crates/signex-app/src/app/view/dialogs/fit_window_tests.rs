@@ -105,7 +105,7 @@ fn blank_preview() -> crate::app::state::PreviewState {
 #[test]
 fn detached_export_footer_stays_inside_a_small_window() {
     let mut app = app_at_small_window();
-    app.document_state.preview = Some(blank_preview());
+    app.document_view.preview = Some(blank_preview());
     assert_labels_inside_window(
         app.view_print_preview_body(),
         &[

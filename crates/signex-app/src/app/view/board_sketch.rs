@@ -28,7 +28,7 @@ impl Signex {
             return None;
         }
         let session = self.board_sketch_in_view()?;
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let canvas = crate::library::editor::standalone::view_board_sketch(
             &session.editor,
             tokens,
@@ -42,7 +42,7 @@ impl Signex {
             &session.editor,
             tokens,
             &self.ui_state.i18n,
-            &self.document_state.panel_ctx.ui_font_name,
+            &self.document_view.panel_ctx.ui_font_name,
         )
         .map(Message::Library);
         let mut layers = stack![canvas, menu, self.board_sketch_bar(session)];
@@ -62,7 +62,7 @@ impl Signex {
     /// The last refusal is the error toast just above it (mockup row 110).
     fn board_sketch_bar<'a>(&'a self, session: &'a BoardSketchSession) -> Element<'a, Message> {
         let i18n = &self.ui_state.i18n;
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let sketch = |event| Message::Pcb(PcbMsg::Sketch(event));
         let look = ModeBarLook {
             title: t!(i18n, ids::BOARD_SKETCH_TITLE),

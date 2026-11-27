@@ -92,7 +92,7 @@ mod tests {
 
     fn shown_ends(origin: PageOrigin) -> Vec<String> {
         let (app, _boot) = crate::app::Signex::new();
-        let mut ctx = app.document_state.panel_ctx.clone();
+        let mut ctx = app.document_view.panel_ctx.clone();
         ctx.paper_size = "A4".to_string();
         ctx.page_origin = origin;
         ctx.harness.wire_ends = Some((Point::new(10.0, 20.0), Point::new(30.0, 20.0)));

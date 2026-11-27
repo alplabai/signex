@@ -333,7 +333,7 @@ const PANEL: iced::Size = iced::Size::new(640.0, 900.0);
 
 fn panel_ctx(mode: PcbPanelMode) -> PanelContext {
     let (app, _boot) = crate::app::Signex::new();
-    let mut ctx = app.document_state.panel_ctx.clone();
+    let mut ctx = app.document_view.panel_ctx.clone();
     ctx.pcb_nets = Some(modes_summary());
     ctx.pcb_layers.board = Some("board.snxpcb".into());
     ctx.pcb_panel.mode = mode;

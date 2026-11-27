@@ -46,7 +46,7 @@ impl Signex {
         let in_view = self.board_sketch_in_view().is_some();
         if !in_view {
             let notice = ErrorNotice::new(ids::BOARD_SKETCH_TITLE, detail.clone());
-            self.document_state.error_notice = Some(notice);
+            self.document_view.error_notice = Some(notice);
         }
         if let Some(session) = self.interaction_state.board_sketch.as_mut() {
             session.refusal = Some(detail);

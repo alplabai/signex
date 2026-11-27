@@ -56,6 +56,8 @@ pub enum TreeIcon {
     SnxLibrary,
     /// `.snxsym` — Signex symbol.
     SnxSymbol,
+    /// `.snxblk` — Signex block diagram (mockup row 171).
+    SnxBlockDiagram,
     /// `.snxpkg` — Signex package / distributable bundle.
     Package,
     /// `.snxmat` — Signex PCB material / stackup sidecar.
@@ -69,23 +71,10 @@ pub enum TreeIcon {
 
 // ─── Tree icon assets ─────────────────────────────────────────
 //
-// Every `TreeIcon` variant renders as a bundled SVG. Three groups:
-//
-//  * **Generic tree icons** — folder / file / library / component /
-//    sheet / net / pin. Live at
-//    `crates/signex-widgets/assets/tree-icons/`.
-//  * **Signex native `.snx***` file family** — shared with the
-//    installer's file-association artwork at
-//    `crates/signex-app/assets/icons/files/`. Reached cross-crate via
-//    `include_bytes!` so one copy of the artwork serves both the
-//    tree view and the .ico/.icns raster pipeline.
-//  * **Standard handoff formats** — `.standard_sch` / `.standard_pcb` /
-//    `.standard_sym` / `.standard_mod` render with the matching Signex-
-//    brand glyph (same chamfered silhouette + amber wedge), so the
-//    project tree stays visually consistent regardless of whether
-//    files are native or Standard. The `TreeIcon::Schematic` / `::Pcb`
-//    variants remain in the enum for backward-compat but now share
-//    the `.snxsch` / `.snxpcb` SVGs.
+// Every `TreeIcon` variant renders as a bundled SVG: generic icons from
+// `assets/tree-icons/`, the native `.snx***` family from
+// `signex-app/assets/icons/files/` (shared with the installer's artwork),
+// and the Standard handoff formats with the matching native glyph.
 
 // Per-variant `OnceLock` cache. iced handles are Arc-backed so
 // cloning a cached handle into every render frame is near-free.
@@ -120,6 +109,7 @@ const SVG_SNX_FOOTPRINT: &[u8] = include_bytes!("../../signex-app/assets/icons/f
 const SVG_SNX_SIMULATION: &[u8] = include_bytes!("../../signex-app/assets/icons/files/snxsim.svg");
 const SVG_SNX_LIBRARY: &[u8] = include_bytes!("../../signex-app/assets/icons/files/snxlib.svg");
 const SVG_SNX_SYMBOL: &[u8] = include_bytes!("../../signex-app/assets/icons/files/snxsym.svg");
+const SVG_SNX_BLOCKS: &[u8] = include_bytes!("../../signex-app/assets/icons/files/snxblk.svg");
 
 impl TreeIcon {
     /// Return the cached SVG handle for this icon. Each variant
@@ -151,6 +141,7 @@ impl TreeIcon {
             Self::SnxSimulation => cached_svg_handle!(SVG_SNX_SIMULATION),
             Self::SnxLibrary => cached_svg_handle!(SVG_SNX_LIBRARY),
             Self::SnxSymbol => cached_svg_handle!(SVG_SNX_SYMBOL),
+            Self::SnxBlockDiagram => cached_svg_handle!(SVG_SNX_BLOCKS),
             Self::Package => cached_svg_handle!(SVG_TREE_PACKAGE),
             Self::Material => cached_svg_handle!(SVG_TREE_MATERIAL),
             Self::Config => cached_svg_handle!(SVG_TREE_CONFIG),
@@ -177,6 +168,7 @@ impl TreeIcon {
                 "snxsim" => Self::SnxSimulation,
                 "snxlib" => Self::SnxLibrary,
                 "snxsym" => Self::SnxSymbol,
+                "snxblk" => Self::SnxBlockDiagram,
                 "snxpkg" => Self::Package,
                 "snxmat" => Self::Material,
                 "snxcfg" => Self::Config,

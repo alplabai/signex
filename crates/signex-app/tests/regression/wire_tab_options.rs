@@ -32,7 +32,7 @@ fn tab_in_the_wire_tool_opens_a_form_that_styles_this_and_the_following_wires() 
     tool(&mut app, ToolMessage::PrePlacementTab);
 
     let pre = app
-        .document_state
+        .document_view
         .panel_ctx
         .pre_placement
         .as_ref()

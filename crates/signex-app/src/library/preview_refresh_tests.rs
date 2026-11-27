@@ -63,6 +63,7 @@ fn open(state: &mut LibraryState, root: &std::path::Path, library_id: Uuid) {
         pricing: Default::default(),
         own_edit_stamp: None,
         display: LibraryDisplaySettings::default(),
+        provenance: Default::default(),
     });
 }
 

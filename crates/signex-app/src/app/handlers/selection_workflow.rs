@@ -234,7 +234,7 @@ impl Signex {
                         // A pin click opens the Pins section; the user can
                         // collapse it again and that stands until the next
                         // pin click.
-                        self.document_state
+                        self.document_view
                             .panel_ctx
                             .collapsed_sections
                             .remove(crate::panels::PINS_SECTION_KEY);

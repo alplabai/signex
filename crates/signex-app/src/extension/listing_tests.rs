@@ -65,7 +65,7 @@ fn an_extension_titles_its_panel_with_its_own_message_in_the_app_language() {
     assert_eq!(shown(&app), "Told panel");
     // The panel context the dock draws with carries it too.
     assert_eq!(
-        app.document_state
+        app.document_view
             .panel_ctx
             .i18n
             .message(panel.title(), &[])
@@ -159,7 +159,7 @@ fn view_lists_extension_panels_in_an_extensions_submenu_that_opens_them() {
 
     let _task = app.update(Message::Menu(picked));
     assert!(
-        app.document_state
+        app.document_view
             .dock
             .locate(PanelKind::Extension(notes))
             .is_some()

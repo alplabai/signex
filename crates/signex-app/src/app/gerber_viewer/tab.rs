@@ -51,7 +51,7 @@ impl Signex {
 
     /// The tab's title: the package's name, or "Gerber Viewer" with none.
     pub(crate) fn gerber_viewer_title(&self) -> String {
-        self.document_state
+        self.document_view
             .gerber_viewer
             .open
             .as_ref()
@@ -62,7 +62,7 @@ impl Signex {
     }
 
     fn gerber_viewer_tab_path(&self) -> PathBuf {
-        self.document_state
+        self.document_view
             .gerber_viewer
             .open
             .as_ref()
@@ -91,7 +91,7 @@ impl Signex {
         keep_session: bool,
     ) -> iced::Task<Message> {
         self.document_state.tabs.remove(idx);
-        let viewer = &mut self.document_state.gerber_viewer;
+        let viewer = &mut self.document_view.gerber_viewer;
         viewer.open = None;
         viewer.reading = None;
         viewer.open_menu = false;
@@ -140,7 +140,7 @@ impl Signex {
         if matches!(key.as_ref(), Key::Named(keyboard::key::Named::Escape)) && modifiers.is_empty()
         {
             // An overlay over the tab takes Esc first.
-            let ours = self.document_state.gerber_viewer.has_escape()
+            let ours = self.document_view.gerber_viewer.has_escape()
                 && self.escape_overlay_message().is_none();
             return ours.then(|| Message::from(GerberViewerMsg::EscapePressed));
         }

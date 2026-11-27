@@ -86,7 +86,7 @@ fn a_paper_change_by_path_on_the_active_sheet_moves_the_panel_and_the_drawn_page
     assert_eq!(page, crate::panels::paper_dimensions("A4"));
     assert_eq!(app.execute_on_sheet(&a, paper("A3")), Ok(true));
     assert_eq!(app.document_state.engines[&a].document().paper_size, "A3");
-    assert_eq!(app.document_state.panel_ctx.paper_size, "A3");
+    assert_eq!(app.document_view.panel_ctx.paper_size, "A3");
     let canvas = app.interaction_state.active_canvas();
     assert_eq!(
         (canvas.paper_width_mm, canvas.paper_height_mm),
@@ -185,10 +185,10 @@ fn an_edit_with_selection_info_refreshes_the_properties_summary() {
     for (wanted, expected) in [(true, 1), (false, 99)] {
         let mut app = app_with(&[("a.snxsch", 100)]);
         select_wire_a(&mut app);
-        app.document_state.panel_ctx.selection_count = 99;
+        app.document_view.panel_ctx.selection_count = 99;
         assert!(app.apply_engine_command(paper("A3"), true, wanted));
         assert_eq!(
-            app.document_state.panel_ctx.selection_count, expected,
+            app.document_view.panel_ctx.selection_count, expected,
             "update_selection_info = {wanted}"
         );
     }
@@ -207,7 +207,7 @@ fn red_dot(app: &Signex, file: &str) -> bool {
                 .or_else(|| find(&row.children, file))
         })
     }
-    let rows = &app.document_state.panel_ctx.projects[0].sheets;
+    let rows = &app.document_view.panel_ctx.projects[0].sheets;
     find(rows, file).expect("the sheet's tree row").is_dirty
 }
 

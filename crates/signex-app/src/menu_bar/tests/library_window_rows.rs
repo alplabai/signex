@@ -24,6 +24,7 @@ fn mounted_library(app: &mut Signex, dir: &std::path::Path, name: &str) -> std::
         library: LibrarySection {
             name: name.into(),
             description: None,
+            ..Default::default()
         },
         mode: LibraryMode::default(),
         workflow: WorkflowConfig::default(),
@@ -53,6 +54,7 @@ fn mounted_library(app: &mut Signex, dir: &std::path::Path, name: &str) -> std::
             own_edit_stamp: None,
             display: Default::default(),
             pricing: Default::default(),
+            provenance: Default::default(),
         });
     file
 }
@@ -310,7 +312,7 @@ fn a_built_in_row_arranges_the_panels_and_takes_the_check_mark() {
         Some(false)
     );
     let _ = click(&mut app, "View/Window/Layouts/Review");
-    let dock = &app.document_state.dock;
+    let dock = &app.document_view.dock;
     assert_eq!(dock.panel_kinds(PanelPosition::Right), [PanelKind::History]);
     assert_eq!(
         dock.panel_kinds(PanelPosition::Bottom),
@@ -367,7 +369,7 @@ fn your_layouts_are_listed_and_a_row_applies_its_layout() {
         .expect("panels");
     let _ = click(&mut app, "View/Window/Layouts/Bench");
     assert_eq!(
-        crate::dock::DockLayoutSnapshot::capture(&app.document_state.dock),
+        crate::dock::DockLayoutSnapshot::capture(&app.document_view.dock),
         saved
     );
     assert_eq!(

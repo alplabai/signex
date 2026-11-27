@@ -39,7 +39,7 @@ fn on_padding_near(layers: Vec<Element<'_, Message>>, label: &str, gap: f32) -> 
 
 fn error_app() -> Signex {
     let mut app = app();
-    app.document_state.error_notice = Some(ErrorNotice::save(crate::app::state::verbatim(
+    app.document_view.error_notice = Some(ErrorNotice::save(crate::app::state::verbatim(
         "disk full while saving",
     )));
     app
@@ -69,7 +69,7 @@ fn a_press_outside_the_error_notice_dismisses_it() {
 
 fn prompt_app() -> Signex {
     let mut app = app();
-    app.document_state.netlist_incomplete_prompt = Some(NetlistIncompletePrompt {
+    app.document_view.netlist_incomplete_prompt = Some(NetlistIncompletePrompt {
         save_path: "out.net".into(),
         messages: vec!["sheet two is not in the netlist".to_owned()],
         ctx: signex_output::ExportContext {
@@ -237,8 +237,8 @@ fn about_and_the_shortcuts_dim_the_window_in_the_dialog_scrim() {
     use signex_types::theme::{ThemeId, theme_tokens};
     for id in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
         let mut app = app();
-        app.document_state.panel_ctx.tokens = theme_tokens(id);
-        let scrim = crate::app::view::dialogs::dialog_scrim(&app.document_state.panel_ctx.tokens);
+        app.document_view.panel_ctx.tokens = theme_tokens(id);
+        let scrim = crate::app::view::dialogs::dialog_scrim(&app.document_view.panel_ctx.tokens);
         let expected = outside_over_white(vec![fill(scrim)]);
         assert!(
             expected.iter().all(|&c| c < 200),

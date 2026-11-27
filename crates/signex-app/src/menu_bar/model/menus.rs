@@ -2,8 +2,8 @@
 //! menu contract pinned by `testdata/menu_bar.golden.tsv`.
 
 use super::items::{
-    cmd, cmd_item, cmd_item_gated, cmd_item_gated_as, cmd_toggle, header, item, item_if,
-    item_if_command, item_named, panel_item, submenu, unavailable, with_icon,
+    cmd, cmd_item, cmd_item_gated, cmd_item_gated_as, cmd_toggle, cmd_toggle_gated, header, item,
+    item_if, item_if_command, item_named, panel_item, submenu, unavailable, with_icon,
 };
 use super::{MenuEntry, MenuIcon, MenuMessage};
 use crate::app::command::enablement::{new_part_menu_enabled, remove_part_menu_enabled};
@@ -19,13 +19,15 @@ pub(super) fn file(ctx: &MenuContext) -> Vec<MenuEntry> {
     vec![
         cmd_item(ctx, cmd("new_document", "Mod+N")),
         // A board (#1312) or a sheet (#2232) for the open project, each
-        // through its setup dialog; greyed with no project.
+        // through its setup dialog, or a block diagram (mockup row 171);
+        // greyed with no project.
         submenu(
             ctx,
             menu_ids::MENU_FILE_NEW,
             vec![
                 cmd_item_gated(ctx, cmd("new_schematic_sheet", "")),
                 cmd_item_gated(ctx, cmd("new_pcb_document", "")),
+                cmd_item_gated(ctx, cmd("new_block_diagram", "")),
             ],
         ),
         cmd_item(ctx, cmd("open_document", "Mod+O")),
@@ -135,6 +137,8 @@ fn export(ctx: &MenuContext) -> Vec<MenuEntry> {
         // The board and its parts as a STEP model (#2488); greyed without
         // a board in view.
         cmd_item_gated(ctx, cmd("export_board_step", "")),
+        // The project's Design Notebook as PDF (mockup row 202).
+        cmd_item_gated(ctx, cmd("export_notebook_pdf", "")),
     ]
 }
 
@@ -257,6 +261,9 @@ fn view_built_in(ctx: &MenuContext) -> Vec<MenuEntry> {
         cmd_item_gated(ctx, cmd("toggle_visible_grid", "Shift+Ctrl+G")),
         cmd_item_gated(ctx, cmd("next_grid", "")),
         cmd_item_gated(ctx, cmd("toggle_auto_focus", "F9")),
+        // Mockup row 197: the sheet's Notebook badges, on by default; greyed
+        // with no sheet in view.
+        cmd_toggle_gated(ctx, cmd("toggle_notebook_badges", "B"), ctx.notebook_badges),
         SEP,
         // The board view: greyed unless a PCB is open.
         cmd_item_gated(ctx, cmd("toggle_ratsnest", "")),
@@ -515,6 +522,16 @@ pub(super) fn project(ctx: &MenuContext) -> Vec<MenuEntry> {
         // #2462: the report of every difference between the schematic and
         // the board, gated like Update PCB.
         cmd_item_gated(ctx, cmd("compare_board_with_schematic", "")),
+        SEP,
+        // Mockup rows 195 and 201: docs/MENU_BAR.md#project-design-notebook
+        submenu(
+            ctx,
+            menu_ids::MENU_PROJECT_DESIGN_NOTEBOOK,
+            vec![
+                cmd_item_gated(ctx, cmd("open_design_notebook", "")),
+                cmd_item_gated(ctx, cmd("generate_design_notebook", "")),
+            ],
+        ),
         SEP,
         // Gated like Close Project: with no project there is no tab to open.
         item_if_command(

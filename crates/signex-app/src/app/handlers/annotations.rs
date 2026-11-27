@@ -15,6 +15,7 @@ use signex_notebook::{NOTEBOOK_DIR, NOTEBOOK_EXTENSION, ProblemKind, newest_firs
 use signex_types::schematic::{SelectedItem, SelectedKind};
 
 use crate::app::handlers::canvas::{AfterOpen, SheetOpen};
+use crate::app::notebook_references;
 use crate::app::project_sheets::{self, OpenSheets, ProjectSheetSet};
 use crate::app::sheet_hierarchy::build_sheet_hierarchy;
 use crate::app::{CaseFold, Message, ProjectId, Signex};
@@ -22,16 +23,19 @@ use crate::dock::DockMessage;
 use crate::panels::annotations::{
     Annotation, AnnotationKind, AnnotationRow, AnnotationsState, AnnotationsView, FileGroup,
     FileReadError, IsoDate, KindChip, ListStatus, NotebookFile, NotebookScan, PartIndex, PartPlace,
-    RefChip, Reference, RowKey, ScanProblem, part_flags,
+    RefChip, Reference, RowKey, ScanProblem, notebook_badges, record_fields,
 };
 use crate::panels::{AnnotationsMsg, NetInspectorMsg, PanelKind, PanelMsg};
+use crate::schematic_runtime::notebook_badges::{
+    NotebookBadgeInk, NotebookBadgeView, NotebookBadges,
+};
 
 /// The log target of the panel's Messages lines (Source `SIGNEX-NOTEBOOK`).
 const TARGET: &str = "signex::notebook";
 const SECONDS_PER_DAY: u64 = 86_400;
 
 /// What a scan reads, captured in `update`.
-struct ScanInputs {
+pub(crate) struct ScanInputs {
     project_dir: PathBuf,
     /// The design to find the referenced parts in; `None` without a sheet.
     design: Option<DesignInputs>,
@@ -47,7 +51,7 @@ struct DesignInputs {
 impl Signex {
     /// Keep the scan current: a scan starts when the panel is shown and when
     /// the project in view changes (a project opened, a switch to another),
-    /// panel open or not, since the schematic's annotation flags come from
+    /// panel open or not, since the schematic's Notebook badges come from
     /// it and are drawn by default. Runs after every message.
     pub(crate) fn sync_annotations_panel(&mut self) -> Task<Message> {
         let open = self.is_panel_open(PanelKind::Annotations);
@@ -59,7 +63,7 @@ impl Signex {
         let held = self.ui_state.annotations.target.as_ref();
         let active = self.document_state.active_document_project();
         let moved = held.map(|(id, dir)| (*id, dir.as_path())) != active.map(|p| (p.id, p.dir()));
-        // A project being closed is not read for the flags it is about to lose.
+        // A project being closed is not read for the badges it is about to lose.
         let closing = active.is_some_and(|p| self.ui_state.annotations.closing == Some(p.id));
         if newly_shown || (moved && !closing) {
             let target = self.annotations_target();
@@ -69,7 +73,7 @@ impl Signex {
     }
 
     /// The project the panel lists: the active document's.
-    fn annotations_target(&self) -> Option<(ProjectId, PathBuf)> {
+    pub(crate) fn annotations_target(&self) -> Option<(ProjectId, PathBuf)> {
         self.document_state
             .active_document_project()
             .map(|project| (project.id, project.dir().to_path_buf()))
@@ -77,7 +81,10 @@ impl Signex {
 
     /// Read the notebook files of `target` on a worker. The last list stays
     /// shown meanwhile unless the project changed.
-    fn start_annotations_scan(&mut self, target: Option<(ProjectId, PathBuf)>) -> Task<Message> {
+    pub(crate) fn start_annotations_scan(
+        &mut self,
+        target: Option<(ProjectId, PathBuf)>,
+    ) -> Task<Message> {
         let inputs = target
             .as_ref()
             .map(|(id, dir)| self.capture_annotation_inputs(*id, dir));
@@ -90,18 +97,18 @@ impl Signex {
             state.scan = None;
             state.expanded = None;
             state.status = ListStatus::NoProject;
-            state.flags = Arc::default();
+            clear_badges(state);
             self.refresh_annotations_view();
-            self.repaint_annotation_flags();
+            self.repaint_notebook_badges();
             return Task::none();
         };
         if !same_project || state.scan.is_none() {
             state.scan = None;
             state.expanded = None;
             state.status = ListStatus::Reading;
-            // Another project's flags never show on this one's sheets.
-            state.flags = Arc::default();
-            self.repaint_annotation_flags();
+            // Another project's badges never show on this one's sheets.
+            clear_badges(state);
+            self.repaint_notebook_badges();
         }
         self.refresh_annotations_view();
         Task::perform(
@@ -122,7 +129,7 @@ impl Signex {
         )
     }
 
-    fn capture_annotation_inputs(&self, id: ProjectId, dir: &Path) -> ScanInputs {
+    pub(crate) fn capture_annotation_inputs(&self, id: ProjectId, dir: &Path) -> ScanInputs {
         let ds = &self.document_state;
         let project = ds.projects.iter().find(|p| p.id == id);
         let pages = project_sheets::project_pages(project);
@@ -150,6 +157,8 @@ impl Signex {
                     return Task::none();
                 }
                 self.apply_annotation_scan(result);
+                self.refresh_annotations_view();
+                return Task::none();
             }
             AnnotationsMsg::QueryChanged(query) => state.filter.query = query,
             AnnotationsMsg::KindToggled(kind) => {
@@ -197,7 +206,9 @@ impl Signex {
                 if !state.expanded.as_ref().is_some_and(still_there) {
                     state.expanded = None;
                 }
-                state.flags = Arc::new(part_flags(&scan));
+                let badges = notebook_badges(&scan);
+                state.badge_marks = Arc::new(NotebookBadges::from_badges(&badges));
+                state.badges = Arc::new(badges);
                 state.scan = Some(Arc::new(scan));
             }
             Err(why) => {
@@ -208,33 +219,35 @@ impl Signex {
                 log::warn!(target: TARGET, "{}", line.into_string());
                 state.scan = None;
                 state.status = ListStatus::Unavailable;
-                state.flags = Arc::default();
+                clear_badges(state);
             }
         }
-        self.repaint_annotation_flags();
+        self.repaint_notebook_badges();
     }
 
-    /// The annotation flags the sheet at `path` shows: the last scan's, when
-    /// the sheet is of the project that scan read; none elsewhere.
-    pub(crate) fn annotation_flag_view(
-        &self,
-        path: Option<&Path>,
-    ) -> crate::schematic_runtime::annotation_flags::AnnotationFlagView<'_> {
+    /// The Notebook badges the sheet at `path` shows: the last scan's, when
+    /// the sheet is of the project that scan read and View ▸ Notebook Badges
+    /// is on; none elsewhere.
+    pub(crate) fn notebook_badge_view(&self, path: Option<&Path>) -> NotebookBadgeView<'_> {
         let state = &self.ui_state.annotations;
         let project = path
             .and_then(|path| self.document_state.document_project(path))
             .map(|project| project.id);
         let scanned = state.target.as_ref().map(|target| target.0);
-        crate::schematic_runtime::annotation_flags::AnnotationFlagView {
-            parts: (project.is_some() && project == scanned).then_some(&*state.flags),
-            ink: crate::schematic_runtime::annotation_flags::AnnotationFlagInk::from_tokens(
+        let shown = !state.badges_hidden && project.is_some() && project == scanned;
+        NotebookBadgeView {
+            badges: shown.then_some(&*state.badge_marks),
+            ink: NotebookBadgeInk::from_tokens(
                 &self.tokens_for(self.ui_state.preferences_draft_theme),
             ),
         }
     }
 
-    /// Redraw the selection layer of every sheet, where the flags are drawn.
-    fn repaint_annotation_flags(&mut self) {
+    /// The badges changed: Properties ▸ Design notes reads them, and the
+    /// selection layer of every sheet, where they are drawn, redraws.
+    pub(crate) fn repaint_notebook_badges(&mut self) {
+        self.document_view.panel_ctx.notebook_badges =
+            Arc::clone(&self.ui_state.annotations.badges);
         self.interaction_state.canvas.clear_overlay_cache();
         for canvas in self.interaction_state.canvases.values_mut() {
             canvas.clear_overlay_cache();
@@ -244,13 +257,13 @@ impl Signex {
     /// Rebuild the rows the panel draws from the scan and the filters.
     fn refresh_annotations_view(&mut self) {
         let view = build_view(&self.ui_state.annotations, today());
-        self.document_state.panel_ctx.annotations = Arc::new(view);
+        self.document_view.panel_ctx.annotations = Arc::new(view);
     }
 
     /// Go to a reference: a part's sheet, zoomed to and selecting the part;
     /// a net through net navigation. What cannot be found is said in
     /// Messages.
-    fn jump_to_reference(&mut self, reference: &Reference) -> Task<Message> {
+    pub(crate) fn jump_to_reference(&mut self, reference: &Reference) -> Task<Message> {
         let i18n = Arc::clone(&self.ui_state.i18n);
         let name = reference.name();
         let Some(part) = reference.component() else {
@@ -286,6 +299,7 @@ impl Signex {
     fn jump_to_net(&mut self, name: &str) -> Task<Message> {
         let i18n = Arc::clone(&self.ui_state.i18n);
         let ds = &self.document_state;
+        let document_view = &self.document_view;
         let active = ds
             .active_path
             .as_deref()
@@ -300,7 +314,7 @@ impl Signex {
         let planned = crate::app::runtime::net_class_styles::plan_projects(ds)
             .into_iter()
             .find(|p| p.project == project);
-        let data = planned.and_then(|p| ds.net_nav.index.fresh(project, &p.key));
+        let data = planned.and_then(|p| document_view.net_nav.index.fresh(project, &p.key));
         let Some(data) = data else {
             let line = t!(i18n, ids::ANNOTATIONS_JUMP_NET_READING, "name" => name);
             crate::diagnostics::log_info(line.into_string());
@@ -332,6 +346,13 @@ impl Signex {
     }
 }
 
+/// Drop the badges of the last scan, so no other project's show.
+fn clear_badges(state: &mut AnnotationsState) {
+    state.badges = Arc::default();
+    state.badge_marks = Arc::default();
+    state.hovered_badge = None;
+}
+
 /// Today in UTC, the day the date windows count back from (1970-01-01 on a
 /// clock set before it).
 pub(crate) fn today() -> IsoDate {
@@ -346,75 +367,142 @@ pub(crate) fn today() -> IsoDate {
 
 /// Read every notebook file of the project and find the design's parts.
 /// Blocking: runs on a worker.
-fn scan_notebooks(inputs: &ScanInputs) -> Result<NotebookScan, String> {
-    let folder = inputs.project_dir.join(NOTEBOOK_DIR);
+pub(crate) fn scan_notebooks(inputs: &ScanInputs) -> Result<NotebookScan, String> {
+    let (scan, texts) = read_notebook_texts(&inputs.project_dir)?;
+    let set = inputs.design.as_ref().map(assemble_design);
+    let parts = inputs
+        .design
+        .as_ref()
+        .zip(set.as_ref())
+        .and_then(|(design, set)| part_index(design, set));
+    // Only a design read whole resolves references: a part on a sheet that
+    // could not be read would wrongly read as deleted.
+    let design = parts
+        .as_ref()
+        .and(set.as_ref())
+        .and_then(|set| notebook_references::read_design(set, &inputs.project_dir))
+        .map(Arc::new);
+    let references = design
+        .as_deref()
+        .map(|design| notebook_references::file_references(&scan.files, &texts, design))
+        .unwrap_or_default();
+    Ok(NotebookScan {
+        parts,
+        design,
+        references,
+        ..scan
+    })
+}
+
+/// Read every `.snxnbk` file under the project's `notebook/` folder, its
+/// chapter subfolders included (mockup row 195: one notebook that includes
+/// chapter files), sorted by path. No parts are looked up. Blocking: runs
+/// on a worker, for the panel and for `list_annotations`.
+pub(crate) fn read_notebook_files(project_dir: &Path) -> Result<NotebookScan, String> {
+    read_notebook_texts(project_dir).map(|(scan, _texts)| scan)
+}
+
+/// [`read_notebook_files`] and the text of each file, `None` where it
+/// could not be read.
+fn read_notebook_texts(project_dir: &Path) -> Result<(NotebookScan, Vec<Option<String>>), String> {
+    let folder = project_dir.join(NOTEBOOK_DIR);
     let entries = match std::fs::read_dir(&folder) {
         Ok(entries) => entries,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            return Ok(NotebookScan::default());
+            return Ok((NotebookScan::default(), Vec::new()));
         }
         Err(e) => return Err(e.to_string()),
     };
     // An entry that cannot be listed is said in Messages, never dropped.
     let (mut paths, mut unlisted) = (Vec::new(), Vec::new());
-    for entry in entries {
-        match entry {
-            Ok(entry) => {
-                let path = entry.path();
-                let notebook = path
-                    .extension()
-                    .is_some_and(|ext| ext.eq_ignore_ascii_case(NOTEBOOK_EXTENSION));
-                if notebook && path.is_file() {
-                    paths.push(path);
+    let mut pending = vec![entries];
+    while let Some(entries) = pending.pop() {
+        for entry in entries {
+            let entry = match entry {
+                Ok(entry) => entry,
+                Err(e) => {
+                    unlisted.push(e.to_string());
+                    continue;
                 }
+            };
+            let path = entry.path();
+            // The entry's own type: a link to a folder is not followed.
+            let is_dir = entry.file_type().is_ok_and(|kind| kind.is_dir());
+            // The generated design report copies the notebook's decisions:
+            // its blocks are not read again, so none counts twice (#3021).
+            if is_dir && path == folder.join(signex_notebook::generate::GENERATED_DIR) {
+                continue;
             }
-            Err(e) => unlisted.push(e.to_string()),
+            if is_dir {
+                match std::fs::read_dir(&path) {
+                    Ok(inner) => pending.push(inner),
+                    Err(e) => unlisted.push(format!("{}: {e}", path.display())),
+                }
+                continue;
+            }
+            let notebook = path
+                .extension()
+                .is_some_and(|ext| ext.eq_ignore_ascii_case(NOTEBOOK_EXTENSION));
+            if notebook && path.is_file() {
+                paths.push(path);
+            }
         }
     }
     paths.sort();
-    let files = paths.into_iter().map(read_notebook).collect();
-    Ok(NotebookScan {
+    let (files, texts): (Vec<NotebookFile>, Vec<Option<String>>) = paths
+        .into_iter()
+        .map(|path| read_notebook(&folder, path))
+        .unzip();
+    let scan = NotebookScan {
         folder_found: true,
         files,
         unlisted,
-        parts: inputs.design.as_ref().and_then(part_index),
-    })
+        ..NotebookScan::default()
+    };
+    Ok((scan, texts))
 }
 
-fn read_notebook(path: PathBuf) -> NotebookFile {
-    let name = path
-        .file_name()
-        .map(|n| n.to_string_lossy().into_owned())
-        .unwrap_or_default();
-    let label = format!("{NOTEBOOK_DIR}/{name}");
+fn read_notebook(folder: &Path, path: PathBuf) -> (NotebookFile, Option<String>) {
+    let inside: Vec<String> = path
+        .strip_prefix(folder)
+        .unwrap_or(&path)
+        .components()
+        .map(|part| part.as_os_str().to_string_lossy().into_owned())
+        .collect();
+    let label = format!("{NOTEBOOK_DIR}/{}", inside.join("/"));
     let text = std::fs::read(&path)
         .map_err(|e| FileReadError::Io(e.to_string()))
         .and_then(|bytes| String::from_utf8(bytes).map_err(|_| FileReadError::NotUtf8));
-    let (annotations, problems, read_error) = match text {
+    let (annotations, problems, read_error, text) = match text {
         Ok(text) => {
             let (annotations, problems) = signex_notebook::scan(&text);
-            (annotations, problems, None)
+            (annotations, problems, None, Some(text))
         }
-        Err(why) => (Vec::new(), Vec::new(), Some(why)),
+        Err(why) => (Vec::new(), Vec::new(), Some(why), None),
     };
-    NotebookFile {
+    let file = NotebookFile {
         path,
         label,
         annotations,
         problems,
         read_error,
-    }
+    };
+    (file, text)
 }
 
-/// Every designator of the design and where its part is. `None` when a sheet
-/// could not be read or is missing: a part there would wrongly read as gone.
-fn part_index(design: &DesignInputs) -> Option<PartIndex> {
-    let set: ProjectSheetSet = project_sheets::assemble_project_sheets_quiet_from(
+/// The project's sheets, open ones with their unsaved edits.
+fn assemble_design(design: &DesignInputs) -> ProjectSheetSet {
+    project_sheets::assemble_project_sheets_quiet_from(
         &design.open,
         &design.pages,
         &design.root,
         design.fold,
-    );
+    )
+}
+
+/// Every designator of the design and where its part is. `None` when a sheet
+/// could not be read or is missing: a part there would wrongly read as gone.
+fn part_index(design: &DesignInputs, set: &ProjectSheetSet) -> Option<PartIndex> {
     if !set.unreadable.is_empty() || !set.absent.is_empty() {
         return None;
     }
@@ -522,6 +610,20 @@ pub(crate) fn problem_text(i18n: &I18n, file: &str, problem: &ScanProblem) -> Lo
             i18n, ids::ANNOTATIONS_PROBLEM_BAD_REFERENCE,
             "file" => file, "line" => line.as_str(), "reference" => reference.as_str()
         ),
+        ProblemKind::BadId { kind, id } => t!(
+            i18n, ids::ANNOTATIONS_PROBLEM_BAD_ID,
+            "file" => file, "line" => line.as_str(), "id" => id.as_str(),
+            "kind" => kind.function(), "prefix" => kind.id_prefix()
+        ),
+        ProblemKind::DuplicateId { id } => t!(
+            i18n, ids::ANNOTATIONS_PROBLEM_DUPLICATE_ID,
+            "file" => file, "line" => line.as_str(), "id" => id.as_str()
+        ),
+        ProblemKind::BadField { argument, value } => t!(
+            i18n, ids::ANNOTATIONS_PROBLEM_BAD_FIELD,
+            "file" => file, "line" => line.as_str(),
+            "argument" => argument.as_str(), "value" => value.as_str()
+        ),
     }
 }
 
@@ -572,6 +674,14 @@ pub(crate) fn build_view(state: &AnnotationsState, today: IsoDate) -> Annotation
             on: !filter.hidden_kinds.contains(&kind),
         })
         .collect();
+    // Blocks cite each other across files: a chapter's Issue `from:` a
+    // Measurement of another.
+    let everything: Vec<Annotation> = scan
+        .files
+        .iter()
+        .flat_map(|f| f.annotations.iter().cloned())
+        .collect();
+    let links = signex_notebook::links(&everything);
     for file in &scan.files {
         let mut shown: Vec<&Annotation> = file
             .annotations
@@ -584,7 +694,15 @@ pub(crate) fn build_view(state: &AnnotationsState, today: IsoDate) -> Annotation
         shown.sort_by(|a, b| newest_first(a, b));
         let rows: Vec<AnnotationRow> = shown
             .into_iter()
-            .map(|a| row_of(file, a, scan.parts.as_ref(), state.expanded.as_ref()))
+            .map(|a| {
+                let place = RowPlace {
+                    file,
+                    parts: scan.parts.as_ref(),
+                    expanded: state.expanded.as_ref(),
+                    links: &links,
+                };
+                row_of(&place, a)
+            })
             .collect();
         view.shown += rows.len();
         view.groups.push(FileGroup {
@@ -602,12 +720,25 @@ fn kind_index(kind: AnnotationKind) -> usize {
         .unwrap_or_default()
 }
 
-fn row_of(
-    file: &NotebookFile,
-    annotation: &Annotation,
-    parts: Option<&PartIndex>,
-    expanded: Option<&RowKey>,
-) -> AnnotationRow {
+/// What a row is built against: its file, the design's parts, the expanded
+/// row and every citation of the scan.
+struct RowPlace<'a> {
+    file: &'a NotebookFile,
+    parts: Option<&'a PartIndex>,
+    expanded: Option<&'a RowKey>,
+    links: &'a [signex_notebook::Link],
+}
+
+fn row_of(place: &RowPlace<'_>, annotation: &Annotation) -> AnnotationRow {
+    let (file, parts, expanded) = (place.file, place.parts, place.expanded);
+    let cited: Vec<_> = annotation.id.as_ref().map_or_else(Vec::new, |id| {
+        place
+            .links
+            .iter()
+            .filter(|link| &link.to == id)
+            .map(|link| (link.citation, link.by.clone()))
+            .collect()
+    });
     let key = RowKey {
         file: file.path.clone(),
         line: annotation.line,
@@ -634,10 +765,13 @@ fn row_of(
         expanded: expanded == Some(&key),
         key,
         kind: annotation.kind,
+        id: annotation.id.as_ref().map(ToString::to_string),
         title: annotation.title.clone(),
         snippet: annotation.snippet.clone(),
         chips,
         status: annotation.status,
+        verdict: annotation.record.verdict(),
+        fields: record_fields(annotation, &cited),
         date: annotation.date,
         source: annotation.source.clone(),
         file_name: file
@@ -655,10 +789,10 @@ mod tests {
     use super::*;
     use crate::app::handlers::editing_commands::net_color_driver::add_sheet_with;
     use crate::app::{CaseFold, LoadedProject};
-    use crate::schematic_runtime::annotation_flags::{FlagMark, PartFlags};
+    use crate::schematic_runtime::notebook_badges::BadgeMark;
+    use signex_notebook::BadgeTone;
     use signex_types::project::{ProjectData, SheetEntry};
     use signex_types::schematic::{Point, SchematicSheet, Symbol};
-    use signex_widgets::theme_ext::AnnotationTone;
 
     const DIR: &str = "/w/flags";
     const U3: u128 = 0x0001_6503;
@@ -759,20 +893,19 @@ mod tests {
                 problems,
                 read_error: None,
             }],
-            unlisted: Vec::new(),
             parts,
+            ..NotebookScan::default()
         }
     }
 
-    fn flags_of(list: &[(&str, AnnotationTone, u32)]) -> Arc<PartFlags> {
-        let mut parts = PartFlags::new();
+    fn badges_of(list: &[(&str, BadgeTone, u32)]) -> Arc<NotebookBadges> {
+        let mut badges = NotebookBadges::default();
         for &(part, tone, count) in list {
-            parts
-                .entry(part.to_string())
-                .or_default()
-                .push(FlagMark { tone, count });
+            badges
+                .parts
+                .insert(part.to_string(), BadgeMark { tone, count });
         }
-        Arc::new(parts)
+        Arc::new(badges)
     }
 
     /// Mockup row 165: clicking U3 opens its sheet, zooms to it and selects it.
@@ -819,12 +952,12 @@ mod tests {
     }
 
     #[test]
-    fn a_scan_puts_its_flags_on_the_sheets_and_repaints_them() {
+    fn a_scan_puts_its_badges_on_the_sheets_and_repaints_them() {
         let (mut app, _path, _id) = app_with_u3();
         let generation = app.ui_state.annotations.generation;
         let before = app.interaction_state.canvas.overlay_cache_clears;
         let scan = notebook(
-            "#annotation(kind: \"issue\")[#component(\"U3\") runs warm]\n\
+            "#annotation(kind: \"issue\", status: \"open\")[#component(\"U3\") runs warm]\n\
              #annotation(kind: \"decision\")[Use the LDO for #component(\"U3\")]\n",
             None,
         );
@@ -836,59 +969,70 @@ mod tests {
             },
         );
         assert_eq!(
-            app.ui_state.annotations.flags.get("U3"),
-            Some(&vec![
-                FlagMark {
-                    tone: AnnotationTone::Issue,
-                    count: 1
-                },
-                FlagMark {
-                    tone: AnnotationTone::Decision,
-                    count: 1
-                },
-            ])
+            app.ui_state.annotations.badge_marks.parts.get("U3"),
+            Some(&BadgeMark {
+                tone: BadgeTone::OpenIssue,
+                count: 2
+            }),
+            "one badge, coloured by the worst status (mockup row 197)"
         );
+        assert_eq!(app.ui_state.annotations.badges.len(), 1);
         assert!(
             app.interaction_state.canvas.overlay_cache_clears > before,
-            "the selection layer, where the flags are, redraws"
+            "the selection layer, where the badges are, redraws"
         );
     }
 
     #[test]
-    fn the_flags_show_only_on_the_sheets_of_the_scanned_project() {
+    fn the_badges_show_only_on_the_sheets_of_the_scanned_project() {
         let (mut app, path, id) = app_with_u3();
-        app.ui_state.annotations.flags = flags_of(&[("U3", AnnotationTone::Issue, 2)]);
-        let shown = app.annotation_flag_view(Some(path.as_path()));
-        assert!(shown.has_flags(), "the scanned project's sheet");
+        app.ui_state.annotations.badge_marks = badges_of(&[("U3", BadgeTone::OpenIssue, 2)]);
+        let shown = app.notebook_badge_view(Some(path.as_path()));
+        assert!(shown.has_badges(), "the scanned project's sheet");
         assert!(
-            app.annotation_flag_view(Some(Path::new("/elsewhere/b.snxsch")))
-                .parts
+            app.notebook_badge_view(Some(Path::new("/elsewhere/b.snxsch")))
+                .badges
                 .is_none(),
             "a sheet of no project"
         );
-        assert!(app.annotation_flag_view(None).parts.is_none());
+        assert!(app.notebook_badge_view(None).badges.is_none());
         let other = app.document_state.mint_project_id();
         app.ui_state.annotations.target = Some((other, PathBuf::from("/w/other")));
         assert!(
-            app.annotation_flag_view(Some(path.as_path()))
-                .parts
+            app.notebook_badge_view(Some(path.as_path()))
+                .badges
                 .is_none(),
             "a scan of another project ({other:?}, not {id:?})"
         );
     }
 
+    /// View ▸ Notebook Badges (B) hides them; they are on by default.
     #[test]
-    fn no_project_in_view_drops_the_flags() {
-        let (mut app, _path, _id) = app_with_u3();
-        app.ui_state.annotations.flags = flags_of(&[("U3", AnnotationTone::Note, 1)]);
-        let _ = app.start_annotations_scan(None);
-        assert!(app.ui_state.annotations.flags.is_empty());
+    fn the_badges_hide_while_switched_off() {
+        let (mut app, path, _id) = app_with_u3();
+        app.ui_state.annotations.badge_marks = badges_of(&[("U3", BadgeTone::Notes, 1)]);
+        assert!(!app.ui_state.annotations.badges_hidden, "on by default");
+        app.ui_state.annotations.badges_hidden = true;
+        assert!(
+            app.notebook_badge_view(Some(path.as_path()))
+                .badges
+                .is_none()
+        );
     }
 
-    /// The flags are drawn by default (mockup row 165), so the project in
+    #[test]
+    fn no_project_in_view_drops_the_badges() {
+        let (mut app, _path, _id) = app_with_u3();
+        app.ui_state.annotations.badge_marks = badges_of(&[("U3", BadgeTone::Notes, 1)]);
+        let _ = app.start_annotations_scan(None);
+        assert!(app.ui_state.annotations.badge_marks.is_empty());
+        assert!(app.ui_state.annotations.badges.is_empty());
+    }
+
+    /// The badges are drawn by default (mockup row 197), so the project in
     /// view is read with the Annotations panel closed too.
     #[test]
-    fn the_flags_show_with_the_annotations_panel_closed() {
+    fn the_badges_show_with_the_annotations_panel_closed() {
         let (mut app, path, id) = app_with_u3();
         assert!(!app.is_panel_open(PanelKind::Annotations));
         app.document_state.active_path = Some(path.clone());
@@ -910,7 +1054,7 @@ mod tests {
             },
         );
         assert!(!app.is_panel_open(PanelKind::Annotations));
-        assert!(app.annotation_flag_view(Some(path.as_path())).has_flags());
+        assert!(app.notebook_badge_view(Some(path.as_path())).has_badges());
     }
 
     #[test]
@@ -949,5 +1093,58 @@ mod tests {
         app.ui_state.annotations.closing = None;
         let _ = app.sync_annotations_panel();
         assert_eq!(app.ui_state.annotations.generation, before + 1);
+    }
+
+    /// Mockup row 195: one notebook includes chapter files, so a chapter in
+    /// a subfolder of `notebook/` is read too, labelled by its path there;
+    /// other files are not.
+    #[test]
+    fn the_chapters_in_subfolders_of_the_notebook_are_read() {
+        let dir = tempfile::tempdir().unwrap();
+        let folder = dir.path().join(NOTEBOOK_DIR);
+        std::fs::create_dir_all(folder.join("chapters/deep")).unwrap();
+        std::fs::write(folder.join("design.snxnbk"), "#note(id: \"NOTE-001\")[A]\n").unwrap();
+        let chapter = "#issue(id: \"ISS-001\")[B]\n";
+        std::fs::write(folder.join("chapters/power.snxnbk"), chapter).unwrap();
+        std::fs::write(folder.join("chapters/deep/x.snxnbk"), "Plain.\n").unwrap();
+        std::fs::write(folder.join("chapters/scope.csv"), "t,v\n").unwrap();
+        let scan = read_notebook_files(dir.path()).expect("read");
+        assert!(scan.folder_found);
+        let labels: Vec<&str> = scan.files.iter().map(|f| f.label.as_str()).collect();
+        assert_eq!(
+            labels,
+            [
+                "notebook/chapters/deep/x.snxnbk",
+                "notebook/chapters/power.snxnbk",
+                "notebook/design.snxnbk",
+            ]
+        );
+        let id = scan.files[1].annotations[0].id.as_ref();
+        assert_eq!(id.map(ToString::to_string).as_deref(), Some("ISS-001"));
+        assert!(scan.unlisted.is_empty());
+        assert!(scan.parts.is_none(), "no parts are looked up");
+    }
+
+    /// #3021: the generated design report copies the decisions; its blocks
+    /// are not read, so `list_annotations` and the badges count each once.
+    #[test]
+    fn the_generated_reports_copies_are_not_read_again() {
+        let dir = tempfile::tempdir().unwrap();
+        let folder = dir.path().join(NOTEBOOK_DIR);
+        std::fs::create_dir_all(folder.join("generated")).unwrap();
+        let decision = "#decision(id: \"DEC-001\", target: component(\"R7\"))[A]\n";
+        std::fs::write(folder.join("design.snxnbk"), decision).unwrap();
+        std::fs::write(folder.join("generated/design-report.snxnbk"), decision).unwrap();
+        let scan = read_notebook_files(dir.path()).expect("read");
+        let labels: Vec<&str> = scan.files.iter().map(|f| f.label.as_str()).collect();
+        assert_eq!(labels, ["notebook/design.snxnbk"]);
+    }
+
+    #[test]
+    fn a_project_without_a_notebook_folder_reads_as_none() {
+        let dir = tempfile::tempdir().unwrap();
+        let scan = read_notebook_files(dir.path()).expect("read");
+        assert!(!scan.folder_found);
+        assert!(scan.files.is_empty());
     }
 }

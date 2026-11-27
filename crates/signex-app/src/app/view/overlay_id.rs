@@ -100,6 +100,9 @@ pub(crate) enum OverlayId {
     UnionPopover,
     /// Edit ▸ Paste Special (mockup row 155).
     SmartPaste,
+    /// In variant ▸ Alternate… / Edit value for this variant… (mockup rows
+    /// 208, 209): the picker, or the popover at the part.
+    VariantPartEdit,
     KeyboardShortcuts,
     About,
     PassiveCalculator,
@@ -131,8 +134,12 @@ pub(crate) enum OverlayId {
     FabOutputs,
     /// Design ▸ Differential Pair Classes… (#1282).
     DiffPairClasses,
+    /// Generate design notebook (#2945, mockup row 201).
+    NotebookGenerate,
     /// Board Reports and Board Print / PDF (#2404, #2402).
     BoardOutput,
+    /// Export Design Notebook PDF (mockup row 202).
+    NotebookPdf,
     /// Tools ▸ Annotation ▸ Back Annotate Schematics (#1312).
     BackAnnotate,
     /// Project ▸ Compare Board with Schematic… (#2462).
@@ -186,7 +193,7 @@ const PRE_BLOCKING: usize = 5;
 /// behaviour change to both the paint stack and the Esc precedence, and
 /// `paint_order_is_exhaustive_and_unique` keeps it honest about covering
 /// every [`OverlayId`] exactly once.
-pub(crate) const PAINT_ORDER: [OverlayId; 86] = [
+pub(crate) const PAINT_ORDER: [OverlayId; 89] = [
     OverlayId::ErrorNotice,
     OverlayId::NetlistIncompletePrompt,
     OverlayId::PrintPreview,
@@ -228,6 +235,7 @@ pub(crate) const PAINT_ORDER: [OverlayId; 86] = [
     OverlayId::PasteArray,
     OverlayId::UnionPopover,
     OverlayId::SmartPaste,
+    OverlayId::VariantPartEdit,
     OverlayId::KeyboardShortcuts,
     OverlayId::About,
     OverlayId::PassiveCalculator,
@@ -251,7 +259,9 @@ pub(crate) const PAINT_ORDER: [OverlayId; 86] = [
     OverlayId::CreateRooms,
     OverlayId::FabOutputs,
     OverlayId::DiffPairClasses,
+    OverlayId::NotebookGenerate,
     OverlayId::BoardOutput,
+    OverlayId::NotebookPdf,
     OverlayId::BackAnnotate,
     OverlayId::CompareBoard,
     // Above its dialog: Esc closes the confirmation first.
@@ -374,6 +384,7 @@ pub(crate) fn swallows_scroll(id: OverlayId) -> bool {
         | OverlayId::PasteArray
         | OverlayId::UnionPopover
         | OverlayId::SmartPaste
+        | OverlayId::VariantPartEdit
         | OverlayId::KeyboardShortcuts
         | OverlayId::About
         | OverlayId::PassiveCalculator
@@ -396,7 +407,9 @@ pub(crate) fn swallows_scroll(id: OverlayId) -> bool {
         | OverlayId::CreateRooms
         | OverlayId::FabOutputs
         | OverlayId::DiffPairClasses
+        | OverlayId::NotebookGenerate
         | OverlayId::BoardOutput
+        | OverlayId::NotebookPdf
         | OverlayId::BackAnnotate
         | OverlayId::CompareBoard
         | OverlayId::CompareBoardConfirm
@@ -443,6 +456,9 @@ pub(crate) fn has_menu_backdrop(id: OverlayId) -> bool {
             | OverlayId::GridPicker
             | OverlayId::UnionPopover
             | OverlayId::ZoomPresets
+            // The Edit value popover is laid like a menu; the picker's
+            // click-outside layer stops the wheel itself.
+            | OverlayId::VariantPartEdit
     )
 }
 
@@ -615,6 +631,7 @@ impl Signex {
             OverlayId::PasteArray => layers.extend(self.paste_array_overlay()),
             OverlayId::UnionPopover => layers.extend(self.union_popover_overlay()),
             OverlayId::SmartPaste => layers.extend(self.smart_paste_overlay()),
+            OverlayId::VariantPartEdit => layers.extend(self.variant_part_edit_overlay(window_id)),
             OverlayId::KeyboardShortcuts => layers.extend(self.keyboard_shortcuts_overlay()),
             OverlayId::About => layers.extend(self.about_overlay()),
             OverlayId::PassiveCalculator => layers.extend(self.passive_calculator_overlay()),
@@ -641,7 +658,9 @@ impl Signex {
             OverlayId::CreateRooms => layers.extend(self.create_rooms_overlay()),
             OverlayId::FabOutputs => layers.extend(self.fab_outputs_overlay()),
             OverlayId::DiffPairClasses => layers.extend(self.diff_pair_classes_overlay()),
+            OverlayId::NotebookGenerate => layers.extend(self.notebook_generate_overlay()),
             OverlayId::BoardOutput => layers.extend(self.board_output_overlay()),
+            OverlayId::NotebookPdf => layers.extend(self.notebook_pdf_overlay()),
             OverlayId::BackAnnotate => layers.extend(self.back_annotate_overlay()),
             OverlayId::CompareBoard => layers.extend(self.compare_board_overlay()),
             OverlayId::CompareBoardConfirm => {
@@ -881,7 +900,7 @@ mod tests {
             iced::Point::new(panel.x, panel.y),
             iced::Size::new(panel.width, panel.height),
         );
-        app.document_state.dock.floating.push(panel);
+        app.document_view.dock.floating.push(panel);
         app.interaction_state.last_mouse_pos = (panel_rect.x + 40.0, panel_rect.y + 60.0);
         let _ = app.update(Message::ContextMenu(ContextMenuMsg::ShowProjectTree(None)));
         assert!(app.interaction_state.project_tree_context_menu.is_some());

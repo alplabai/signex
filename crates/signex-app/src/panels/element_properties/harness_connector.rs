@@ -57,7 +57,11 @@ pub struct HarnessPanel {
     /// The project's settings section is unreadable: definitions cannot be
     /// edited.
     pub are_definitions_locked: bool,
-    /// Per definition: how many connectors of the open sheets use it.
+    /// Types the open sheets use that the project does not define (#3043),
+    /// each as its first connector shows it. Listed, never edited.
+    pub undefined_types: Vec<HarnessDefinition>,
+    /// Per definition, then per undefined type: how many connectors and
+    /// sheet entries of the open sheets use it.
     pub uses: Vec<usize>,
     /// The selected connector (or the one owning the selected entry).
     pub connector: Option<HarnessConnector>,
@@ -501,7 +505,7 @@ mod definition_link_tests {
         let window = iced::Size::new(320.0, 60.0);
         let en = signex_i18n::I18n::en_us();
         let (app, _boot) = crate::app::Signex::new();
-        let tokens = app.document_state.panel_ctx.tokens;
+        let tokens = app.document_view.panel_ctx.tokens;
         let row = || {
             super::super::part_panel::link_row(
                 t!(en, ids::PANELS_HARNESS_DEFINITION),
@@ -645,7 +649,7 @@ mod add_entry_tests {
     #[test]
     fn the_entries_header_carries_a_plus_that_adds_an_entry() {
         let (app, _boot) = Signex::new();
-        let ctx = &app.document_state.panel_ctx;
+        let ctx = &app.document_view.panel_ctx;
         let c = connector(&["SCK", "MOSI"]);
         let title = ctx
             .i18n

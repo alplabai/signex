@@ -408,7 +408,7 @@ mod tests {
             default_clearance_mm: Some(clearance.into()),
             ..DrcPanel::default()
         };
-        (app.document_state.panel_ctx.clone(), drc)
+        (app.document_view.panel_ctx.clone(), drc)
     }
 
     fn laid_out(element: Element<'_, PanelMsg>) -> Vec<crate::layout_probe::LaidOutText> {
@@ -477,7 +477,7 @@ mod tests {
     #[test]
     fn the_idle_list_shows_each_rule_with_its_state() {
         let (app, _boot) = crate::app::Signex::new();
-        let mut ctx = app.document_state.panel_ctx.clone();
+        let mut ctx = app.document_view.panel_ctx.clone();
         ctx.pcb_drc = Some(DrcPanel {
             written_base_rules: vec![BaseRule::TrackWidth],
             default_clearance_mm: Some("0.2".into()),

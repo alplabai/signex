@@ -95,11 +95,11 @@ fn a_failed_write_reaches_the_messages_panel_and_keeps_the_draft_dirty() {
 
     assert!(app.document_state.symbol_editors[&path].is_dirty());
     assert!(app.document_state.is_document_dirty(&path));
-    assert!(app.document_state.error_notice.is_some());
+    assert!(app.document_view.error_notice.is_some());
     assert!(app.document_state.inflight_git_commits.is_empty());
     let path_text = path.display().to_string();
     assert!(
-        app.document_state
+        app.document_view
             .panel_ctx
             .diagnostics
             .iter()
@@ -240,7 +240,7 @@ fn a_second_save_of_a_path_still_writing_queues_one_follow_up() {
     let repeated = app.save_primitive_tab_at(&path).expect("coalesced");
     assert_eq!(queued.units() + repeated.units(), 0, "nothing starts yet");
     assert!(
-        app.document_state.error_notice.is_none(),
+        app.document_view.error_notice.is_none(),
         "a queued save is not a failure"
     );
 
@@ -272,7 +272,10 @@ fn replace_editor(app: &mut Signex, path: &Path, name: &str) {
 
 fn assert_replaced_editor_untouched(app: &Signex, path: &Path, name: &str) {
     let editor = &app.document_state.symbol_editors[path];
-    assert_eq!(editor.baseline.symbols[0].name, name, "baseline untouched");
+    assert_eq!(
+        editor.draft.baseline.symbols[0].name, name,
+        "baseline untouched"
+    );
     assert!(
         app.document_state.is_document_dirty(path),
         "its dirty marker stays"
@@ -354,7 +357,7 @@ fn a_failed_save_as_keeps_the_draft_when_the_original_was_reopened() {
         let tabs = app.document_state.tabs.iter().filter(|t| t.path == *path);
         assert_eq!(tabs.count(), 1, "one tab on {}", path.display());
     }
-    let notice = app.document_state.error_notice.as_ref().expect("notice");
+    let notice = app.document_view.error_notice.as_ref().expect("notice");
     // The sentence names the operation; the reason is the error chain, shown
     // in the card's system block (mockup row 11).
     assert_eq!(notice.detail.render_en_us(), "Save As failed");
@@ -400,7 +403,7 @@ fn a_failed_save_as_puts_the_tab_back_where_it_was() {
     assert!(app.document_state.symbol_editors.contains_key(&from));
     assert!(app.document_state.symbol_editors[&from].is_dirty());
     assert!(app.document_state.is_document_dirty(&from));
-    assert!(app.document_state.error_notice.is_some());
+    assert!(app.document_view.error_notice.is_some());
 }
 
 #[test]
@@ -476,7 +479,7 @@ fn a_late_save_as_completion_still_attempts_the_library_attach() {
     assert!(to.exists(), "the bytes landed");
     let lib_text = lib.display().to_string();
     assert!(
-        app.document_state
+        app.document_view
             .panel_ctx
             .diagnostics
             .iter()
@@ -719,6 +722,7 @@ fn owing(dir: &Path, stem: &str) -> (Signex, PathBuf) {
         .symbol_editors
         .get_mut(&path)
         .unwrap()
+        .draft
         .cascade_owed = vec![uuid::Uuid::now_v7()];
     (app, path)
 }

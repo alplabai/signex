@@ -251,7 +251,7 @@ impl Signex {
 
     /// Whether `id`'s text view holds typed text not applied yet.
     pub(crate) fn rules_text_unapplied(&self, id: ProjectId) -> bool {
-        self.document_state
+        self.document_view
             .project_tabs
             .get(&id)
             .and_then(|tab| tab.rules.text.as_ref())

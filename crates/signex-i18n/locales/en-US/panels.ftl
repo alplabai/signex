@@ -595,6 +595,9 @@ panels-status-bar-drag-with-wires = Dragging with wires ({ $key }: plain move)
 panels-status-bar-drag-wires-horizontal-first = Dragging with wires, horizontal first ({ $key }: plain move)
 panels-status-bar-drag-wires-vertical-first = Dragging with wires, vertical first ({ $key }: plain move)
 panels-status-bar-drag-wires-straight = Dragging with wires, straight ({ $key }: plain move)
+# The 45° modes: a 45° leg leaves the fixed end first, or reaches the pin last.
+panels-status-bar-drag-wires-45-start = Dragging with wires, 45° first ({ $key }: plain move)
+panels-status-bar-drag-wires-45-end = Dragging with wires, 45° last ({ $key }: plain move)
 # A drag in progress that leaves the wires. $key is the modifier key.
 panels-status-bar-move-without-wires = Moving without wires ({ $key }: drag with wires)
 # Measure tool prompts.
@@ -1205,6 +1208,11 @@ panels-harness-defs-uses = { $entries } entries · { $uses ->
     [one] 1 use
    *[other] { $uses } uses
 }
+# A type placed objects use that the project does not define (#3043); $entries as above, taken from its first connector.
+panels-harness-defs-undefined-uses = { $entries } entries · { $uses ->
+    [one] 1 use
+   *[other] { $uses } uses
+} · not defined
 panels-harness-defs-name = Name
 panels-harness-defs-description = Description
 panels-harness-defs-kind = Kind
@@ -1349,6 +1357,9 @@ panels-compiled-design-msg-no-project = Compile project: open a sheet of a proje
 panels-compiled-design-naming-refused = Channel naming not changed: { $why }
 # A channel card's variant fit click was refused; $why says why.
 panels-compiled-design-fit-refused = Channel fit not changed: { $why }
+# The grey tag of a channel row the active variant leaves out entirely
+# (mockup row 154); $variant is the variant's name.
+panels-compiled-design-not-fitted = Not fitted ({ $variant })
 
 # sch-panels-tidy
 # The Canvas Font field (mockup row 40): $family is the font, $size its size in points.
@@ -1472,3 +1483,8 @@ panels-pcb-classes-diff-pair = Diff pair
 # Kind code of an Export Job (.snxout) document, as on its tab and in the
 # unsaved list of the Exit confirm.
 panels-tab-kind-output-job = OUT
+# The refusals of `set_dock_panel` (#2470), a command for agents and scripts.
+panels-dock-command-unknown-panel = `panel` is one of { $panels }.
+panels-dock-command-unknown-state = `state` is one of open, close, collapse, expand.
+panels-dock-command-in-window = The { $panel } panel is in a window of its own; close that window.
+panels-dock-command-not-docked = The { $panel } panel is not docked, so it has no region to { $state }.

@@ -71,7 +71,7 @@ fn click(p: &mut Project, world_x: f64, world_y: f64) {
 
 fn info(p: &Project, key: &str) -> Option<String> {
     p.app
-        .document_state
+        .document_view
         .panel_ctx
         .selection_info
         .iter()
@@ -103,14 +103,14 @@ fn a_click_at_a_pin_end_selects_the_part_and_focuses_that_pin() {
 fn a_pin_click_opens_a_collapsed_pins_section() {
     let (mut p, _) = project_with_part(false);
     p.app
-        .document_state
+        .document_view
         .panel_ctx
         .collapsed_sections
         .insert(crate::panels::PINS_SECTION_KEY.to_string());
     click(&mut p, 50.0, 50.0);
     assert!(
         p.app
-            .document_state
+            .document_view
             .panel_ctx
             .collapsed_sections
             .contains(crate::panels::PINS_SECTION_KEY),
@@ -119,7 +119,7 @@ fn a_pin_click_opens_a_collapsed_pins_section() {
     click(&mut p, 45.1, 50.0);
     assert!(
         !p.app
-            .document_state
+            .document_view
             .panel_ctx
             .collapsed_sections
             .contains(crate::panels::PINS_SECTION_KEY)
@@ -146,7 +146,7 @@ fn the_pin_rows_take_their_nets_from_the_project_net_index() {
         Some(SelectedItem::new(id(ROOT_VCC_WIRE), SelectedKind::Wire)),
         (5.0, 0.0),
     );
-    if let Some(c) = p.app.document_state.net_nav.hover.candidate.as_mut() {
+    if let Some(c) = p.app.document_view.net_nav.hover.candidate.as_mut() {
         c.since = Instant::now()
             .checked_sub(DWELL + Duration::from_millis(50))
             .expect("clock");
@@ -216,7 +216,7 @@ fn a_pin_focus_recorded_for_another_sheet_or_placement_is_not_kept() {
     let placement_a = InstancePath::root().child(uuid::Uuid::from_u128(5));
     let placement_b = InstancePath::root().child(uuid::Uuid::from_u128(6));
     p.app
-        .document_state
+        .document_view
         .tab_placements
         .record(&sheet, Some(placement_a.clone()));
     let mut recorded_a = clicked.clone();
@@ -226,7 +226,7 @@ fn a_pin_focus_recorded_for_another_sheet_or_placement_is_not_kept() {
     assert_eq!(focused(&p).as_deref(), Some("1"), "same known placement");
 
     p.app
-        .document_state
+        .document_view
         .tab_placements
         .record(&sheet, Some(placement_b));
     p.app.update_selection_info();

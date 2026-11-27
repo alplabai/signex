@@ -96,7 +96,7 @@ fn press_run_drc(app: &mut Signex) -> Vec<String> {
 
 /// The DRC panel laid out in a 300 px dock, bidi marks dropped.
 fn panel_texts(app: &Signex) -> Vec<LaidOutText> {
-    let view = crate::panels::view_panel(PanelKind::Drc, &app.document_state.panel_ctx);
+    let view = crate::panels::view_panel(PanelKind::Drc, &app.document_view.panel_ctx);
     lay_out_texts(view, iced::Size::new(300.0, 2000.0))
         .into_iter()
         .map(|mut t| {
@@ -126,7 +126,7 @@ fn a_room_finding_is_counted_in_the_other_tile() {
         .filter(|k| DrcCategory::of(**k) == DrcCategory::Other)
         .count();
     let panel = app
-        .document_state
+        .document_view
         .panel_ctx
         .pcb_drc
         .as_ref()
@@ -156,7 +156,7 @@ fn a_room_finding_is_counted_in_the_other_tile() {
     );
 
     let pressed = crate::layout_probe::messages_on_click(
-        crate::panels::view_panel(PanelKind::Drc, &app.document_state.panel_ctx),
+        crate::panels::view_panel(PanelKind::Drc, &app.document_view.panel_ctx),
         iced::Size::new(300.0, 2000.0),
         "other",
     );
@@ -165,7 +165,7 @@ fn a_room_finding_is_counted_in_the_other_tile() {
     }
     app.refresh_panel_ctx();
     let panel = app
-        .document_state
+        .document_view
         .panel_ctx
         .pcb_drc
         .as_ref()

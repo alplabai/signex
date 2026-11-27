@@ -103,7 +103,7 @@ fn save_all_writes_when_the_task_runs_and_settles_after_every_write() {
     );
     feed(&mut app, messages);
     assert!(!app.document_state.has_dirty_documents());
-    assert!(app.document_state.error_notice.is_none());
+    assert!(app.document_view.error_notice.is_none());
 }
 
 #[test]
@@ -139,7 +139,7 @@ fn a_failed_write_keeps_signex_open_and_names_the_file_and_the_reason() {
 
     assert!(symbol.exists(), "the other file still saved");
     assert!(app.document_state.is_document_dirty(&blocked));
-    let notice = app.document_state.error_notice.as_ref().expect("notice");
+    let notice = app.document_view.error_notice.as_ref().expect("notice");
     assert!(
         notice.detail.render_en_us().contains("stayed open"),
         "{notice:?}"
@@ -150,7 +150,7 @@ fn a_failed_write_keeps_signex_open_and_names_the_file_and_the_reason() {
     );
     let path_text = blocked.display().to_string();
     assert!(
-        app.document_state
+        app.document_view
             .panel_ctx
             .diagnostics
             .iter()
@@ -173,7 +173,7 @@ fn a_draft_edited_during_save_all_is_reported_unsaved() {
     feed(&mut app, outputs(task));
 
     assert!(app.document_state.is_document_dirty(&symbol));
-    let notice = app.document_state.error_notice.as_ref().expect("notice");
+    let notice = app.document_view.error_notice.as_ref().expect("notice");
     assert!(
         notice.detail.render_en_us().contains("Lib.snxsym"),
         "{notice:?}"
@@ -290,7 +290,7 @@ fn a_save_all_write_superseded_by_a_later_ctrl_s_does_not_quit_before_that_save_
     // Exactly one cancelled system quit request: no exit, no window close.
     crate::task_driver::assert_quit_declined(after);
     assert!(app.document_state.is_document_dirty(&sheet));
-    let notice = app.document_state.error_notice.as_ref().expect("notice");
+    let notice = app.document_view.error_notice.as_ref().expect("notice");
     assert!(
         notice.detail.render_en_us().contains("Sheet.snxsch"),
         "{notice:?}"
@@ -311,7 +311,7 @@ fn save_all_over_a_running_primitive_ctrl_s_keeps_signex_open_until_it_lands() {
     // Exactly one cancelled system quit request: no exit, no window close.
     crate::task_driver::assert_quit_declined(after);
     assert!(app.document_state.is_document_dirty(&symbol));
-    let notice = app.document_state.error_notice.as_ref().expect("notice");
+    let notice = app.document_view.error_notice.as_ref().expect("notice");
     assert!(
         notice.detail.render_en_us().contains("Lib.snxsym"),
         "{notice:?}"
@@ -417,7 +417,7 @@ fn save_all_writes_identical_case_variants_once_and_clears_every_marker() {
         "{:?}",
         app.document_state.dirty_document_paths()
     );
-    assert!(app.document_state.error_notice.is_none());
+    assert!(app.document_view.error_notice.is_none());
 }
 
 /// A recovery copy of a document that is no longer open is removed when a
@@ -519,7 +519,7 @@ fn loose_identical_variants_collapse_when_the_directory_probe_says_so() {
         "{:?}",
         app.document_state.dirty_document_paths()
     );
-    assert!(app.document_state.error_notice.is_none());
+    assert!(app.document_view.error_notice.is_none());
 }
 
 /// The mirror image: a directory that probes case-sensitive keeps the two
@@ -576,7 +576,7 @@ fn begin_save_all_probes_the_loose_directory_then_saves_both_spellings() {
     feed(&mut app, writes);
 
     assert!(!app.document_state.has_dirty_documents());
-    assert!(app.document_state.error_notice.is_none());
+    assert!(app.document_view.error_notice.is_none());
     let written = sink.0.lock().unwrap().clone();
     if folds {
         assert_eq!(written, vec![upper.clone()], "one file, one write");
@@ -615,7 +615,7 @@ fn an_undecided_directory_writes_once_and_keeps_the_other_spelling_dirty() {
     assert!(app.document_state.is_document_dirty(&lower));
     // Exactly one cancelled system quit request: no exit, no window close.
     crate::task_driver::assert_quit_declined(after);
-    let notice = app.document_state.error_notice.as_ref().expect("notice");
+    let notice = app.document_view.error_notice.as_ref().expect("notice");
     assert!(
         notice.detail.render_en_us().contains("lib.snxsch"),
         "{notice:?}"
@@ -805,7 +805,7 @@ fn a_quit_save_all_whose_write_panics_declines_the_quit() {
     crate::task_driver::assert_quit_declined(after);
     assert!(!app.library.batch_has_rows_in_flight(batch));
     assert!(app.document_state.parked_save_all_settles.is_empty());
-    let notice = format!("{:?}", app.document_state.error_notice.as_ref());
+    let notice = format!("{:?}", app.document_view.error_notice.as_ref());
     assert!(
         notice.contains("Sheet.snxsch")
             && notice.contains("resistors")

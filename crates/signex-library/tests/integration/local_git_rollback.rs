@@ -30,6 +30,7 @@ pub(crate) fn init(dir: &tempfile::TempDir) -> (PathBuf, Uuid, LocalGitAdapter) 
         library: LibrarySection {
             name: "Rb".into(),
             description: None,
+            ..Default::default()
         },
         mode: LibraryMode::default(),
         workflow: WorkflowConfig::default(),

@@ -27,7 +27,7 @@ impl Signex {
         };
         let ctx = site
             .owner
-            .map_or(&self.document_state.panel_ctx, |w| self.panel_ctx_for(w));
+            .map_or(&self.document_view.panel_ctx, |w| self.panel_ctx_for(w));
         let Some(open) = crate::panels::open_part_menu(ctx) else {
             return Vec::new();
         };
@@ -40,12 +40,12 @@ impl Signex {
                 dd_msg(None, &text(i18n, label), "", message)
             })
             .collect();
-        let panel_ctx = &self.document_state.panel_ctx;
+        let panel_ctx = &self.document_view.panel_ctx;
         let docked_in_main =
             site.owner.is_none() && self.ui_state.main_window_id == Some(window_id);
         let anchor = if docked_in_main {
             super::components_row::dock_menu_anchor(
-                self.document_state.dock.locate(PanelKind::Properties),
+                self.document_view.dock.locate(PanelKind::Properties),
                 self.document_area_in(None),
                 self.ui_state.window_size.0,
                 open.at,

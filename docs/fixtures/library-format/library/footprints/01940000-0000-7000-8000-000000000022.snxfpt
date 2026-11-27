@@ -1,0 +1,96 @@
+format = "snxfpt/1.1"
+file_uuid = "01940000-0000-7000-8000-000000000032"
+display_name = "R_0805"
+created = "2026-01-01T00:00:00Z"
+updated = "2026-01-02T03:04:05Z"
+
+[[footprints]]
+uuid = "01940000-0000-7000-8000-000000000022"
+name = "R_0805"
+anchor = [
+    0.0,
+    0.0,
+]
+pads_tsv = '''
+number	kind	shape	size_x	size_y	pos_x	pos_y	rotation	layers	drill_diameter	drill_slot_length	solder_mask_margin	paste_margin	corner_radius_pct
+1	Smd	round_rect:0.25	1.15	1.45	-0.9	0	0	Top Layer|Top Solder|Top Paste			0.05	0	25
+2	Smd	round_rect:0.25	1.15	1.45	0.9	0	0	Top Layer|Top Solder|Top Paste			0.05	0	25
+'''
+silk_f = []
+silk_b = []
+fab_b = []
+version = "1.0.0"
+released = false
+created = "2026-01-01T00:00:00Z"
+updated = "2026-01-02T03:04:05Z"
+schema_version = 3
+description = "Chip resistor, 0805 (2012 metric)"
+default_designator = "R?"
+
+[footprints.courtyard]
+points = [
+    [
+    -1.75,
+    -1.0,
+],
+    [
+    1.75,
+    -1.0,
+],
+    [
+    1.75,
+    1.0,
+],
+    [
+    -1.75,
+    1.0,
+],
+]
+
+[[footprints.fab_f]]
+stroke_width = 0.1
+filled = false
+
+[footprints.fab_f.kind]
+kind = "rectangle"
+from = [
+    -1.05,
+    -0.65,
+]
+to = [
+    1.05,
+    0.65,
+]
+
+[footprints.body_3d]
+shape = "Extrude"
+height_mm = 0.6000000238418579
+offset_z_mm = 0.0
+top_color = [
+    0.20000000298023224,
+    0.20000000298023224,
+    0.20000000298023224,
+    1.0,
+]
+side_color = [
+    0.30000001192092896,
+    0.30000001192092896,
+    0.30000001192092896,
+    1.0,
+]
+
+[footprints.step_attachment]
+content_hash = "25bdbce8f3930e778844aff9e6deb9dd4aa5f01315979d7f7eebc68bbc301313"
+filename = "R_0805.step"
+offset_xyz = [
+    0.0,
+    0.0,
+    0.0,
+]
+rotation_xyz = [
+    0.0,
+    0.0,
+    90.0,
+]
+
+[footprints.pcb_params]

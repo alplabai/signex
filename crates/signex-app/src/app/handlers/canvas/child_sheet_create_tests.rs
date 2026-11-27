@@ -303,7 +303,7 @@ fn an_unsaved_parent_says_so_and_offers_nothing() {
     let task = app.descend_through_sheet_symbol(id, "sheet1.snxsch");
     crate::app::path_ops::settle_task(&mut app, task);
     assert!(app.ui_state.create_child_sheet_confirm.is_none());
-    let card = app.document_state.error_notice.as_ref().expect("a notice");
+    let card = app.document_view.error_notice.as_ref().expect("a notice");
     assert!(
         card.detail
             .render_en_us()
@@ -431,7 +431,7 @@ fn a_project_being_renamed_refuses_inline_in_the_dialog_not_in_a_notice() {
         "{c:?}"
     );
     assert!(
-        app.document_state.error_notice.is_none(),
+        app.document_view.error_notice.is_none(),
         "no notice over the dialog"
     );
 }
@@ -710,7 +710,7 @@ fn descending_into_an_unopened_child_opens_it_when_the_worker_has_read_it() {
     write_child_file(dir.path(), 0);
     let child = dir.path().join("sheet1.snxsch");
     let root = signex_types::schematic::InstancePath::from_chain(vec![Uuid::from_u128(7)]);
-    app.document_state
+    app.document_view
         .tab_placements
         .record(&parent, Some(root.clone()));
 
@@ -729,7 +729,7 @@ fn descending_into_an_unopened_child_opens_it_when_the_worker_has_read_it() {
     assert!(!app.document_state.pending_opens.contains(&child));
     assert!(app.ui_state.pending_sheet_opens.is_empty());
     assert_eq!(
-        app.document_state.tab_placements.get(&child),
+        app.document_view.tab_placements.get(&child),
         Some(&root.child(id)),
         "the placement it came through"
     );
@@ -792,9 +792,7 @@ fn closing_the_documents_while_the_child_is_read_opens_nothing() {
     write_child_file(dir.path(), 0);
     let child = dir.path().join("sheet1.snxsch");
     let from = signex_types::schematic::InstancePath::from_chain(vec![Uuid::from_u128(7)]);
-    app.document_state
-        .tab_placements
-        .record(&parent, Some(from));
+    app.document_view.tab_placements.record(&parent, Some(from));
     let task = app.descend_through_sheet_symbol(id, "sheet1.snxsch");
 
     app.cancel_in_flight_reads();
@@ -802,7 +800,7 @@ fn closing_the_documents_while_the_child_is_read_opens_nothing() {
 
     assert!(!app.has_tab_for(&child));
     assert!(
-        app.document_state.tab_placements.get(&child).is_none(),
+        app.document_view.tab_placements.get(&child).is_none(),
         "no placement for a tab that never opened"
     );
     assert!(app.ui_state.pending_sheet_opens.is_empty());
@@ -826,7 +824,7 @@ fn a_rename_holding_the_child_refuses_the_descent_with_a_notice() {
 
     assert!(!app.has_tab_for(&child));
     assert!(!app.document_state.pending_opens.contains(&child));
-    let notice = app.document_state.error_notice.as_ref().expect("notice");
+    let notice = app.document_view.error_notice.as_ref().expect("notice");
     assert!(
         notice.detail.render_en_us().contains("still running"),
         "{}",
@@ -860,7 +858,7 @@ fn a_stale_read_of_the_same_file_does_not_settle_the_new_descent() {
     write_child_file(dir.path(), 0);
     let child = dir.path().join("sheet1.snxsch");
     let from = signex_types::schematic::InstancePath::from_chain(vec![Uuid::from_u128(7)]);
-    app.document_state
+    app.document_view
         .tab_placements
         .record(&parent, Some(from.clone()));
     // A first descent whose read is cancelled (Close All), then a second one.
@@ -878,7 +876,7 @@ fn a_stale_read_of_the_same_file_does_not_settle_the_new_descent() {
 
     assert!(app.has_tab_for(&child));
     assert_eq!(
-        app.document_state.tab_placements.get(&child),
+        app.document_view.tab_placements.get(&child),
         Some(&from.child(id)),
         "the new descent's placement is recorded"
     );
@@ -982,7 +980,7 @@ fn a_descent_deduplicated_against_an_untracked_open_arrives_when_it_succeeds() {
     let child = dir.path().join("sheet1.snxsch");
     assert!(app.document_state.pending_opens.insert(child.clone()));
     let root = signex_types::schematic::InstancePath::from_chain(vec![Uuid::from_u128(7)]);
-    app.document_state
+    app.document_view
         .tab_placements
         .record(&parent, Some(root.clone()));
 
@@ -993,7 +991,7 @@ fn a_descent_deduplicated_against_an_untracked_open_arrives_when_it_succeeds() {
     assert!(app.has_tab_for(&child));
     assert!(app.ui_state.pending_sheet_opens.is_empty());
     assert_eq!(
-        app.document_state.tab_placements.get(&child),
+        app.document_view.tab_placements.get(&child),
         Some(&root.child(id)),
         "the placement it came through"
     );
@@ -1027,7 +1025,7 @@ fn a_descent_parked_on_a_deferred_open_that_fails_to_reopen_does_not_strand() {
         "the descent answered instead of waiting for an open that never comes"
     );
     assert!(
-        app.document_state.error_notice.is_some(),
+        app.document_view.error_notice.is_some(),
         "the refusal shows"
     );
 }

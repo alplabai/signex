@@ -5,6 +5,21 @@ use super::{CommandFlags, CommandGroup, CommandMetadata, Enablement, operands};
 use signex_i18n_ids::command_ids;
 
 pub(super) const QUERY: &[CommandMetadata] = &[
+    // #1988: the BOM lines of a sheet's project, with a template's columns
+    // (computed ones included), as JSON. No menu row: the dialog is File ▸
+    // Export ▸ Export BOM…. A query that writes no file: the `file` category
+    // of the other queries, so the CLI grants it as a read.
+    CommandMetadata {
+        id: "bom_lines",
+        category: "file",
+        label: command_ids::CMD_BOM_LINES,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: operands::BOM_LINES,
+        ..CommandMetadata::DEFAULT
+    },
     CommandMetadata {
         id: "document_info",
         category: "file",
@@ -49,6 +64,32 @@ pub(super) const QUERY: &[CommandMetadata] = &[
         operands: operands::QUERY_PINS,
         ..CommandMetadata::DEFAULT
     },
+    // #1313: the project's power tree and the budget per sheet; changes
+    // nothing.
+    CommandMetadata {
+        id: "query_power_tree",
+        category: "design",
+        label: command_ids::CMD_QUERY_POWER_TREE,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: operands::QUERY_POWER_TREE,
+        ..CommandMetadata::DEFAULT
+    },
+    // #1277: the net ties of a sheet, with the nets each joins, or of a
+    // board, with the nets each tie footprint's pads bridge.
+    CommandMetadata {
+        id: "query_net_ties",
+        category: "file",
+        label: command_ids::CMD_QUERY_NET_TIES,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: operands::DOCUMENT,
+        ..CommandMetadata::DEFAULT
+    },
     // #2944: the rows of an open library as the app holds them; reads no
     // file and reaches no library server, so it does not need the network.
     CommandMetadata {
@@ -71,6 +112,19 @@ pub(super) const QUERY: &[CommandMetadata] = &[
         enable: Enablement::Always,
         flags: CommandFlags::NONE,
         operands: operands::RESOLVE,
+        ..CommandMetadata::DEFAULT
+    },
+    // Mockup row 198: the review records of the project's Design Notebook,
+    // cited by typed id.
+    CommandMetadata {
+        id: "list_annotations",
+        category: "design",
+        label: command_ids::CMD_LIST_ANNOTATIONS,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: operands::LIST_ANNOTATIONS,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {

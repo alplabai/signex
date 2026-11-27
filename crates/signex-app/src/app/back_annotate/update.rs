@@ -292,7 +292,7 @@ impl Signex {
         // Messages stays en-US whatever the UI language.
         let why = signex_i18n::I18n::en_us().message_plain(id, &[]);
         crate::diagnostics::log_warning(format!("Back Annotate: {why}"));
-        self.document_state.error_notice = Some(ErrorNotice::new(ids::BACK_ANNOTATE_TITLE, id));
+        self.document_view.error_notice = Some(ErrorNotice::new(ids::BACK_ANNOTATE_TITLE, id));
         Task::none()
     }
 

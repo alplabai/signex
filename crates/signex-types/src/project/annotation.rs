@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use super::{AnnotateUndo, ProjectData, UnknownJson};
-use crate::designator::DesignatorStandard;
+use crate::designator::{DesignatorStandard, NumberingScheme};
 
 /// The `.snxprj` key of the annotation settings.
 pub(super) const ANNOTATION_KEY: &str = "annotation";
@@ -23,6 +23,10 @@ pub struct AnnotationSettings {
     /// machine's Preferences value decides.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub annotate_undo: Option<AnnotateUndo>,
+    /// How Annotate numbers new designators (#1292). Absent = continuous;
+    /// the continuous scheme is never written.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub numbering: Option<NumberingScheme>,
     /// Keys a newer build wrote inside the section; kept for re-save.
     #[serde(default, flatten, skip_serializing_if = "UnknownJson::is_empty")]
     pub unknown: UnknownJson,
@@ -33,6 +37,7 @@ impl AnnotationSettings {
     pub fn is_empty(&self) -> bool {
         self.designator_standard.is_none()
             && self.annotate_undo.is_none()
+            && self.numbering.is_none()
             && self.unknown.is_empty()
     }
 }
@@ -113,6 +118,23 @@ impl ProjectData {
     /// the same terms as [`Self::set_designator_standard`].
     pub fn set_annotate_undo(&mut self, choice: Option<AnnotateUndo>) {
         self.edit_annotation(|settings| settings.annotate_undo = choice);
+    }
+
+    /// How Annotate numbers this project's new designators (#1292).
+    pub fn annotate_numbering(&self) -> NumberingScheme {
+        self.annotation
+            .as_ref()
+            .and_then(|settings| settings.numbering)
+            .unwrap_or_default()
+    }
+
+    /// Set the numbering scheme, on the same terms as
+    /// [`Self::set_designator_standard`]. Continuous is the default and is
+    /// stored as no key, so choosing it on a project that never had another
+    /// saves byte-identical to before.
+    pub fn set_annotate_numbering(&mut self, scheme: NumberingScheme) {
+        let stored = (scheme != NumberingScheme::Continuous).then_some(scheme);
+        self.edit_annotation(|settings| settings.numbering = stored);
     }
 
     /// Edit the settings; an unreadable section is replaced and empty

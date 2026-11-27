@@ -75,6 +75,7 @@ fn a_click_on_the_unavailable_filter_leaves_the_next_click_to_the_list() {
         display: Default::default(),
         dangling: Default::default(),
         pricing: Default::default(),
+        provenance: Default::default(),
     });
     state.touch_data();
     state.picker = Some(PickerState::default());

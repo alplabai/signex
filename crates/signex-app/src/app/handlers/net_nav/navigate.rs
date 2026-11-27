@@ -47,7 +47,7 @@ impl Signex {
             return Task::none();
         };
         // The user asked: a build that failed before may work now.
-        self.document_state.net_nav.index.clear_failed(project);
+        self.document_view.net_nav.index.clear_failed(project);
         match self.net_index_lookup(project) {
             IndexLookup::Ready(data) => self.jump_with(&data, &target),
             IndexLookup::Building(build) => {
@@ -92,7 +92,7 @@ impl Signex {
         let name = describe_member(source);
         // Carry on the lap this jump continues, or start one from this port.
         let anchor = (key.clone(), target.item.uuid, source.occurrence.clone());
-        let nav = &mut self.document_state.net_nav;
+        let nav = &mut self.document_view.net_nav;
         if !nav
             .jump
             .as_ref()
@@ -177,7 +177,7 @@ impl Signex {
     /// Back / forward through the sheets visited. A sheet that can no longer
     /// be opened is dropped from the history and said so.
     pub(crate) fn step_sheet_history(&mut self, forward: bool) -> Task<Message> {
-        let history = &self.document_state.net_nav.history;
+        let history = &self.document_view.net_nav.history;
         let Some(path) = history.peek(forward).map(std::path::Path::to_path_buf) else {
             crate::diagnostics::log_info(messages::no_history(forward));
             return Task::none();
@@ -205,7 +205,7 @@ impl Signex {
         forward: bool,
         path: &std::path::Path,
     ) -> bool {
-        let history = &mut self.document_state.net_nav.history;
+        let history = &mut self.document_view.net_nav.history;
         if history.peek(forward) != Some(path) {
             return false;
         }
@@ -221,10 +221,10 @@ impl Signex {
             && matches!(tab.kind, TabKind::Schematic)
         {
             let path = tab.path.clone();
-            self.document_state.net_nav.history.visit(&path);
+            self.document_view.net_nav.history.visit(&path);
         }
         self.sync_net_highlight_to_canvases();
         // A card read on the sheet just left is stale.
-        self.document_state.net_nav.hover = Default::default();
+        self.document_view.net_nav.hover = Default::default();
     }
 }
