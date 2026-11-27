@@ -465,11 +465,14 @@ pub(super) fn build_footprint_editor_panel_ctx(
                 count_expr,
                 dx_expr,
                 dy_expr,
+                depopulation,
                 ..
             } => crate::panels::ArrayKindSummary::Linear {
                 count_expr: count_expr.clone(),
                 dx_expr: dx_expr.clone(),
                 dy_expr: dy_expr.clone(),
+                suppressed_instances: suppressed_indices(depopulation.as_ref()).1,
+                count_value: count_expr.trim().parse::<u32>().ok(),
             },
             ArrayKind::Grid {
                 nx_expr,
@@ -510,19 +513,7 @@ pub(super) fn build_footprint_editor_panel_ctx(
                             signex_sketch::entity::EntityKind::Point { x, y } => Some([x, y]),
                             _ => None,
                         });
-                let (mask_expr, suppressed_instances): (String, Vec<u32>) = depopulation
-                    .as_ref()
-                    .map(|d| {
-                        // Polar entries are (i, 0); flatten to a single
-                        // index per row.
-                        let suppressed = d
-                            .suppressed_instances
-                            .iter()
-                            .filter_map(|(si, sj)| if *sj == 0 { Some(*si) } else { None })
-                            .collect();
-                        (d.mask_expr.clone(), suppressed)
-                    })
-                    .unwrap_or_default();
+                let (mask_expr, suppressed_instances) = suppressed_indices(depopulation.as_ref());
                 crate::panels::ArrayKindSummary::Polar {
                     count_expr: count_expr.clone(),
                     sweep_angle_expr: sweep_angle_expr.clone(),
@@ -806,4 +797,21 @@ fn editor_pad_size_mm(
         .iter()
         .find(|pad| pad.sketch_entity_id == Some(id))
         .map(|pad| [pad.size_mm.0, pad.size_mm.1])
+}
+
+/// A linear or polar pattern's mask and suppressed instances, each entry
+/// `(i, 0)` flattened to its index `i`.
+fn suppressed_indices(
+    depopulation: Option<&signex_sketch::array::GridDepopulation>,
+) -> (String, Vec<u32>) {
+    depopulation
+        .map(|d| {
+            let suppressed = d
+                .suppressed_instances
+                .iter()
+                .filter_map(|&(i, j)| (j == 0).then_some(i))
+                .collect();
+            (d.mask_expr.clone(), suppressed)
+        })
+        .unwrap_or_default()
 }

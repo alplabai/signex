@@ -66,6 +66,7 @@ fn linear(count: &str, dx: &str) -> impl Fn(SketchEntityId, SketchEntityId) -> A
         count_expr: count.clone(),
         dx_expr: dx.clone(),
         dy_expr: "0mm".into(),
+        depopulation: None,
     }
 }
 

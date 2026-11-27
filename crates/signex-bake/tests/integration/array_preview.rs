@@ -119,6 +119,7 @@ fn a_linear_pattern_previews_the_baked_pads() {
             count_expr: "3".into(),
             dx_expr: "1.27mm".into(),
             dy_expr: "0mm".into(),
+            depopulation: None,
         },
     );
     let (kept, _) = preview_and_bake(&data, at);
@@ -134,6 +135,7 @@ fn a_count_that_does_not_evaluate_previews_nothing() {
             count_expr: "missing_parameter".into(),
             dx_expr: "1mm".into(),
             dy_expr: "0mm".into(),
+            depopulation: None,
         }
     });
     let shown = preview_array(&data.arrays[0], &data, Some([0.0, 0.0]), None, 256);
@@ -149,8 +151,30 @@ fn more_instances_than_the_limit_are_counted_not_walked() {
             count_expr: "300".into(),
             dx_expr: "1mm".into(),
             dy_expr: "0mm".into(),
+            depopulation: None,
         }
     });
     let shown = preview_array(&data.arrays[0], &data, Some([0.0, 0.0]), None, 256);
     assert_eq!(shown, ArrayPreview::TooMany(300));
+}
+
+/// #2688: a linear pattern's suppressed instance and the one its mask drops
+/// are previewed as dropped and baked as nothing.
+#[test]
+fn a_depopulated_linear_pattern_previews_the_baked_pads() {
+    let at = (0.5, 0.25);
+    let data = sketch_with(at, NumberingScheme::default(), |source| ArrayKind::Linear {
+        source,
+        count_expr: "5".into(),
+        dx_expr: "1.27mm".into(),
+        dy_expr: "0mm".into(),
+        depopulation: Some(GridDepopulation {
+            mask_expr: "i != 4".into(),
+            suppressed_instances: vec![(1, 0)],
+        }),
+    });
+    let (kept, all) = preview_and_bake(&data, at);
+    assert_eq!(all, 5, "dropped instances are previewed too");
+    let numbers: Vec<&str> = kept.iter().map(|(n, ..)| n.as_str()).collect();
+    assert_eq!(numbers, vec!["1", "3", "4"]);
 }

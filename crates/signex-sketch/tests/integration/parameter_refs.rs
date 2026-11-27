@@ -65,6 +65,7 @@ fn fixture() -> Fixture {
             count_expr: "rows".into(),
             dx_expr: "pitch".into(),
             dy_expr: "0mm".into(),
+            depopulation: None,
         },
         numbering: NumberingScheme::default(),
     });

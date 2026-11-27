@@ -2,7 +2,8 @@
 //! save writes follows the content, as the schematic's does. A file whose
 //! sketches hold no link and whose footprints generate nothing writes
 //! `snxfpt/1.1` byte for byte; one that embeds a STEP model writes
-//! `snxfpt/1.4` (#3108).
+//! `snxfpt/1.4` (#3108), and one with any of the 1.5 content
+//! (`FootprintFile::needs_1_5`) writes `snxfpt/1.5`.
 
 use signex_types::format_version::{FormatVersion, MissingToken, NewerMinor};
 
@@ -27,16 +28,22 @@ pub(super) const SNXFPT_FORMAT_V1_3: &str = "snxfpt/1.3";
 /// refuses the file by name. Wins over every lower token.
 pub(super) const SNXFPT_FORMAT_V1_4: &str = "snxfpt/1.4";
 
+/// Written while the file holds any 1.5 content (`FootprintFile::needs_1_5`):
+/// a 1.4 build would ignore it and lose it on save, so it refuses the file
+/// by name. Wins over every lower token.
+pub(super) const SNXFPT_FORMAT_V1_5: &str = "snxfpt/1.5";
+
 /// `.snxfpt` version policy. A newer token, minor included, is refused by
 /// name: an older build cannot tell which of its shapes it would misread.
 pub(super) const FOOTPRINT_FILE_VERSION: FormatVersion = FormatVersion {
-    current: SNXFPT_FORMAT_V1_4,
+    current: SNXFPT_FORMAT_V1_5,
     readable: &[
         "snxfpt/1",
         SNXFPT_FORMAT_V1_1,
         SNXFPT_FORMAT_SKETCH_LINKS,
         SNXFPT_FORMAT_V1_3,
         SNXFPT_FORMAT_V1_4,
+        SNXFPT_FORMAT_V1_5,
     ],
     newer_minor: NewerMinor::Refused,
     missing: MissingToken::Refused,
@@ -47,6 +54,9 @@ impl FootprintFile {
     /// file whose last model, link, sweep or generated feature goes drops
     /// back down.
     pub fn format_token(&self) -> &'static str {
+        if self.needs_1_5() {
+            return SNXFPT_FORMAT_V1_5;
+        }
         if self.writes_models() {
             return SNXFPT_FORMAT_V1_4;
         }
@@ -67,5 +77,16 @@ impl FootprintFile {
         } else {
             SNXFPT_FORMAT_V1_1
         }
+    }
+
+    /// Whether the file holds content only `snxfpt/1.5` carries. One rule
+    /// for every 1.5 trigger; today a footprint sketch whose linear pattern
+    /// has a suppression list (#2688). A file without any keeps its lower
+    /// token, byte for byte.
+    fn needs_1_5(&self) -> bool {
+        self.footprints
+            .iter()
+            .filter_map(|fp| fp.sketch.as_ref())
+            .any(|sketch| sketch.has_linear_suppression())
     }
 }

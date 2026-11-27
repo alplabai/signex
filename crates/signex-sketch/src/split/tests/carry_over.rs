@@ -464,6 +464,7 @@ fn array_source_and_polar_center_retarget_to_line_a() {
             count_expr: "2".into(),
             dx_expr: "1".into(),
             dy_expr: "0".into(),
+            depopulation: None,
         },
         numbering: NumberingScheme::default(),
     });

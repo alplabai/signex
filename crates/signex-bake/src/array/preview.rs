@@ -88,10 +88,12 @@ pub fn preview_array(
             count_expr,
             dx_expr,
             dy_expr,
+            depopulation,
         } => walk(*source, array, &params_ast, limit).linear(
             count_expr,
             dx_expr,
             dy_expr,
+            depopulation.as_ref(),
             &mut warnings,
             &mut collect,
         ),

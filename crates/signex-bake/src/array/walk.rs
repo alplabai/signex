@@ -65,12 +65,18 @@ impl Walk<'_> {
         }
     }
 
-    /// `count` instances stepped by (`dx`, `dy`).
+    /// `count` instances stepped by (`dx`, `dy`), with an optional
+    /// depopulation whose list holds `(i, 0)` entries.
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "a linear array is three expressions, its depopulation and the visitor"
+    )]
     pub fn linear(
         &self,
         count_expr: &str,
         dx_expr: &str,
         dy_expr: &str,
+        depopulation: Option<&GridDepopulation>,
         warnings: &mut Vec<String>,
         visit: &mut Visit<'_>,
     ) -> Result<Walked, SketchError> {
@@ -79,6 +85,7 @@ impl Walk<'_> {
         let count_ast = parse_in(count_expr, LiteralContext::Count)?;
         let dx_ast = parse_in(dx_expr, LiteralContext::Length)?;
         let dy_ast = parse_in(dy_expr, LiteralContext::Length)?;
+        let mask_ast = mask_ast(depopulation)?;
         let mut ctx = self.context();
         let Some(count) =
             super::eval_count("linear", "count_expr", source, &count_ast, &ctx, warnings)?
@@ -97,16 +104,37 @@ impl Walk<'_> {
         }
         for i in 0..count {
             ctx.array_index = Some((i, 0));
-            let dx_mm = crate::params::eval_length_mm(&dx_ast, &ctx)?;
-            let dy_mm = crate::params::eval_length_mm(&dy_ast, &ctx)?;
-            let number = derive_pad_number(self.numbering, i, &mut ctx, warnings, source);
+            let is_skipped = is_suppressed(depopulation, i, 0)
+                || !mask_keeps(
+                    mask_ast.as_ref(),
+                    &ctx,
+                    warnings,
+                    || format!("linear array source {source}: depopulation eval failed at i={i}"),
+                    "keeping instance",
+                );
+            let offset_mm = if is_skipped {
+                let dx = crate::params::eval_length_mm(&dx_ast, &ctx).ok();
+                let dy = crate::params::eval_length_mm(&dy_ast, &ctx).ok();
+                dx.zip(dy).map(|(dx, dy)| [i as f64 * dx, i as f64 * dy])
+            } else {
+                let dx = crate::params::eval_length_mm(&dx_ast, &ctx)?;
+                let dy = crate::params::eval_length_mm(&dy_ast, &ctx)?;
+                Some([i as f64 * dx, i as f64 * dy])
+            };
+            let mut dropped_warnings = Vec::new();
+            let number_warnings = if is_skipped {
+                &mut dropped_warnings
+            } else {
+                &mut *warnings
+            };
+            let number = derive_pad_number(self.numbering, i, &mut ctx, number_warnings, source);
             ctx.array_index = Some((i, 0));
             let instance = Instance {
                 i,
                 j: 0,
-                offset_mm: Some([i as f64 * dx_mm, i as f64 * dy_mm]),
+                offset_mm,
                 number,
-                is_skipped: false,
+                is_skipped,
             };
             visit(instance, &ctx, warnings)?;
         }

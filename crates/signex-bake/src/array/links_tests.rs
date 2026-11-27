@@ -89,6 +89,7 @@ fn linear(source: SketchEntityId, count: u32, dx_mm: f64) -> Array {
             count_expr: count.to_string(),
             dx_expr: format!("{dx_mm}mm"),
             dy_expr: "0mm".into(),
+            depopulation: None,
         },
         numbering: NumberingScheme::default(),
     }

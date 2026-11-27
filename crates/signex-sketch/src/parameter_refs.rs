@@ -228,7 +228,7 @@ macro_rules! expression_walker {
             for Array { id, kind, numbering } in arrays {
                 let array = *id;
                 match kind {
-                    ArrayKind::Linear { source: _, count_expr, dx_expr, dy_expr } => {
+                    ArrayKind::Linear { source: _, count_expr, dx_expr, dy_expr, depopulation } => {
                         let site = |field| ParameterUse::Pattern {
                             array,
                             kind: PatternKind::Linear,
@@ -237,6 +237,9 @@ macro_rules! expression_walker {
                         visit(site(PatternField::Count), count_expr);
                         visit(site(PatternField::Dx), dx_expr);
                         visit(site(PatternField::Dy), dy_expr);
+                        if let Some(GridDepopulation { mask_expr, suppressed_instances: _ }) = depopulation {
+                            visit(site(PatternField::DepopulationMask), mask_expr);
+                        }
                         numbering_walk!(visit, site, numbering);
                     }
                     ArrayKind::Grid { source: _, nx_expr, ny_expr, dx_expr, dy_expr, depopulation } => {

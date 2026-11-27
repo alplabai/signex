@@ -28,8 +28,11 @@ format declares only its own table row below.
   (mockup rows 176 and 177) and `snxpcb/1.11` when it has a pour cutout
   (#2871), a dimension with a non-default look (#2868) or of a kind other
   than aligned (#2507), a drawing or
-  string on a copper layer (#2883) or an unfilled pour (#2506), and
-  `snxpcb/1.12` when it has a layout plan (#2942). A project stays `snxprj/1`, byte for
+  string on a copper layer (#2883) or an unfilled pour (#2506),
+  `snxpcb/1.12` when it has a layout plan (#2942) and `snxpcb/1.13` when its
+  board sketch has a linear pattern with a suppression list (#2688). A
+  footprint file writes `snxfpt/1.5` for any of the 1.5 content listed in
+  its row below. A project stays `snxprj/1`, byte for
   byte, and writes `snxprj/1.1` when it has variant settings. A build that
   reads only the lower token opens such a sheet or board read-only. A project
   is different: a released build refuses a `snxprj/1.1` project on load; see
@@ -74,6 +77,7 @@ format declares only its own table row below.
 | `.snxpcb`, drawn copper | `snxpcb/1.11` while a board drawing (`graphics`) or board string (`texts`) sits on a copper layer (`format::board_has_drawn_copper`, #2883; DECISIONS 2026-11-25), whatever else the board holds; else the tokens above, byte for byte. A 1.10 build would not count it as copper | `snxpcb/1.11`, as above | opens read-only | refused |
 | `.snxpcb`, unfilled pour | `snxpcb/1.11` while a pour that is not shelved carries `unfilled = true` (`Zone::is_unfilled_pour`, #2506; DECISIONS 2026-11-25), whatever else the board holds; else the tokens above, byte for byte, and the key is written only when on. A 1.10 build would flood the pour and export copper the author cleared | `snxpcb/1.11`, as above | opens read-only | refused |
 | `.snxpcb`, layout plan | `snxpcb/1.12` while `[board_options.layout_plan]` sets anything (`LayoutPlan::is_empty`, #2942; DECISIONS 2026-11-25), whatever else the board holds; else the tokens above, byte for byte, and clearing the last setting writes the lower token again. A 1.11 build would drop the plan on save | adds `snxpcb/1.12` | opens read-only | refused |
+| `.snxpcb`, linear suppression | `snxpcb/1.13` while any 1.13 content is present, whatever else the board holds: today a board sketch linear pattern with a suppression list (`depopulation`, `SketchData::has_linear_suppression`, #2688; DECISIONS 2026-11-27). One rule lists every 1.13 trigger (`pcb_token::needs_1_13`). Else the tokens above, byte for byte, and restoring the last suppressed instance writes the lower token again. A 1.12 build would bake the suppressed pads and drop the list on save | adds `snxpcb/1.13` | opens read-only | refused |
 | `.snxmat`, user material library | `snxmat/1` (`materials.snxmat` in the config folder: the person's own cores, prepregs, copper foils and masks, mockup row 177) | `snxmat/1` | refused | refused |
 | BOM template | `snxbomt/1` (a BOM column preset with computed columns, #1988; `docs/BOM_COLUMNS.md`). An unknown key is refused, so a newer template is never rewritten without it | `snxbomt/1` | refused | refused |
 | `.snxprj` | `snxprj/1` | `snxprj/1` | opens read-only | read as `snxprj/1` |
@@ -81,6 +85,7 @@ format declares only its own table row below.
 | `.snxlib` | `snxlib/2` | `snxlib/2` | refused | refused |
 | `.snxfpt` | `snxfpt/1.1`, `1.2` with sketch links (reference dimensions, pattern sources and mirrors, per-instance pad overrides), or `1.3` with generated features (silkscreen outline, pad clearance, pin 1 marker, assembly outline; mockup row 124, #2834) or a pattern numbering sweep other than row by row (mockup row 126), whatever else it holds | `snxfpt/1`, `1.1`, `1.2`, `1.3`, `1.4` | refused | refused |
 | `.snxfpt`, embedded 3D models | `snxfpt/1.4` while the file embeds a STEP model a footprint attaches (`[[models]]`, #3107/#3108; DECISIONS 2026-11-26), whatever else it holds; else the tokens above, byte for byte, and removing the last model writes the lower token again. A 1.3 build would ignore the section and drop the models on save | adds `snxfpt/1.4` | refused | refused |
+| `.snxfpt`, 1.5 content | `snxfpt/1.5` while the file holds any 1.5 content, whatever else it holds (models included): today a sketch linear pattern with a suppression list (`depopulation`, `SketchData::has_linear_suppression`, #2688; DECISIONS 2026-11-27). One rule lists every 1.5 trigger (`FootprintFile::needs_1_5`), so later 1.5 content joins it rather than taking a new token. Else the tokens above, byte for byte, and restoring the last suppressed instance writes the lower token again. A 1.4 build would bake the suppressed pads and drop the list on save, so it refuses the file by name | adds `snxfpt/1.5` | refused | refused |
 | `.snxblk`, block diagram | `snxblk/1` (mockup row 171, #2796; `docs/architecture/snxblk-format.md`) | `snxblk/1` | opens read-only | refused |
 | `.snxsym` | `snxsym/v1`, `v2` or `v3` by content; `v4` while any graphic is a Bezier, Pie Chart, Elliptical Arc or Round Rectangle (#2838), whatever else it holds | `snxsym/v1`, `v2`, `v3`, `v4` | refused | refused |
 | `.snxsim` | `snxsim/v1` | `snxsim/v1` | refused | refused |

@@ -90,7 +90,12 @@ impl Walk<'_, '_> {
                 count_expr,
                 dx_expr,
                 dy_expr,
-            } => self.linear_slots(*source, count_expr, dx_expr, dy_expr),
+                depopulation,
+            } => self.linear_slots(
+                *source,
+                [count_expr, dx_expr, dy_expr].map(String::as_str),
+                depopulation.as_ref(),
+            ),
             ArrayKind::Grid {
                 source,
                 nx_expr,
@@ -119,17 +124,19 @@ impl Walk<'_, '_> {
         }
     }
 
-    /// `count` slots stepped by (`dx`, `dy`).
+    /// `count` slots stepped by (`dx`, `dy`). `exprs` is
+    /// `[count, dx, dy]`; the suppression list holds `(i, 0)` entries.
     fn linear_slots(
         &mut self,
         source: SketchEntityId,
-        count_expr: &str,
-        dx_expr: &str,
-        dy_expr: &str,
+        exprs: [&str; 3],
+        depopulation: Option<&GridDepopulation>,
     ) -> Result<Option<Walked>, SketchError> {
+        let [count_expr, dx_expr, dy_expr] = exprs;
         let count_ast = parse_in(count_expr, LiteralContext::Count)?;
         let dx_ast = parse_in(dx_expr, LiteralContext::Length)?;
         let dy_ast = parse_in(dy_expr, LiteralContext::Length)?;
+        let mask = mask_ast(depopulation)?;
         let mut ctx = self.context();
         let warnings = &mut *self.warnings;
         let Some(count) =
@@ -147,13 +154,21 @@ impl Walk<'_, '_> {
         if !self.within_cap("linear", source, Some(count)) {
             return Ok(None);
         }
+        let report = MaskReport {
+            label: "linear",
+            source,
+            is_grid: false,
+        };
         let mut slots = Vec::with_capacity(count);
         for i in 0..count {
             ctx.array_index = Some((i, 0));
+            let Some(listed) = self.visits(depopulation, mask.as_ref(), &ctx, &report) else {
+                continue;
+            };
             let dx = crate::params::eval_length_mm(&dx_ast, &ctx)?;
             let dy = crate::params::eval_length_mm(&dy_ast, &ctx)?;
             let place = Place::translation(i as f64 * dx, i as f64 * dy);
-            slots.push(Slot::new(i, 0, i as u64, place, false));
+            slots.push(Slot::new(i, 0, i as u64, place, listed));
         }
         Ok(Some(Walked::new(slots, count as u64, None)))
     }

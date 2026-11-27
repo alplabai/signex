@@ -101,11 +101,18 @@ fn polar_suppressing_2() -> Fixture {
 }
 
 fn linear_of_four() -> Fixture {
-    fixture(|source, _| ArrayKind::Linear {
+    linear_of_four_suppressing(&[])
+}
+
+/// #2688: a linear pattern's list holds `(i, 0)` entries.
+fn linear_of_four_suppressing(cells: &[(u32, u32)]) -> Fixture {
+    let depopulation = (!cells.is_empty()).then(|| suppressing(cells)).flatten();
+    fixture(move |source, _| ArrayKind::Linear {
         source,
         count_expr: "4".into(),
         dx_expr: "1.27mm".into(),
         dy_expr: "0.3mm".into(),
+        depopulation: depopulation.clone(),
     })
 }
 
@@ -154,6 +161,19 @@ fn a_linear_array_bakes_each_step_from_the_source() {
     assert_eq!(baked(&f.sketch), numbered(&["1", "2", "3", "4"], places));
 }
 
+/// #2688: a suppressed linear instance bakes no pad; the others keep their
+/// places and numbers.
+#[test]
+fn a_linear_array_leaves_a_suppressed_instance_out() {
+    let f = linear_of_four_suppressing(&[(1, 0)]);
+    let s = xy(&solve(&f.sketch), &f.sketch, SOURCE);
+    let places = [0, 2, 3]
+        .into_iter()
+        .map(|i| at_offset(s, [i as f64 * 1.27, i as f64 * 0.3]))
+        .collect();
+    assert_eq!(baked(&f.sketch), numbered(&["1", "3", "4"], places));
+}
+
 #[test]
 fn a_grid_bakes_each_kept_cell_from_the_source() {
     let f = grid_suppressing_1_0();
@@ -199,6 +219,11 @@ fn a_polar_array_bakes_each_kept_turn_of_the_source() {
 fn an_override_leaves_every_instance_where_the_plain_array_puts_it() {
     for (what, f, cell) in [
         ("linear", linear_of_four(), (2, 0)),
+        (
+            "suppressed linear",
+            linear_of_four_suppressing(&[(1, 0)]),
+            (2, 0),
+        ),
         ("grid", grid_suppressing_1_0(), (2, 1)),
         ("polar", polar_suppressing_2(), (3, 0)),
     ] {
@@ -221,6 +246,7 @@ fn an_override_leaves_every_instance_where_the_plain_array_puts_it() {
 fn the_instance_rings_sit_on_the_baked_pads() {
     for (what, f) in [
         ("linear", linear_of_four()),
+        ("suppressed linear", linear_of_four_suppressing(&[(1, 0)])),
         ("grid", grid_suppressing_1_0()),
         ("polar", polar_suppressing_2()),
     ] {
