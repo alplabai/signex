@@ -102,6 +102,7 @@ fn add_row(editor: &mut FootprintDocument, source: SketchEntityId) -> ArrayId {
             count_expr: "2".into(),
             dx_expr: "0mm".into(),
             dy_expr: "2mm".into(),
+            depopulation: None,
         },
         numbering: NumberingScheme::default(),
     });

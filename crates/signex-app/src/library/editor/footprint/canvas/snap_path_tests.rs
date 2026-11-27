@@ -361,7 +361,10 @@ fn two_selected_pads() -> Session {
 #[test]
 fn dragging_a_pad_of_a_selection_moves_the_whole_selection() {
     let mut s = two_selected_pads();
-    assert_eq!(s.press((2.2, 2.1)), None, "the press keeps the selection");
+    assert!(
+        s.press((2.2, 2.1)).is_none(),
+        "the press keeps the selection"
+    );
     let moved = s.move_to((5.4, 4.1)).expect("the drag moves the pads");
     assert!(
         matches!(

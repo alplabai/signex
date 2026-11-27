@@ -52,8 +52,8 @@ fn linear() -> ArrayKind {
 #[test]
 fn suppressing_and_restoring_an_instance_round_trips_every_pattern_kind() {
     for start in [grid(), polar(), linear()] {
+        // Every kind has a suppression list since #2688.
         let mut kind = start.clone();
-        assert!(kind.has_suppression_model());
 
         assert!(kind.toggle_instance_suppressed(2, 0), "suppress");
         assert!(kind.is_instance_suppressed(2, 0));
