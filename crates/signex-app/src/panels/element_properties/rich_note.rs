@@ -8,7 +8,6 @@ use super::super::*;
 use super::rows::{labelled_row, sunken_value, unit_input, unit_suffix};
 use super::text_note::segmented_row;
 use crate::panels::{NoteLayout, NoteLength, PlacedEditMsg, PlacedField};
-use iced::Widget as _;
 use signex_i18n::{ids, t};
 use signex_types::measure::length_field_text;
 use signex_types::schematic::{NoteFrame, NoteSize, RichNoteLayout, SelectedItem};
