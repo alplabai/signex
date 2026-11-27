@@ -143,19 +143,35 @@ pub(crate) mod flows {
             let sheet = signex_types::format::SnxSchematic::parse(&text)
                 .expect("parse")
                 .sheet;
-            let _ = app.update(Message::File(FileMsg::SchematicOpenFinished {
+            let task = app.update(Message::File(FileMsg::SchematicOpenFinished {
                 path: path.clone(),
                 title: "t".into(),
                 result: Ok(Box::new(sheet)),
                 disk: None,
             }));
+            land_index_builds(&mut app, task);
         }
-        // Opening a sheet with a Global label starts the net index build its
-        // cross references read (#1273); the updates above dropped that task,
-        // so build it here, or every later request would wait on it.
-        app.settle_net_index_blocking();
         assert_eq!(app.document_state.active_path.as_deref(), Some(a.as_path()));
         (app, a, b)
+    }
+
+    /// Land the net index builds `task` started, and only those: opening a
+    /// sheet with a Global label starts the build its cross references read
+    /// (#1273). A build left in flight holds the project's one worker slot,
+    /// so every later build would wait on it forever.
+    fn land_index_builds(app: &mut Signex, task: iced::Task<Message>) {
+        let mut driver = signex_app::task_driver::TaskDriver::new();
+        let mut queue = std::collections::VecDeque::from([task]);
+        while let Some(task) = queue.pop_front() {
+            for message in driver.outputs(task).expect("the task chain settled") {
+                if matches!(
+                    message,
+                    Message::Ui(UiMsg::NetNav(NetNavMsg::IndexResolved(_)))
+                ) {
+                    queue.push_back(app.update(message));
+                }
+            }
+        }
     }
 
     fn nav(app: &mut Signex, msg: NetNavMsg) {
