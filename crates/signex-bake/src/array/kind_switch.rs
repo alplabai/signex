@@ -175,7 +175,7 @@ pub fn remove_unused_point(sketch: &mut SketchData, point: SketchEntityId) -> bo
         || sketch
             .entities
             .iter()
-            .any(|e| e.point_refs().contains(&point))
+            .any(|e| e.id != point && e.point_refs().contains(&point))
         || sketch
             .constraints
             .iter()
