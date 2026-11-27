@@ -465,7 +465,7 @@ fn tooltip_texts<M>(
     use iced::advanced::shell::{Bus, Waker};
     use iced::advanced::widget::operation::Text;
     use iced::advanced::widget::{Id, Operation, Tree};
-    use iced::advanced::{Layout, Shell, layout, mouse};
+    use iced::advanced::{Layout, Shell, Widget as _, layout, mouse};
 
     struct Texts(Vec<String>);
     impl<T> Operation<T> for Texts {

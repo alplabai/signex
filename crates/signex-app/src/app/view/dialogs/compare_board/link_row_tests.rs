@@ -49,6 +49,7 @@ fn app_with_link_row() -> Signex {
         revision: 1,
         rows: vec![link_j1()],
         notes: Vec::new(),
+        pad_locks: Vec::new(),
     };
     state.report = Some(compare(&eco, &BackChangeList::default()));
     state.phase = Phase::Ready;
