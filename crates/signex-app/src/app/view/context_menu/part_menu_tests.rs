@@ -83,3 +83,24 @@ fn a_detached_properties_window_opens_the_menu_in_itself() {
     let _ = app.update(esc);
     assert_eq!(app.document_state.panel_ctx.part_panel.menu_for, None);
 }
+
+/// Opening the ⋯ menu closes the menu that was open, as every other menu's
+/// open handler does, and the menu still opens.
+#[test]
+fn opening_the_part_menu_closes_another_open_menu() {
+    let (mut app, _boot) = Signex::new();
+    app.ui_state.first_run_tour_open = false;
+    app.interaction_state.tab_context_menu = Some(crate::app::TabContextMenuState {
+        x: 10.0,
+        y: 10.0,
+        tab_idx: 0,
+    });
+    app.ui_state.tab_overflow_menu_open = true;
+    let _ = app.update(part(PartPanelMsg::MenuToggled(PART)));
+    assert!(app.interaction_state.tab_context_menu.is_none());
+    assert!(!app.ui_state.tab_overflow_menu_open);
+    assert_eq!(app.document_state.panel_ctx.part_panel.menu_for, Some(PART));
+    // The same toggle again closes it.
+    let _ = app.update(part(PartPanelMsg::MenuToggled(PART)));
+    assert_eq!(app.document_state.panel_ctx.part_panel.menu_for, None);
+}

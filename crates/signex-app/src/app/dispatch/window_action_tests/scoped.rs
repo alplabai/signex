@@ -51,6 +51,31 @@ fn a_part_menu_toggled_in_a_window_opens_in_that_windows_properties() {
     assert_eq!(f.app.document_state.panel_ctx.part_panel.menu_for, None);
 }
 
+/// Opening the ⋯ menu in an undocked window closes every other open menu,
+/// the main window's part menu included, and still opens its own (#3063).
+#[test]
+fn a_part_menu_opened_in_a_window_closes_the_other_menus() {
+    let mut f = fixture();
+    f.app.refresh_panel_ctx();
+    let id = uuid::Uuid::from_u128(11);
+    let main_part = uuid::Uuid::from_u128(12);
+    f.app.document_state.panel_ctx.part_panel.menu_for = Some(main_part);
+    f.app.interaction_state.tab_context_menu = Some(crate::app::TabContextMenuState {
+        x: 10.0,
+        y: 10.0,
+        tab_idx: 0,
+    });
+    let toggled = typed_in_window(
+        &f,
+        crate::panels::PanelMsg::Part(crate::panels::PartPanelMsg::MenuToggled(id)),
+    );
+    let _ = f.app.update(toggled);
+    let window = &f.app.document_state.window_panel_ctx[&f.window];
+    assert_eq!(window.part_panel.menu_for, Some(id));
+    assert_eq!(f.app.document_state.panel_ctx.part_panel.menu_for, None);
+    assert!(f.app.interaction_state.tab_context_menu.is_none());
+}
+
 #[test]
 fn a_child_sheet_name_committed_in_a_window_lands_in_that_windows_engine() {
     let mut f = fixture();

@@ -75,6 +75,13 @@ impl Signex {
     }
 
     pub(super) fn handle_dock_part_message(&mut self, msg: &PartPanelMsg) -> Task<Message> {
+        // Opening the ⋯ menu closes every other menu first, as each menu's
+        // open handler does; a toggle that closes it closes nothing else.
+        if let PartPanelMsg::MenuToggled(part) = msg
+            && self.document_state.panel_ctx.part_panel.menu_for != Some(*part)
+        {
+            self.close_all_context_menus();
+        }
         let part_panel = &mut self.document_state.panel_ctx.part_panel;
         let effect = part_panel.update(msg.clone());
         // The ⋯ menu opens level with the press (#3063).
