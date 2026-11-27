@@ -377,8 +377,12 @@ fn seed_project_rules(
 /// and the picked fab tier's router tool (mockup row 179d). Part of the creation: a
 /// failure takes the project back.
 fn write_setup(project_path: &Path, setup: &signex_types::project::ProjectSetup) -> Result<()> {
-    let mut data = signex_types::project::parse_project_bytes(project_path, b"")
-        .with_context(|| format!("read the new project {}", project_path.display()))?;
+    let mut data = signex_types::project::parse_project_bytes(
+        project_path,
+        b"",
+        signex_types::project::files_on_disk(project_path),
+    )
+    .with_context(|| format!("read the new project {}", project_path.display()))?;
     data.project_defaults = setup.defaults();
     if let Some(tier) = setup.fab {
         data.set_router_tool_diameter(Some(tier.capabilities().router_tool_diameter));

@@ -280,7 +280,7 @@ fn project_defaults_are_written_only_when_set_and_round_trip() {
     let mut data = blank_project();
     data.project_defaults = ProjectSetup::from_profile(SetupProfile::Hdi).defaults();
     let bytes = encode_project(&data).unwrap();
-    let back = parse_project_bytes(std::path::Path::new("P.snxprj"), &bytes).unwrap();
+    let back = parse_project_bytes(std::path::Path::new("P.snxprj"), &bytes, |_| false).unwrap();
     assert_eq!(back.project_defaults, data.project_defaults);
     assert_eq!(back.project_defaults.pcb.unwrap().copper_layers, 8);
 }
@@ -380,7 +380,8 @@ fn a_stored_setup_reads_back_as_the_profile_it_matches() {
 }
 
 fn opened(json: &str) -> ProjectData {
-    parse_project_bytes(std::path::Path::new("P.snxprj"), json.as_bytes()).expect("opens")
+    parse_project_bytes(std::path::Path::new("P.snxprj"), json.as_bytes(), |_| false)
+        .expect("opens")
 }
 
 const BASE: &str = r#""name":"P","dir":"","schematic_root":null,"pcb_file":null"#;
@@ -464,7 +465,7 @@ fn a_project_stores_its_dimension_defaults() {
     dimension.style.suffix = " ref".into();
     data.project_defaults.dimension = Some(dimension.clone());
     let bytes = encode_project(&data).unwrap();
-    let back = parse_project_bytes(std::path::Path::new("P.snxprj"), &bytes).unwrap();
+    let back = parse_project_bytes(std::path::Path::new("P.snxprj"), &bytes, |_| false).unwrap();
     assert_eq!(back.project_defaults.dimension, Some(dimension));
 
     let mut wild = data.clone();
@@ -472,7 +473,7 @@ fn a_project_stores_its_dimension_defaults() {
         d.line_width = -1.0;
     }
     let bytes = encode_project(&wild).unwrap();
-    let back = parse_project_bytes(std::path::Path::new("P.snxprj"), &bytes).unwrap();
+    let back = parse_project_bytes(std::path::Path::new("P.snxprj"), &bytes, |_| false).unwrap();
     assert!(back.project_defaults.dimension.is_none());
     assert!(back.has_unreadable_project_defaults());
 }
