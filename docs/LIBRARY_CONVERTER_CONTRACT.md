@@ -268,9 +268,11 @@ that takes its children along is #3134. After the converter exits, its
 pipes are read for at most 2 s more, so a process it left behind cannot
 hold the import.
 
-Quitting Signex stops a running import at once and waits for it: a
-stopped `--update` is put back to its last import commit, and an import
-commit under way is finished, before Signex exits.
+Quitting Signex stops a running import at once. Signex waits up to 10 s
+for the converter to stop, then for the clean-up to finish: a stopped
+`--update` is put back to its last import commit, a failed new import
+removes what it wrote, and an import commit under way is finished, before
+Signex exits.
 
 ## 7. Versioning this contract
 

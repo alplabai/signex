@@ -633,8 +633,9 @@ puts the library back to its last import. To change an imported part for
 good, copy it into a library of your own.
 
 **Quitting during an import.** Quitting Signex stops a running import at
-once. An update is put back to its last import before Signex
-exits, so the library is never left half written. On Windows, a process
+once. Signex waits up to 10 s for the converter to stop, then for the
+clean-up to finish: an update is put back to its last import, and a new
+import removes what it wrote, before Signex exits. On Windows, a process
 the converter started may keep running after it is stopped (#3134).
 
 **Licences of imported libraries.** An imported library keeps the licence of
