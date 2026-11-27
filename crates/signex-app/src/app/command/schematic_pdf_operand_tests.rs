@@ -136,3 +136,42 @@ fn in_a_window_it_opens_print_preview_and_its_export_writes_the_links() {
         "the preview's Export writes the links too"
     );
 }
+
+/// A Properties field still being typed on a sheet of the project is
+/// committed before the headless export builds its pages, so the PDF prints
+/// the typed value, as Export PDF in the dialog does.
+#[test]
+fn headless_a_pending_properties_draft_prints_as_typed() {
+    use crate::panels::TitleBlockField;
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, contents, _) = project(dir.path());
+    app.document_view.drafts.set_title_block(
+        &contents,
+        TitleBlockField::DocumentNumber,
+        "TYPED-NOT-PRESSED",
+    );
+    let file = dir.path().join("draft.pdf");
+    let document = format!("document={}", contents.display());
+    let path = format!("path={}", file.display());
+    let (outcome, task) = headless(&mut app, &[&document, &path]);
+    assert!(
+        matches!(outcome, CommandOutcome::Answered(_)),
+        "{outcome:?}"
+    );
+    let printed = app.document_state.engines[&contents]
+        .document()
+        .title_block
+        .get("document_number")
+        .cloned();
+    assert_eq!(
+        printed.as_deref(),
+        Some("TYPED-NOT-PRESSED"),
+        "the draft is in the sheet the pages are built from"
+    );
+    assert!(
+        app.document_view.drafts.title_blocks().is_empty(),
+        "committed"
+    );
+    settle(&mut app, task);
+    assert!(file.exists(), "the PDF is written");
+}
