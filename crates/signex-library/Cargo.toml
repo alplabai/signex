@@ -121,6 +121,11 @@ name = "library_writer"
 path = "tests/library_writer/main.rs"
 required-features = ["local-git"]
 
+# Own binary: it points libgit2's global config at a file of its own (#3190).
+[[test]]
+name = "snapshot_line_endings"
+required-features = ["local-git"]
+
 # GH #548 — inherit [workspace.lints.rust] (unused_must_use = deny).
 [lints]
 workspace = true
