@@ -35,6 +35,8 @@ mod pattern_glyphs;
 mod sketch_ink;
 // The Import DXF preview draws in the same palette (mockup row 179c).
 pub(crate) use sketch_ink::SketchInk;
+// The bake preview's layer legend lists what it draws (mockup row 190).
+pub(crate) use bake_overlay::footprint_bake_layers;
 
 /// The colour of selected sketch geometry, and of what draws as selected
 /// with it: the pad-link profile and the accent of a value on the drawing.

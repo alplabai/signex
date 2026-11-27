@@ -33,6 +33,7 @@ define_ids! {
     SKETCH_BAKE_OUTCOME_LINK_PAD = "sketch-bake-outcome-link-pad";
     SKETCH_BAKE_OUTCOME_LINK_NONE = "sketch-bake-outcome-link-none";
     SKETCH_BAKE_LEGEND_TOP = "sketch-bake-legend-top";
+    SKETCH_BAKE_LEGEND_BOTTOM = "sketch-bake-legend-bottom";
     SKETCH_BAKE_LEGEND_PASTE = "sketch-bake-legend-paste";
     SKETCH_BAKE_LEGEND_MASK = "sketch-bake-legend-mask";
     SKETCH_BAKE_LEGEND_SILK = "sketch-bake-legend-silk";

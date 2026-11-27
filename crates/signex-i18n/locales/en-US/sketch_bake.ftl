@@ -70,6 +70,7 @@ sketch-bake-outcome-link-pad = Pad { $number } · { $source }
 sketch-bake-outcome-link-none = Pad { $number } · no sketch source
 # The layer colour legend over a footprint's bake preview (mockup row 190).
 sketch-bake-legend-top = Top
+sketch-bake-legend-bottom = Bottom
 sketch-bake-legend-paste = Paste
 sketch-bake-legend-mask = Mask
 sketch-bake-legend-silk = Silk

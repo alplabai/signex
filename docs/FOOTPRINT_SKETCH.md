@@ -246,7 +246,10 @@ control stays in reach:
   `board_layer_colour`), with the sketch faint on top. The pads, silk and
   courtyard are the editor's own (the footprint bakes on every solve); the
   other fields are baked from the same solve when the canvas redraws
-  (`canvas/draw/sketch/bake_overlay.rs`). The card is in Properties, not
+  (`canvas/draw/sketch/bake_overlay.rs`). A legend at the canvas's top
+  right names the layers the preview draws on, with their colours: Top,
+  Bottom, Paste, Mask, Silk and Courtyard, each only when something is
+  drawn on it (Caner, 2026-11-27, mockup row 190). The card is in Properties, not
   over the canvas: while the preview is open Properties shows the Bake
   panel, whatever is selected: the Roles section, the card, then Back to
   sketch and Bake (mockup row 190). The card also lists the last
