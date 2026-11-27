@@ -940,6 +940,12 @@ library-import-update-restored = The update failed, and the library was restored
 library-import-update-not-restored = The update failed: { $error } The library could not be restored to its last import ({ $reason }); check its folder before using it.
 # $path is the imported library, $other the mounted library with the same id.
 library-import-id-clash = The imported library { $path } has the same library id as { $other }, which is already open, so it was not added. Close the other library first.
+# $path is the staging folder a preview would create.
+library-import-staging-exists = Something is already at { $path }, where the preview would be written. Remove it or choose another folder.
+# $path is the library folder.
+library-import-target-changed = { $path } was created or changed after the preview, so the library was not moved there. The preview is kept: empty or remove that folder and press Import again, or go back and choose another folder.
+# $path is the library folder, $error the system's reason.
+library-import-move-failed = The previewed library could not be moved to { $path }: { $error }
 # Import Library dialog (mockup row 211, #3117–#3120).
 # $step is 1, 2 or 3, $name the step's name.
 library-import-dialog-step-note = Step { $step } of 3 · { $name }
@@ -1017,7 +1023,39 @@ library-import-dialog-detail-code = Code
 library-import-dialog-detail-written = Written as
 library-import-dialog-detail-not-written = Not written
 library-import-dialog-detail-hint = Select an item to see what happens to it.
-library-import-dialog-no-drawing = A preview writes only the report, so the symbols and footprints can be looked at once the library is imported.
+library-import-dialog-no-drawing = An update's preview writes only the report, so the symbols and footprints can be looked at once the library is updated.
+# Drawn preview of a new import (#3171).
+library-import-dialog-tab-parts = Parts
+library-import-dialog-tab-items = Report items
+library-import-dialog-stage-running = Converting the library for the preview; nothing goes into the library folder until Import…
+library-import-dialog-staged-note = The preview waits in a hidden folder beside the library folder. Import moves it there without converting again.
+library-import-dialog-parts-reading = Reading the previewed library…
+# $error is why the previewed library could not be read.
+library-import-dialog-parts-failed = The previewed library could not be read: { $error }
+library-import-dialog-parts-filter = Filter by part number, symbol, footprint or manufacturer part number
+library-import-dialog-parts-empty = The converter wrote no parts.
+library-import-dialog-parts-none-match = No part matches the filter.
+# $shown and $count are whole numbers.
+library-import-dialog-parts-caption = { $shown } of { $count } parts · alternates are the extra footprints a part may use
+library-import-dialog-col-part = Part number
+library-import-dialog-col-symbol = Symbol
+library-import-dialog-col-footprint = Footprint
+# $n is 1 or 2.
+library-import-dialog-col-alternate = Alternate { $n }
+library-import-dialog-none-mark = —
+library-import-dialog-part-hint = Select a part to see its symbol, footprint and parameters.
+library-import-dialog-part-reading = Reading the part…
+# $error is why the part could not be read.
+library-import-dialog-part-failed = The part could not be read: { $error }
+library-import-dialog-part-no-symbol = No symbol
+library-import-dialog-part-no-footprint = No footprint
+library-import-dialog-part-manufacturer = Manufacturer
+library-import-dialog-part-suppliers = Suppliers
+library-import-dialog-part-parameters = Parameters
+# $first and $second are a name and its part number.
+library-import-dialog-part-pair = { $first } · { $second }
+library-import-dialog-part-none-listed = None listed
+library-import-dialog-moving = Moving the previewed library into place…
 # $count is a whole number.
 library-import-dialog-skipped-banner = { $count ->
         [one] 1 item will be skipped. It is listed in the loss report after the import.

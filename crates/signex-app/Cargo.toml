@@ -172,6 +172,9 @@ windows-sys = { version = "0.61", features = [
     # The agent journals (#2253): the link count of a journal file and the
     # final path of an opened handle, to refuse a hard link or a swapped folder.
     "Win32_Storage_FileSystem",
+    # The Job object a library converter runs in, so a stop or an exit kills
+    # what it started (#3134, `src/library_import/job.rs`).
+    "Win32_System_JobObjects",
 ] }
 
 # NOT `[lints] workspace = true` — cargo rejects mixing inheritance with

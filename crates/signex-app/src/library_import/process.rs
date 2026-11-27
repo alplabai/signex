@@ -2,9 +2,8 @@
 //! a stop kills everything it started, with stdout read line by line into a
 //! bounded queue and stderr's tail kept, neither ever waited on forever.
 //!
-//! On Windows only the converter itself is killed, and quitting the app
-//! during a run leaves the converter running ([`ProcessGroup::kill`] is a
-//! no-op there); a Job object that takes its children with it is #3134
+//! On Windows a Job object stands in for the process group (`job.rs`);
+//! when the system refuses one, only the converter itself is killed
 //! (`docs/LIBRARY_CONVERTER_CONTRACT.md` §6).
 
 use std::ffi::OsString;
@@ -16,6 +15,8 @@ use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
 use super::error::ImportError;
+#[cfg(windows)]
+use super::job::Job;
 use super::run::ConverterCommand;
 use super::stream::{Line, LineSplitter};
 
@@ -32,24 +33,54 @@ pub const PIPE_GRACE: Duration = Duration::from_secs(2);
 /// runs; the app holds a clone so quitting can kill it
 /// ([`ProcessGroup::kill`]). It is cleared before the converter is reaped,
 /// so a quit never signals a group id the system has handed out again.
+/// On Windows it also carries the run's Job object, if it has one.
 #[derive(Debug, Clone, Default)]
-pub struct ProcessGroup(Arc<std::sync::atomic::AtomicU32>);
+pub struct ProcessGroup {
+    id: Arc<std::sync::atomic::AtomicU32>,
+    #[cfg(windows)]
+    job: Arc<Mutex<Option<Arc<Job>>>>,
+}
 
 impl ProcessGroup {
-    pub(super) fn set(&self, group: u32) {
-        self.0.store(group, Ordering::Release);
+    fn set(&self, group: u32) {
+        self.id.store(group, Ordering::Release);
+    }
+
+    #[cfg(windows)]
+    fn set_job(&self, job: Option<Arc<Job>>) {
+        *self.job.lock().unwrap_or_else(PoisonError::into_inner) = job;
+    }
+
+    /// Nothing runs any more: forget the group (and the job).
+    pub(super) fn clear(&self) {
+        self.set(0);
+        #[cfg(windows)]
+        self.set_job(None);
     }
 
     /// The group of the converter running now, if one is.
     pub fn current(&self) -> Option<u32> {
-        Some(self.0.load(Ordering::Acquire)).filter(|&g| g != 0)
+        Some(self.id.load(Ordering::Acquire)).filter(|&g| g != 0)
     }
 
-    /// Kill the running converter's whole group (Unix); nothing when none
-    /// runs. For quitting the app, where the run's own stop never comes.
+    /// Kill the running converter's whole group (its Job object on
+    /// Windows); nothing when none runs. For quitting the app, where the
+    /// run's own stop never comes. Only sends the kill, never waits.
     pub fn kill(&self) {
+        #[cfg(unix)]
         if let Some(group) = self.current() {
             kill_group_id(group);
+        }
+        #[cfg(windows)]
+        self.terminate_job();
+    }
+
+    /// A job handle stays valid while held, so unlike a group id it can
+    /// never name someone else's processes.
+    #[cfg(windows)]
+    fn terminate_job(&self) {
+        if let Some(job) = &*self.job.lock().unwrap_or_else(PoisonError::into_inner) {
+            job.terminate();
         }
     }
 }
@@ -69,10 +100,6 @@ fn kill_group_id(group: u32) {
     }
 }
 
-// Quitting during an import leaves the converter running on Windows: #3134.
-#[cfg(not(unix))]
-fn kill_group_id(_group: u32) {}
-
 /// A started converter.
 pub struct Running {
     child: Child,
@@ -82,6 +109,10 @@ pub struct Running {
     stderr_done: Arc<AtomicBool>,
     /// Where the converter's group id is published while it is unreaped.
     published: Option<ProcessGroup>,
+    /// The job the converter and what it starts run in; dropping the last
+    /// handle kills them. `None` when the system refused one.
+    #[cfg(windows)]
+    job: Option<Arc<Job>>,
 }
 
 /// What one poll of stdout gave.
@@ -122,6 +153,8 @@ impl Running {
             program: command.program.clone(),
             detail: e.to_string(),
         })?;
+        #[cfg(windows)]
+        let job = Job::holding(&child).map(Arc::new);
         let stderr = Arc::new(Mutex::new(Vec::new()));
         let stderr_done = Arc::new(AtomicBool::new(false));
         drain_tail(child.stderr.take(), stderr.clone(), stderr_done.clone());
@@ -133,6 +166,8 @@ impl Running {
             stderr,
             stderr_done,
             published: None,
+            #[cfg(windows)]
+            job,
         })
     }
 
@@ -140,6 +175,8 @@ impl Running {
     /// ([`Self::try_wait`] seeing it exit, or [`Self::stop`]).
     pub fn publish(&mut self, group: &ProcessGroup) {
         group.set(self.child.id());
+        #[cfg(windows)]
+        group.set_job(self.job.clone());
         self.published = Some(group.clone());
     }
 
@@ -147,7 +184,7 @@ impl Running {
     /// been, reaped, after which its id may be reused.
     fn unpublish(&mut self) {
         if let Some(group) = self.published.take() {
-            group.set(0);
+            group.clear();
         }
     }
 
@@ -200,6 +237,8 @@ impl Running {
         if self.stdout_open || !self.stderr_done.load(Ordering::Acquire) {
             log::warn!("library import: the converter left a process holding its output; stopped");
             self.kill_group();
+            #[cfg(windows)]
+            self.wait_job_empty();
         }
     }
 
@@ -220,13 +259,27 @@ impl Running {
         if let Err(e) = self.child.wait() {
             log::debug!("library import: reap: {e}");
         }
+        #[cfg(windows)]
+        self.wait_job_empty();
     }
 
-    /// Kill whatever is left in the converter's process group. After the
-    /// converter exited and was reaped the group id cannot be reused while
-    /// a member lives, so this only reaches what it started.
+    /// What the converter started holds files open until it has ended, and
+    /// the run removes or restores the output next: wait for the job to
+    /// empty, for at most [`PIPE_GRACE`].
+    #[cfg(windows)]
+    fn wait_job_empty(&self) {
+        self.job.iter().for_each(|job| job.wait_empty(PIPE_GRACE));
+    }
+
+    /// Kill whatever is left in the converter's process group (its Job
+    /// object on Windows). After the converter exited and was reaped the
+    /// group id cannot be reused while a member lives, so this only reaches
+    /// what it started.
     pub fn kill_group(&self) {
+        #[cfg(unix)]
         kill_group_id(self.child.id());
+        #[cfg(windows)]
+        self.job.iter().for_each(|job| job.terminate());
     }
 }
 

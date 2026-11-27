@@ -1,9 +1,10 @@
 //! The folder check behind Next and Import (#3117, #3123): a folder that is
 //! absent or empty takes a new import; one that holds an imported library
 //! with a clean history is offered as an update; anything else is refused
-//! with its reason. The check reads only; the run itself takes the folder
-//! (`library_import::output::claim_output`) or, for an update, holds its
-//! write lock.
+//! with its reason; before a staged preview is moved in (#3171), anything
+//! but a free folder keeps the preview on step 2. The check reads only;
+//! the run itself takes the folder (`library_import::output::claim_output`)
+//! or, for an update, holds its write lock.
 
 use std::path::{Path, PathBuf};
 
@@ -88,6 +89,20 @@ impl Signex {
         let Some(mode) = mode else {
             return Task::none();
         };
+        // Import of a staged preview (#3171): a folder that is no longer
+        // free keeps the dialog on step 2 with the preview, for another try.
+        if mode == RunMode::Import && d.staged.is_some() {
+            let problem = match check {
+                TargetCheck::Free => return self.start_dialog_run(mode),
+                TargetCheck::Refused(problem) => problem,
+                TargetCheck::Imported { .. } => ImportError::TargetChanged {
+                    path: location.clone(),
+                }
+                .to_translatable(),
+            };
+            d.move_problem = Some(problem);
+            return Task::none();
+        }
         match check {
             TargetCheck::Refused(problem) => {
                 d.update_offer = None;
@@ -117,7 +132,7 @@ impl Signex {
                 }
                 let run = match mode {
                     RunMode::Preview => RunMode::Preview,
-                    RunMode::Import | RunMode::Update => RunMode::Update,
+                    RunMode::Import | RunMode::Update | RunMode::Stage => RunMode::Update,
                 };
                 self.start_dialog_run(run)
             }

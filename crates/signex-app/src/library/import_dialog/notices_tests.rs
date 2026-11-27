@@ -210,6 +210,7 @@ fn a_file_no_installed_converter_reads_keeps_next_off_and_every_notice_builds() 
                 running: None,
                 project_open: false,
                 library_open: false,
+                look: crate::library::browser::PreviewLook::for_tests(),
             };
             drop(view(state, ctx, &tokens, &i18n, true));
         }

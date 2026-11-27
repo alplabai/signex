@@ -83,7 +83,7 @@ fn result_card<'a>(
     let name = result.library_name();
     let title = match facts.mode {
         RunMode::Update => t!(i18n, ids::LIBRARY_IMPORT_DIALOG_RESULT_UPDATED, "name" => name),
-        RunMode::Import | RunMode::Preview => {
+        RunMode::Import | RunMode::Preview | RunMode::Stage => {
             t!(i18n, ids::LIBRARY_IMPORT_DIALOG_RESULT_IMPORTED, "name" => name)
         }
     };

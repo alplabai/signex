@@ -292,6 +292,7 @@ impl ImportDialogState {
             limits: RunLimits::default(),
             group: Default::default(),
             stage: Default::default(),
+            adopt: None,
         })
     }
 

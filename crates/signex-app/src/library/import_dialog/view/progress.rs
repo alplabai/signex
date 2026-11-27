@@ -11,7 +11,7 @@ use signex_widgets::text;
 use super::{ImportDialogContext, SP, TS, caption, mono, tag};
 use crate::library::import_dialog::progress::PhaseLine;
 use crate::library::import_dialog::{
-    FolderAfter, ImportDialogMsg, ImportDialogState, ImportEnd, msg,
+    FolderAfter, ImportDialogMsg, ImportDialogState, ImportEnd, Step, msg,
 };
 use crate::library::messages::LibraryMessage;
 use crate::library::modal_chrome::{cancel_btn, footer_strip, notice_banner, secondary_btn};
@@ -62,7 +62,13 @@ pub(super) fn current_line<'a>(
     i18n: &I18n,
 ) -> Element<'a, LibraryMessage> {
     let current = state.current_phase();
-    let title = phase_label(current.map_or("", |l| l.phase.as_str()), i18n);
+    // Import of a staged preview runs no converter: it moves the folder.
+    let moving = current.is_none() && state.step == Step::Import && state.staged.is_some();
+    let title: signex_widgets::Label<'static> = if moving {
+        t!(i18n, ids::LIBRARY_IMPORT_DIALOG_MOVING).into()
+    } else {
+        phase_label(current.map_or("", |l| l.phase.as_str()), i18n)
+    };
     let mut head = row![text(title).size(TS.body).font(bold())]
         .spacing(SP.m)
         .align_y(Alignment::Center);

@@ -378,6 +378,9 @@ define_ids! {
     LIBRARY_IMPORT_UPDATE_RESTORED = "library-import-update-restored";
     LIBRARY_IMPORT_UPDATE_NOT_RESTORED = "library-import-update-not-restored";
     LIBRARY_IMPORT_ID_CLASH = "library-import-id-clash";
+    LIBRARY_IMPORT_STAGING_EXISTS = "library-import-staging-exists";
+    LIBRARY_IMPORT_TARGET_CHANGED = "library-import-target-changed";
+    LIBRARY_IMPORT_MOVE_FAILED = "library-import-move-failed";
     // Import Library dialog (mockup row 211, #3117–#3120)
     LIBRARY_IMPORT_DIALOG_STEP_NOTE = "library-import-dialog-step-note";
     LIBRARY_IMPORT_DIALOG_STEP_SOURCE = "library-import-dialog-step-source";
@@ -446,6 +449,33 @@ define_ids! {
     LIBRARY_IMPORT_DIALOG_DETAIL_NOT_WRITTEN = "library-import-dialog-detail-not-written";
     LIBRARY_IMPORT_DIALOG_DETAIL_HINT = "library-import-dialog-detail-hint";
     LIBRARY_IMPORT_DIALOG_NO_DRAWING = "library-import-dialog-no-drawing";
+    // Drawn preview of a new import (#3171)
+    LIBRARY_IMPORT_DIALOG_TAB_PARTS = "library-import-dialog-tab-parts";
+    LIBRARY_IMPORT_DIALOG_TAB_ITEMS = "library-import-dialog-tab-items";
+    LIBRARY_IMPORT_DIALOG_STAGE_RUNNING = "library-import-dialog-stage-running";
+    LIBRARY_IMPORT_DIALOG_STAGED_NOTE = "library-import-dialog-staged-note";
+    LIBRARY_IMPORT_DIALOG_PARTS_READING = "library-import-dialog-parts-reading";
+    LIBRARY_IMPORT_DIALOG_PARTS_FAILED = "library-import-dialog-parts-failed";
+    LIBRARY_IMPORT_DIALOG_PARTS_FILTER = "library-import-dialog-parts-filter";
+    LIBRARY_IMPORT_DIALOG_PARTS_EMPTY = "library-import-dialog-parts-empty";
+    LIBRARY_IMPORT_DIALOG_PARTS_NONE_MATCH = "library-import-dialog-parts-none-match";
+    LIBRARY_IMPORT_DIALOG_PARTS_CAPTION = "library-import-dialog-parts-caption";
+    LIBRARY_IMPORT_DIALOG_COL_PART = "library-import-dialog-col-part";
+    LIBRARY_IMPORT_DIALOG_COL_SYMBOL = "library-import-dialog-col-symbol";
+    LIBRARY_IMPORT_DIALOG_COL_FOOTPRINT = "library-import-dialog-col-footprint";
+    LIBRARY_IMPORT_DIALOG_COL_ALTERNATE = "library-import-dialog-col-alternate";
+    LIBRARY_IMPORT_DIALOG_NONE_MARK = "library-import-dialog-none-mark";
+    LIBRARY_IMPORT_DIALOG_PART_HINT = "library-import-dialog-part-hint";
+    LIBRARY_IMPORT_DIALOG_PART_READING = "library-import-dialog-part-reading";
+    LIBRARY_IMPORT_DIALOG_PART_FAILED = "library-import-dialog-part-failed";
+    LIBRARY_IMPORT_DIALOG_PART_NO_SYMBOL = "library-import-dialog-part-no-symbol";
+    LIBRARY_IMPORT_DIALOG_PART_NO_FOOTPRINT = "library-import-dialog-part-no-footprint";
+    LIBRARY_IMPORT_DIALOG_PART_MANUFACTURER = "library-import-dialog-part-manufacturer";
+    LIBRARY_IMPORT_DIALOG_PART_SUPPLIERS = "library-import-dialog-part-suppliers";
+    LIBRARY_IMPORT_DIALOG_PART_PARAMETERS = "library-import-dialog-part-parameters";
+    LIBRARY_IMPORT_DIALOG_PART_PAIR = "library-import-dialog-part-pair";
+    LIBRARY_IMPORT_DIALOG_PART_NONE_LISTED = "library-import-dialog-part-none-listed";
+    LIBRARY_IMPORT_DIALOG_MOVING = "library-import-dialog-moving";
     LIBRARY_IMPORT_DIALOG_SKIPPED_BANNER = "library-import-dialog-skipped-banner";
     LIBRARY_IMPORT_DIALOG_REPORT_MISSING = "library-import-dialog-report-missing";
     LIBRARY_IMPORT_DIALOG_NOTHING_WRITTEN = "library-import-dialog-nothing-written";

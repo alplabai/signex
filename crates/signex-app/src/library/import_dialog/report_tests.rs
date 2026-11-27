@@ -62,6 +62,7 @@ fn job_outcome(exit: ExitKind) -> ImportJobOutcome {
         local_commits: 0,
         library_id: None,
         requires: Vec::new(),
+        staged: None,
     }
 }
 
@@ -324,6 +325,7 @@ fn the_result_and_the_report_build_in_both_graphite_themes() {
                     running: None,
                     project_open: true,
                     library_open,
+                    look: crate::library::browser::PreviewLook::for_tests(),
                 };
                 drop(view(state, ctx, &tokens, &i18n, false));
             }

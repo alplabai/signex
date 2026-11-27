@@ -11,7 +11,7 @@ use std::time::{Duration, Instant};
 use super::confine::{ConfineError, confine};
 use super::error::ImportError;
 use super::events::{ExitKind, ProgressEvent, StreamFold, Summary};
-use super::output::{Held, claim_output};
+use super::output::{ClaimedOutput, Held, claim_output};
 use super::process::{Polled, ProcessGroup, Running};
 use super::report::{ImportReport, read_report};
 use super::run_state::JobStage;
@@ -61,8 +61,19 @@ pub enum RunMode {
     Preview,
     /// A new library in an absent or empty folder.
     Import,
+    /// A new library written for the drawn preview (#3171) into a staging
+    /// folder the run creates beside the target; Import later moves it
+    /// into place (`staging`). Run without `--dry-run`, like an import.
+    Stage,
     /// `--update` over a library this converter wrote from the same source.
     Update,
+}
+
+impl RunMode {
+    /// A run for step 2's preview: a dry run, or a staged library.
+    pub fn is_preview(self) -> bool {
+        matches!(self, Self::Preview | Self::Stage)
+    }
 }
 
 /// One `library` invocation.
@@ -118,7 +129,7 @@ impl LibraryRunRequest {
         match self.mode {
             RunMode::Preview => args.push("--dry-run".into()),
             RunMode::Update => args.push("--update".into()),
-            RunMode::Import => {}
+            RunMode::Import | RunMode::Stage => {}
         }
         args.push("--progress".into());
         args
@@ -204,6 +215,9 @@ pub struct RunFailure {
     pub restored: Option<Result<(), String>>,
     /// Refused before the converter started, so nothing on disk changed.
     pub refused: bool,
+    /// An Import of a staged preview (#3171) stopped before the library
+    /// was moved: the staging folder is whole, so Import can be tried again.
+    pub preview_kept: bool,
 }
 
 impl RunFailure {
@@ -215,6 +229,7 @@ impl RunFailure {
             removed_output: false,
             restored: None,
             refused: false,
+            preview_kept: false,
         }
     }
 
@@ -255,22 +270,37 @@ pub fn run_library_in(
     stage: &JobStage,
     on_event: &mut dyn FnMut(&ProgressEvent),
 ) -> Result<RunOutcome, RunFailure> {
+    run_library_claimed(command, request, limits, cancel, group, on_event).map(|(run, _)| run)
+}
+
+/// [`run_library_in`], also returning how the run took its output folder,
+/// so a staged preview can later be discarded through it.
+pub fn run_library_claimed(
+    command: &ConverterCommand,
+    request: &LibraryRunRequest,
+    limits: RunLimits,
+    cancel: &AtomicBool,
+    group: &ProcessGroup,
+    on_event: &mut dyn FnMut(&ProgressEvent),
+) -> Result<(RunOutcome, ClaimedOutput), RunFailure> {
     request.validate().map_err(RunFailure::refused)?;
     let claimed = claim_output(request).map_err(RunFailure::refused)?;
     let mut args = command.leading_args.clone();
     args.extend(request.args());
     let cwd = neutral_dir(Some(&request.output));
     let streamed = stream_run(command, &args, &cwd, limits, cancel, group, on_event);
-    let result = streamed.and_then(|finished| finish(request, finished));
-    result.map_err(|mut failure| {
-        // A large folder takes a while to remove; quit cut it short would
-        // leave half of it, which the next run refuses as not empty.
-        if claimed.held != Held::NotOwned {
-            stage.settling();
+    match streamed.and_then(|finished| finish(request, finished)) {
+        Ok(run) => Ok((run, claimed)),
+        Err(mut failure) => {
+            // A large folder takes a while to remove; quit cut short would
+            // leave half of it, which the next run refuses as not empty.
+            if claimed.held != Held::NotOwned {
+                stage.settling();
+            }
+            failure.removed_output = claimed.release_after_failure();
+            Err(failure)
         }
-        failure.removed_output = claimed.release_after_failure();
-        failure
-    })
+    }
 }
 
 /// A run whose process ended on its own.
@@ -304,7 +334,7 @@ fn stream_run(
     // pipe drain that may follow for up to `PIPE_GRACE`.
     running.publish(group);
     let result = stream_loop(&mut running, limits, cancel, on_event);
-    group.set(0);
+    group.clear();
     result
 }
 
@@ -378,6 +408,7 @@ fn finish(request: &LibraryRunRequest, finished: Finished) -> Result<RunOutcome,
         removed_output: false,
         restored: None,
         refused: false,
+        preview_kept: false,
     };
     let Some(summary) = summary else {
         return Err(fail(

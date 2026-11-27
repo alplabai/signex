@@ -596,9 +596,21 @@ library under version control from the start: the import is its first
 commit, so a later update is one change you can compare or revert.
 
 **Preview, import and the loss report.** **Next** runs the converter once
-without writing anything and lists what it would approximate, drop or skip.
-**Import** writes the library; **Cancel** stops after the current item and
-removes what was written (an empty folder you chose is kept, emptied). When
+and writes the library into a hidden folder beside the one you chose
+(`.<name>.signex-preview-…`), so step 2 shows what you will get: the parts
+with their symbol, footprint and up to two alternate footprints, and for the
+part you select its symbol and footprint drawn, its manufacturer and part
+number, its suppliers and its parameters. **Report items** lists what the
+converter approximated, dropped or skipped. Nothing goes into the folder you
+chose until **Import**, which moves the previewed library there without
+converting again. When that folder was created or changed after the preview,
+Import refuses, says why and keeps the preview: empty or remove the folder
+and press Import again, or go back. **Back**, **Cancel**, closing the dialog
+and quitting Signex remove the hidden folder; going back and changing the
+name, folder, models or database means the next **Next** previews again.
+The preview of an update only reads the source and lists the report items.
+During the conversion **Cancel** stops after the current item and removes
+what was written (an empty folder you chose is kept, emptied). When
 it finishes, the result card says how many parts were imported, where the
 library went, where it is mounted and which commit holds it. **View loss report** lists every item that did not come
 across unchanged, grouped by how much was lost and by the converter's code
@@ -635,8 +647,8 @@ good, copy it into a library of your own.
 **Quitting during an import.** Quitting Signex stops a running import at
 once. Signex waits up to 10 s for the converter to stop, then for the
 clean-up to finish: an update is put back to its last import, and a new
-import removes what it wrote, before Signex exits. On Windows, a process
-the converter started may keep running after it is stopped (#3134).
+import removes what it wrote, before Signex exits. Whatever the converter
+started is stopped with it, on Windows too.
 
 **Licences of imported libraries.** An imported library keeps the licence of
 its source. A converter records it in the library's manifest (the `license`

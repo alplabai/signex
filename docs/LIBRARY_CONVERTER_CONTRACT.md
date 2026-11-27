@@ -102,7 +102,7 @@ Prints one JSON object (schema `#/$defs/describe`) and exits 0:
 | `--json` | Print the summary (§3.2) as the last stdout line. |
 | `--progress` | Print progress events (§3.1) on stdout. Implies `--json`. |
 
-A converter must accept every value option in its joined form, `--option=value`; Signex always passes it that way (`--output=<dir>`, `--db=<value>`), so a value starting with `-` is never read as an option. Unknown options are an error (exit 1, summary with `ok: false`). A converter must also turn an internal failure (a crash while reading a malformed file) into a `failed` summary rather than exiting without one. `--help` and `--version` print their text and exit 0 with no summary; Signex never passes them.
+A converter writes only inside `--output` and never replaces, renames or removes the `--output` folder itself. A converter must accept every value option in its joined form, `--option=value`; Signex always passes it that way (`--output=<dir>`, `--db=<value>`), so a value starting with `-` is never read as an option. Unknown options are an error (exit 1, summary with `ok: false`). A converter must also turn an internal failure (a crash while reading a malformed file) into a `failed` summary rather than exiting without one. `--help` and `--version` print their text and exit 0 with no summary; Signex never passes them.
 
 ## 3. Output streams
 
@@ -246,10 +246,14 @@ human-readable `import-report.md` with the same content. Schema
 ## 6. How Signex runs a converter
 
 1. Discovery (§1) and `describe`; refuse a newer contract major.
-2. Preview: `library … --output=<temp> --dry-run --progress`; show the
-   report.
-3. Import: `library … --output=<target> --progress` (plus `--update` when
-   re-importing the same source).
+2. Preview. For a new import: `library … --output=<staging> --progress`, a
+   real run into a new staging folder beside the target (same parent, so the
+   same file system); Signex shows the written parts and the report, and
+   step 3 moves that library into place without running the converter
+   again. For an update: `library … --output=<temp> --dry-run --progress`;
+   show the report.
+3. Import: for a new import, the staged library is moved to `<target>`;
+   for an update, `library … --output=<target> --progress --update`.
 4. On exit 0 or 2: initialise git, commit, mount the library (and the
    libraries its manifest `requires`), show the report.
 5. On exit 1 or a 120 s silence: show the error and the stderr tail; Signex
@@ -262,11 +266,17 @@ human-readable `import-report.md` with the same content. Schema
    untracked files the run added removed, ignored files kept.
 
 A stop kills the converter's whole process group on Unix (it is started in
-a group of its own). On Windows only the converter process itself is
-killed, so a process it started may outlive a stop or a quit; a Job object
-that takes its children along is #3134. After the converter exits, its
-pipes are read for at most 2 s more, so a process it left behind cannot
-hold the import.
+a group of its own). On Windows the converter runs in a Job object (#3134)
+that kills every process in it when the run stops it or its last handle
+closes: a cancel, a silence stop, quitting Signex or Signex crashing ends
+whatever the converter started, and so does the end of a run that a
+process the converter left behind outlived. A stop waits up to 2 s for
+those processes to end before the output is removed or restored. The
+converter is put in the job right after it starts, so a process it starts
+in that first moment would be outside it. Where the system refuses a job,
+only the converter process itself is killed. After the converter exits,
+its pipes are read for at most 2 s more, so a process it left behind
+cannot hold the import.
 
 Quitting Signex stops a running import at once. Signex waits up to 10 s
 for the converter to stop, then for the clean-up to finish: a stopped

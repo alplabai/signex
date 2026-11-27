@@ -502,6 +502,7 @@ fn every_step_builds_in_both_graphite_themes() {
                         running: None,
                         project_open,
                         library_open: project_open,
+                        look: crate::library::browser::PreviewLook::for_tests(),
                     };
                     drop(view(state, ctx, &tokens, &i18n, windowed));
                 }
@@ -624,6 +625,7 @@ fn a_dry_run_nobody_waits_for_leaves_no_temp_folder() {
         local_commits: 0,
         library_id: None,
         requires: Vec::new(),
+        staged: None,
     };
     let task = app.update(import(LibraryImportMsg::Finished(Box::new(
         ImportFinished {
