@@ -86,6 +86,8 @@ impl Signex {
             });
             if let Some(hit) = hit {
                 self.interaction_state.active_canvas_mut().selected = vec![hit];
+                // A union member lifts its whole union (#2745).
+                self.expand_selection_to_unions();
                 self.update_selection_info();
             } else {
                 // The canvas already floats; with nothing to lift the old

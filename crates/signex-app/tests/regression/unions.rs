@@ -243,3 +243,239 @@ fn add_and_remove_selection_change_the_members() {
     unions(&mut app, UnionsMsg::RemoveSelectionRequested);
     assert_eq!(doc(&app).unions[0].members.len(), 2);
 }
+
+/// The name the panel foot's field shows for the picked union.
+fn foot_name(app: &Signex) -> String {
+    app.document_state
+        .panel_ctx
+        .unions
+        .foot
+        .as_ref()
+        .expect("the picked union has a foot")
+        .name
+        .clone()
+}
+
+fn open_unions_panel(app: &mut Signex) {
+    let _ = app.update(Message::Menu(
+        signex_app::menu_bar::MenuMessage::OpenUnionsPanel,
+    ));
+}
+
+/// #2745: the foot's name field keeps a trailing space while the union takes
+/// the trimmed name, so "Input f" can be typed, and the keys are one undo
+/// step.
+#[test]
+fn the_rename_field_keeps_a_trailing_space_and_the_keys_are_one_undo_step() {
+    let mut app = app_with_union();
+    open_unions_panel(&mut app);
+    let before = undo_position(&app);
+    panel(&mut app, UnionsMsg::RenameEdited("Input".into()));
+    panel(&mut app, UnionsMsg::RenameEdited("Input ".into()));
+    assert_eq!(foot_name(&app), "Input ", "the space stays in the field");
+    assert_eq!(
+        doc(&app).unions[0].name,
+        "Input",
+        "the name is stored trimmed"
+    );
+    panel(&mut app, UnionsMsg::RenameEdited("Input f".into()));
+    assert_eq!(doc(&app).unions[0].name, "Input f");
+    assert_eq!(foot_name(&app), "Input f");
+    assert_eq!(undo_position(&app), before + 1, "one undo step");
+    let _ = app.update(Message::Edit(EditMsg::Undo));
+    assert_eq!(doc(&app).unions[0].name, "Input filter");
+    assert_eq!(
+        foot_name(&app),
+        "Input filter",
+        "the field follows the undo"
+    );
+}
+
+/// #2745: a cleared name field stays empty instead of snapping back, and
+/// renames nothing.
+#[test]
+fn a_cleared_rename_field_stays_empty_and_renames_nothing() {
+    let mut app = app_with_union();
+    open_unions_panel(&mut app);
+    let before = undo_position(&app);
+    panel(&mut app, UnionsMsg::RenameEdited(String::new()));
+    assert_eq!(foot_name(&app), "");
+    assert_eq!(doc(&app).unions[0].name, "Input filter");
+    assert_eq!(undo_position(&app), before, "no undo step");
+}
+
+/// #2791: a locked union keeps its name, through the panel too; its field
+/// shows the stored name.
+#[test]
+fn a_locked_union_keeps_its_name() {
+    let mut app = app_with_union();
+    open_unions_panel(&mut app);
+    let path = app.document_state.active_path.clone().unwrap();
+    let union = doc(&app).unions[0].uuid;
+    panel(&mut app, UnionsMsg::LockToggled { sheet: path, union });
+    assert!(doc(&app).unions[0].locked);
+    let (steps, sheet) = (undo_position(&app), written(&app));
+    panel(&mut app, UnionsMsg::RenameEdited("Renamed".into()));
+    assert_eq!(doc(&app).unions[0].name, "Input filter");
+    assert_eq!(undo_position(&app), steps, "no undo step");
+    assert_eq!(written(&app), sheet, "the document is unchanged");
+    assert_eq!(foot_name(&app), "Input filter");
+}
+
+/// #2745: every canvas gesture that adds a union member to the selection
+/// brings the whole union along, so the union moves as one.
+mod moves_as_one {
+    use signex_app::active_bar::{ActiveBarAction, ActiveBarMsg};
+    use signex_app::app::unions::{UnionPopoverMsg, UnionsMsg};
+    use signex_app::app::{EditMsg, Message, Signex};
+    use signex_app::canvas::{BoxDirection, CanvasEvent};
+    use signex_types::schematic::{Point, SelectedItem, SelectedKind, Wire};
+    use std::path::PathBuf;
+    use uuid::Uuid;
+
+    use crate::click_click_move::{app_with_wires, wire_start};
+
+    fn wire(a: (f64, f64), b: (f64, f64)) -> Wire {
+        Wire {
+            color: None,
+            unknown_columns: Default::default(),
+            uuid: Uuid::now_v7(),
+            start: Point::new(a.0, a.1),
+            end: Point::new(b.0, b.1),
+            stroke_width: 0.0,
+            locked: false,
+        }
+    }
+
+    /// A union "Pair" of two wires, nothing selected: `near` lies in the box
+    /// x 0..30, y 0..10, `far` well outside it.
+    struct Pair {
+        app: Signex,
+        path: PathBuf,
+        near: Uuid,
+        far: Uuid,
+    }
+
+    fn pair() -> Pair {
+        let near = wire((5.0, 5.0), (15.0, 5.0));
+        let far = wire((40.0, 20.0), (60.0, 20.0));
+        let (near, far, wires) = (near.uuid, far.uuid, vec![near, far]);
+        let (mut app, path) = app_with_wires(wires);
+        app.interaction_state.active_canvas_mut().selected = vec![
+            SelectedItem::new(near, SelectedKind::Wire),
+            SelectedItem::new(far, SelectedKind::Wire),
+        ];
+        let send = |app: &mut Signex, msg: UnionsMsg| {
+            let _ = app.update(Message::Edit(EditMsg::Unions(msg)));
+        };
+        send(&mut app, UnionsMsg::CreateRequested);
+        send(
+            &mut app,
+            UnionsMsg::Popover(UnionPopoverMsg::NameEdited("Pair".into())),
+        );
+        send(&mut app, UnionsMsg::Popover(UnionPopoverMsg::Confirmed));
+        assert_eq!(app.document_state.engines[&path].document().unions.len(), 1);
+        app.interaction_state.active_canvas_mut().selected.clear();
+        Pair {
+            app,
+            path,
+            near,
+            far,
+        }
+    }
+
+    fn selected(app: &Signex) -> Vec<Uuid> {
+        let mut ids: Vec<Uuid> = app
+            .interaction_state
+            .active_canvas()
+            .selected
+            .iter()
+            .map(|i| i.uuid)
+            .collect();
+        ids.sort();
+        ids
+    }
+
+    impl Pair {
+        fn both(&self) -> Vec<Uuid> {
+            let mut ids = vec![self.near, self.far];
+            ids.sort();
+            ids
+        }
+
+        /// Drop a drag of the selection 2.54 mm to the right, and check that
+        /// both wires moved by it.
+        fn drag_moves_both(&mut self) {
+            let _ = self
+                .app
+                .update(Message::CanvasEvent(CanvasEvent::MoveSelected {
+                    dx: 2.54,
+                    dy: 0.0,
+                    connections: Default::default(),
+                }));
+            let near = wire_start(&self.app, &self.path, self.near);
+            let far = wire_start(&self.app, &self.path, self.far);
+            assert!((near.x - 7.54).abs() < 1e-6, "the gripped member moves");
+            assert!(
+                (far.x - 42.54).abs() < 1e-6,
+                "the other member moves by the same amount"
+            );
+        }
+
+        fn ctrl_click(&mut self, x: f64, y: f64) {
+            let _ = self
+                .app
+                .update(Message::CanvasEvent(CanvasEvent::CtrlClicked {
+                    world_x: x,
+                    world_y: y,
+                }));
+        }
+    }
+
+    #[test]
+    fn a_box_round_one_member_selects_and_moves_the_whole_union() {
+        let mut pair = pair();
+        let _ = pair
+            .app
+            .update(Message::CanvasEvent(CanvasEvent::BoxSelect {
+                x1: 0.0,
+                y1: 0.0,
+                x2: 30.0,
+                y2: 10.0,
+                direction: BoxDirection::LeftToRight,
+            }));
+        assert_eq!(selected(&pair.app), pair.both());
+        pair.drag_moves_both();
+    }
+
+    /// Ctrl+click (and Shift+click, which sends the same event) on a member
+    /// adds its whole union; Ctrl+click on a selected member takes that one
+    /// off, which is how a selection narrows for Remove Selection.
+    #[test]
+    fn ctrl_click_adds_the_whole_union_and_takes_off_one_member() {
+        let mut pair = pair();
+        pair.ctrl_click(50.0, 20.0);
+        assert_eq!(selected(&pair.app), pair.both());
+        pair.ctrl_click(10.0, 5.0);
+        assert_eq!(selected(&pair.app), vec![pair.far]);
+        pair.ctrl_click(10.0, 5.0);
+        assert_eq!(selected(&pair.app), pair.both());
+        pair.drag_moves_both();
+    }
+
+    #[test]
+    fn a_click_click_move_pick_on_a_member_lifts_the_whole_union() {
+        let mut pair = pair();
+        let _ = pair.app.update(Message::ActiveBar(ActiveBarMsg::Action(
+            ActiveBarAction::Move,
+        )));
+        let _ = pair
+            .app
+            .update(Message::CanvasEvent(CanvasEvent::MovePicked {
+                world_x: 10.0,
+                world_y: 5.0,
+            }));
+        assert_eq!(selected(&pair.app), pair.both());
+        pair.drag_moves_both();
+    }
+}

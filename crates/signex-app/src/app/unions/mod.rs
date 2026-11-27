@@ -15,6 +15,6 @@ mod state_tests;
 
 pub(crate) use popover::{UNION_NAME_INPUT_ID, tag_pill, view as popover_view};
 pub use state::{
-    CreateUnionPopover, UnionFoot, UnionGroup, UnionPopoverMsg, UnionRow, UnionScope, UnionsMsg,
-    UnionsPanelView, UnionsState,
+    CreateUnionPopover, RenameDraft, UnionFoot, UnionGroup, UnionPopoverMsg, UnionRow, UnionScope,
+    UnionsMsg, UnionsPanelView, UnionsState,
 };
