@@ -15,6 +15,7 @@ mod history;
 mod join;
 mod movement;
 mod parts;
+mod refusals;
 mod selection;
 mod transform;
 mod ui;
@@ -29,6 +30,9 @@ use history::apply_symbol_history;
 use join::apply_symbol_join;
 use movement::apply_symbol_move;
 use parts::apply_symbol_parts;
+pub(crate) use refusals::{
+    new_unstorable_pin_text, pin_text_refused, refuse_pin_text, refuse_read_only,
+};
 use selection::apply_symbol_selection;
 use transform::apply_symbol_transform;
 use ui::apply_symbol_ui;
@@ -92,6 +96,8 @@ fn clear_stale_status_message(editor: &mut SymEditor, msg: &SymbolEditorMsg) {
             | SymbolEditorMsg::CycleUnit
     ) {
         editor.gui.status_message = None;
+        editor.gui.pin_text_refusal = None;
+        editor.gui.read_only_refused = false;
     }
 }
 
@@ -316,6 +322,15 @@ pub(crate) fn apply_symbol_primitive_edit(
     editor: &mut crate::app::SymbolDocument,
     msg: SymbolEditorMsg,
 ) {
+    // A file that opened repaired takes no edit until it is saved (#3129).
+    if editor.draft.is_read_only() {
+        refusals::apply_read_only(editor, msg, apply_edit);
+    } else {
+        apply_edit(editor, msg);
+    }
+}
+
+fn apply_edit(editor: &mut crate::app::SymbolDocument, msg: SymbolEditorMsg) {
     use crate::library::editor::symbol::state::SymbolSelection;
 
     // The measurement carries the event that triggered it: apply the
@@ -730,6 +745,8 @@ fn rotate_pivot_msg_to_state(
 mod curve_tool_tests;
 #[cfg(test)]
 mod move_run_tests;
+#[cfg(test)]
+mod refusal_tests;
 
 #[cfg(test)]
 mod tests {

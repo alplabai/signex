@@ -18,12 +18,12 @@ use super::run::{
 };
 use super::selection::Shown;
 use crate::app::command::CommandOutcome;
-use crate::app::core::command_log::RecordedTargets;
 use crate::app::core::mutation_outcome::MutationOutcome;
 use crate::app::handlers::pcb_item_move::{carry_of_drop, drag_commands};
 use crate::app::{Message, Signex};
 use crate::keymap::AppCommandId;
 use crate::panels::command_log::LogRow;
+use crate::panels::command_log::RecordedTargets;
 
 /// `commands` with a new id for a union they create.
 fn with_new_union_ids(commands: &[Command]) -> Vec<Command> {

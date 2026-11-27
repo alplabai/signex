@@ -103,7 +103,7 @@ pub const DEFAULT_COMPONENT_CLASSES: &[(&str, &str)] = &[
     ("generic", "Generic"),
 ];
 
-pub use crate::app::core::component_class::ComponentClassEntry;
+pub use component_class::ComponentClassEntry;
 
 /// Materialise the seed list as owned `ComponentClassEntry` values.
 pub fn default_component_classes() -> Vec<ComponentClassEntry> {
@@ -752,6 +752,7 @@ pub fn write_symbol_pin_selection_pref(mode: PinSelectionMode) {
 mod board_views;
 pub mod bundled;
 pub mod catalog;
+mod component_class;
 mod dock_layout;
 pub mod document_report;
 mod erc;

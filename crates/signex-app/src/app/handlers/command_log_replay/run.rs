@@ -14,13 +14,13 @@ use super::book::ReplayInput;
 use super::scope::{ReplayScope, acts_on_all_when_empty, replay_scope};
 use super::selection::{Shown, TabKey, board_selection};
 use crate::app::command::{CommandArgs, CommandOutcome};
-use crate::app::core::command_log::{RECORDED_TARGETS, RecordedTargets};
 use crate::app::handlers::clipboard_workflows::{CopyOutcome, DEFAULT_PASTE_OFFSET_MM};
 use crate::app::project_sheets::{plan_project_sheets_for, resolve_child_reference_quiet};
 use crate::app::state::PasteCounters;
 use crate::app::{Message, Signex};
 use crate::keymap::AppCommandId;
 use crate::panels::command_log::{LogRow, LogSource};
+use crate::panels::command_log::{RECORDED_TARGETS, RecordedTargets};
 
 impl Signex {
     /// What `command`, about to run, acts on: `None` unless it is a person's
