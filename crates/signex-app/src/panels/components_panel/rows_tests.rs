@@ -2,7 +2,7 @@
 //! counts per source, Compact and Previews rows, the hover Place and the
 //! "shown of total" header count.
 
-use super::rows::{RowColors, RowFlags, RowLook, component_row_label};
+use super::rows::{RowColors, RowContext, RowFlags, RowLook, component_row_label, view_row_button};
 use super::sections::section_count;
 use super::tests::{fixture_row, library_with, thumb_look};
 use super::*;
@@ -204,4 +204,90 @@ fn a_hovered_row_offers_place() {
     assert!(idle.iter().all(|t| t.text != "Place"));
     let hovered = stock_texts(ComponentsRowStyle::Compact, Some(0));
     assert_eq!(hovered.iter().filter(|t| t.text == "Place").count(), 1);
+}
+
+/// The messages a mouse `button` press (and release) on the text `label`
+/// of a hovered Compact row publishes, hover enter/exit left out.
+fn row_press(button: iced::mouse::Button, label: &str) -> Vec<LibraryMessage> {
+    use iced::mouse::Event;
+    let row = fixture_row("R0805_10k", "ERA-3AED103V", "Panasonic");
+    let key = ComponentsPanelRowKey {
+        library_path: PathBuf::from("lib.snxlib"),
+        table: "Passives".to_owned(),
+        row_id: signex_library::RowId::from_uuid(row.row_id),
+    };
+    let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::GraphiteDark);
+    let i18n = I18n::en_us();
+    let cx = RowContext {
+        style: ComponentsRowStyle::Compact,
+        colors: RowColors {
+            text: iced::Color::WHITE,
+            muted: iced::Color::WHITE,
+            tint: iced::Color::BLACK,
+            hover: iced::Color::BLACK,
+            menu: iced::Color::BLACK,
+        },
+        look: RowLook::graphite(),
+        tokens: &tokens,
+        i18n: &i18n,
+    };
+    let flags = RowFlags {
+        hovered: true,
+        ..RowFlags::default()
+    };
+    let window = iced::Size::new(600.0, 200.0);
+    let build = || view_row_button(key.clone(), &row, flags, None, &cx);
+    let texts = crate::layout_probe::lay_out_texts(build(), window);
+    let at = crate::layout_probe::find(&texts, label).bounds.center();
+    let mut published = crate::layout_probe::messages_for_events(
+        build(),
+        window,
+        at,
+        &[Event::ButtonPressed(button), Event::ButtonReleased(button)].map(iced::Event::Mouse),
+    );
+    published.retain(|m| {
+        !matches!(
+            m,
+            LibraryMessage::ComponentsPanelRowEntered(_)
+                | LibraryMessage::ComponentsPanelRowExited(_)
+        )
+    });
+    published
+}
+
+/// A press on a row's label selects it, a press on its hover Place places
+/// it, a right press opens its menu: each publishes that one message only
+/// (#2631; restores the row-press coverage #2620 dropped).
+#[test]
+fn a_row_publishes_press_place_and_right_click_apart() {
+    use iced::mouse::Button;
+    let label = "R0805_10k — ERA-3AED103V";
+
+    let pressed = row_press(Button::Left, label);
+    assert!(
+        matches!(
+            pressed.as_slice(),
+            [LibraryMessage::ComponentsPanelRowPressed(key)]
+                if key.table == "Passives" && key.library_path == PathBuf::from("lib.snxlib")
+        ),
+        "{pressed:?}"
+    );
+
+    let placed = row_press(Button::Left, "Place");
+    assert!(
+        matches!(
+            placed.as_slice(),
+            [LibraryMessage::ComponentsPanelPlace { table, .. }] if table == "Passives"
+        ),
+        "{placed:?}"
+    );
+
+    let right = row_press(Button::Right, label);
+    assert!(
+        matches!(
+            right.as_slice(),
+            [LibraryMessage::ComponentsPanelRowRightClicked(_)]
+        ),
+        "{right:?}"
+    );
 }
