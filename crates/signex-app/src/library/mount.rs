@@ -240,7 +240,7 @@ impl LibraryState {
     /// `state/methods.rs:83-85`.
     pub fn request_mount(&mut self, path: &Path, intent: MountIntent) -> MountRequest {
         if self.library_at(path).is_some() {
-            self.cancel_pending_close(path, "it was opened again");
+            self.note_reopened(path);
             return MountRequest::AlreadyMounted;
         }
         match self.pending_mounts.get_mut(path) {

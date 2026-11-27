@@ -33,6 +33,8 @@ notice-place-failed = Place Failed
 notice-disk-changed-title = File Changed on Disk
 notice-disk-missing-title = File Missing on Disk
 notice-disk-folder-missing-title = Folder Missing on Disk
+# The confirm of Remove from Signex on the Start screen's Libraries page.
+notice-library-remove-title = Remove Library from { -brand-name }
 
 ## Details
 
@@ -62,6 +64,9 @@ notice-project-add-library-unavailable = Adding a library to the project from th
 # $action is an internal tag of the change (such as "add" or "remove"), in
 # English; $error is the system's reason, in English.
 notice-global-libraries-not-saved = Could not save the global library list ({ $action }): { $error }
+# The Remove from Signex confirm; the library's path is shown under it.
+# $library is the library's name.
+notice-library-remove-detail = Remove “{ $library }” from { -brand-name }? It is no longer loaded for every project. Its files stay on disk, and you can add it again. Projects that list it keep their own reference to it.
 # $path is the library file; $error is the system's reason, in English.
 notice-library-cannot-open = Cannot open library { $path }: { $error }
 # $path is the library file being added; $error is the system's reason, in

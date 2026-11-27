@@ -364,6 +364,36 @@ start-libraries-stock-caption = ships with Signex · read-only
 start-libraries-no-match = No libraries match “{ $query }”
 start-libraries-none = No libraries loaded
 start-libraries-none-body = Add a library to use its parts in every project.
+# Version control column (#2591). The heading is shown in capitals; git and
+# git-lfs are the tools' names.
+start-libraries-column-version-control = VERSION CONTROL
+# The library that comes with the install has no version control to show.
+start-libraries-vcs-none = —
+# Shown while the library's version control is still being read.
+start-libraries-vcs-pending = …
+start-libraries-vcs-git = git
+# A link: pressing it opens Enable Version Control for the library.
+start-libraries-vcs-off = off
+start-libraries-vcs-attention = needs attention
+# Reasons shown under "needs attention".
+start-libraries-vcs-git-missing = git is not installed or not on PATH
+start-libraries-vcs-lfs-missing = uses Git LFS, but git-lfs is not on PATH
+# $count is a whole number.
+start-libraries-vcs-uncommitted =
+    { $count ->
+        [one] { $count } uncommitted change
+       *[other] { $count } uncommitted changes
+    }
+# $reason is git's own message, in English.
+start-libraries-vcs-unreadable = cannot read the repository: { $reason }
+# Messages line when the version control of the libraries could not be read.
+# $reason is the system's reason, in English.
+start-libraries-vcs-read-failed = Could not read the version control of the libraries: { $reason }
+# The button that opens a library row's menu (#2592).
+start-library-row-menu = ⋯
+# Row menu entry and the confirm's button: Signex stops loading the library;
+# its files stay on disk.
+start-library-remove = Remove from { -brand-name }
 # A project is open but no document is shown.
 start-hint-title = No document selected
 start-hint-body = Choose a schematic or PCB from the project tree, or open one here.

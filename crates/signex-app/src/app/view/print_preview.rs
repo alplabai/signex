@@ -489,6 +489,16 @@ fn notice_choice_buttons<'a>(
                 tokens,
             )];
         }
+        Some(NoticeAction::RemoveLibraryFromSignex { path }) => {
+            let confirmed =
+                crate::start_screen::StartScreenMsg::LibraryRemoveConfirmed(path.clone());
+            return vec![dialog_button(
+                t!(i18n, ids::START_LIBRARY_REMOVE),
+                DialogButtonKind::Danger,
+                Some(crate::start_screen::message(confirmed)),
+                tokens,
+            )];
+        }
         None => return Vec::new(),
     };
     let choice =

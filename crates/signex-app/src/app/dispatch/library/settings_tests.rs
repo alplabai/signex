@@ -286,9 +286,20 @@ fn disconnect_waits_while_a_connect_is_running() {
     assert!(app.library.settings.digikey_account_email.is_some());
 }
 
+/// Run a settings task the way iced would and feed its results back.
+fn run_settings(app: &mut Signex, task: iced::Task<Message>) {
+    for message in drain(task) {
+        let Message::Library(LibraryMessage::Settings(msg)) = message else {
+            panic!("a settings task answers with a settings message");
+        };
+        drop(app.handle_library_settings_message(msg));
+    }
+}
+
 /// Dropping a dragged distributor on a row moves it there and saves
 /// the order the way Up / Down do. One test, since both write the shared
-/// `distributors.toml` of this test process.
+/// `distributors.toml` of this test process. The save is a Task (#2626):
+/// the order is in the Model at once and on disk once the task ran.
 #[test]
 fn a_dropped_distributor_takes_the_row_and_the_order_is_saved_like_up_down() {
     use signex_library::DistributorSource::{DigiKey, Jlcpcb, Lcsc, Mouser};
@@ -305,12 +316,14 @@ fn a_dropped_distributor_takes_the_row_and_the_order_is_saved_like_up_down() {
         app.library.settings.preferred_order_drop_target,
         Some(Mouser)
     );
-    drop(app.handle_library_settings_message(SettingsMsg::PreferenceDropped(Mouser)));
+    let save = app.handle_library_settings_message(SettingsMsg::PreferenceDropped(Mouser));
+    assert_eq!(save.units(), 1, "the save must be a Task, not inline IO");
 
     let moved = vec![DigiKey, Jlcpcb, Mouser, Lcsc];
     assert_eq!(app.library.settings.preferred_order, moved);
     assert_eq!(app.library.settings.preferred_order_drag, None);
     assert_eq!(app.library.settings.preferred_order_drop_target, None);
+    run_settings(&mut app, save);
     assert_eq!(app.library.settings.preferred_order_error, None);
     assert_eq!(
         crate::library::settings::persistence::load_preferred_order(),
@@ -319,9 +332,11 @@ fn a_dropped_distributor_takes_the_row_and_the_order_is_saved_like_up_down() {
     );
 
     // Up keeps saving through the same path.
-    drop(app.handle_library_settings_message(SettingsMsg::PreferenceUp(Lcsc)));
+    let save = app.handle_library_settings_message(SettingsMsg::PreferenceUp(Lcsc));
+    assert_eq!(save.units(), 1, "Up saves in a Task too");
     let up = vec![DigiKey, Jlcpcb, Lcsc, Mouser];
     assert_eq!(app.library.settings.preferred_order, up);
+    run_settings(&mut app, save);
     assert_eq!(
         crate::library::settings::persistence::load_preferred_order(),
         up
@@ -330,9 +345,86 @@ fn a_dropped_distributor_takes_the_row_and_the_order_is_saved_like_up_down() {
     // A release off the list ends the drag; a drop with no drag moves nothing.
     drop(app.handle_library_settings_message(SettingsMsg::PreferenceDragStarted(DigiKey)));
     drop(app.handle_library_settings_message(SettingsMsg::PreferenceDragEnded));
-    drop(app.handle_library_settings_message(SettingsMsg::PreferenceDropped(Mouser)));
+    let none = app.handle_library_settings_message(SettingsMsg::PreferenceDropped(Mouser));
+    assert_eq!(none.units(), 0, "nothing moved, nothing saved");
     assert_eq!(app.library.settings.preferred_order, up);
     assert_eq!(app.library.settings.preferred_order_drag, None);
+}
+
+/// A failed save shows its reason; a late result of an older order does
+/// not overwrite the caption of the newest one.
+#[test]
+fn only_the_newest_order_save_sets_the_error_caption() {
+    let (mut app, _startup) = Signex::new();
+    app.library.settings.preferred_order_save_generation = 3;
+
+    drop(
+        app.handle_library_settings_message(SettingsMsg::PreferenceOrderSaved {
+            generation: 3,
+            result: Err("disk full".into()),
+        }),
+    );
+    assert_eq!(
+        app.library.settings.preferred_order_error.as_deref(),
+        Some("disk full")
+    );
+
+    drop(
+        app.handle_library_settings_message(SettingsMsg::PreferenceOrderSaved {
+            generation: 2,
+            result: Ok(()),
+        }),
+    );
+    assert_eq!(
+        app.library.settings.preferred_order_error.as_deref(),
+        Some("disk full"),
+        "an older save's result is ignored"
+    );
+
+    drop(
+        app.handle_library_settings_message(SettingsMsg::PreferenceOrderSaved {
+            generation: 3,
+            result: Ok(()),
+        }),
+    );
+    assert_eq!(app.library.settings.preferred_order_error, None);
+}
+
+/// Two saves whose workers run out of order: the older one, arriving
+/// after the newer wrote, does not write, so the newest order stays.
+#[test]
+fn an_older_order_save_never_lands_after_a_newer_one() {
+    let written = std::sync::Mutex::new(0);
+    let mut writes = Vec::new();
+
+    assert_eq!(
+        super::settings::save_in_turn(&written, 2, || {
+            writes.push(2);
+            Ok(())
+        }),
+        Ok(())
+    );
+    assert_eq!(
+        super::settings::save_in_turn(&written, 1, || {
+            writes.push(1);
+            Ok(())
+        }),
+        Ok(()),
+        "a superseded save is not an error"
+    );
+    assert_eq!(writes, vec![2]);
+
+    // A failed newest save still blocks the older order from landing.
+    assert_eq!(
+        super::settings::save_in_turn(&written, 4, || Err("denied".to_string())),
+        Err("denied".to_string())
+    );
+    super::settings::save_in_turn(&written, 3, || {
+        writes.push(3);
+        Ok(())
+    })
+    .unwrap();
+    assert_eq!(writes, vec![2]);
 }
 
 /// The Mouser pill reads the last test; an edited key is untested again.

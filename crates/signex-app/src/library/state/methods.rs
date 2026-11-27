@@ -106,6 +106,7 @@ impl Default for LibraryState {
             closing: Default::default(),
             history_missing: Default::default(),
             unmounted: Vec::new(),
+            reopened: Vec::new(),
             clock: chrono::Utc::now(),
             refresh_generations: HashMap::new(),
             refresh_generation_counter: 0,
@@ -501,7 +502,7 @@ impl LibraryState {
         project_paths: &[PathBuf],
     ) -> Result<(), LibraryError> {
         if self.library_at(&root).is_some() {
-            self.cancel_pending_close(&root, "it was opened again");
+            self.note_reopened(&root);
             return Ok(());
         }
         let adapter = LocalGitAdapter::open(&root)?;

@@ -30,6 +30,8 @@ define_ids! {
     NOTICE_DISK_CHANGED_TITLE = "notice-disk-changed-title";
     NOTICE_DISK_MISSING_TITLE = "notice-disk-missing-title";
     NOTICE_DISK_FOLDER_MISSING_TITLE = "notice-disk-folder-missing-title";
+    NOTICE_LIBRARY_REMOVE_TITLE = "notice-library-remove-title";
+    NOTICE_LIBRARY_REMOVE_DETAIL = "notice-library-remove-detail";
     NOTICE_LIBRARY_READ_ONLY_DETAIL = "notice-library-read-only-detail";
     NOTICE_LIBRARY_HISTORY_MISSING_DETAIL = "notice-library-history-missing-detail";
     NOTICE_DISK_CHANGED = "notice-disk-changed";

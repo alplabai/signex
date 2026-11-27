@@ -716,4 +716,9 @@ pub enum SettingsMsg {
     PreferenceDropped(DistributorSource),
     /// The mouse button was released anywhere on the page: the drag ends.
     PreferenceDragEnded,
+    /// The background save of the order `generation` finished.
+    PreferenceOrderSaved {
+        generation: u64,
+        result: Result<(), String>,
+    },
 }

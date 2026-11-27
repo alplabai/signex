@@ -1,17 +1,22 @@
 //! The Libraries page (mockup row 1, "Libraries page"): the libraries loaded for
-//! every project, Stock first, in a table of name and path, scope and
-//! component count, each with Open (the library's Library Browser tab;
-//! Stock opens read-only, as it is mounted). The toolbar filters the table
-//! and offers Add library… (the Components panel's Add ▸ Global) and Open
-//! Library Browser. The mock's Version control column and row ⋯ menu are
-//! not drawn: the app keeps no per-library git state to show and has no
-//! "remove from Signex" action yet.
+//! every project, Stock first, in a table of name and path, scope,
+//! component count and version control, each with Open (the library's
+//! Library Browser tab; Stock opens read-only, as it is mounted). The
+//! toolbar filters the table and offers Add library… (the Components
+//! panel's Add ▸ Global) and Open Library Browser.
+//!
+//! Version control (#2591) reads `—` for Stock, `git`, `off` (a link that
+//! opens Enable Version Control) or "needs attention" with its reason
+//! inline; the state is read off the UI thread into
+//! [`StartScreenState::library_vcs`]. A Global or Installed row has a ⋯
+//! menu with Remove from Signex (#2592).
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use iced::widget::{Row, Space, column, container, row};
 use iced::{Alignment, Background, Border, Element, Length, Widget as _};
-use signex_i18n::{I18n, UserText, ids, t};
+use signex_i18n::{I18n, Localized, UserText, ids, t};
+use signex_library::library_vcs::{LibraryVcsState, VcsAttention};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::text;
 
@@ -32,8 +37,10 @@ const SP: Spacing = Spacing::DEFAULT;
 const SCOPE_W: f32 = TS.body * 7.0;
 /// Width of the Components column.
 const COUNT_W: f32 = TS.body * 8.0;
-/// Width of the row actions column.
-const ACTIONS_W: f32 = TS.body * 5.0;
+/// Width of the Version control column; a reason wraps inside it.
+const VCS_W: f32 = TS.body * 11.0;
+/// Width of the row actions column (Open and the ⋯ button).
+const ACTIONS_W: f32 = TS.body * 7.0;
 
 /// A loaded library as the Start screen lists it.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -43,20 +50,40 @@ pub struct LoadedLibrary {
     pub path: PathBuf,
     pub components: usize,
     pub scope: ComponentsMountSource,
+    /// The folder's version control as last read; `None` before the first
+    /// read lands, and always for Stock, which shows `—`.
+    pub vcs: Option<LibraryVcsState>,
+}
+
+/// The folder a library file's version control lives in: the one holding
+/// the `.snxlib`, as Enable Version Control scopes it.
+pub fn library_folder(path: &Path) -> Option<&Path> {
+    path.parent()
 }
 
 /// The mounted libraries, Stock first and then in the Components panel's
-/// source order. Nothing is open on the Start screen, so no library counts
-/// as a project's.
-pub fn loaded_libraries(library: &crate::library::LibraryState) -> Vec<LoadedLibrary> {
+/// source order, with the version control `state` holds for each. Nothing
+/// is open on the Start screen, so no library counts as a project's.
+pub fn loaded_libraries(
+    library: &crate::library::LibraryState,
+    state: &StartScreenState,
+) -> Vec<LoadedLibrary> {
     let mut out: Vec<LoadedLibrary> = library
         .open_libraries
         .iter()
-        .map(|lib| LoadedLibrary {
-            name: lib.display_name.clone(),
-            path: lib.root.clone(),
-            components: lib.cached_components.len(),
-            scope: library.mount_source_for(&lib.root, &[]),
+        .map(|lib| {
+            let scope = library.mount_source_for(&lib.root, &[]);
+            let vcs = (scope != ComponentsMountSource::Stock)
+                .then(|| library_folder(&lib.root))
+                .flatten()
+                .and_then(|dir| state.library_vcs.get(dir).cloned());
+            LoadedLibrary {
+                name: lib.display_name.clone(),
+                path: lib.root.clone(),
+                components: lib.cached_components.len(),
+                scope,
+                vcs,
+            }
         })
         .collect();
     let rank = |scope: ComponentsMountSource| {
@@ -151,11 +178,12 @@ pub(super) fn view<'a>(
     ]
 }
 
-/// The four cells of a table row, in column widths.
+/// The five cells of a table row, in column widths.
 fn cells<'a>(
     library: Element<'a, Message>,
     scope: Element<'a, Message>,
     count: Element<'a, Message>,
+    vcs: Element<'a, Message>,
     actions: Element<'a, Message>,
 ) -> Row<Element<'a, Message>> {
     row![
@@ -164,6 +192,7 @@ fn cells<'a>(
         container(count)
             .width(COUNT_W)
             .align_x(iced::alignment::Horizontal::Right),
+        container(vcs).width(VCS_W),
         container(actions)
             .width(ACTIONS_W)
             .align_x(iced::alignment::Horizontal::Right),
@@ -180,6 +209,10 @@ fn header<'a>(tokens: &ThemeTokens, i18n: &I18n) -> Element<'a, Message> {
         section_header(tokens, t!(i18n, ids::START_LIBRARIES_COLUMN_LIBRARY)),
         section_header(tokens, t!(i18n, ids::START_LIBRARIES_COLUMN_SCOPE)),
         section_header(tokens, t!(i18n, ids::START_LIBRARIES_COLUMN_COMPONENTS)),
+        section_header(
+            tokens,
+            t!(i18n, ids::START_LIBRARIES_COLUMN_VERSION_CONTROL),
+        ),
         Space::new().boxed(),
     ))
     .padding([SP.s + SP.xs / 2.0, SP.l])
@@ -238,15 +271,101 @@ fn library_row<'a>(tokens: &ThemeTokens, i18n: &I18n, lib: &LoadedLibrary) -> El
             lib.path.clone(),
         ))),
     );
+    let mut actions = row![open].spacing(SP.xs).align_y(Alignment::Center);
+    if is_removable(lib.scope) {
+        actions = actions.push(action_button(
+            tokens,
+            (Look::Ghost, Size::Small),
+            None,
+            t!(i18n, ids::START_LIBRARY_ROW_MENU),
+            Some(message(StartScreenMsg::LibraryMenuOpened(lib.path.clone()))),
+        ));
+    }
     container(cells(
         name.boxed(),
         pill(tokens, t!(i18n, lib.scope.message()), tone),
         count.boxed(),
-        open,
+        vcs_cell(tokens, i18n, lib),
+        actions.boxed(),
     ))
     .padding([SP.m, SP.l])
     .width(Length::Fill)
     .boxed()
+}
+
+/// Whether Remove from Signex applies to a library of `scope` (#2592):
+/// Global and Installed libraries are registered with Signex; Stock ships
+/// with it and a project's own come from its `.snxprj`.
+pub fn is_removable(scope: ComponentsMountSource) -> bool {
+    matches!(
+        scope,
+        ComponentsMountSource::Global | ComponentsMountSource::Installed
+    )
+}
+
+/// The Version control cell (#2591): `—` for Stock, a `git` pill, `off` as
+/// a link to Enable Version Control, or a "needs attention" pill over its
+/// reason. `…` until the state is read, so a pending read never looks
+/// like no version control.
+fn vcs_cell<'a>(tokens: &ThemeTokens, i18n: &I18n, lib: &LoadedLibrary) -> Element<'a, Message> {
+    if lib.scope == ComponentsMountSource::Stock {
+        return quiet_text(tokens, t!(i18n, ids::START_LIBRARIES_VCS_NONE));
+    }
+    match &lib.vcs {
+        None => quiet_text(tokens, t!(i18n, ids::START_LIBRARIES_VCS_PENDING)),
+        Some(LibraryVcsState::Git) => {
+            pill(tokens, t!(i18n, ids::START_LIBRARIES_VCS_GIT), PillTone::Ok)
+        }
+        Some(LibraryVcsState::Off) => action_button(
+            tokens,
+            (Look::Ghost, Size::Small),
+            None,
+            t!(i18n, ids::START_LIBRARIES_VCS_OFF),
+            Some(message(StartScreenMsg::LibraryVcsEnableClicked(
+                lib.path.clone(),
+            ))),
+        ),
+        Some(LibraryVcsState::NeedsAttention(why)) => column![
+            pill(
+                tokens,
+                t!(i18n, ids::START_LIBRARIES_VCS_ATTENTION),
+                PillTone::Warn,
+            ),
+            text(attention_reason(i18n, why))
+                .size(TS.caption)
+                .color(resolve(tokens).ink4)
+                .width(Length::Fill),
+        ]
+        .spacing(SP.xs / 2.0)
+        .boxed(),
+    }
+}
+
+/// The reason a library's repository needs attention, as the cell says it.
+pub(super) fn attention_reason(i18n: &I18n, why: &VcsAttention) -> Localized {
+    match why {
+        VcsAttention::GitNotFound => t!(i18n, ids::START_LIBRARIES_VCS_GIT_MISSING),
+        VcsAttention::LfsNotFound => t!(i18n, ids::START_LIBRARIES_VCS_LFS_MISSING),
+        VcsAttention::Unreadable(reason) => t!(
+            i18n,
+            ids::START_LIBRARIES_VCS_UNREADABLE,
+            "reason" => reason.as_str()
+        ),
+        VcsAttention::Uncommitted(count) => t!(
+            i18n,
+            ids::START_LIBRARIES_VCS_UNCOMMITTED,
+            "count" => *count
+        ),
+    }
+}
+
+/// A short line in the secondary ink, as the mock's `.caption` cells.
+fn quiet_text<'a>(tokens: &ThemeTokens, line: Localized) -> Element<'a, Message> {
+    text(line)
+        .size(TS.body)
+        .color(ti(tokens.text_secondary))
+        .wrapping(iced::widget::text::Wrapping::None)
+        .boxed()
 }
 
 /// A mono caption line that ends in an ellipsis when long.
@@ -271,5 +390,6 @@ pub(super) fn sample(name: &str, scope: ComponentsMountSource, components: usize
         path: PathBuf::from(format!("{name}.snxlib")),
         components,
         scope,
+        vcs: None,
     }
 }

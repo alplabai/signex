@@ -215,6 +215,18 @@ impl Signex {
             // Already version-controlled (or not probed yet) — nothing to enable.
             return Task::none();
         }
+        self.open_library_vcs_dialog_at(library_file_path, root_dir)
+    }
+
+    /// Open the library-scope Enable Version Control dialog on the library
+    /// file `library_file_path` in `root_dir`, which the caller found has no
+    /// `.git`. The project tree and the Start screen's Libraries page
+    /// (#2591) both open it here.
+    pub(crate) fn open_library_vcs_dialog_at(
+        &mut self,
+        library_file_path: std::path::PathBuf,
+        root_dir: std::path::PathBuf,
+    ) -> Task<Message> {
         let library_name = library_file_path
             .file_stem()
             .and_then(|s| s.to_str())

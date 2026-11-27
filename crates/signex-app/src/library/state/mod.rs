@@ -788,6 +788,10 @@ pub struct LibraryState {
     /// Libraries unmounted since the last `finish_update`, which drains
     /// this to close their Library Browser and Component Preview tabs.
     pub unmounted: Vec<PathBuf>,
+    /// Libraries opened again while still mounted since the last
+    /// `finish_update`: the re-open cancels a pending close and a pending
+    /// Remove from Signex (#2592). Drained there.
+    pub reopened: Vec<PathBuf>,
     /// "Now" as `view` may use it, for the age of cached prices. `view` is
     /// pure and cannot ask the clock, so `update` sets this on the poll tick
     /// and whenever a library's caches are refreshed.

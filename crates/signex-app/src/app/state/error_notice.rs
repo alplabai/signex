@@ -41,7 +41,8 @@ pub enum NoticeSeverity {
 }
 
 /// The headings whose card is a warning; every other heading is an error.
-const WARNING_TITLES: [MessageId; 5] = [
+const WARNING_TITLES: [MessageId; 6] = [
+    ids::NOTICE_LIBRARY_REMOVE_TITLE,
     ids::NOTICE_DISK_CHANGED_TITLE,
     ids::NOTICE_DISK_MISSING_TITLE,
     ids::NOTICE_DISK_FOLDER_MISSING_TITLE,
@@ -80,6 +81,9 @@ pub enum NoticeAction {
     /// A save of a project read from a newer minor was refused (#2904): the
     /// card offers Save Project As… for it (#2908).
     SaveProjectAs { project: super::ProjectId },
+    /// Remove from Signex on the Start screen's Libraries page (#2592):
+    /// the card asks first, and says the library's files stay on disk.
+    RemoveLibraryFromSignex { path: std::path::PathBuf },
 }
 
 impl ErrorNotice {
@@ -362,6 +366,19 @@ impl ErrorNotice {
     /// The requested action has no backing flow yet.
     pub fn unavailable(detail: impl Into<Translatable>) -> Self {
         Self::new(ids::NOTICE_NOT_AVAILABLE, detail)
+    }
+
+    /// The Remove from Signex confirm for the library `name` at `path`
+    /// (#2592): the path in the system block, Remove from Signex beside
+    /// Cancel.
+    pub fn remove_library_from_signex(name: &str, path: &std::path::Path) -> Self {
+        let detail = Translatable::new(ids::NOTICE_LIBRARY_REMOVE_DETAIL).arg("library", name);
+        let mut notice = Self::new(ids::NOTICE_LIBRARY_REMOVE_TITLE, detail)
+            .with_system(path.display().to_string());
+        notice.action = Some(NoticeAction::RemoveLibraryFromSignex {
+            path: path.to_path_buf(),
+        });
+        notice
     }
 }
 
