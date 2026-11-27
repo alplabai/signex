@@ -36,7 +36,13 @@ fn a_note_with_an_equation_draws_as_ink_paths() {
     for shape in &drawing.shapes {
         let [x0, y0, x1, y1] = shape.bounds().expect("points");
         assert!(x0 >= -0.5 && y0 >= -0.5, "{x0},{y0}");
-        assert!(x1 <= drawing.width_mm + 0.5 && y1 <= drawing.height_mm + 0.5);
+        assert!(
+            x1 <= drawing.width_mm + 0.5 && y1 <= drawing.height_mm + 0.5,
+            "a {:?} shape ends at ({x1}, {y1}) past the {} x {} mm drawing",
+            shape.kind,
+            drawing.width_mm,
+            drawing.height_mm
+        );
     }
 }
 
