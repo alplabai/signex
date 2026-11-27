@@ -425,7 +425,7 @@ fn stock_cell<'a>(
         field,
         source_caption(supply, SupplyValue::Stock, tokens, i18n)
     ]
-    .spacing(SP.xs / 2.0)
+    .spacing(SP.xs)
     .boxed()
 }
 
@@ -481,7 +481,7 @@ fn lifecycle_cell<'a>(
         picker,
         source_caption(supply, SupplyValue::Lifecycle, tokens, i18n)
     ]
-    .spacing(SP.xs / 2.0)
+    .spacing(SP.xs)
     .boxed()
 }
 
