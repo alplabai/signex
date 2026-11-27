@@ -1,0 +1,47 @@
+# Clippy config for scripts/check_domain_io.sh only (#2431, #2326 principle S3).
+# The DOMAIN crates (scripts/check_arch_guard.sh) do no IO and read no clock or
+# randomness: file contents, file listings, time and ids come in as values or
+# through the host ports of ADR-0006. The script points CLIPPY_CONF_DIR here,
+# so the root clippy.toml (the app's bans) does not apply to that run, and the
+# normal workspace clippy never sees these. Sites not moved yet are in
+# scripts/domain-io-allowlist.txt, which only shrinks.
+disallowed-methods = [
+    { path = "std::fs::read", reason = "a domain crate takes file contents as bytes from the host (#2431)" },
+    { path = "std::fs::read_to_string", reason = "a domain crate takes file contents from the host (#2431)" },
+    { path = "std::fs::write", reason = "a domain crate returns bytes; the host writes them (#2431)" },
+    { path = "std::fs::read_dir", reason = "a domain crate takes the file listing from the host (#2431)" },
+    { path = "std::fs::create_dir", reason = "a domain crate does no IO (#2431)" },
+    { path = "std::fs::create_dir_all", reason = "a domain crate does no IO (#2431)" },
+    { path = "std::fs::remove_file", reason = "a domain crate does no IO (#2431)" },
+    { path = "std::fs::remove_dir", reason = "a domain crate does no IO (#2431)" },
+    { path = "std::fs::remove_dir_all", reason = "a domain crate does no IO (#2431)" },
+    { path = "std::fs::rename", reason = "a domain crate does no IO (#2431)" },
+    { path = "std::fs::copy", reason = "a domain crate does no IO (#2431)" },
+    { path = "std::fs::hard_link", reason = "a domain crate does no IO (#2431)" },
+    { path = "std::fs::metadata", reason = "a domain crate takes the file listing from the host (#2431)" },
+    { path = "std::fs::symlink_metadata", reason = "a domain crate takes the file listing from the host (#2431)" },
+    { path = "std::fs::canonicalize", reason = "a domain crate does no IO (#2431)" },
+    { path = "std::fs::read_link", reason = "a domain crate does no IO (#2431)" },
+    { path = "std::fs::set_permissions", reason = "a domain crate does no IO (#2431)" },
+    { path = "std::fs::exists", reason = "a domain crate takes the file listing from the host (#2431)" },
+    { path = "std::fs::File::open", reason = "a domain crate takes file contents from the host (#2431)" },
+    { path = "std::fs::File::create", reason = "a domain crate returns bytes; the host writes them (#2431)" },
+    { path = "std::fs::File::create_new", reason = "a domain crate returns bytes; the host writes them (#2431)" },
+    { path = "std::fs::File::options", reason = "a domain crate does no IO (#2431)" },
+    { path = "std::fs::OpenOptions::new", reason = "a domain crate does no IO (#2431)" },
+    { path = "std::fs::OpenOptions::open", reason = "a domain crate does no IO (#2431)" },
+    { path = "std::path::Path::exists", reason = "a domain crate takes the file listing from the host (#2431)" },
+    { path = "std::path::Path::try_exists", reason = "a domain crate takes the file listing from the host (#2431)" },
+    { path = "std::path::Path::is_file", reason = "a domain crate takes the file listing from the host (#2431)" },
+    { path = "std::path::Path::is_dir", reason = "a domain crate takes the file listing from the host (#2431)" },
+    { path = "std::path::Path::is_symlink", reason = "a domain crate takes the file listing from the host (#2431)" },
+    { path = "std::path::Path::metadata", reason = "a domain crate takes the file listing from the host (#2431)" },
+    { path = "std::path::Path::symlink_metadata", reason = "a domain crate takes the file listing from the host (#2431)" },
+    { path = "std::path::Path::read_dir", reason = "a domain crate takes the file listing from the host (#2431)" },
+    { path = "std::path::Path::canonicalize", reason = "a domain crate does no IO (#2431)" },
+    { path = "std::path::Path::read_link", reason = "a domain crate does no IO (#2431)" },
+    { path = "std::time::Instant::now", reason = "a domain crate reads no clock; the host times the call (#2431)" },
+    { path = "std::time::SystemTime::now", reason = "a domain crate reads no clock; time comes in as a value (#2431)" },
+    { path = "uuid::Uuid::now_v7", reason = "ids are minted by the caller through an IdSource (#2429)", allow-invalid = true },
+    { path = "uuid::Uuid::new_v4", reason = "ids are minted by the caller through an IdSource (#2429)", allow-invalid = true },
+]
