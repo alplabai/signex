@@ -17,6 +17,7 @@ pub mod erc;
 mod expression;
 pub mod fab;
 pub mod field_value;
+pub mod font_file;
 mod markup_escape;
 pub mod netlist;
 pub mod pdf;

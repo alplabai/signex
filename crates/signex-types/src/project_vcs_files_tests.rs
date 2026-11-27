@@ -122,6 +122,17 @@ fn the_gitattributes_lfs_block_covers_models_and_raster_assets_not_svg() {
     assert!(!gitattributes_block_body(false).contains("filter=lfs"));
 }
 
+/// #1178: the project fonts are binary, and go through LFS when it is on.
+#[test]
+fn the_gitattributes_block_marks_project_fonts_binary_and_lfs() {
+    let plain = gitattributes_block_body(false);
+    for ext in ["ttf", "otf", "ttc"] {
+        assert!(plain.contains(&format!("*.{ext}\tbinary\n")), "{ext}");
+    }
+    assert!(!plain.contains("assets/fonts/"));
+    assert!(gitattributes_block_body(true).contains("assets/fonts/** filter=lfs"));
+}
+
 #[test]
 fn ensure_project_gitignore_creates_exactly_the_block() {
     let dir = tempfile::tempdir().unwrap();

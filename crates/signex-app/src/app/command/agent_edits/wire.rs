@@ -348,6 +348,14 @@ const PROJECT_WIDE: &[(&str, &str)] = &[
         "notebook_fix_reference",
         "it edits the project's Design Notebook, which no sheet's undo step covers; run it as its own command",
     ),
+    (
+        "project_remove_font",
+        "it writes the project's settings, which no sheet's undo step covers",
+    ),
+    (
+        "project_set_font_license",
+        "it writes the project's settings, which no sheet's undo step covers",
+    ),
 ];
 
 const BOARD_EDIT: &str =

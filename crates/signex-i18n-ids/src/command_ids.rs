@@ -285,6 +285,9 @@ define_ids! {
         CMD_PROJECT_REMOVE_REQUIREMENT = "cmd-project-remove-requirement";
         CMD_PROJECT_ENABLE_REQUIREMENT = "cmd-project-enable-requirement";
         CMD_PROJECT_RUN_REQUIREMENTS = "cmd-project-run-requirements";
+        CMD_PROJECT_ADD_FONT = "cmd-project-add-font";
+        CMD_PROJECT_REMOVE_FONT = "cmd-project-remove-font";
+        CMD_PROJECT_SET_FONT_LICENSE = "cmd-project-set-font-license";
         CMD_NUMBER_SCHEMATIC_SHEETS = "cmd-number-schematic-sheets";
         CMD_MENU_NUMBER_SCHEMATIC_SHEETS = "cmd-menu-number-schematic-sheets";
         CMD_RESET_SCHEMATIC_DESIGNATORS = "cmd-reset-schematic-designators";

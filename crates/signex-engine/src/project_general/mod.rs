@@ -17,8 +17,10 @@
 //! The Sheets, Variants, Libraries, ERC and annotation and Version control
 //! sections (#1689-#1693) edit through the same history; their commands are
 //! in `sections` and each is a step of its own. So do the Requirements
-//! section's edits (#2339, `requirements`).
+//! section's edits (#2339, `requirements`) and the Fonts section's (#1178,
+//! `fonts`).
 
+mod fonts;
 mod requirements;
 mod sections;
 
@@ -33,6 +35,7 @@ use signex_types::project::{
     SchematicDefaultField, SchematicDefaultOverrides,
 };
 
+pub use fonts::ProjectFontCommand;
 pub use requirements::ProjectRequirementCommand;
 pub use sections::ProjectSectionCommand;
 use sections::SectionsSnapshot;
@@ -135,6 +138,8 @@ struct GeneralSnapshot {
     agent_journal: AgentJournalSettings,
     fab_outputs: Option<FabOutputKinds>,
     diff_pair_classes: Vec<signex_types::diff_pair_class::DiffPairClass>,
+    /// The font list as stored (#1178), read or not.
+    fonts: Option<serde_json::Value>,
     sections: SectionsSnapshot,
     /// The project's rules, held only by the two sides of a
     /// [`ProjectGeneralCommand::SetFabTier`] step.
@@ -152,6 +157,7 @@ impl GeneralSnapshot {
             agent_journal: data.agent_journal,
             fab_outputs: data.fab_outputs,
             diff_pair_classes: data.schematic_design.diff_pair_classes.clone(),
+            fonts: data.project_fonts_raw().cloned(),
             sections: SectionsSnapshot::of(data),
             rules: None,
         }
@@ -179,6 +185,7 @@ impl GeneralSnapshot {
         data.agent_journal = self.agent_journal;
         data.fab_outputs = self.fab_outputs;
         data.schematic_design.diff_pair_classes = self.diff_pair_classes;
+        data.restore_project_fonts_raw(self.fonts);
         self.sections.restore(data);
     }
 }
@@ -372,6 +379,16 @@ impl ProjectGeneralHistory {
         self.apply_step(data, |data| command.apply(data))
     }
 
+    /// Apply one Fonts edit (#1178) as an undo step of its own, like
+    /// [`Self::apply_section`].
+    pub fn apply_font(
+        &mut self,
+        data: &mut ProjectData,
+        command: &ProjectFontCommand,
+    ) -> Result<bool, signex_types::project::ProjectFontProblem> {
+        self.apply_step(data, |data| command.apply(data))
+    }
+
     /// Run `edit` as a step of its own: recorded when a field changed,
     /// nothing recorded when it changed nothing or was refused.
     fn apply_step<E>(
@@ -434,6 +451,8 @@ impl ProjectGeneralHistory {
     }
 }
 
+#[cfg(test)]
+mod font_tests;
 #[cfg(test)]
 mod section_tests;
 #[cfg(test)]

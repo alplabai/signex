@@ -112,6 +112,8 @@ const SAVES: &[&str] = &[
     // With `save`, writes notebook/generated/design-report.snxnbk (mockup
     // row 201).
     "generate_design_notebook",
+    // Copies the font file into the project's `assets/fonts` folder (#1178).
+    "project_add_font",
 ];
 
 /// Commands outside the `reports` category that write an export file.
@@ -219,6 +221,7 @@ mod tests {
             (Capability::Save, "mark_notebook_attachment_valid"),
             (Capability::Save, "attach_notebook_file"),
             (Capability::Save, "generate_design_notebook"),
+            (Capability::Save, "project_add_font"),
             (Capability::Export, "print"),
             (Capability::Export, "report_manager_bom"),
             (Capability::Export, "export_board_report"),
