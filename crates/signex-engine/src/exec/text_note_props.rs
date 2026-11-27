@@ -110,7 +110,10 @@ mod tests {
             ..Default::default()
         };
         let done = engine
-            .execute(Command::UpdateTextNoteProps { note_id: id, props })
+            .execute(Command::UpdateTextNoteProps {
+                note_id: id,
+                props: Box::new(props),
+            })
             .expect("applied");
         assert!(done.changed);
         let note = &engine.document().text_notes[0];
@@ -137,7 +140,7 @@ mod tests {
         let done = engine
             .execute(Command::UpdateTextNoteProps {
                 note_id: id,
-                props: rich,
+                props: Box::new(rich),
             })
             .expect("applied");
         assert!(done.changed);
@@ -147,7 +150,7 @@ mod tests {
         let again = engine
             .execute(Command::UpdateTextNoteProps {
                 note_id: id,
-                props: rich,
+                props: Box::new(rich),
             })
             .expect("ran");
         assert!(!again.changed);
@@ -176,7 +179,10 @@ mod tests {
             ..Default::default()
         };
         let done = engine
-            .execute(Command::UpdateTextNoteProps { note_id: id, props })
+            .execute(Command::UpdateTextNoteProps {
+                note_id: id,
+                props: Box::new(props),
+            })
             .expect("applied");
         assert!(done.changed);
         assert_eq!(engine.document().text_notes[0].rich, layout);
@@ -191,7 +197,7 @@ mod tests {
         let refused = engine
             .execute(Command::UpdateTextNoteProps {
                 note_id: id,
-                props: bad,
+                props: Box::new(bad),
             })
             .expect("ran");
         assert!(!refused.changed);
@@ -219,7 +225,10 @@ mod tests {
             },
         ] {
             let done = engine
-                .execute(Command::UpdateTextNoteProps { note_id: id, props })
+                .execute(Command::UpdateTextNoteProps {
+                    note_id: id,
+                    props: Box::new(props),
+                })
                 .expect("ran");
             assert!(!done.changed, "{props:?}");
         }

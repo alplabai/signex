@@ -261,7 +261,7 @@ pub fn text_note_props_command(
         item.kind == SelectedKind::TextNote && sheet.text_notes.iter().any(|n| n.uuid == item.uuid);
     is_note.then_some(Command::UpdateTextNoteProps {
         note_id: item.uuid,
-        props,
+        props: Box::new(props),
     })
 }
 

@@ -989,12 +989,12 @@ fn samples() -> Vec<(String, Command)> {
         "UpdateTextNoteProps",
         Command::UpdateTextNoteProps {
             note_id: uid(TEXT_NOTE, 1),
-            props: crate::TextNoteProps {
+            props: Box::new(crate::TextNoteProps {
                 justify_h: Some(HAlign::Right),
                 rotation_degrees: Some(90.0),
                 font_size_mm: Some(2.0),
                 ..Default::default()
-            },
+            }),
         },
     );
     add(

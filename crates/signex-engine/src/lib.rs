@@ -914,7 +914,7 @@ impl Engine {
             | Command::BreakUnion { .. } => self.exec_unions(before, cmd),
             Command::SetRunEnd { run, start, to } => self.set_run_end(before, run, start, to),
             Command::UpdateTextNoteProps { note_id, props } => {
-                Ok(self.update_text_note_props(before, note_id, props))
+                Ok(self.update_text_note_props(before, note_id, *props))
             }
         };
         self.prune_union_members(&mut result);

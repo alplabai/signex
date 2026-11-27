@@ -398,7 +398,8 @@ pub enum Command {
     /// keeps that property. One undo step, none when nothing changes.
     UpdateTextNoteProps {
         note_id: Uuid,
-        props: TextNoteProps,
+        /// Boxed: the rich layout makes the props large (clippy large_enum_variant).
+        props: Box<TextNoteProps>,
     },
     PlaceWireSegment {
         wire: Wire,
