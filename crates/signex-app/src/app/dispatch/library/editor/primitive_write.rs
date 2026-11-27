@@ -15,6 +15,10 @@ pub(super) enum Snapshot {
         baseline: SymbolFile,
         name: String,
         owed: Vec<Uuid>,
+        /// The draft opened repaired and this is the person's Save: read the
+        /// file on disk leniently so the write replaces it with the repair
+        /// (#3129). Every other save reads it strictly and is refused.
+        write_repair: bool,
     },
     Footprint {
         file: FootprintFile,
@@ -161,6 +165,7 @@ impl PrimitiveWrite {
             options: SaveOptions {
                 mode: self.mode,
                 bump_versions: library.bumps_versions(self.mode),
+                write_repair: false,
             },
             own: own_turn.as_ref().map(|turn| turn.own_revisions()),
             others: held
@@ -179,7 +184,8 @@ impl PrimitiveWrite {
                 baseline,
                 name,
                 owed,
-            } => write_symbol(&context, file, &baseline, &name, &owed),
+                write_repair,
+            } => write_symbol(&context, file, &baseline, &name, &owed, write_repair),
             Snapshot::Footprint {
                 file,
                 baseline,
@@ -199,6 +205,7 @@ fn write_symbol(
     baseline: &SymbolFile,
     name: &str,
     owed: &[Uuid],
+    write_repair: bool,
 ) -> Result<PrimitiveWritten, LibraryError> {
     let save = container_save::save_symbol_container(
         context.library,
@@ -206,7 +213,10 @@ fn write_symbol(
         &file,
         baseline,
         context.now,
-        context.options,
+        SaveOptions {
+            write_repair,
+            ..context.options
+        },
         &format!("save symbol {name}"),
     )?;
     let name_in = |container: &SymbolFile, uuid: Uuid| {

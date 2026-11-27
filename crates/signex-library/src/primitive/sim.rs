@@ -216,6 +216,14 @@ impl SimFile {
             if model.body.contains(BODY_PLACEHOLDER_PREFIX) {
                 return Err(SimFileError::InvalidBody { model_index: idx });
             }
+            // #3129: the body is a TOML literal string; see `crate::toml_literal`.
+            if let Some(character) = crate::toml_literal::first_unstorable_in_multiline(&model.body)
+            {
+                return Err(SimFileError::ControlCharInBody {
+                    model: model.name.clone(),
+                    character,
+                });
+            }
         }
         let mut wire_models: Vec<SimModelWire> = Vec::with_capacity(self.models.len());
         for (idx, model) in self.models.iter().enumerate() {
@@ -274,6 +282,19 @@ pub enum SimFileError {
          the literal multi-line string envelope cannot escape it"
     )]
     InvalidBody { model_index: usize },
+    /// #3129: a control character the literal body cannot hold (any but
+    /// tab, LF and CRLF); the file would save and then never open.
+    #[error(
+        "model {model:?}: the body holds the control character {}, which a .snxsim \
+         cannot store; remove it to save",
+        code_point(.character)
+    )]
+    ControlCharInBody { model: String, character: char },
+}
+
+/// `U+000D` for a message; takes the reference the error fields give.
+fn code_point(c: &char) -> String {
+    crate::toml_literal::code_point(*c)
 }
 
 #[cfg(test)]
@@ -435,6 +456,38 @@ mod tests {
                 assert_eq!(model_index, 0);
             }
             other => panic!("expected InvalidBody, got {other:?}"),
+        }
+    }
+
+    /// #3129: tab stays allowed in the literal body; a lone CR, NUL and DEL
+    /// are refused at save, naming the model and the character.
+    #[test]
+    fn sim_body_keeps_tab_and_refuses_other_control_characters() {
+        let mut model = SimModel::empty("TABBED", SimKind::Spice3);
+        model.body = ".SUBCKT\tFOO A B\n.ENDS".into();
+        let text = SimFile::from_model(model.clone())
+            .to_toml_string()
+            .expect("tab is allowed");
+        let back = SimFile::from_toml_str(&text).expect("parse");
+        assert_eq!(back.models[0].body, model.body);
+        let mut crlf = SimModel::empty("CRLF", SimKind::Spice3);
+        crlf.body = ".SUBCKT FOO\r\n.ENDS".into();
+        let text = SimFile::from_model(crlf)
+            .to_toml_string()
+            .expect("CRLF is allowed");
+        SimFile::from_toml_str(&text).expect("a CRLF body opens");
+        for bad in ['\r', '\0', '\u{7f}'] {
+            let mut model = SimModel::empty("BAD", SimKind::Spice3);
+            model.body = format!(".SUBCKT{bad} FOO\n.ENDS");
+            match SimFile::from_model(model).to_toml_string() {
+                Err(e @ SimFileError::ControlCharInBody { .. }) => {
+                    let text = e.to_string();
+                    assert!(text.contains("\"BAD\""), "{text}");
+                    let code = crate::toml_literal::code_point(bad);
+                    assert!(text.contains(&code), "{text}");
+                }
+                other => panic!("{bad:?}: expected ControlCharInBody, got {other:?}"),
+            }
         }
     }
 }

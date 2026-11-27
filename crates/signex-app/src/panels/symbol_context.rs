@@ -85,6 +85,9 @@ pub struct SymbolEditorPanelContext {
     /// containing library; falls back to defaults for lone-file
     /// edits.
     pub display: SymbolDisplayOptions,
+    /// The last pin text refused for a control character (#3129), shown
+    /// under the pin's fields until the next edit.
+    pub pin_text_refusal: Option<signex_library::UnstorablePinText>,
 }
 
 /// What the Symbol tab's illustration draws: the shapes and pins of the

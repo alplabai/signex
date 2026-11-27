@@ -26,6 +26,8 @@ mod primitive_save_refresh_tests;
 #[cfg(test)]
 mod primitive_save_tests;
 mod primitive_write;
+#[cfg(test)]
+mod symbol_repair_save_tests;
 
 impl Signex {
     /// Open a `.snxsym` or `.snxfpt` as a main-window document tab.
@@ -201,7 +203,7 @@ impl Signex {
                         path,
                     );
                 }
-                match self.save_primitive_tab_at(&path) {
+                match self.save_primitive_tab_explicitly(&path) {
                     Ok(task) => task,
                     Err(e) => {
                         self.report_save_failure("Save failed", &e);
@@ -265,7 +267,7 @@ impl Signex {
         // Symbol-only mutations.
         let replay_probe = self.probe_symbol_edit(&path, &msg);
         if let Some(editor) = self.document_state.symbol_editors.get_mut(&path) {
-            crate::library::editor::symbol::updates::apply_symbol_primitive_edit(editor, msg);
+            crate::library::editor::symbol::apply_symbol_primitive_edit(editor, msg);
             // v0.20 — primitive editor edits (designator/size/etc, and
             // critically `placement_paused`) need the panel context
             // rebuilt so the right-dock view reads the new value next
