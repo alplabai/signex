@@ -128,3 +128,27 @@ fn ctrl_s_writes_the_repair() {
             .is_read_only()
     );
 }
+
+/// Closing the repaired tab asks nothing and writes nothing: the dirty draft
+/// is parked, still read-only, for the person's Save or a discard.
+#[test]
+fn closing_the_repaired_tab_parks_it_unwritten() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, path) = open_repaired(dir.path());
+    let idx = app
+        .document_state
+        .tabs
+        .iter()
+        .position(|tab| tab.path == path)
+        .expect("the tab");
+    let close = app.close_tab_parking_dirty(idx);
+    let _ = crate::task_driver::TaskDriver::new().settle(&mut app, close);
+    unwritten(&path, "closing the tab");
+    let parked = app
+        .document_state
+        .symbol_editors
+        .get(&path)
+        .expect("parked");
+    assert!(parked.draft.is_read_only());
+    assert!(app.document_state.is_document_dirty(&path));
+}
