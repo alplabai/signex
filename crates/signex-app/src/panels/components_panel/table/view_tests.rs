@@ -6,6 +6,7 @@ use signex_i18n::I18n;
 use signex_library::templates::ColumnKey;
 use signex_types::theme::{ThemeId, theme_tokens};
 
+use super::super::tests::thumb_look;
 use super::test_fixture::{key_of, parts, show};
 use super::{table_block, toolbar};
 use crate::layout_probe::{find, lay_out_texts, messages_for_events};
@@ -19,12 +20,12 @@ fn texts_of(state: &LibraryState, theme: ThemeId) -> Vec<String> {
     let tokens = theme_tokens(theme);
     let i18n = I18n::en_us();
     let mut out: Vec<String> =
-        lay_out_texts(toolbar(&state.components_panel.table, &tokens, &i18n), DOCK)
+        lay_out_texts(toolbar(&state.components_panel, &tokens, &i18n), DOCK)
             .into_iter()
             .map(|t| t.text)
             .collect();
     out.extend(
-        lay_out_texts(table_block(state, &tokens, &i18n), DOCK)
+        lay_out_texts(table_block(state, thumb_look(), &tokens, &i18n), DOCK)
             .into_iter()
             .map(|t| t.text),
     );
@@ -126,7 +127,7 @@ fn a_part_row_publishes_press_right_click_and_double_click_place() {
     let state = parts();
     let tokens = theme_tokens(ThemeId::GraphiteDark);
     let i18n = I18n::en_us();
-    let build = || table_block(&state, &tokens, &i18n);
+    let build = || table_block(&state, thumb_look(), &tokens, &i18n);
     let texts = lay_out_texts(build(), DOCK);
     let at = find(&texts, "C1").bounds.center();
     let events = |buttons: &[(Button, bool)]| -> Vec<LibraryMessage> {

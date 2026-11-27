@@ -17,7 +17,7 @@ pub struct BoundDraft {
     /// edit.
     pub refusal: Option<String>,
     /// "Any prefix": the number is compared with the number a value
-    /// displays, in whatever prefix (components-cx decision 6). Only the
+    /// displays, in whatever prefix (mockup row 52). Only the
     /// Components panel sets it.
     pub any_prefix: bool,
 }
@@ -85,7 +85,7 @@ pub struct RangeFilterDraft {
     pub unit: Unit,
     pub low: BoundDraft,
     pub high: BoundDraft,
-    /// What a min-to-max column's filter tests (components-cx decision 8);
+    /// What a min-to-max column's filter tests (mockup row 52);
     /// a plain measurement ignores it.
     pub on: RangeOn,
 }

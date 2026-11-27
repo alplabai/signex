@@ -1,5 +1,4 @@
-//! Value-aware search of the Components panel (mockup row 52,
-//! components-cx decisions 5, 6 and 9).
+//! Value-aware search of the Components panel (mockup row 52).
 //!
 //! A query is split into words and a part must match every word. A number
 //! with a prefix or unit (`100n`, `0.1u`, `0.1 µF`, `4k7`, `16V`) matches a

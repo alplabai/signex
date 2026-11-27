@@ -231,7 +231,10 @@ fn columns_picker<'a>(
         );
         for (column, visible) in shown {
             let covered = cache.coverage.get(column).copied().unwrap_or(0);
-            col = col.push(picker_row(column, *visible, covered, total, tokens, i18n));
+            let origin = cache.column_origin.get(column).map(String::as_str);
+            col = col.push(picker_row(
+                column, *visible, covered, total, origin, tokens, i18n,
+            ));
         }
     }
     if !any {
@@ -269,11 +272,13 @@ fn columns_picker<'a>(
     col.push(reset).boxed()
 }
 
+#[allow(clippy::too_many_arguments)]
 fn picker_row<'a>(
     column: &ColumnKey,
     visible: bool,
     covered: usize,
     total: usize,
+    origin: Option<&str>,
     tokens: &ThemeTokens,
     i18n: &I18n,
 ) -> Element<'a, LibraryMessage> {
@@ -310,7 +315,7 @@ fn picker_row<'a>(
     };
     row![
         tick,
-        text(user_text(caption(column, i18n)))
+        text(user_text(column_label(column, origin, i18n)))
             .size(ROW_TEXT_SIZE)
             .color(ink)
             .width(Length::Fill)
@@ -324,6 +329,23 @@ fn picker_row<'a>(
     .spacing(SP.s)
     .align_y(Alignment::Center)
     .boxed()
+}
+
+/// A Columns picker entry: the caption, and the library whose own
+/// template the column comes from when the global one does not offer it
+/// (Caner, 2026-11-27).
+pub(super) fn column_label(column: &ColumnKey, origin: Option<&str>, i18n: &I18n) -> String {
+    let name = caption(column, i18n);
+    match origin {
+        Some(library) => i18n.message_plain(
+            ids::PANELS_COMPONENTS_COLUMN_FROM,
+            &[
+                ("column", name.as_str().into()),
+                ("library", library.into()),
+            ],
+        ),
+        None => name,
+    }
 }
 
 /// "Grouped by Package › Value · sorted by Voltage ↑ · 8 columns".
@@ -395,11 +417,7 @@ fn filter_popover<'a>(
                 .iter()
                 .find(|c| &c.key == key)
                 .map_or_else(|| key.clone(), |c| c.label.clone());
-            let min_to_max = table
-                .cache
-                .template
-                .as_ref()
-                .is_some_and(|t| t.range(key).is_some());
+            let min_to_max = table.cache.is_range(key);
             let excluded = table.cache.excluded.get(key).copied().unwrap_or(0);
             col = col.push(range_row(
                 key, label, draft, min_to_max, excluded, tokens, i18n,

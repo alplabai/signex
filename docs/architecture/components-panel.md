@@ -2,7 +2,7 @@
 
 The Components panel (`crates/signex-app/src/panels/components_panel/`) shows
 every mounted part in one table, one category at a time (mockup row 52,
-components-cx decisions 1 to 9, #2785). This page is the map of the code; the user's view is in
+#2785). This page is the map of the code; the user's view is in
 `docs/USER_GUIDE.md` section 5.
 
 ## Layout
@@ -11,8 +11,8 @@ From the top:
 
 1. **Tool line** (`table/view.rs`, `toolbar`): the category picker (All
    parts, then each component class the mounted libraries hold, with its part
-   count), **Filter** (with the number of active filters), **Columns**, and the
-   view switch **List** / **Details**.
+   count), **Filter** (with the number of active filters), **Columns**, the
+   view switch **List** / **Details** and the **Previews** switch.
 2. **Search field** (`look::filter_field`), value-aware (`query.rs`), with the
    match summary line under it.
 3. The open **popover**, drawn as a card under the tool line
@@ -67,9 +67,33 @@ keeps state and draws; it does not sort or compare values itself.
   `table/cache_tests.rs` 25,000-part test pins that a hover does not sort
   again and that a frame builds a window.
 
-A category's template is the global one for the class
-(`TemplateRegistry::resolve` with no library id); All parts has none and shows
-only row fields.
+### Categories and templates
+
+The picker lists All parts, Recently placed, then each class. **Recently
+placed** is the session log of parts placed from the panel
+(`recent::RecentlyPlaced`, #2631): a refused place is not recorded, the
+most recent comes first and the log keeps five. Its rows keep the log's
+order until the user sorts or groups; a row whose library or row is gone is
+left out.
+
+Each row reads its own class template (`table/templates.rs`,
+`RowTemplates`): a library's own template for the class
+(`TemplateRegistry::insert_for_library`) wins over the global one for that
+library's rows (Caner, 2026-11-27). A class category's columns are those of
+every template its rows use, the leading template's first (the global one
+when rows use it); its first view is the leading template's `[view]`. A
+column that only a library's own template offers, and the global one does
+not, names that library in the Columns picker ("Temp (b template)",
+`TableCache::column_origin`). All parts and Recently placed show only row
+fields.
+
+### Previews
+
+The **Previews** switch (`row_style`, the `components_panel_previews`
+preference, #2535) adds a leading thumbnail column and makes every line a
+Previews row tall. The thumbnail read is asked only for the rows in view
+(`table::drawn_rows`) and the dragged row's card (`wanted_thumbnails`); the
+cache and its refresh on a library re-read are `thumbs::SymbolThumbs`.
 
 ## Setups and persistence
 
@@ -78,7 +102,9 @@ to columns, widths, sort, grouping or pins stores the category's setup in
 `ComponentsTable::setups` and writes the whole map to `prefs.json` key
 `components_panel_views` (`fonts/components_views.rs`) through
 `background_pref_write`, the atomic read-modify-write, off the UI thread
-(decision 1). At start the map is read back; each setup is fitted to the
+(decision 1). The category shown last is saved in the same entry and the
+panel opens on it (Caner, 2026-11-27):
+`{"category": "capacitor", "setups": {..}}`. At start the entry is read back; each setup is fitted to the
 columns the category offers now (`ViewSetup::fitted`). Reset to category
 default removes the category's setup (pins other than the template's stay).
 Filters are not saved.
@@ -95,11 +121,16 @@ Filters are not saved.
 | Columns picker | `ColumnShown` / `ColumnMoved` / `ResetPressed` | show, hide, ↑ ↓, Reset to category default |
 | Filter popover | `RangeFilter`, `BoundPrefixPicked`, `RangeTargetPicked`, `InStockToggled` | a new range filter starts on Any prefix and a min-to-max one on Covers |
 | Row press, right press, double-click | `ComponentsPanelRowPressed` / `RowRightClicked` / `ComponentsPanelPlace` | select and arm a drag, the row menu, place |
+| Hover Place (first column) | `ComponentsPanelPlace` | place |
+| Previews switch | `ComponentsPanelRowStylePicked` | thumbnail column and taller rows, saved as a preference |
+| Esc with a popover open | `PopoverDismissed` | closes the popover before anything else Esc does in the panel (`dispatch/escape.rs`); not from a detached modal's window, nor while a dialog takes the Esc |
 | Details star | `PinToggled` | pin for the part's category |
 
-Not built: dragging a header to reorder it or onto the group bar, dragging
-group chips, and the table's keyboard navigation; the header menu, the
-Columns picker's ↑ ↓ and "+ Group" cover the same edits.
+Not built yet (#3199): dragging a header to reorder it or onto the group
+bar, dragging group chips, the table's keyboard navigation, the text-value
+filter chips, the Datasheet and Distributor buttons, the 2D / 3D footprint
+toggle and clickable references. The header menu, the Columns picker's ↑ ↓
+and "+ Group" cover the same edits meanwhile.
 
 ## Display rules
 

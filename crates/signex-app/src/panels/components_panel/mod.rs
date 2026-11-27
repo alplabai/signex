@@ -1,5 +1,5 @@
 //! Components Panel: every mounted part in one table, one category at a
-//! time (mockup row 52, components-cx decisions 1 to 9).
+//! time (mockup row 52).
 //!
 //! The tool line picks the category (All parts or a component class), opens
 //! the Filter and Columns popovers and switches between the list alone and
@@ -82,7 +82,7 @@ pub(crate) fn view<'a>(
     let mut col: Column<Element<'a, LibraryMessage>> = column![
         container(
             column![
-                table::toolbar(&panel.table, tokens, i18n),
+                table::toolbar(panel, tokens, i18n),
                 look::filter_field(&panel.filter, tokens, i18n),
             ]
             .spacing(0)
@@ -104,7 +104,11 @@ pub(crate) fn view<'a>(
         col = col.push(id_clash_notices(state, tokens, i18n));
     }
     col = col.push(thin_sep(look::separator(tokens)));
-    let block = table::table_block(state, tokens, i18n);
+    let thumb_look = thumbs::ThumbLook {
+        colors: ctx.canvas_colors,
+        device_px_per_logical_px: ctx.device_px_per_logical_px,
+    };
+    let block = table::table_block(state, thumb_look, tokens, i18n);
     if panel.table.list_only {
         return col
             .push(container(block).height(Length::Fill))
@@ -136,19 +140,25 @@ pub(crate) fn view<'a>(
         .boxed()
 }
 
-/// The symbol references the panel would draw: the dragged row's card
-/// shows one.
+/// The symbol references the panel would draw, in table order: what the
+/// thumbnail read is asked for. The dragged row's card always shows one;
+/// the table's rows only with Previews on, and only those in view.
 pub(crate) fn wanted_thumbnails(
     state: &LibraryState,
 ) -> Vec<signex_library::primitive::PrimitiveRef> {
     let panel = &state.components_panel;
-    panel
+    let dragged = panel
         .drag
         .as_ref()
         .and_then(|drag| recent::row_of(state, &drag.key))
-        .map(|row| row.symbol_ref)
+        .map(|row| row.symbol_ref);
+    if !panel.row_style.shows_previews() {
+        return dragged.into_iter().collect();
+    }
+    let rows = table::drawn_rows(&panel.table, true)
         .into_iter()
-        .collect()
+        .filter_map(|r| Some(r.row(&state.open_libraries)?.symbol_ref));
+    dragged.into_iter().chain(rows).collect()
 }
 
 /// Non-modal list of libraries refused or closed for sharing a library id

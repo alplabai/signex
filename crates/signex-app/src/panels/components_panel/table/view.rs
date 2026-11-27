@@ -8,12 +8,13 @@ use signex_types::theme::ThemeTokens;
 use signex_widgets::dropdown_style::GraphiteDropdown as _;
 use signex_widgets::{button, text};
 
+use super::super::thumbs::ThumbLook;
 use super::super::{HINT_TEXT_SIZE, ROW_TEXT_SIZE, SP};
 use super::columns::caption;
 use super::state::{ComponentsTable, TablePopover};
 use super::{body, group_bar, header, popovers};
 use crate::library::messages::{ComponentsTableMsg, LibraryMessage};
-use crate::library::state::LibraryState;
+use crate::library::state::{ComponentsPanelState, LibraryState};
 use crate::styles::ti;
 use crate::styles::tokens::resolve;
 
@@ -21,13 +22,15 @@ fn msg(m: ComponentsTableMsg) -> LibraryMessage {
     LibraryMessage::ComponentsTable(m)
 }
 
-/// The tool line: category, Filter (with its count), Columns and the view
-/// switch (list only, or list with details).
+/// The tool line: category, Filter (with its count), Columns, the view
+/// switch (list only, or list with details) and Previews (the thumbnail
+/// column, #2535).
 pub(crate) fn toolbar<'a>(
-    table: &'a ComponentsTable,
+    panel: &'a ComponentsPanelState,
     tokens: &ThemeTokens,
     i18n: &I18n,
 ) -> Element<'a, LibraryMessage> {
+    let table = &panel.table;
     let entries = table.cache.categories.clone();
     let current = entries.iter().find(|e| e.key == table.category).cloned();
     let category = pick_list(current, entries, |e: &super::category::CategoryEntry| {
@@ -68,7 +71,8 @@ pub(crate) fn toolbar<'a>(
         ComponentsTableMsg::ListOnlyPicked(false),
         tokens,
     );
-    row![category, filter, columns, list_only, with_details]
+    let previews = super::super::look::previews_switch(panel.row_style, tokens, i18n);
+    row![category, filter, columns, list_only, with_details, previews]
         .spacing(SP.xs)
         .align_y(Alignment::Center)
         .width(Length::Fill)
@@ -115,10 +119,12 @@ fn tool_button<'a>(
 /// the table and the status line.
 pub(crate) fn table_block<'a>(
     state: &'a LibraryState,
+    thumb_look: ThumbLook,
     tokens: &'a ThemeTokens,
     i18n: &'a I18n,
 ) -> Element<'a, LibraryMessage> {
     let table = &state.components_panel.table;
+    let previews = state.components_panel.row_style.shows_previews();
     let mut col: Column<Element<'a, LibraryMessage>> = column![].spacing(0).width(Length::Fill);
     // One slot either way, so opening a popover keeps the table's widget
     // state (its scroll offset).
@@ -136,8 +142,8 @@ pub(crate) fn table_block<'a>(
         ));
     } else {
         let grid = column![
-            header::view(table, tokens, i18n),
-            body::view(state, tokens, i18n)
+            header::view(table, previews, tokens, i18n),
+            body::view(state, thumb_look, tokens, i18n)
         ]
         .spacing(0)
         .height(Length::Fill);

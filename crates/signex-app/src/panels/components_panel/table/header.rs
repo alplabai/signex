@@ -22,6 +22,13 @@ use crate::styles::tokens::resolve;
 pub(super) const HEADER_HEIGHT: f32 = 26.0;
 /// Width of the resize handle at a header cell's right edge.
 const HANDLE_WIDTH: f32 = 6.0;
+/// Side padding of the Previews thumbnail cell.
+pub(super) const THUMB_PAD: f32 = 4.0;
+
+/// Width of the Previews thumbnail cell that leads every row.
+pub(super) fn thumb_cell_width() -> f32 {
+    super::super::look::THUMB_WIDTH + 2.0 * THUMB_PAD
+}
 
 /// Widget id of the header strip, scrolled with the body.
 pub(crate) const HEADER_SCROLL: iced::widget::Id = iced::widget::Id::new("components-table-header");
@@ -61,6 +68,7 @@ pub(super) fn sort_mark(table: &ComponentsTable, column: &ColumnKey) -> Option<S
 
 pub(super) fn view<'a>(
     table: &'a ComponentsTable,
+    previews: bool,
     tokens: &ThemeTokens,
     i18n: &I18n,
 ) -> Element<'a, LibraryMessage> {
@@ -69,6 +77,14 @@ pub(super) fn view<'a>(
     let r = resolve(tokens);
     let (muted, line, chrome) = (r.ink3, ti(tokens.border), ti(tokens.toolbar_bg));
     let mut cells: Row<Element<'a, LibraryMessage>> = row![].spacing(0);
+    // The Previews thumbnail column has no title.
+    if previews {
+        cells = cells.push(
+            iced::widget::Space::new()
+                .width(thumb_cell_width())
+                .height(HEADER_HEIGHT),
+        );
+    }
     for (column, width) in columns {
         let mut label = row![
             text(user_text(caption(&column, i18n)))
@@ -116,12 +132,13 @@ pub(super) fn view<'a>(
                 .boxed(),
         );
     }
-    let strip = scrollable(container(cells).width(Length::Fixed(total_width(total, table))))
-        .id(HEADER_SCROLL)
-        .direction(scrollable::Direction::Horizontal(
-            scrollable::Scrollbar::hidden(),
-        ))
-        .width(Length::Fill);
+    let strip =
+        scrollable(container(cells).width(Length::Fixed(total_width(total, table, previews))))
+            .id(HEADER_SCROLL)
+            .direction(scrollable::Direction::Horizontal(
+                scrollable::Scrollbar::hidden(),
+            ))
+            .width(Length::Fill);
     container(strip)
         .width(Length::Fill)
         .style(move |_: &Theme| container::Style {
@@ -132,9 +149,10 @@ pub(super) fn view<'a>(
 }
 
 /// The full width of a line: the columns, their handles and separators.
-pub(super) fn total_width(columns_total: f32, table: &ComponentsTable) -> f32 {
+pub(super) fn total_width(columns_total: f32, table: &ComponentsTable, previews: bool) -> f32 {
     let count = table.cache.setup.visible_columns().len() as f32;
-    columns_total + count * (HANDLE_WIDTH + 1.0)
+    let thumbs = if previews { thumb_cell_width() } else { 0.0 };
+    thumbs + columns_total + count * (HANDLE_WIDTH + 1.0)
 }
 
 /// The width a body cell takes for a column `width` wide: the column and

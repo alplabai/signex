@@ -428,10 +428,14 @@ more); **File ▸ Library ▸ Open Library…** mounts a `.snxlib` library. With
 library mounted the panel offers **Add Library…** (Project, Installed or
 Global) and **Open Project…**.
 
-The tool line picks the category: **All parts**, or a component class such as
-Capacitor, each with its part count. A category opens with the columns, sort
+The tool line picks the category: **All parts**, **Recently placed** (the
+parts you placed from the panel this session, most recent first, up to five),
+or a component class such as Capacitor, each with its part count. The panel
+opens on the category you showed last. A category opens with the columns, sort
 and grouping its class template sets (the bundled capacitor view groups by
-package, then value, and sorts by voltage). Each class has its own parameter
+package, then value, and sorts by voltage). A library can carry its own
+template for a class; its parts then read that one, and a column only it
+adds is marked with the library's name in the Columns picker. Each class has its own parameter
 columns:
 
 - **Sort**: click a header to sort by it (again for descending, a third time
@@ -462,6 +466,10 @@ line under the table counts the results.
 A value a part does not set shows as — in the table and **Not set** in a group
 line and in Details, and sorts last. A min-to-max value with one end set shows
 that end, as "≥ 2.7 V" or "≤ 5.5 V".
+
+**Previews** in the tool line adds a symbol preview column and taller rows;
+the choice is remembered. With a popover open (Columns, Filter, a header
+menu, + Group), `Esc` closes it first.
 
 Type in the search field to narrow the table; every word must match. The
 search reads values: `100n`, `0.1u` and `0.1 µF` all find a 100 nF part, `4k7`
@@ -558,8 +566,9 @@ To place a part, open a schematic sheet, then either:
   `P` then `P` in the default profile (`A` in Classic), or the Active Bar's
   **Part** button, which all open the same picker), select a part and press
   **Place**, or press `Enter` in the search field; or
-- double-click a part's row in the Components panel, press **Place** in its
-  details, or right-click the row and pick **Place**. The menu shows the key that places
+- press **Place** at the start of a part's row in the Components panel (it
+  shows while the pointer is over the row), double-click the row, press
+  **Place** in its details, or right-click the row and pick **Place**. The menu shows the key that places
   from it, the one your shortcut profile binds to accepting a placement
   (`Enter` in the default profile; Classic binds none).
 

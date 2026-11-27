@@ -1,5 +1,4 @@
-//! The Components panel table (mockup row 52, components-cx decisions 1 to
-//! 9): one category at a time, its parameter columns, nested sort and
+//! The Components panel table (mockup row 52): one category at a time, its parameter columns, nested sort and
 //! grouping, range filters and the Details parameter pins.
 //!
 //! * [`state`]: the model, saved setups and session filters.
@@ -25,11 +24,16 @@ mod group_bar;
 mod header;
 mod popovers;
 mod state;
+mod templates;
 mod update;
 mod view;
 
 #[cfg(test)]
 mod cache_tests;
+#[cfg(test)]
+mod kept_tests;
+#[cfg(test)]
+mod templates_tests;
 #[cfg(test)]
 mod test_fixture;
 #[cfg(test)]
@@ -37,7 +41,7 @@ mod update_tests;
 #[cfg(test)]
 mod view_tests;
 
-pub(crate) use body::BODY_SCROLL;
+pub(crate) use body::{BODY_SCROLL, drawn_rows};
 pub use cache::{TableCache, TableLine, TableRow};
 pub(crate) use cache::{TableSource, sync};
 pub use category::CategoryEntry;

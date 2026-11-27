@@ -1,6 +1,6 @@
 //! The Components panel table (mockup row 52): applies a table message,
 //! rebuilds the cache, and turns what the message owes into tasks: the
-//! saved setups written off the UI thread, the header strip moved with the
+//! saved setups and last category written off the UI thread, the header strip moved with the
 //! body.
 
 use super::*;
@@ -16,10 +16,10 @@ impl Signex {
         let fx = self.library.components_panel.table.apply(msg);
         self.library.sync_view_caches_in(&self.ui_state.i18n);
         let mut tasks = Vec::new();
-        if fx.save_setups {
-            let setups = self.library.components_panel.table.setups.clone();
+        if fx.save_prefs {
+            let views = self.library.components_panel.table.prefs();
             tasks.push(crate::fonts::background_pref_write(VIEWS_PREF, move || {
-                crate::fonts::write_components_view_setups(&setups)
+                crate::fonts::write_components_views(&views)
             }));
         }
         if let Some(x) = fx.header_x {

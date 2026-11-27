@@ -8,7 +8,7 @@ use signex_types::theme::ThemeTokens;
 use signex_widgets::{button, text, text_input};
 
 use crate::library::messages::LibraryMessage;
-use crate::library::state::ComponentsMountSource;
+use crate::library::state::{ComponentsMountSource, ComponentsRowStyle};
 use crate::styles::tokens::{hover_overlay, resolve};
 use crate::styles::{TypeScale, ti};
 
@@ -80,7 +80,7 @@ pub(super) fn filter_field<'a>(
 
 /// The info line under the header that says what each bare number of the
 /// search matched, with part counts: `100  100 pF 8 · 100 nF 8 · name or
-/// text 2` (components-cx decisions 6 and 9). `None` without one.
+/// text 2` (mockup row 52). `None` without one.
 pub(super) fn match_summary<'a>(
     lines: &[super::query::MatchLine],
     tokens: &ThemeTokens,
@@ -203,6 +203,66 @@ pub(super) fn add_menu<'a>(tokens: &ThemeTokens, i18n: &I18n) -> Element<'a, Lib
     )
     .padding([0.0, EDGE])
     .width(Length::Fill)
+    .boxed()
+}
+
+/// The "Previews" switch in the tool line: the table's thumbnail column
+/// and taller rows, remembered as a preference (#2535; Caner, 2026-11-27).
+pub(super) fn previews_switch<'a>(
+    row_style: ComponentsRowStyle,
+    tokens: &ThemeTokens,
+    i18n: &I18n,
+) -> Element<'a, LibraryMessage> {
+    let r = resolve(tokens);
+    let on = row_style.shows_previews();
+    let style = signex_widgets::toggle_switch::ToggleSwitchStyle::new(
+        ti(tokens.accent),
+        r.line_strong,
+        crate::styles::tokens::on_accent(tokens),
+    );
+    let flipped = ComponentsRowStyle::from_previews(!on);
+    let switch = signex_widgets::toggle_switch::toggle_switch(
+        on,
+        style,
+        Some(LibraryMessage::ComponentsPanelRowStylePicked(flipped)),
+    );
+    // The label flips the switch too.
+    let label = button(
+        text(t!(i18n, ids::PANELS_COMPONENTS_PREVIEWS))
+            .size(TS.caption)
+            .color(r.ink3),
+    )
+    .padding(0.0)
+    .on_press(LibraryMessage::ComponentsPanelRowStylePicked(flipped))
+    .style(|_: &Theme, _| button::Style::default());
+    crate::panels::graphite::hint_tooltip(
+        row![switch, label]
+            .spacing(super::SP.s)
+            .align_y(Alignment::Center)
+            .boxed(),
+        t!(i18n, ids::PANELS_COMPONENTS_PREVIEWS_TOOLTIP),
+        tokens,
+        iced::widget::tooltip::Position::Bottom,
+    )
+}
+
+/// Height of a Previews row: thumbnail, name and one line of description.
+pub(super) const PREVIEW_ROW_HEIGHT: f32 = TS.body * 10.0 / 3.0;
+
+/// The small "Place" button of a hovered row or a recent part.
+pub(super) fn place_button<'a>(
+    on_press: LibraryMessage,
+    tokens: &ThemeTokens,
+    i18n: &I18n,
+) -> Element<'a, LibraryMessage> {
+    button(
+        text(t!(i18n, ids::PANELS_COMPONENTS_PLACE))
+            .size(TS.caption)
+            .color(ti(tokens.text)),
+    )
+    .padding([super::SP.xs, super::SP.m])
+    .on_press(on_press)
+    .style(crate::styles::outline_button(tokens))
     .boxed()
 }
 

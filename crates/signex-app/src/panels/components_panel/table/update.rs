@@ -15,9 +15,9 @@ use crate::library::messages::{ComponentsTableMsg, HeaderAction, RangeBound, Ran
 /// What the dispatcher owes after a message.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct TableEffects {
-    /// The saved setups changed: write them to `prefs.json`, off the UI
-    /// thread.
-    pub save_setups: bool,
+    /// The saved setups or the category changed: write them to
+    /// `prefs.json`, off the UI thread.
+    pub save_prefs: bool,
     /// The body scrolled sideways: move the header strip with it.
     pub header_x: Option<f32>,
     /// The body is to scroll back to its top (a new category, Collapse
@@ -36,6 +36,8 @@ impl ComponentsTable {
                     self.popover = None;
                     self.resize = None;
                     fx.body_to_top = true;
+                    // The last category is remembered (Caner, 2026-11-27).
+                    fx.save_prefs = true;
                 }
             }
             ComponentsTableMsg::HeaderPressed(column) => {
@@ -134,7 +136,7 @@ impl ComponentsTable {
                         kept.pinned = saved.pinned;
                         self.setups.insert(key, kept);
                     }
-                    fx.save_setups = true;
+                    fx.save_prefs = true;
                 }
             }
             ComponentsTableMsg::FilterToggled => self.toggle_popover(TablePopover::Filter),
@@ -186,7 +188,7 @@ impl ComponentsTable {
         self.cache.setup = setup.clone();
         self.setups
             .insert(self.category.pref_key().to_owned(), setup);
-        fx.save_setups = true;
+        fx.save_prefs = true;
     }
 
     fn header_menu(&mut self, action: HeaderAction, fx: &mut TableEffects) {
@@ -223,12 +225,7 @@ impl ComponentsTable {
         let is_new = picked
             .as_ref()
             .is_some_and(|key| self.filters().is_none_or(|f| f.range.get(key).is_none()));
-        let min_to_max = picked.as_ref().is_some_and(|key| {
-            self.cache
-                .template
-                .as_ref()
-                .is_some_and(|t| t.range(key).is_some())
-        });
+        let min_to_max = picked.as_ref().is_some_and(|key| self.cache.is_range(key));
         let filters = self.filters_mut();
         filters.range.apply(msg);
         if let (Some(key), true) = (picked, is_new) {
@@ -252,7 +249,7 @@ impl ComponentsTable {
             self.cache.setup.pinned = setup.pinned.clone();
         }
         self.setups.insert(key, setup);
-        fx.save_setups = true;
+        fx.save_prefs = true;
     }
 }
 

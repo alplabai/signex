@@ -1,4 +1,4 @@
-//! Messages of the Components panel table (mockup row 52, components-cx):
+//! Messages of the Components panel table (mockup row 52):
 //! category, columns, sort, grouping, range filters and the Details
 //! parameter pins. Routed by `dispatch/library/components_table.rs`.
 
@@ -75,7 +75,7 @@ pub enum ComponentsTableMsg {
     /// An edit of one of the category's range filters.
     RangeFilter(RangeFilterMsg),
     /// A bound's prefix picker of the range filter on `key` was set: a
-    /// prefix, or `None` for Any prefix (components-cx decision 6).
+    /// prefix, or `None` for Any prefix (mockup row 52).
     BoundPrefixPicked {
         key: String,
         high: bool,

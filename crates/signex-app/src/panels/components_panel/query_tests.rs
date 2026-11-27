@@ -1,5 +1,4 @@
-//! Value-aware search of the Components panel (mockup row 52,
-//! components-cx decisions 5, 6 and 9) and the header that holds it.
+//! Value-aware search of the Components panel (mockup row 52) and the header that holds it.
 
 use std::path::Path;
 

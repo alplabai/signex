@@ -16,22 +16,36 @@ use crate::library::range_filter::RangeFilters;
 pub enum CategoryKey {
     #[default]
     AllParts,
+    /// The parts placed from the panel this session, most recent first
+    /// (Caner, 2026-11-27).
+    Recent,
     Class(String),
 }
 
 impl CategoryKey {
-    /// The key a saved setup is stored under in `prefs.json`. `*` cannot be
-    /// a class name, so All parts never meets a class.
+    /// The key a saved setup and the last category are stored under in
+    /// `prefs.json`. `*` and `@recent` are not class names, so neither
+    /// meets a class.
     pub fn pref_key(&self) -> &str {
         match self {
             CategoryKey::AllParts => "*",
+            CategoryKey::Recent => "@recent",
             CategoryKey::Class(class) => class,
+        }
+    }
+
+    /// The category a [`Self::pref_key`] names.
+    pub fn from_pref_key(key: &str) -> CategoryKey {
+        match key {
+            "*" => CategoryKey::AllParts,
+            "@recent" => CategoryKey::Recent,
+            class => CategoryKey::Class(class.to_owned()),
         }
     }
 
     pub fn class(&self) -> Option<&str> {
         match self {
-            CategoryKey::AllParts => None,
+            CategoryKey::AllParts | CategoryKey::Recent => None,
             CategoryKey::Class(class) => Some(class),
         }
     }
@@ -39,7 +53,7 @@ impl CategoryKey {
 
 /// The filters of one category: its range filters and In stock only.
 /// Session-scoped; only column, sort and group setups are saved
-/// (components-cx decision 1).
+/// (mockup row 52).
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct TableFilters {
     pub range: RangeFilters,
@@ -92,7 +106,7 @@ pub struct TableScroll {
 pub struct ComponentsTable {
     pub category: CategoryKey,
     /// The user's setups, by [`CategoryKey::pref_key`]; a category without
-    /// one opens from its configuration (components-cx decision 3).
+    /// one opens from its configuration (mockup row 52).
     pub setups: BTreeMap<String, ViewSetup>,
     /// Open groups per category, by path; every group starts closed.
     pub open_groups: HashMap<CategoryKey, HashSet<GroupPath>>,
@@ -115,11 +129,24 @@ pub struct ComponentsTable {
 }
 
 impl ComponentsTable {
-    /// A table starting from the setups `prefs.json` holds.
-    pub fn with_setups(setups: BTreeMap<String, ViewSetup>) -> Self {
+    /// A table starting from what `prefs.json` holds: the setups and the
+    /// category shown last.
+    pub fn from_prefs(views: crate::fonts::ComponentsViews) -> Self {
         Self {
-            setups,
+            category: views
+                .category
+                .as_deref()
+                .map_or_else(CategoryKey::default, CategoryKey::from_pref_key),
+            setups: views.setups,
             ..Self::default()
+        }
+    }
+
+    /// What `prefs.json` keeps of the table.
+    pub fn prefs(&self) -> crate::fonts::ComponentsViews {
+        crate::fonts::ComponentsViews {
+            category: Some(self.category.pref_key().to_owned()),
+            setups: self.setups.clone(),
         }
     }
 

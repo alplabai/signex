@@ -1,5 +1,5 @@
-//! The category picker's entries: All parts, then each component class the
-//! mounted libraries hold, with its part count.
+//! The category picker's entries: All parts, Recently placed, then each
+//! component class the mounted libraries hold, with its part count.
 
 use std::collections::BTreeMap;
 use std::fmt;
@@ -24,9 +24,10 @@ impl fmt::Display for CategoryEntry {
     }
 }
 
-/// All parts first, then the classes by caption in display order. A class
-/// is listed while at least one mounted part has it.
-pub fn categories_of(libraries: &[OpenLibrary], i18n: &I18n) -> Vec<CategoryEntry> {
+/// All parts first, then Recently placed (`recent` parts), then the
+/// classes by caption in display order. A class is listed while at least
+/// one mounted part has it.
+pub fn categories_of(libraries: &[OpenLibrary], recent: usize, i18n: &I18n) -> Vec<CategoryEntry> {
     let mut counts: BTreeMap<&str, usize> = BTreeMap::new();
     let mut total = 0;
     for row in libraries
@@ -50,11 +51,16 @@ pub fn categories_of(libraries: &[OpenLibrary], i18n: &I18n) -> Vec<CategoryEntr
         .collect();
     classes.sort_by(|a, b| i18n.compare_for_display(&a.0, &b.0).then(a.1.cmp(b.1)));
     let all = i18n.message_plain(ids::PANELS_COMPONENTS_ALL_PARTS, &[]);
-    std::iter::once(entry(CategoryKey::AllParts, all, total))
-        .chain(
-            classes
-                .into_iter()
-                .map(|(name, class, n)| entry(CategoryKey::Class(class.to_owned()), name, n)),
-        )
-        .collect()
+    let recently = i18n.message_plain(ids::PANELS_COMPONENTS_RECENT_CATEGORY, &[]);
+    [
+        entry(CategoryKey::AllParts, all, total),
+        entry(CategoryKey::Recent, recently, recent),
+    ]
+    .into_iter()
+    .chain(
+        classes
+            .into_iter()
+            .map(|(name, class, n)| entry(CategoryKey::Class(class.to_owned()), name, n)),
+    )
+    .collect()
 }

@@ -176,6 +176,8 @@ impl LibraryState {
     /// changed (the search must be current first).
     pub(super) fn sync_components_table(&mut self, i18n: &signex_i18n::I18n) {
         let panel = &mut self.components_panel;
+        let recent: Vec<ComponentsPanelRowKey> =
+            panel.recent.parts().iter().map(|p| p.key.clone()).collect();
         let src = crate::panels::components_panel::table::TableSource {
             libraries: &self.open_libraries,
             rows: &panel.rows,
@@ -183,6 +185,7 @@ impl LibraryState {
             data_version: self.data_version,
             needle: &panel.filter,
             selected: panel.selected.as_ref(),
+            recent: &recent,
         };
         crate::panels::components_panel::table::sync(&mut panel.table, &src, i18n);
     }

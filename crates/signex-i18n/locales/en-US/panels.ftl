@@ -875,7 +875,7 @@ panels-components-clear-filter = Clear
 panels-components-place = Place
 # Switch next to Add: rows with a symbol thumbnail and a description.
 panels-components-previews = Previews
-panels-components-previews-tooltip = Rows with symbol preview (remembered as a preference)
+panels-components-previews-tooltip = A symbol preview column and taller rows (remembered as a preference)
 # Section title above the parts placed from this panel, in capitals.
 panels-components-recent-title = RECENTLY PLACED
 # How often a recent part was placed this session. $count is a whole number.
@@ -1567,7 +1567,7 @@ panels-components-filter-count = { $count } parts
 panels-components-range-covers = Covers
 panels-components-range-min = Min
 panels-components-range-max = Max
-# A range filter bound on Any prefix compares the number as displayed (components-cx decision 6).
+# A range filter bound on Any prefix compares the number as displayed (mockup row 52).
 panels-components-any-prefix = Any prefix
 panels-components-any-prefix-note = Any prefix: compares the displayed number.
 # Details: show every parameter, or only the pinned ones; $count is how many there are.
@@ -1579,3 +1579,8 @@ panels-components-details-choices = PART CHOICES
 # A part choice's stock: $count parts, or none.
 panels-components-in-stock = { $count } in stock
 panels-components-out-of-stock = Out of stock
+# The category of the parts placed from the panel this session.
+panels-components-recent-category = Recently placed
+# A Columns picker entry for a column only a library's own class template
+# offers: $column is its caption, $library the library.
+panels-components-column-from = { $column } ({ $library } template)

@@ -66,12 +66,10 @@ pub(super) fn parts() -> LibraryState {
     ])
 }
 
-/// Show `category`, as the picker does, and rebuild the caches.
+/// Show the category `category` names (`*`, `@recent` or a class), as the
+/// picker does, and rebuild the caches.
 pub(super) fn show(state: &mut LibraryState, category: &str) {
-    let key = match category {
-        "*" => CategoryKey::AllParts,
-        class => CategoryKey::Class(class.to_owned()),
-    };
+    let key = CategoryKey::from_pref_key(category);
     let _ = state
         .components_panel
         .table

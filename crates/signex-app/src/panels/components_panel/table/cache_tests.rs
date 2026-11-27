@@ -103,7 +103,7 @@ fn twenty_five_thousand_parts_build_once_and_draw_a_window() {
     state.sync_view_caches();
     let lines = state.components_panel.table.cache.lines.len();
     assert_eq!(lines, N);
-    let window = body::window(lines, 12_000.0, 600.0);
+    let window = body::window(lines, 12_000.0, 600.0, false);
     assert!(window.len() < 100, "a frame builds {} lines", window.len());
     assert!(window.start > 0 && window.end < lines);
 }

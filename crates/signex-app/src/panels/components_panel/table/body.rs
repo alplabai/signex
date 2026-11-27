@@ -1,8 +1,10 @@
 //! The table body: group lines and part rows, windowed so a frame builds
 //! widgets only for the lines in view (25,000 parts stay smooth). A part
-//! row keeps the old list row's gestures: a press selects it and arms a
-//! drag onto the schematic, a right-click opens its menu; a double-click
-//! places it (mockup row 52).
+//! row keeps the old list row's gestures (#2535, #2631): a press selects it
+//! and arms a drag onto the schematic, a right-click opens its menu, the
+//! inline Place of a hovered row places it, and a double-click places it
+//! too (mockup row 52). With Previews on, rows are taller and start with
+//! the part's symbol thumbnail (Caner, 2026-11-27).
 
 use iced::widget::{Column, Row, Space, column, container, mouse_area, row, scrollable};
 use iced::{Alignment, Background, Element, Length, Theme, Widget};
@@ -13,17 +15,19 @@ use signex_types::theme::ThemeTokens;
 use signex_widgets::text;
 
 use super::super::rows::{RowColors, RowFlags};
+use super::super::thumbs::ThumbLook;
 use super::super::{HINT_TEXT_SIZE, ROW_TEXT_SIZE, look};
 use super::cache::{TableLine, TableRow};
 use super::cells;
 use super::columns::{caption, is_right_aligned};
 use super::header;
+use super::state::ComponentsTable;
 use super::view::user_text;
 use crate::library::browser::{OVERSCAN_ROWS, visible_range};
 use crate::library::messages::{ComponentsTableMsg, LibraryMessage};
 use crate::library::state::LibraryState;
 
-/// Height of a table line.
+/// Height of a table line in Compact rows.
 pub(super) const LINE_HEIGHT: f32 = look::ROW_HEIGHT;
 /// Indent per group level.
 const LEVEL_INDENT: f32 = 10.0;
@@ -35,6 +39,15 @@ pub(crate) const BODY_SCROLL: iced::widget::Id = iced::widget::Id::new("componen
 
 fn msg(m: ComponentsTableMsg) -> LibraryMessage {
     LibraryMessage::ComponentsTable(m)
+}
+
+/// The height of every line: Compact, or the taller Previews row.
+pub(crate) fn line_height(previews: bool) -> f32 {
+    if previews {
+        look::PREVIEW_ROW_HEIGHT
+    } else {
+        LINE_HEIGHT
+    }
 }
 
 /// The colours of a line, from the theme.
@@ -51,34 +64,82 @@ pub(super) fn line_colors(tokens: &ThemeTokens) -> RowColors {
 }
 
 /// The lines a frame builds: those in view plus an overscan.
-pub(super) fn window(lines: usize, scroll_y: f32, viewport_h: f32) -> std::ops::Range<usize> {
+pub(super) fn window(
+    lines: usize,
+    scroll_y: f32,
+    viewport_h: f32,
+    previews: bool,
+) -> std::ops::Range<usize> {
     let viewport_h = if viewport_h > 0.0 {
         viewport_h
     } else {
         FIRST_VIEWPORT
     };
-    visible_range(scroll_y, viewport_h, LINE_HEIGHT, lines, OVERSCAN_ROWS)
+    visible_range(
+        scroll_y,
+        viewport_h,
+        line_height(previews),
+        lines,
+        OVERSCAN_ROWS,
+    )
+}
+
+/// The part rows a frame draws, for the thumbnails it asks to read.
+pub(crate) fn drawn_rows(table: &ComponentsTable, previews: bool) -> Vec<&TableRow> {
+    let lines = &table.cache.lines;
+    let shown = window(
+        lines.len(),
+        table.scroll.y,
+        table.scroll.viewport_h,
+        previews,
+    );
+    lines[shown]
+        .iter()
+        .filter_map(|line| match line {
+            TableLine::Row { row, .. } => table.cache.base.get(*row),
+            TableLine::Group { .. } => None,
+        })
+        .collect()
+}
+
+/// What every line of one frame is drawn with.
+#[derive(Clone, Copy)]
+struct LineLook<'b> {
+    colors: RowColors,
+    previews: bool,
+    height: f32,
+    thumbs: ThumbLook,
+    tokens: &'b ThemeTokens,
 }
 
 pub(super) fn view<'a>(
     state: &'a LibraryState,
+    thumb_look: ThumbLook,
     tokens: &'a ThemeTokens,
     i18n: &'a I18n,
 ) -> Element<'a, LibraryMessage> {
     let panel = &state.components_panel;
     let table = &panel.table;
+    let previews = panel.row_style.shows_previews();
     let (columns, total) = header::layout(table);
-    let width = header::total_width(total, table);
+    let width = header::total_width(total, table, previews);
     let lines = &table.cache.lines;
-    let shown = window(lines.len(), table.scroll.y, table.scroll.viewport_h);
-    let colors = line_colors(tokens);
+    let shown = window(
+        lines.len(),
+        table.scroll.y,
+        table.scroll.viewport_h,
+        previews,
+    );
+    let lk = LineLook {
+        colors: line_colors(tokens),
+        previews,
+        height: line_height(previews),
+        thumbs: thumb_look,
+        tokens,
+    };
     let mut col: Column<Element<'a, LibraryMessage>> = column![].spacing(0);
     if shown.start > 0 {
-        col = col.push(
-            Space::new()
-                .height(shown.start as f32 * LINE_HEIGHT)
-                .boxed(),
-        );
+        col = col.push(Space::new().height(shown.start as f32 * lk.height).boxed());
     }
     for line in &lines[shown.clone()] {
         col = col.push(match line {
@@ -89,17 +150,17 @@ pub(super) fn view<'a>(
                 count,
                 depth,
                 open,
-            } => group_line(path, column, value, *count, *depth, *open, colors, i18n),
+            } => group_line(path, column, value, *count, *depth, *open, lk, i18n),
             TableLine::Row { row, depth } => match table.cache.base.get(*row) {
-                Some(r) => part_line(state, r, &columns, *depth, colors, i18n),
-                None => Space::new().height(LINE_HEIGHT).boxed(),
+                Some(r) => part_line(state, r, &columns, *depth, lk, i18n),
+                None => Space::new().height(lk.height).boxed(),
             },
         });
     }
     if shown.end < lines.len() {
         col = col.push(
             Space::new()
-                .height((lines.len() - shown.end) as f32 * LINE_HEIGHT)
+                .height((lines.len() - shown.end) as f32 * lk.height)
                 .boxed(),
         );
     }
@@ -131,9 +192,10 @@ fn group_line<'a>(
     count: usize,
     depth: usize,
     open: bool,
-    colors: RowColors,
+    lk: LineLook<'_>,
     i18n: &I18n,
 ) -> Element<'a, LibraryMessage> {
+    let colors = lk.colors;
     let shown = cells::shown(value, i18n);
     let is_set = shown.is_some();
     let value_text =
@@ -160,7 +222,7 @@ fn group_line<'a>(
             left: 4.0 + depth as f32 * LEVEL_INDENT,
             ..iced::Padding::ZERO
         })
-        .height(LINE_HEIGHT)
+        .height(lk.height)
         .width(Length::Fill)
         .on_press(msg(ComponentsTableMsg::GroupToggled(path.clone())))
         .style(move |_: &Theme, status: iced::widget::button::Status| {
@@ -173,21 +235,49 @@ fn group_line<'a>(
     face.boxed()
 }
 
-/// A part row: one cell per visible column, "—" where a value is not set.
+/// A part row: the thumbnail (Previews), then one cell per visible
+/// column, "—" where a value is not set; a hovered row's first cell ends
+/// in Place.
 fn part_line<'a>(
     state: &'a LibraryState,
     r: &'a TableRow,
     columns: &[(ColumnKey, f32)],
     depth: usize,
-    colors: RowColors,
+    lk: LineLook<'_>,
     i18n: &I18n,
 ) -> Element<'a, LibraryMessage> {
     let panel = &state.components_panel;
     let Some(row_data) = r.row(&state.open_libraries) else {
-        return Space::new().height(LINE_HEIGHT).boxed();
+        return Space::new().height(lk.height).boxed();
     };
-    let template = panel.table.cache.template.as_ref();
-    let mut cells_row: Row<Element<'a, LibraryMessage>> = row![].spacing(0);
+    let colors = lk.colors;
+    let key = r.key.clone();
+    let flags = RowFlags {
+        selected: panel.selected.as_ref() == Some(&key),
+        hovered: panel.hovered.as_ref() == Some(&key),
+        menu_open: panel.row_menu.as_ref().is_some_and(|m| m.key == key),
+    };
+    let place = LibraryMessage::ComponentsPanelPlace {
+        library_path: key.library_path.clone(),
+        table: key.table.clone(),
+        row_id: key.row_id,
+    };
+    let template = panel.table.cache.template_of(r);
+    let mut cells_row: Row<Element<'a, LibraryMessage>> =
+        row![].spacing(0).align_y(Alignment::Center);
+    if lk.previews {
+        let thumb = match panel.thumbs.get(&row_data.symbol_ref) {
+            Some(symbol) => lk.thumbs.thumb(symbol.clone()),
+            None => lk.thumbs.placeholder(),
+        };
+        cells_row = cells_row.push(
+            container(thumb)
+                .padding([0.0, header::THUMB_PAD])
+                .width(Length::Fixed(header::thumb_cell_width()))
+                .height(lk.height)
+                .center_y(lk.height),
+        );
+    }
     for (i, (column, width)) in columns.iter().enumerate() {
         let shown = cells::cell_text(row_data, &r.facts, template, column, i18n);
         let (words, ink) = match shown {
@@ -206,16 +296,29 @@ fn part_line<'a>(
         } else {
             6.0
         };
+        // The inline Place sits in the first column, which never scrolls
+        // out of reach the way the row's end does.
+        let content: Element<'a, LibraryMessage> = if i == 0 && flags.hovered {
+            row![
+                cell.width(Length::Fill),
+                look::place_button(place.clone(), lk.tokens, i18n)
+            ]
+            .spacing(4)
+            .align_y(Alignment::Center)
+            .boxed()
+        } else {
+            cell.boxed()
+        };
         cells_row = cells_row.push(
-            container(cell)
+            container(content)
                 .padding(iced::Padding {
                     left,
                     right: 6.0,
                     ..iced::Padding::ZERO
                 })
                 .width(Length::Fixed(header::cell_width(*width)))
-                .height(LINE_HEIGHT)
-                .center_y(LINE_HEIGHT)
+                .height(lk.height)
+                .center_y(lk.height)
                 .align_x(if is_right_aligned(column) {
                     Alignment::End
                 } else {
@@ -225,15 +328,9 @@ fn part_line<'a>(
                 .boxed(),
         );
     }
-    let key = r.key.clone();
-    let flags = RowFlags {
-        selected: panel.selected.as_ref() == Some(&key),
-        hovered: panel.hovered.as_ref() == Some(&key),
-        menu_open: panel.row_menu.as_ref().is_some_and(|m| m.key == key),
-    };
     let fill = flags.fill(colors);
     let face = container(cells_row)
-        .height(LINE_HEIGHT)
+        .height(lk.height)
         .style(move |_: &Theme| container::Style {
             background: fill.map(Background::Color),
             ..container::Style::default()
@@ -241,11 +338,7 @@ fn part_line<'a>(
     mouse_area(face)
         .on_press(LibraryMessage::ComponentsPanelRowPressed(key.clone()))
         .on_right_press(LibraryMessage::ComponentsPanelRowRightClicked(key.clone()))
-        .on_double_click(LibraryMessage::ComponentsPanelPlace {
-            library_path: key.library_path.clone(),
-            table: key.table.clone(),
-            row_id: key.row_id,
-        })
+        .on_double_click(place)
         .on_enter(LibraryMessage::ComponentsPanelRowEntered(key.clone()))
         .on_exit(LibraryMessage::ComponentsPanelRowExited(key))
         .boxed()

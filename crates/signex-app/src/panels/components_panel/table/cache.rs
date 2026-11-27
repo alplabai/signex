@@ -26,6 +26,7 @@ use uuid::Uuid;
 
 use super::category::{CategoryEntry, categories_of};
 use super::state::{CategoryKey, ComponentsTable};
+use super::templates::{RowTemplates, class_columns, class_view, recent_view};
 use crate::library::range_filter::FilterColumn;
 use crate::library::state::{ComponentsPanelRowKey, OpenLibrary, PanelRows};
 
@@ -39,6 +40,8 @@ pub(crate) struct TableSource<'a> {
     /// The search text as typed.
     pub needle: &'a str,
     pub selected: Option<&'a ComponentsPanelRowKey>,
+    /// The Recently placed log, most recent first.
+    pub recent: &'a [ComponentsPanelRowKey],
 }
 
 /// One part of the category.
@@ -51,6 +54,8 @@ pub struct TableRow {
     pub table: Arc<str>,
     pub index: usize,
     pub facts: RowFacts,
+    /// The class template the row reads, in [`TableCache::templates`].
+    pub template: Option<usize>,
 }
 
 impl TableRow {
@@ -113,6 +118,7 @@ struct BaseInputs {
     data_version: u64,
     category: CategoryKey,
     locale: &'static str,
+    recent: Vec<ComponentsPanelRowKey>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -122,6 +128,8 @@ struct ArrangeInputs {
     group: Vec<SortKey>,
     filters: Vec<(String, RangeFilter, RangeOn)>,
     in_stock: bool,
+    /// Recently placed with no sort or grouping: the log's order.
+    keep_order: bool,
 }
 
 /// See the module docs.
@@ -131,8 +139,13 @@ pub struct TableCache {
     arrange_inputs: Option<ArrangeInputs>,
     lines_for: Option<u64>,
     pub categories: Vec<CategoryEntry>,
-    /// The category's class template (the global one), if any.
+    /// The templates the rows read; a library's own wins for its rows.
+    pub templates: RowTemplates,
+    /// The category's leading template (`RowTemplates::primary`), if any.
     pub template: Option<ParameterTemplate>,
+    /// The library a column comes from when only its own template offers
+    /// it.
+    pub column_origin: HashMap<ColumnKey, String>,
     pub offered: Vec<ColumnKey>,
     pub default_view: CategoryView,
     /// The setup in effect, fitted to `offered`.
@@ -161,6 +174,7 @@ pub(crate) fn sync(table: &mut ComponentsTable, src: &TableSource<'_>, i18n: &I1
         data_version: src.data_version,
         category: table.category.clone(),
         locale: i18n.locale(),
+        recent: src.recent.to_vec(),
     };
     let base_changed = table.cache.base_inputs.as_ref() != Some(&base_inputs);
     if base_changed {
@@ -175,6 +189,9 @@ pub(crate) fn sync(table: &mut ComponentsTable, src: &TableSource<'_>, i18n: &I1
         group: table.cache.setup.group.clone(),
         filters: filters.range.active_on(),
         in_stock: filters.in_stock,
+        keep_order: table.category == CategoryKey::Recent
+            && table.cache.setup.sort.is_empty()
+            && table.cache.setup.group.is_empty(),
     };
     let arranged = base_changed || table.cache.arrange_inputs.as_ref() != Some(&arrange_inputs);
     if arranged {
@@ -193,16 +210,30 @@ pub(crate) fn sync(table: &mut ComponentsTable, src: &TableSource<'_>, i18n: &I1
 
 impl TableCache {
     fn rebuild_base(&mut self, src: &TableSource<'_>, category: &CategoryKey, i18n: &I18n) {
-        self.categories = categories_of(src.libraries, i18n);
-        self.template = category
-            .class()
-            .and_then(|class| src.registry.resolve(Uuid::nil(), class))
-            .cloned();
-        self.base = rows_of(src.libraries, category);
-        let template = self.template.as_ref();
-        let rows = self.base.iter().filter_map(|r| r.row(src.libraries));
-        self.offered = offered_columns(template, rows);
-        self.default_view = category_view(template);
+        self.categories = categories_of(src.libraries, src.recent.len(), i18n);
+        self.templates = RowTemplates::default();
+        self.base = match category {
+            CategoryKey::Recent => recent_rows(src, &mut self.templates),
+            _ => rows_of(src, category, &mut self.templates),
+        };
+        self.template = self.templates.get(self.templates.primary()).cloned();
+        let libraries = src.libraries;
+        (self.offered, self.column_origin) = match category.class() {
+            Some(class) => {
+                let global = src.registry.resolve(Uuid::nil(), class);
+                let rows = with_templates(&self.base, libraries);
+                class_columns(&self.templates, global, rows)
+            }
+            None => {
+                let rows = with_templates(&self.base, libraries).map(|(row, _)| row);
+                (offered_columns(None, rows), HashMap::new())
+            }
+        };
+        self.default_view = match category {
+            CategoryKey::AllParts => CategoryView::all_parts(),
+            CategoryKey::Recent => recent_view(),
+            CategoryKey::Class(_) => class_view(&self.templates),
+        };
         self.coverage = self
             .offered
             .iter()
@@ -210,13 +241,26 @@ impl TableCache {
                 let n = self
                     .base
                     .iter()
-                    .filter_map(|r| Some((r.row(src.libraries)?, &r.facts)))
-                    .filter(|(row, facts)| !column_value(row, facts, template, column).is_missing())
+                    .filter_map(|r| Some((r.row(libraries)?, r)))
+                    .filter(|(row, r)| {
+                        !column_value(row, &r.facts, self.templates.get(r.template), column)
+                            .is_missing()
+                    })
                     .count();
                 (column.clone(), n)
             })
             .collect();
-        self.range_columns = range_columns(self, src.libraries, i18n);
+        self.range_columns = range_columns(self, libraries, i18n);
+    }
+
+    /// The template `r` reads.
+    pub fn template_of(&self, r: &TableRow) -> Option<&ParameterTemplate> {
+        self.templates.get(r.template)
+    }
+
+    /// Whether `name` is a min-to-max column of any template in use.
+    pub fn is_range(&self, name: &str) -> bool {
+        self.templates.is_range(name)
     }
 
     fn rearrange(&mut self, src: &TableSource<'_>, inputs: &ArrangeInputs, i18n: &I18n) {
@@ -225,7 +269,7 @@ impl TableCache {
             self.arrange_passes += 1;
         }
         let matches = search_matches(src, inputs.needle.is_empty());
-        let template = self.template.as_ref();
+        let templates = &self.templates;
         let mut excluded: BTreeMap<String, usize> = BTreeMap::new();
         self.shown = (0..self.base.len())
             .filter(|&i| {
@@ -243,7 +287,8 @@ impl TableCache {
                 }
                 let mut keep = true;
                 for (key, filter, on) in &inputs.filters {
-                    let cell = column_value(row, &r.facts, template, &ColumnKey::from(key.clone()));
+                    let column = ColumnKey::from(key.clone());
+                    let cell = column_value(row, &r.facts, templates.get(r.template), &column);
                     match cell.range_verdict(filter, *on) {
                         RangeVerdict::Matches => {}
                         RangeVerdict::Outside => keep = false,
@@ -258,10 +303,14 @@ impl TableCache {
             .collect();
         self.excluded = excluded;
         let (base, shown, libraries) = (&self.base, &self.shown, src.libraries);
+        if inputs.keep_order {
+            self.nodes = (0..self.shown.len()).map(ViewNode::Row).collect();
+            return;
+        }
         let cell = |i: usize, column: &ColumnKey| {
             let r = &base[shown[i]];
             r.row(libraries).map_or(CellValue::Missing, |row| {
-                column_value(row, &r.facts, template, column)
+                column_value(row, &r.facts, templates.get(r.template), column)
             })
         };
         let text_order = |a: &str, b: &str| -> Ordering { i18n.compare_for_display(a, b) };
@@ -277,11 +326,14 @@ impl TableCache {
 
 /// Every part of `category` across the mounted libraries, in library,
 /// table name, then row order.
-fn rows_of(libraries: &[OpenLibrary], category: &CategoryKey) -> Vec<TableRow> {
+fn rows_of(
+    src: &TableSource<'_>,
+    category: &CategoryKey,
+    templates: &mut RowTemplates,
+) -> Vec<TableRow> {
     let mut out = Vec::new();
-    for (lib_index, lib) in libraries.iter().enumerate() {
-        let symbols = names_by_uuid(&lib.cached_symbols);
-        let footprints = names_by_uuid(&lib.cached_footprints);
+    for (lib_index, lib) in src.libraries.iter().enumerate() {
+        let names = Names::of(lib);
         let mut tables: Vec<(&String, &Vec<ComponentRow>)> = lib.tables.iter().collect();
         tables.sort_by(|a, b| a.0.cmp(b.0));
         for (name, rows) in tables {
@@ -290,30 +342,97 @@ fn rows_of(libraries: &[OpenLibrary], category: &CategoryKey) -> Vec<TableRow> {
                 if category.class().is_some_and(|c| c != row.class.as_str()) {
                     continue;
                 }
-                let (stock, price) = supply_facts(lib, row);
-                out.push(TableRow {
-                    key: ComponentsPanelRowKey {
-                        library_path: lib.root.clone(),
-                        table: name.clone(),
-                        row_id: signex_library::RowId(row.row_id),
-                    },
-                    lib: lib_index,
-                    table: Arc::clone(&table),
-                    index,
-                    facts: RowFacts {
-                        library_ref: symbols.get(&row.symbol_ref.uuid).map(|s| s.to_string()),
-                        footprint: row
-                            .footprint_ref
-                            .and_then(|r| footprints.get(&r.uuid))
-                            .map(|s| s.to_string()),
-                        stock,
-                        price,
-                    },
-                });
+                let template = templates.index_for(src.registry, lib, row.class.as_str());
+                out.push(table_row(
+                    lib_index, lib, &table, index, row, &names, template,
+                ));
             }
         }
     }
     out
+}
+
+/// The Recently placed parts still mounted, in the log's order (most
+/// recent first, as many as the log keeps).
+fn recent_rows(src: &TableSource<'_>, templates: &mut RowTemplates) -> Vec<TableRow> {
+    src.recent
+        .iter()
+        .filter_map(|key| {
+            let (lib_index, lib) = src
+                .libraries
+                .iter()
+                .enumerate()
+                .find(|(_, l)| l.root == key.library_path)?;
+            let rows = lib.tables.get(&key.table)?;
+            let index = rows.iter().position(|r| r.row_id == key.row_id.0)?;
+            let row = &rows[index];
+            let names = Names::of(lib);
+            let template = templates.index_for(src.registry, lib, row.class.as_str());
+            let table: Arc<str> = Arc::from(key.table.as_str());
+            Some(table_row(
+                lib_index, lib, &table, index, row, &names, template,
+            ))
+        })
+        .collect()
+}
+
+/// A library's symbol and footprint names by uuid.
+struct Names<'a> {
+    symbols: HashMap<Uuid, &'a str>,
+    footprints: HashMap<Uuid, &'a str>,
+}
+
+impl<'a> Names<'a> {
+    fn of(lib: &'a OpenLibrary) -> Self {
+        Names {
+            symbols: names_by_uuid(&lib.cached_symbols),
+            footprints: names_by_uuid(&lib.cached_footprints),
+        }
+    }
+}
+
+fn table_row(
+    lib_index: usize,
+    lib: &OpenLibrary,
+    table: &Arc<str>,
+    index: usize,
+    row: &ComponentRow,
+    names: &Names<'_>,
+    template: Option<usize>,
+) -> TableRow {
+    let (stock, price) = supply_facts(lib, row);
+    TableRow {
+        key: ComponentsPanelRowKey {
+            library_path: lib.root.clone(),
+            table: table.to_string(),
+            row_id: signex_library::RowId(row.row_id),
+        },
+        lib: lib_index,
+        table: Arc::clone(table),
+        index,
+        facts: RowFacts {
+            library_ref: names
+                .symbols
+                .get(&row.symbol_ref.uuid)
+                .map(|s| s.to_string()),
+            footprint: row
+                .footprint_ref
+                .and_then(|r| names.footprints.get(&r.uuid))
+                .map(|s| s.to_string()),
+            stock,
+            price,
+        },
+        template,
+    }
+}
+
+/// Each row of `base` with the template it reads.
+fn with_templates<'r>(
+    base: &'r [TableRow],
+    libraries: &'r [OpenLibrary],
+) -> impl Iterator<Item = (&'r ComponentRow, Option<usize>)> + 'r {
+    base.iter()
+        .filter_map(move |r| Some((r.row(libraries)?, r.template)))
 }
 
 fn names_by_uuid(listing: &[signex_library::PrimitiveSummary]) -> HashMap<Uuid, &str> {
@@ -357,7 +476,6 @@ fn search_matches<'a>(
 /// The measurement columns of the category, each in the unit most of its
 /// values are in.
 fn range_columns(cache: &TableCache, libraries: &[OpenLibrary], i18n: &I18n) -> Vec<FilterColumn> {
-    let template = cache.template.as_ref();
     cache
         .offered
         .iter()
@@ -368,7 +486,7 @@ fn range_columns(cache: &TableCache, libraries: &[OpenLibrary], i18n: &I18n) -> 
                 let Some(row) = r.row(libraries) else {
                     continue;
                 };
-                let cell = column_value(row, &r.facts, template, column);
+                let cell = column_value(row, &r.facts, cache.template_of(r), column);
                 if let Some(q) = cell.quantities().first() {
                     match units.iter_mut().find(|(u, _)| u == q.unit()) {
                         Some((_, n)) => *n += 1,
@@ -423,7 +541,8 @@ fn sync_details(table: &mut ComponentsTable, src: &TableSource<'_>, i18n: &I18n)
         return;
     };
     let category = CategoryKey::Class(row.class.as_str().to_owned());
-    let template = src.registry.resolve(Uuid::nil(), row.class.as_str());
+    // The row's own library's template wins (Caner, 2026-11-27).
+    let template = src.registry.resolve(lib.library_id, row.class.as_str());
     let saved_pins = table
         .setups
         .get(category.pref_key())

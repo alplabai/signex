@@ -1,6 +1,5 @@
 //! State-machine tests of the Components panel table: each interaction
-//! from the message to the rows the table draws (mockup row 52,
-//! components-cx decisions 1, 3, 6 and 8).
+//! from the message to the rows the table draws (mockup row 52).
 
 use signex_library::RangeOn;
 use signex_library::templates::{ColumnKey, SortKey};
@@ -97,7 +96,7 @@ fn all_parts_lists_every_part_by_part_number() {
 fn header_clicks_sort_and_shift_nests() {
     let mut state = parts();
     let fx = apply(&mut state, M::HeaderPressed(ColumnKey::Manufacturer));
-    assert!(fx.save_setups);
+    assert!(fx.save_prefs);
     let sort = |s: &LibraryState| s.components_panel.table.cache.setup.sort.clone();
     assert_eq!(sort(&state), [SortKey::ascending(ColumnKey::Manufacturer)]);
     apply(&mut state, M::HeaderPressed(ColumnKey::Manufacturer));
@@ -192,7 +191,7 @@ fn a_handle_drag_resizes_and_saves_the_width() {
         start + 30.0
     );
     let fx = apply(&mut state, M::ResizeEnded);
-    assert!(fx.save_setups);
+    assert!(fx.save_prefs);
     assert_eq!(
         state
             .components_panel
@@ -314,7 +313,7 @@ fn the_columns_picker_edits_and_reset_returns_to_the_default() {
             .is_category_default(&cache.default_view, &cache.offered)
     );
     let fx = apply(&mut state, M::ResetPressed);
-    assert!(fx.save_setups);
+    assert!(fx.save_prefs);
     let cache = &state.components_panel.table.cache;
     assert!(
         cache
@@ -557,7 +556,7 @@ fn details_pins_follow_the_parts_category_and_are_saved() {
     assert_eq!(dielectric.value, "Not set");
 
     let fx = apply(&mut state, M::PinToggled("tolerance".into()));
-    assert!(fx.save_setups);
+    assert!(fx.save_prefs);
     assert!(
         state.components_panel.table.setups["capacitor"]
             .pinned
@@ -605,4 +604,31 @@ fn a_half_set_pair_shows_its_one_end() {
     apply(&mut state, M::HeaderRightClicked(p("supply")));
     apply(&mut state, M::HeaderMenuPicked(HeaderAction::SortAscending));
     assert_eq!(drawn_parts(&state), ["U1", "U2", "U3"]);
+}
+
+/// Caner, 2026-11-27: the category shown last is saved with the setups and
+/// the panel opens on it again; picking the category already shown saves
+/// nothing.
+#[test]
+fn the_last_category_is_saved_and_reopened() {
+    let mut state = parts();
+    let fx = apply(
+        &mut state,
+        M::CategoryPicked(CategoryKey::Class("opamp".into())),
+    );
+    assert!(fx.save_prefs);
+    let prefs = state.components_panel.table.prefs();
+    assert_eq!(prefs.category.as_deref(), Some("opamp"));
+    let reopened = super::ComponentsTable::from_prefs(prefs);
+    assert_eq!(reopened.category, CategoryKey::Class("opamp".into()));
+    let recent = super::ComponentsTable::from_prefs(crate::fonts::ComponentsViews {
+        category: Some("@recent".into()),
+        ..Default::default()
+    });
+    assert_eq!(recent.category, CategoryKey::Recent);
+    let fx = apply(
+        &mut state,
+        M::CategoryPicked(CategoryKey::Class("opamp".into())),
+    );
+    assert!(!fx.save_prefs);
 }

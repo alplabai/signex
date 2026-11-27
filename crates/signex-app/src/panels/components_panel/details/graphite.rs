@@ -20,7 +20,7 @@ const SP: Spacing = Spacing::DEFAULT;
 
 /// The parameter table's columns.
 const PARAMETER_COLUMNS: [TableColumn; 3] = [
-    // The pin star (components-cx): no title.
+    // The pin star (mockup row 52): no title.
     (None, Length::Fixed(PIN_WIDTH)),
     (
         Some(ids::EDITORS_COMPONENT_COLUMN_NAME),

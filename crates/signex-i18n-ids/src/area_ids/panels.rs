@@ -596,4 +596,6 @@ define_ids! {
     PANELS_COMPONENTS_DETAILS_CHOICES = "panels-components-details-choices";
     PANELS_COMPONENTS_IN_STOCK = "panels-components-in-stock";
     PANELS_COMPONENTS_OUT_OF_STOCK = "panels-components-out-of-stock";
+    PANELS_COMPONENTS_RECENT_CATEGORY = "panels-components-recent-category";
+    PANELS_COMPONENTS_COLUMN_FROM = "panels-components-column-from";
 }

@@ -12,6 +12,14 @@ use signex_library::{
 };
 use uuid::Uuid;
 
+/// The thumbnail look the view tests draw rows with.
+pub(super) fn thumb_look() -> thumbs::ThumbLook {
+    thumbs::ThumbLook {
+        colors: signex_types::theme::canvas_colors(signex_types::theme::ThemeId::GraphiteLight),
+        device_px_per_logical_px: 1.0,
+    }
+}
+
 pub(super) fn fixture_row(pn: &str, mpn: &str, mfr: &str) -> ComponentRow {
     let _ = (PinPadOverride::new("1", "1"),);
     ComponentRow {
