@@ -326,14 +326,14 @@ impl Signex {
                     crate::library_import::staging::sweep_stale(&sweep, started);
                     check_target(&checked)
                 })
-                    .await
-                    .unwrap_or_else(|e| {
-                        TargetCheck::Refused(
-                            Translatable::new(ids::LIBRARY_IMPORT_DIALOG_TARGET_UNREADABLE)
-                                .arg("path", location.display().to_string())
-                                .arg("error", e.to_string()),
-                        )
-                    });
+                .await
+                .unwrap_or_else(|e| {
+                    TargetCheck::Refused(
+                        Translatable::new(ids::LIBRARY_IMPORT_DIALOG_TARGET_UNREADABLE)
+                            .arg("path", location.display().to_string())
+                            .arg("error", e.to_string()),
+                    )
+                });
                 (location, check)
             },
             |(location, check)| dialog_message(ImportDialogMsg::TargetChecked { location, check }),

@@ -136,7 +136,10 @@ pub(super) fn copy_file_synced(from: &Path, to: &Path) -> io::Result<()> {
     if written.is_err() {
         drop(copy);
         if let Err(why) = std::fs::remove_file(to) {
-            log::error!("library import: the partial copy {} stays: {why}", to.display());
+            log::error!(
+                "library import: the partial copy {} stays: {why}",
+                to.display()
+            );
         }
     }
     written
@@ -184,7 +187,10 @@ pub(super) fn copy_across(
         std::fs::create_dir(to)?;
         if let Err(e) = copy_tree(from, to) {
             if let Err(why) = std::fs::remove_dir_all(to) {
-                log::error!("library import: the partial copy {} stays: {why}", to.display());
+                log::error!(
+                    "library import: the partial copy {} stays: {why}",
+                    to.display()
+                );
             }
             return Err(e);
         }
@@ -285,7 +291,13 @@ mod unix {
     ) -> io::Result<()> {
         // SAFETY: as for renameat2 above.
         let done = unsafe {
-            libc::renameatx_np(old_dir, old.as_ptr(), new_dir, new.as_ptr(), libc::RENAME_EXCL)
+            libc::renameatx_np(
+                old_dir,
+                old.as_ptr(),
+                new_dir,
+                new.as_ptr(),
+                libc::RENAME_EXCL,
+            )
         };
         if done == 0 {
             return Ok(());

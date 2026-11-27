@@ -217,7 +217,7 @@ fn group_line<'a>(
     .spacing(6)
     .align_y(Alignment::Center);
     let hover = colors.hover;
-    let face = iced::widget::button(line)
+    let face = signex_widgets::button(line)
         .padding(iced::Padding {
             left: 4.0 + depth as f32 * LEVEL_INDENT,
             ..iced::Padding::ZERO

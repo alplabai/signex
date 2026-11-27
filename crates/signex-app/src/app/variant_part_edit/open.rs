@@ -52,7 +52,7 @@ impl Signex {
             VariantEditKind::Alternate => {
                 let picker = AlternatePicker::new(part);
                 self.ui_state.variant_part_edit =
-                    Some(Box::new(VariantPartEdit::Alternate(picker)));
+                    Some(Box::new(VariantPartEdit::Alternate(Box::new(picker))));
                 self.read_variant_candidates()
             }
             VariantEditKind::Value => {
@@ -60,7 +60,7 @@ impl Signex {
                     return Task::none();
                 };
                 let popover = ValuePopover::new(part, &project.data.variant_settings);
-                self.ui_state.variant_part_edit = Some(Box::new(VariantPartEdit::Value(popover)));
+                self.ui_state.variant_part_edit = Some(Box::new(VariantPartEdit::Value(Box::new(popover))));
                 iced::widget::operation::focus(VARIANT_VALUE_INPUT_ID.clone())
             }
         }
@@ -74,7 +74,8 @@ impl Signex {
             return Task::none();
         };
         let picker = AlternatePicker::new(part);
-        self.ui_state.variant_part_edit = Some(Box::new(VariantPartEdit::Alternate(picker)));
+        self.ui_state.variant_part_edit =
+            Some(Box::new(VariantPartEdit::Alternate(Box::new(picker))));
         self.read_variant_candidates()
     }
 

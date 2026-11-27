@@ -74,6 +74,11 @@ impl Signex {
                     return false;
                 }
                 p.corners = corners;
+                // Sharp corners take no size, so a pour switched back to
+                // Sharp writes neither key, as one that never had corners.
+                if corners.is_sharp() {
+                    p.corner_size = 0.0;
+                }
                 rebuild_sketch(editor);
                 true
             });

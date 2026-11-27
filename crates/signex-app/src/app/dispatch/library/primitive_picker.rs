@@ -481,7 +481,21 @@ impl Signex {
                     .collect();
                 Task::batch(binds)
             }
-            _ => Task::none(),
+            // A symbol's version is read only for a Library Browser row
+            // pick; any other target reaching here is a bug, said in the
+            // log rather than dropped silently.
+            other @ (PrimitivePickerTarget::PreviewRow(_)
+            | PrimitivePickerTarget::EditRowModal(_)
+            | PrimitivePickerTarget::PreviewAlternate(_)
+            | PrimitivePickerTarget::DesignPart { .. }
+            | PrimitivePickerTarget::BoardFootprint { .. }
+            | PrimitivePickerTarget::SketchParameters { .. }) => {
+                tracing::warn!(
+                    target: "signex::library",
+                    "symbol version read for a picker target that does not bind by version: {other:?}"
+                );
+                Task::none()
+            }
         }
     }
 

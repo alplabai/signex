@@ -55,7 +55,7 @@ pub(super) fn kind_segments(pattern: &ArraySummary, i18n: &I18n) -> Vec<Segment>
     .map(|(kind, name)| Segment {
         label: t!(i18n, name),
         active: kind == current,
-        msg: Some(PanelMsg::FpEditorPatternKindPicked { array_id, kind }),
+        msg: Some(PanelMsg::FpEditorPatternKindPicked(array_id, kind)),
     })
     .collect()
 }

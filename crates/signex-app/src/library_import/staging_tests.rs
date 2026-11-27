@@ -9,11 +9,10 @@ use std::time::{Duration, SystemTime};
 use super::error::ImportError;
 use super::events::{Counts, ExitKind, Summary};
 use super::output::claim_output;
-use super::run::{LibraryRunRequest, ModelsMode, RunMode, RunOutcome};
 use super::place::{HeldDir, copy_across, rename_entry, rename_no_replace};
+use super::run::{LibraryRunRequest, ModelsMode, RunMode, RunOutcome};
 use super::staging::{
-    SPLIT_MARK, STAGING_MARK, StagedLibrary, TargetBefore, move_entry, staging_dir_for,
-    sweep_stale,
+    SPLIT_MARK, STAGING_MARK, StagedLibrary, TargetBefore, move_entry, staging_dir_for, sweep_stale,
 };
 
 fn request(output: PathBuf, mode: RunMode) -> LibraryRunRequest {
@@ -300,8 +299,16 @@ fn a_move_back_that_fails_reports_a_split_library_and_keeps_both_folders() {
     assert!(detail.contains("injected"), "{detail}");
     let kept_name = staging.file_name().unwrap().to_str().unwrap();
     assert!(kept_name.contains(SPLIT_MARK), "{kept_name}");
-    assert_eq!(std::fs::read_dir(&target).unwrap().count(), 1, "one entry moved");
-    assert_eq!(std::fs::read_dir(staging).unwrap().count(), 1, "the other kept");
+    assert_eq!(
+        std::fs::read_dir(&target).unwrap().count(),
+        1,
+        "one entry moved"
+    );
+    assert_eq!(
+        std::fs::read_dir(staging).unwrap().count(),
+        1,
+        "the other kept"
+    );
     assert!(!staged.dir().exists(), "renamed, not removed");
     let swept = sweep_stale(&[dir.path().to_path_buf()], far_future());
     assert_eq!(swept, 0, "a split library is never swept");
@@ -323,13 +330,26 @@ fn a_whole_copy_counts_as_moved_when_its_source_stays() {
         std::fs::read_to_string(to.join("symbols").join("R.snxsym")).unwrap(),
         "symbol"
     );
-    assert!(from.join("symbols").join("R.snxsym").is_file(), "left, logged");
+    assert!(
+        from.join("symbols").join("R.snxsym").is_file(),
+        "left, logged"
+    );
     // A file copy never replaces what is at its destination.
     std::fs::write(dir.path().join("a.txt"), "new").unwrap();
     std::fs::write(dir.path().join("b.txt"), "theirs").unwrap();
     let mut remove = |p: &Path| std::fs::remove_file(p);
-    assert!(copy_across(&dir.path().join("a.txt"), &dir.path().join("b.txt"), &mut remove).is_err());
-    assert_eq!(std::fs::read_to_string(dir.path().join("b.txt")).unwrap(), "theirs");
+    assert!(
+        copy_across(
+            &dir.path().join("a.txt"),
+            &dir.path().join("b.txt"),
+            &mut remove
+        )
+        .is_err()
+    );
+    assert_eq!(
+        std::fs::read_to_string(dir.path().join("b.txt")).unwrap(),
+        "theirs"
+    );
 }
 
 /// No rename replaces what appeared at its destination: an empty folder,
@@ -343,7 +363,10 @@ fn a_rename_never_replaces_what_appeared_at_its_destination() {
     std::fs::write(staging.join("P.snxlib"), "library").unwrap();
     std::fs::create_dir_all(target.join("sub")).unwrap();
     std::fs::write(target.join("P.snxlib"), "theirs").unwrap();
-    let (from, to) = (HeldDir::open(&staging).unwrap(), HeldDir::open(&target).unwrap());
+    let (from, to) = (
+        HeldDir::open(&staging).unwrap(),
+        HeldDir::open(&target).unwrap(),
+    );
     for name in ["sub", "P.snxlib"] {
         let refused = rename_entry(&from, &to, OsStr::new(name)).unwrap_err();
         #[cfg(unix)]
@@ -351,13 +374,19 @@ fn a_rename_never_replaces_what_appeared_at_its_destination() {
         #[cfg(not(unix))]
         drop(refused);
     }
-    assert_eq!(std::fs::read_to_string(target.join("P.snxlib")).unwrap(), "theirs");
+    assert_eq!(
+        std::fs::read_to_string(target.join("P.snxlib")).unwrap(),
+        "theirs"
+    );
     assert_eq!(std::fs::read_dir(target.join("sub")).unwrap().count(), 0);
     assert!(staging.join("sub").join("f").is_file());
     drop((from, to));
     let empty = dir.path().join("empty");
     std::fs::create_dir(&empty).unwrap();
-    assert!(rename_no_replace(&staging, &empty).is_err(), "an empty folder is not replaced");
+    assert!(
+        rename_no_replace(&staging, &empty).is_err(),
+        "an empty folder is not replaced"
+    );
     assert!(staging.join("P.snxlib").is_file() && empty.is_dir());
 }
 
@@ -373,13 +402,26 @@ fn a_link_swapped_in_at_the_held_target_is_not_followed() {
         std::fs::create_dir(d).unwrap();
     }
     std::fs::write(staging.join("P.snxlib"), "library").unwrap();
-    let (from, to) = (HeldDir::open(&staging).unwrap(), HeldDir::open(&target).unwrap());
+    let (from, to) = (
+        HeldDir::open(&staging).unwrap(),
+        HeldDir::open(&target).unwrap(),
+    );
     std::fs::rename(&target, &moved_away).unwrap();
     std::os::unix::fs::symlink(&outside, &target).unwrap();
     rename_entry(&from, &to, OsStr::new("P.snxlib")).unwrap();
-    assert!(moved_away.join("P.snxlib").is_file(), "into the held folder");
-    assert_eq!(std::fs::read_dir(&outside).unwrap().count(), 0, "never through the link");
-    assert!(HeldDir::open(&target).is_err(), "a link is refused as a folder to hold");
+    assert!(
+        moved_away.join("P.snxlib").is_file(),
+        "into the held folder"
+    );
+    assert_eq!(
+        std::fs::read_dir(&outside).unwrap().count(),
+        0,
+        "never through the link"
+    );
+    assert!(
+        HeldDir::open(&target).is_err(),
+        "a link is refused as a folder to hold"
+    );
 }
 
 /// Far enough ahead that every folder made in a test counts as older than
@@ -406,11 +448,17 @@ fn stale_staging_folders_are_swept_and_nothing_else() {
     let file = root.join(format!(".Leds{STAGING_MARK}0003"));
     std::fs::write(&file, "not a folder").unwrap();
     // This session's previews are newer than its start: none goes.
-    assert_eq!(sweep_stale(std::slice::from_ref(&root), SystemTime::UNIX_EPOCH), 0);
+    assert_eq!(
+        sweep_stale(std::slice::from_ref(&root), SystemTime::UNIX_EPOCH),
+        0
+    );
     assert!(stale.is_dir());
     assert_eq!(sweep_stale(std::slice::from_ref(&root), far_future()), 1);
     assert!(!stale.exists(), "the stale preview goes");
-    assert!(marked.is_dir() && mine.is_dir() && file.is_file(), "the rest stays");
+    assert!(
+        marked.is_dir() && mine.is_dir() && file.is_file(),
+        "the rest stays"
+    );
     #[cfg(unix)]
     {
         let outside = root.join("outside");

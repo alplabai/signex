@@ -482,7 +482,10 @@ fn remove_stale(path: &Path) -> bool {
     let emptied = folder_id_at(path).and_then(|id| empty_folder(path, &id));
     match emptied.and_then(|()| std::fs::remove_dir(path)) {
         Ok(()) => {
-            log::info!("library import: removed the stale preview {}", path.display());
+            log::info!(
+                "library import: removed the stale preview {}",
+                path.display()
+            );
             true
         }
         Err(e) => {

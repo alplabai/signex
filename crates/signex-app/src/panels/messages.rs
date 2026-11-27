@@ -559,10 +559,10 @@ pub enum PanelMsg {
         array_id: signex_sketch::array::ArrayId,
     },
     /// #2596 — a kind segment was picked; Polar asks for a centre first.
-    FpEditorPatternKindPicked {
-        array_id: signex_sketch::array::ArrayId,
-        kind: signex_bake::array::PatternKind,
-    },
+    FpEditorPatternKindPicked(
+        signex_sketch::array::ArrayId,
+        signex_bake::array::PatternKind,
+    ),
     /// v0.23 — Toggle a single (i, j) instance in a Grid array's
     /// `GridDepopulation.suppressed_instances`. `value=true` re-enables
     /// the instance; `value=false` suppresses it.

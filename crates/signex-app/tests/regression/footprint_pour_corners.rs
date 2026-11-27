@@ -192,3 +192,27 @@ fn picking_the_corners_the_pour_has_records_no_step() {
     subform(&mut app, FpSubformMsg::PourCornersPicked { id, corners });
     assert_eq!(editor(&app, &path).history.undo_len(), 0);
 }
+
+/// A pour switched from Rounded back to Sharp drops its size too, so it
+/// writes the same bytes as a pour that never had corners: no
+/// `corners` or `corner_size` key, and the lower token.
+#[test]
+fn switching_back_to_sharp_drops_the_size_and_writes_no_corner_keys() {
+    let (footprint, id) = pour_footprint();
+    let (mut app, path) = open_editor("pour-sharp-again", footprint);
+    let before = editor(&app, &path).file.to_toml_string().unwrap();
+
+    let corners = PourCorners::Rounded;
+    subform(&mut app, FpSubformMsg::PourCornersPicked { id, corners });
+    size(&mut app, id, "0.5");
+    let corners = PourCorners::Sharp;
+    subform(&mut app, FpSubformMsg::PourCornersPicked { id, corners });
+
+    let attr = pour(&app, &path, id);
+    assert_eq!((attr.corners, attr.corner_size), (PourCorners::Sharp, 0.0));
+    assert_eq!(editor(&app, &path).file.format_token(), "snxfpt/1.1");
+    let after = editor(&app, &path).file.to_toml_string().unwrap();
+    assert!(!after.contains("corner_size"), "{after}");
+    assert!(!after.contains("corners"), "{after}");
+    assert_eq!(after, before, "the same bytes as before any corner edit");
+}

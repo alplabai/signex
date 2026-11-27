@@ -350,7 +350,7 @@ fn the_kind_segment_shows_the_kind_and_offers_every_kind() {
     let picked: Vec<PatternKind> = segments
         .iter()
         .map(|s| match &s.msg {
-            Some(PanelMsg::FpEditorPatternKindPicked { array_id, kind }) => {
+            Some(PanelMsg::FpEditorPatternKindPicked(array_id, kind)) => {
                 assert_eq!(*array_id, pattern.array_id);
                 *kind
             }

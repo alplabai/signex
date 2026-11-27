@@ -253,8 +253,8 @@ impl ValuePopover {
 /// The open variant part edit.
 #[derive(Debug, Clone, PartialEq)]
 pub enum VariantPartEdit {
-    Alternate(AlternatePicker),
-    Value(ValuePopover),
+    Alternate(Box<AlternatePicker>),
+    Value(Box<ValuePopover>),
 }
 
 impl VariantPartEdit {

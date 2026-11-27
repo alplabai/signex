@@ -107,11 +107,18 @@ fn stop_once_started(
         poll: Duration::from_millis(10),
     };
     std::thread::scope(|scope| {
-        let handle = scope
-            .spawn(|| {
-                let stage = super::run_state::JobStage::default();
-                run_library_in(&command, &request, limits, &cancel, &group, &stage, &mut |_| {})
-            });
+        let handle = scope.spawn(|| {
+            let stage = super::run_state::JobStage::default();
+            run_library_in(
+                &command,
+                &request,
+                limits,
+                &cancel,
+                &group,
+                &stage,
+                &mut |_| {},
+            )
+        });
         let pid = child_pid(&pid_file);
         stop(&cancel, &group);
         (handle.join().unwrap(), pid)
