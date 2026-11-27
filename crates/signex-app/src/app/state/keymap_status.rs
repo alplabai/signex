@@ -40,7 +40,7 @@ impl KeymapStatus {
 
     /// The text in en-US, as a log line or a test reads it.
     pub fn en_us(&self) -> String {
-        self.render(I18n::en_us_ref())
+        self.render(&I18n::en_us())
     }
 
     /// Whether the en-US text contains `needle`.
