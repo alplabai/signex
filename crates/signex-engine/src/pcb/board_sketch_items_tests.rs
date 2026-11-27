@@ -401,12 +401,24 @@ fn a_shelved_pour_removed_from_the_sketch_still_goes() {
     assert!(engine.board().zones.iter().any(|z| z.uuid == id(ZONE_1)));
 }
 
-/// A pour that is not shelved re-bakes as before: live and filled, as the
-/// bake wrote it, and a pour new in a bake starts unshelved.
+/// #2706, decision 8 (Caner, 2026-11-27, answer (a)): a pour that is not
+/// shelved keeps its `unfilled` flag too, and stays live.
+#[test]
+fn a_re_bake_keeps_an_unshelved_pours_unfilled_flag() {
+    let mut engine = baked_then(|z| z.unfilled = true);
+    engine.execute(bake(sketch(), items(7.0))).unwrap();
+    assert!(!pour(&engine).shelved);
+    assert!(pour(&engine).unfilled);
+    assert_eq!(pour(&engine).outline[0].x, 7.0, "the new outline");
+}
+
+/// A pour neither shelved nor unfilled re-bakes as before: exactly what
+/// the bake wrote, and a pour new in a bake starts unshelved and filled.
 #[test]
 fn an_unshelved_pour_re_bakes_as_before() {
     let mut engine = baked_then(|_| {});
     assert!(!pour(&engine).shelved, "a new pour starts unshelved");
+    assert!(!pour(&engine).unfilled, "and filled");
     engine.execute(bake(sketch(), items(7.0))).unwrap();
     assert_eq!(*pour(&engine), zone(POUR, 7.0));
 }

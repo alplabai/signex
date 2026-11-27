@@ -75,16 +75,16 @@ pub(in crate::pcb) fn set(
     }
 
     let owned = OwnedItems::of(board.sketch.as_ref(), sketch.as_deref());
-    let shelved: HashMap<Uuid, bool> = (board.zones.iter())
-        .filter(|zone| zone.shelved && owned.holds(zone.uuid))
-        .map(|zone| (zone.uuid, zone.unfilled))
+    let edits: HashMap<Uuid, PourEdits> = (board.zones.iter())
+        .filter(|zone| owned.holds(zone.uuid))
+        .map(|zone| (zone.uuid, PourEdits::of(zone)))
         .collect();
     let zones = board
         .zones
         .iter()
         .filter(|zone| !owned.holds(zone.uuid))
         .cloned()
-        .chain(items.zones.into_iter().map(|zone| keep_shelved(zone, &shelved)))
+        .chain(items.zones.into_iter().map(|zone| keep_edits(zone, &edits)))
         .collect();
     let graphics = board
         .graphics
@@ -202,12 +202,28 @@ pub(in crate::pcb) fn owned_item_ids(
     zones.chain(graphics).collect()
 }
 
-/// A pour shelved on the board stays shelved, with its `unfilled` flag,
-/// when the sketch re-bakes it under the same uuid (#2706, decision 8).
-fn keep_shelved(mut zone: Zone, shelved: &HashMap<Uuid, bool>) -> Zone {
-    if let Some(&unfilled) = shelved.get(&zone.uuid) {
-        zone.shelved = true;
-        zone.unfilled = unfilled;
+/// The board edits of a pour a re-bake keeps (#2706, decision 8).
+#[derive(Clone, Copy)]
+struct PourEdits {
+    shelved: bool,
+    unfilled: bool,
+}
+
+impl PourEdits {
+    fn of(zone: &Zone) -> Self {
+        Self {
+            shelved: zone.shelved,
+            unfilled: zone.unfilled,
+        }
+    }
+}
+
+/// A pour the sketch re-bakes under the same uuid keeps whether it was
+/// shelved and unfilled on the board; a new pour keeps what the bake wrote.
+fn keep_edits(mut zone: Zone, edits: &HashMap<Uuid, PourEdits>) -> Zone {
+    if let Some(kept) = edits.get(&zone.uuid) {
+        zone.shelved |= kept.shelved;
+        zone.unfilled |= kept.unfilled;
     }
     zone
 }

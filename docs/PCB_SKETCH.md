@@ -522,10 +522,10 @@ its seed edge and a drawing that of its edge. The board command
 whose uuid is an entity of the board sketch before or after, or a pattern
 instance of one ([Patterned board items](#patterned-board-items)), and moves each
 anchored footprint that is not locked (Messages names a locked one). A
-pour shelved on the board stays shelved when the sketch re-bakes it under
-the same uuid, with its `unfilled` flag; a new pour and a pour that is not
-shelved take what the bake writes (live and filled), and a pour whose
-entity is gone is removed as before (#2706). Its
+pour the sketch re-bakes under the same uuid keeps its board edits: a
+shelved pour stays shelved and an unfilled pour, shelved or not, stays
+unfilled. A new pour takes what the bake writes (live and filled), and a
+pour whose entity is gone is removed as before (#2706). Its
 inverse `RestoreBoardSketchBake` puts back the zone and drawing lists and the
 old positions bit for bit. The app uses it only when the sketch owns one of
 the three kinds now or did before (`SketchData::owns_board_items`), so a
