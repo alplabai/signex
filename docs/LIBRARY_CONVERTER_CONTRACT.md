@@ -253,17 +253,24 @@ human-readable `import-report.md` with the same content. Schema
 4. On exit 0 or 2: initialise git, commit, mount the library (and the
    libraries its manifest `requires`), show the report.
 5. On exit 1 or a 120 s silence: show the error and the stderr tail; Signex
-   removes a target directory it created for this run. A failed `--update`
-   (which Signex only starts over a clean repository, holding the library's
-   write lock and refusing while the library has unsaved work in the app)
-   is reset to the last import commit: tracked files checked out again,
+   removes what it created for this run: a target directory it made (and
+   the parent directories it made, while they are empty), or what the run
+   wrote into an empty directory that was already there, which is kept.
+   A failed `--update` (which Signex only starts over a clean repository,
+   holding the library's write lock and refusing while the library has
+   unsaved work in the app) is reset to the last import commit: tracked files checked out again,
    untracked files the run added removed, ignored files kept.
 
 A stop kills the converter's whole process group on Unix (it is started in
 a group of its own). On Windows only the converter process itself is
-killed; a Job object that takes its children along is a follow-up. After
-the converter exits, its pipes are read for at most 2 s more, so a process
-it left behind cannot hold the import.
+killed, so a process it started may outlive a stop or a quit; a Job object
+that takes its children along is #3134. After the converter exits, its
+pipes are read for at most 2 s more, so a process it left behind cannot
+hold the import.
+
+Quitting Signex stops a running import at once and waits for it: a
+stopped `--update` is put back to its last import commit, and an import
+commit under way is finished, before Signex exits.
 
 ## 7. Versioning this contract
 

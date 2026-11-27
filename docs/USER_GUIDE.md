@@ -598,9 +598,9 @@ commit, so a later update is one change you can compare or revert.
 **Preview, import and the loss report.** **Next** runs the converter once
 without writing anything and lists what it would approximate, drop or skip.
 **Import** writes the library; **Cancel** stops after the current item and
-removes what was written. When it finishes, the result card says how many
-parts were imported, where the library went, where it is mounted and which
-commit holds it. **View loss report** lists every item that did not come
+removes what was written (an empty folder you chose is kept, emptied). When
+it finishes, the result card says how many parts were imported, where the
+library went, where it is mounted and which commit holds it. **View loss report** lists every item that did not come
 across unchanged, grouped by how much was lost and by the converter's code
 for the problem:
 
@@ -631,6 +631,11 @@ of its own since the last import, the dialog warns that the update replaces
 their content; the commits stay in the history. A failed or cancelled update
 puts the library back to its last import. To change an imported part for
 good, copy it into a library of your own.
+
+**Quitting during an import.** Quitting Signex stops a running import at
+once. An update is put back to its last import before Signex
+exits, so the library is never left half written. On Windows, a process
+the converter started may keep running after it is stopped (#3134).
 
 **Licences of imported libraries.** An imported library keeps the licence of
 its source. A converter records it in the library's manifest (the `license`
