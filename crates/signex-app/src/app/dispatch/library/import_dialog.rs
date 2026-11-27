@@ -255,10 +255,12 @@ impl Signex {
         if d.step != from || d.awaiting.is_some() || d.checking_target || d.blocker().is_some() {
             return Task::none();
         }
-        // An earlier run (a dry run left by Back or Close) is still
-        // stopping: the engine takes one run at a time.
+        // The engine takes one run at a time. A dry run this dialog left
+        // (Back, Close) is still stopping; any other run is not its own.
         if self.library.import.running.is_some() {
-            d.run_stopping = true;
+            if !d.run_stopping {
+                d.other_run_active = true;
+            }
             return Task::none();
         }
         d.checking_target = true;
@@ -518,6 +520,7 @@ impl Signex {
         };
         // Whatever ended, the engine is free for the next run.
         d.run_stopping = false;
+        d.other_run_active = false;
         if mode.is_none() || d.awaiting != mode {
             return false;
         }

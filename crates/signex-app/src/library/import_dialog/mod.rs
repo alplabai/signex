@@ -123,6 +123,8 @@ pub struct ImportDialogState {
     pub stop_requested: bool,
     /// A run the dialog no longer waits for is still stopping; Next waits.
     pub run_stopping: bool,
+    /// A library import the dialog did not start is running; Next waits.
+    pub other_run_active: bool,
     pub phases: Vec<progress::PhaseLine>,
     pub import_end: Option<ImportEnd>,
 }
@@ -155,6 +157,7 @@ impl ImportDialogState {
             cancel_pending: false,
             stop_requested: false,
             run_stopping: false,
+            other_run_active: false,
             phases: Vec::new(),
             import_end: None,
         }

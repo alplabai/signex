@@ -504,6 +504,8 @@ fn next_waits_while_a_left_dry_run_is_still_stopping() {
     let (mut app, _boot) = Signex::new();
     let mut state = found(vec![converter("/bin/a", A)]);
     picked(&mut state, &["/in/P.lib1"]);
+    // Back left this dialog's dry run stopping.
+    state.run_stopping = true;
     app.library.import_dialog = Some(Box::new(state));
     app.library.import.running = Some(ImportRun {
         output: "/tmp/signex-library-preview-old".into(),
@@ -519,6 +521,31 @@ fn next_waits_while_a_left_dry_run_is_still_stopping() {
     drop(app.update(cancelled(true)));
     assert_eq!(dialog(&app).blocker(), None, "free again");
     assert!(app.document_view.error_notice.is_none());
+}
+
+#[test]
+fn next_waits_for_a_run_the_dialog_did_not_start_and_says_so_neutrally() {
+    let (mut app, _boot) = Signex::new();
+    let mut state = found(vec![converter("/bin/a", A)]);
+    picked(&mut state, &["/in/P.lib1"]);
+    app.library.import_dialog = Some(Box::new(state));
+    app.library.import.running = Some(ImportRun {
+        output: "/elsewhere/Other".into(),
+        mode: RunMode::Import,
+        target: MountTarget::Global,
+        cancel: Arc::new(AtomicBool::new(false)),
+        group: Default::default(),
+        progress: None,
+    });
+    drop(app.update(d(ImportDialogMsg::NextPressed)));
+    let state = dialog(&app);
+    assert_eq!(state.blocker(), Some(Blocker::OtherRun));
+    assert!(!state.run_stopping, "not a run of this dialog's");
+    let i18n = I18n::en_us();
+    let line = super::view::blocker_line(state, &i18n).unwrap().into_string();
+    assert_eq!(plain(&line), "Another library import is running.");
+    drop(app.update(cancelled(false)));
+    assert_eq!(dialog(&app).blocker(), None, "free again");
 }
 
 #[test]

@@ -22,6 +22,8 @@ mod source;
 
 #[cfg(test)]
 pub(super) use progress::end_words;
+#[cfg(test)]
+pub(super) use source::blocker_line;
 
 pub(super) const TS: TypeScale = TypeScale::DEFAULT;
 pub(super) const SP: Spacing = Spacing::DEFAULT;

@@ -32,6 +32,8 @@ pub enum Blocker {
     Checking,
     /// A dry run left by Back or Close is still stopping.
     RunStopping,
+    /// A library import this dialog did not start is running.
+    OtherRun,
 }
 
 /// Whether an input kind belongs on the `kind` side of the picker.
@@ -188,6 +190,9 @@ impl ImportDialogState {
         }
         if self.run_stopping {
             return Some(Blocker::RunStopping);
+        }
+        if self.other_run_active {
+            return Some(Blocker::OtherRun);
         }
         None
     }

@@ -361,6 +361,7 @@ pub(crate) fn blocker_line(state: &ImportDialogState, i18n: &I18n) -> Option<Loc
         Blocker::NoLocation => t!(i18n, ids::LIBRARY_IMPORT_DIALOG_LOCATION_EMPTY),
         Blocker::LocationNotAbsolute => t!(i18n, ids::LIBRARY_IMPORT_DIALOG_LOCATION_NOT_ABSOLUTE),
         Blocker::RunStopping => t!(i18n, ids::LIBRARY_IMPORT_DIALOG_RUN_STOPPING),
+        Blocker::OtherRun => t!(i18n, ids::LIBRARY_IMPORT_DIALOG_OTHER_RUN),
         Blocker::Looking
         | Blocker::NotInstalled
         | Blocker::NoSource
