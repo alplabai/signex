@@ -348,6 +348,9 @@ pub struct EditRowModalState {
     /// modal stays open meanwhile, and the result closes it only if the
     /// draft still equals this.
     pub saving: Option<SavingSnapshot>,
+    /// Template slots added through their "+ name" offer in this edit
+    /// (#2648): while one is still empty its row keeps a ✕.
+    pub added_slots: std::collections::HashSet<String>,
 }
 
 /// What the Edit Component Details modal held when Save was pressed.
@@ -418,7 +421,18 @@ impl EditRowModalState {
             reload_confirming: false,
             opened_primary,
             saving: None,
+            added_slots: std::collections::HashSet::new(),
         }
+    }
+
+    /// Whether the row `key` is a template slot added in this edit whose
+    /// value field is still empty, so it can be taken back (#2648).
+    pub fn is_untouched_added_slot(&self, key: &str) -> bool {
+        self.added_slots.contains(key)
+            && self
+                .param_buf
+                .get(key)
+                .is_some_and(|(value, _)| value.trim().is_empty())
     }
 }
 

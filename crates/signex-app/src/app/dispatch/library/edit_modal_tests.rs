@@ -702,14 +702,21 @@ fn a_failed_save_shows_in_the_footer_summary() {
     );
 }
 
-/// Template rows carry the "template" pill and no ✕; a custom row keeps
-/// its ✕.
+/// Template rows carry the "template" pill and no ✕ once they hold a
+/// value; a custom row keeps its ✕.
 #[test]
 fn template_rows_have_a_pill_and_no_remove_and_custom_rows_keep_it() {
     let (mut app, root, row_id) = app_with_browser();
     with_slot_template(&mut app, &root);
     open_modal(&mut app, &root, row_id);
     add_slot(&mut app, &root, "count");
+    let _ = app.update(edit(
+        &root,
+        BrowserEditMsg::SetParamValue {
+            key: "count".into(),
+            value: "3".into(),
+        },
+    ));
     let _ = app.update(edit(&root, BrowserEditMsg::AddParam));
     let (texts, clicked) = edit_modal_texts(&app, &root, "\u{2715}");
     let count = |label: &str| texts.iter().filter(|t| *t == label).count();
@@ -731,6 +738,68 @@ fn template_rows_have_a_pill_and_no_remove_and_custom_rows_keep_it() {
             .any(|t| t.starts_with("Template parameters come from the ")),
         "{texts:?}"
     );
+}
+
+/// #2648 (decided 2026-11-27): a template slot added by mistake can be
+/// taken back. Its ✕ shows while the slot is still empty, removes it, and
+/// Save then succeeds without it. Typed into, or stored on the row, a
+/// template row has no ✕.
+#[test]
+fn an_empty_slot_added_in_this_edit_can_be_removed_before_save() {
+    let (mut app, root, row_id) = app_with_browser();
+    with_slot_template(&mut app, &root);
+    open_modal(&mut app, &root, row_id);
+    add_slot(&mut app, &root, "count");
+    let (texts, clicked) = edit_modal_texts(&app, &root, "\u{2715}");
+    assert_eq!(
+        texts.iter().filter(|t| *t == "\u{2715}").count(),
+        1,
+        "{texts:?}"
+    );
+    assert!(
+        clicked.iter().any(|m| matches!(
+            m,
+            LibraryMessage::BrowserEdit {
+                msg: BrowserEditMsg::DeleteParam { key },
+                ..
+            } if key == "count"
+        )),
+        "the empty slot's ✕ removes it: {clicked:?}"
+    );
+    let _ = app.update(edit(
+        &root,
+        BrowserEditMsg::DeleteParam {
+            key: "count".into(),
+        },
+    ));
+    let task = app.update(edit(&root, BrowserEditMsg::Save));
+    run_write(&mut app, task);
+    assert!(
+        app.library.library_browsers[&root].edit_modal.is_none(),
+        "Save succeeds without the removed slot"
+    );
+    drop(app.land_pending_refresh(&root));
+    assert!(!stored(&app, &root, row_id).parameters.contains_key("count"));
+
+    // A typed value takes the ✕ away; a stored template value has none.
+    open_modal(&mut app, &root, row_id);
+    add_slot(&mut app, &root, "count");
+    let _ = app.update(edit(
+        &root,
+        BrowserEditMsg::SetParamValue {
+            key: "count".into(),
+            value: "4".into(),
+        },
+    ));
+    let (texts, _) = edit_modal_texts(&app, &root, "Save");
+    assert!(!texts.iter().any(|t| t == "\u{2715}"), "{texts:?}");
+    let task = app.update(edit(&root, BrowserEditMsg::Save));
+    run_write(&mut app, task);
+    drop(app.land_pending_refresh(&root));
+    open_modal(&mut app, &root, row_id);
+    let (texts, _) = edit_modal_texts(&app, &root, "Save");
+    assert!(texts.iter().any(|t| t == "template"), "{texts:?}");
+    assert!(!texts.iter().any(|t| t == "\u{2715}"), "{texts:?}");
 }
 
 // ─── mockup row 137: the delete-row confirm ──────────────────────────

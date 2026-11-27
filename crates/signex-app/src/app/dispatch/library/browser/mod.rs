@@ -518,6 +518,7 @@ impl Signex {
                     modal.draft.parameters.remove(&key);
                     modal.param_buf.remove(&key);
                     modal.param_prefix.remove(&key);
+                    modal.added_slots.remove(&key);
                 }
                 BrowserEditMsg::SetTags(s) => {
                     modal.tags_buf = s;

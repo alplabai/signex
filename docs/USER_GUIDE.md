@@ -468,7 +468,7 @@ writable library is open, the dialog says so and offers **New Library…**.
 component row. The list is grouped: each open library, then each library that
 holds one of the project's symbol files but is not open ("In library …
 (not open)"), then "Not in a library". A click on a row picks it. A symbol of
-a library that is not open asks **Link without copying** (the library opens
+a library that is not open is tagged **Library not open** and asks **Link without copying** (the library opens
 and the row points at its symbol, so the link breaks if that library is not
 open) or **Copy into** the row's library. A symbol in no library can only be
 copied; the original file stays as it is. **Cancel** goes back to the list.
@@ -482,8 +482,9 @@ Library Browser opens the **Edit Component Details** modal for a measurement
 cell, and the component editor's **Parameters** tab edits the same way. In the
 modal the number and its prefix list form one field; a unit this version does
 not know is shown as written and kept. Parameters that come from the class
-template are marked **template** and cannot be removed there; your own
-parameters keep their **✕**. If the **Internal PN** you type is already used by
+template are marked **template** and cannot be removed there, except one you
+added in this edit with its **+ name** offer and have not filled in yet, which
+keeps its **✕** until you type a value; your own parameters keep their **✕**. If the **Internal PN** you type is already used by
 another component in the library, the field turns red, says which table has
 it, and the footer counts the problem; **Save** waits until the PN is unique.
 A save the library refuses shows its reason in the same footer spot. In the
