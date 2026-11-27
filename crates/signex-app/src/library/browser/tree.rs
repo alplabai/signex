@@ -28,9 +28,15 @@ pub(super) fn view_libraries_tree<'a>(
 
     let mut col: Column<Element<'a, LibraryMessage>> = column![
         container(
-            text(t!(i18n, ids::LIBRARY_BROWSER_LIBRARIES))
-                .size(TS.section)
-                .style(crate::styles::section_label(tokens))
+            row![
+                text(t!(i18n, ids::LIBRARY_BROWSER_LIBRARIES))
+                    .size(TS.section)
+                    .style(crate::styles::section_label(tokens))
+                    .boxed(),
+                Space::new().width(Length::Fill).boxed(),
+                import_button(tokens, i18n),
+            ]
+            .align_y(iced::Alignment::Center)
         )
         .padding(iced::Padding {
             top: SP.m,
@@ -116,6 +122,29 @@ pub(super) fn view_libraries_tree<'a>(
         }
     }
     col.boxed()
+}
+
+/// The LIBRARIES header's Import…: the Import Library dialog (#3122), as a
+/// small ghost button in the accent text like the TABLES header's.
+fn import_button<'a>(tokens: &ThemeTokens, i18n: &I18n) -> Element<'a, LibraryMessage> {
+    use iced::widget::button::{Status, Style};
+    let r = crate::styles::tokens::resolve(tokens);
+    let accent_text = r.accent_text;
+    let hover = look::hover_fill(tokens);
+    button(text(t!(i18n, ids::LIBRARY_BROWSER_IMPORT)).size(TS.caption))
+        .padding([0.0, SP.s])
+        .on_press(import_dialog::msg(ImportDialogMsg::Requested))
+        .style(move |_: &Theme, status: Status| Style {
+            background: matches!(status, Status::Hovered)
+                .then_some(iced::Background::Color(hover)),
+            text_color: accent_text,
+            border: Border {
+                radius: crate::styles::Radii::GRAPHITE.small.into(),
+                ..Border::default()
+            },
+            ..Style::default()
+        })
+        .boxed()
 }
 
 /// A library row's menu: View import report.

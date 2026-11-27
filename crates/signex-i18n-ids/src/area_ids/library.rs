@@ -497,4 +497,5 @@ define_ids! {
     LIBRARY_IMPORT_DIALOG_OPEN_IN_BROWSER = "library-import-dialog-open-in-browser";
     LIBRARY_IMPORT_DIALOG_SAVE_REPORT_TITLE = "library-import-dialog-save-report-title";
     LIBRARY_IMPORT_DIALOG_MENU_VIEW_REPORT = "library-import-dialog-menu-view-report";
+    LIBRARY_BROWSER_IMPORT = "library-browser-import";
 }

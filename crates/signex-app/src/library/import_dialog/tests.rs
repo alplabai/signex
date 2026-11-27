@@ -636,3 +636,38 @@ fn quitting_stops_a_running_import() {
     app.stop_library_import_at_quit();
     assert!(cancel.load(Ordering::Relaxed));
 }
+
+/// #3122: a dialog opened for a project mounts the import into that
+/// project when "This project" is chosen, even when it is not the active
+/// one; Mount for all projects still records it globally.
+#[test]
+fn a_dialog_opened_for_a_project_mounts_into_that_project() {
+    use crate::app::handlers::menu::export::tests::app_workspace;
+    for for_all in [false, true] {
+        let mut app = app_workspace("/work/ProjectA", &["a.snxsch"]);
+        let project = &app.document_state.projects[0];
+        let (id, path) = (project.id, project.path.clone());
+        app.document_state.active_project = None;
+        let mut state = found(vec![converter("/bin/a", A)]);
+        picked(&mut state, &["/in/P.lib1"]);
+        state.set_location("/out/P".into());
+        state.project = Some(id);
+        state.mount_for_all = for_all;
+        state.step = Step::Preview;
+        state.pending_run = Some(RunMode::Import);
+        state.checking_target = true;
+        app.library.import_dialog = Some(Box::new(state));
+        drop(app.update(d(ImportDialogMsg::TargetChecked {
+            location: "/out/P".into(),
+            problem: None,
+        })));
+        let run = app.library.import.running.as_ref().expect("started");
+        let expected = if for_all {
+            MountTarget::Global
+        } else {
+            MountTarget::Project(path)
+        };
+        assert_eq!(run.target, expected);
+        assert_eq!(dialog(&app).step, Step::Import);
+    }
+}

@@ -101,6 +101,9 @@ pub struct ImportDialogState {
     /// The location was changed by hand, so it no longer follows the name.
     pub location_edited: bool,
     pub mount_for_all: bool,
+    /// The project the dialog was opened for (Project tab ▸ Libraries):
+    /// "This project" means it rather than the active project.
+    pub project: Option<crate::app::state::ProjectId>,
     pub include_models: bool,
     /// Why the chosen folder cannot take the library (from the check Next
     /// runs); cleared by any edit.
@@ -153,6 +156,7 @@ impl ImportDialogState {
             location: String::new(),
             location_edited: false,
             mount_for_all: true,
+            project: None,
             include_models: true,
             target_problem: None,
             checking_target: false,
@@ -185,8 +189,12 @@ impl Default for ImportDialogState {
 /// Events of the Import Library dialog.
 #[derive(Debug, Clone)]
 pub enum ImportDialogMsg {
-    /// File ▸ Import ▸ Library… (or the palette) was chosen.
+    /// File ▸ Import ▸ Library…, the palette, or the Library Browser's
+    /// Import… was chosen.
     Requested,
+    /// Import library… in a project's Libraries section: "This project"
+    /// is preselected, meaning that project.
+    RequestedForProject(crate::app::state::ProjectId),
     /// The converter search finished on its worker; `None` when the worker
     /// itself failed (shown as no converter found).
     DiscoveryFinished(Option<Box<DiscoveryCache>>),

@@ -601,7 +601,12 @@ impl Signex {
                 lib.import_dialog.as_deref()?,
                 crate::library::import_dialog::ImportDialogContext {
                     running: lib.import.running.as_ref(),
-                    project_open: self.document_state.active_project.is_some(),
+                    project_open: self.document_state.active_project.is_some()
+                        || lib
+                            .import_dialog
+                            .as_deref()
+                            .and_then(|d| d.project)
+                            .is_some_and(|id| self.document_state.project_by_id(id).is_some()),
                     library_open: lib
                         .import_dialog
                         .as_deref()

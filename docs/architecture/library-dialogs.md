@@ -125,7 +125,11 @@ check. The card itself is in `updates_dialog::view`.
 
 `crates/signex-app/src/library/import_dialog/` (mockup row 211, #3117–#3125),
 opened by File ▸ Import ▸ Library… (`import_library`, also in the command
-palette). It runs an installed library converter
+palette), by Import… in the Library Browser's LIBRARIES header, and by Import
+library… in a project's Project tab ▸ Libraries section (#3122). Opened from a
+project, Mount for all projects starts off and "This project" means that
+project (`ImportDialogState::project`), whether or not it is the active one;
+an open dialog stays as it is. It runs an installed library converter
 ([LIBRARY_CONVERTER_CONTRACT.md](../LIBRARY_CONVERTER_CONTRACT.md)) through the
 engine in `crate::library_import`, in three steps under a stepper; the header
 note repeats the step ("Step 2 of 3 · Preview"). Handlers:

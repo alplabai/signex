@@ -1095,3 +1095,5 @@ library-import-dialog-open-report = Open report
 library-import-dialog-open-in-browser = Open in Library Browser
 library-import-dialog-save-report-title = Save the loss report
 library-import-dialog-menu-view-report = View import report
+# The Library Browser's LIBRARIES header (#3122).
+library-browser-import = Import…

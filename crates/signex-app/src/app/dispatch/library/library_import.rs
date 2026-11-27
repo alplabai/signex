@@ -53,13 +53,36 @@ impl Signex {
         job: ImportJob,
         scope: MountScope,
     ) -> Task<Message> {
+        if self.refuse_library_import(&job) {
+            return Task::none();
+        }
+        let target = self.mount_target_for(scope);
+        self.run_library_import(job, target)
+    }
+
+    /// Start `job`, mounting the result at `target` (a project the Import
+    /// Library dialog was opened for). Refused as [`Self::start_library_import`].
+    pub(crate) fn start_library_import_into(
+        &mut self,
+        job: ImportJob,
+        target: MountTarget,
+    ) -> Task<Message> {
+        if self.refuse_library_import(&job) {
+            return Task::none();
+        }
+        self.run_library_import(job, target)
+    }
+
+    /// Refuse `job` with a notice while another import runs, or for an
+    /// update while the library has unsaved work in the app.
+    fn refuse_library_import(&mut self, job: &ImportJob) -> bool {
         if let Some(running) = &self.library.import.running {
             self.document_view.error_notice = Some(ErrorNotice::new(
                 ids::LIBRARY_IMPORT_FAILED_TITLE,
                 Translatable::new(ids::LIBRARY_IMPORT_RUNNING)
                     .arg("path", running.output.display().to_string()),
             ));
-            return Task::none();
+            return true;
         }
         if job.request.mode == RunMode::Update
             && let Some(what) = self.unsaved_in_library(&job.request.output)
@@ -68,9 +91,12 @@ impl Signex {
                 ids::LIBRARY_IMPORT_FAILED_TITLE,
                 ImportError::UnsavedInApp { what }.to_translatable(),
             ));
-            return Task::none();
+            return true;
         }
-        let target = self.mount_target_for(scope);
+        false
+    }
+
+    fn run_library_import(&mut self, job: ImportJob, target: MountTarget) -> Task<Message> {
         let cancel = Arc::new(AtomicBool::new(false));
         self.library.import.running = Some(ImportRun {
             output: job.request.output.clone(),

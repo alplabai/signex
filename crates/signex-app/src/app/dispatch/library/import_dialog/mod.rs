@@ -15,7 +15,7 @@ use crate::library::import_dialog::result::ImportResult;
 use crate::library::import_dialog::{
     self as dialog, ImportDialogMsg, ImportDialogState, ImportEnd, PreviewState, SourceKind, Step,
 };
-use crate::library_import::run_state::ImportFinished;
+use crate::library_import::run_state::{ImportFinished, MountTarget};
 use crate::library_import::snapshot::default_libraries_root;
 use crate::library_import::{MountScope, ProgressEvent, RunMode};
 
@@ -95,7 +95,8 @@ impl Signex {
     pub(super) fn handle_import_dialog(&mut self, msg: ImportDialogMsg) -> Task<Message> {
         let root = default_libraries_root();
         match msg {
-            ImportDialogMsg::Requested => self.open_import_dialog(),
+            ImportDialogMsg::Requested => self.open_import_dialog(None),
+            ImportDialogMsg::RequestedForProject(id) => self.open_import_dialog(Some(id)),
             ImportDialogMsg::DiscoveryFinished(cache) => {
                 let discovery = cache.as_ref().map(|c| c.discovery.clone());
                 if let Some(d) = self.library.import_dialog.as_mut() {
@@ -195,13 +196,22 @@ impl Signex {
         }
     }
 
-    /// Open the dialog on step 1 and look for converters. An open dialog
+    /// Open the dialog on step 1 and look for converters; opened for a
+    /// project, "This project" is preselected and means it. An open dialog
     /// stays as it is.
-    fn open_import_dialog(&mut self) -> Task<Message> {
+    fn open_import_dialog(
+        &mut self,
+        project: Option<crate::app::state::ProjectId>,
+    ) -> Task<Message> {
         if self.library.import_dialog.is_some() {
             return Task::none();
         }
-        self.library.import_dialog = Some(Box::default());
+        let mut state = ImportDialogState::new();
+        if let Some(id) = project.filter(|&id| self.document_state.project_by_id(id).is_some()) {
+            state.project = Some(id);
+            state.mount_for_all = false;
+        }
+        self.library.import_dialog = Some(Box::new(state));
         self.discover_converters()
     }
 
@@ -363,10 +373,15 @@ impl Signex {
     /// Start the dry run (into a new temp folder) or the import (into the
     /// chosen folder), and move to its step when the engine took it.
     fn start_dialog_run(&mut self, mode: RunMode) -> Task<Message> {
-        let project_open = self.document_state.active_project.is_some();
         let Some(d) = self.library.import_dialog.as_deref() else {
             return Task::none();
         };
+        let for_all = mode == RunMode::Preview || d.mount_for_all;
+        // The project the dialog was opened for, while it is loaded.
+        let project = d
+            .project
+            .and_then(|id| self.document_state.project_by_id(id))
+            .map(|p| p.path.clone());
         let output = match mode {
             RunMode::Preview => {
                 std::env::temp_dir().join(format!("{PREVIEW_DIR_PREFIX}{}", uuid::Uuid::now_v7()))
@@ -376,12 +391,15 @@ impl Signex {
         let Some(job) = d.job(mode, output.clone()) else {
             return Task::none();
         };
-        let scope = if mode == RunMode::Preview || d.mount_for_all || !project_open {
-            MountScope::AllProjects
-        } else {
-            MountScope::ThisProject
+        let task = match project {
+            Some(path) if !for_all => {
+                self.start_library_import_into(job, MountTarget::Project(path))
+            }
+            _ if for_all || self.document_state.active_project.is_none() => {
+                self.start_library_import(job, MountScope::AllProjects)
+            }
+            _ => self.start_library_import(job, MountScope::ThisProject),
         };
-        let task = self.start_library_import(job, scope);
         let started = self
             .library
             .import
