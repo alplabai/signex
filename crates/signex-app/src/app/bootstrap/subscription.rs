@@ -4,6 +4,7 @@
 use super::super::*;
 
 use super::window_subscriptions;
+use crate::app::images::PlaceDialogMsg;
 use crate::app::view::overlay_id::OverlayId;
 use iced::Subscription;
 
@@ -29,7 +30,6 @@ struct OpenOverlays {
     find_replace_open: bool,
     find_similar_open: bool,
     paste_array_open: bool,
-    /// The Place Image dialog (mockup row 204).
     place_image_open: bool,
     /// The Create Union popover (mockup row 158).
     union_popover_open: bool,
@@ -345,11 +345,9 @@ impl OpenOverlays {
                     crate::paste_array::PasteArrayMsg::EscapePressed,
                 ))
             }),
-            OverlayId::PlaceImage => self.place_image_open.then(|| {
-                Message::from(crate::app::ImagesMsg::Dialog(
-                    crate::app::images::PlaceDialogMsg::Closed,
-                ))
-            }),
+            OverlayId::PlaceImage => self
+                .place_image_open
+                .then(|| Message::from(crate::app::ImagesMsg::Dialog(PlaceDialogMsg::Closed))),
             OverlayId::UnionPopover => self.union_popover_open.then(|| {
                 Message::Edit(crate::app::EditMsg::Unions(
                     crate::app::unions::UnionsMsg::Popover(

@@ -940,10 +940,7 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
     (PLANNED, StillRunsUnavailable, &[]),
 ];
 
-const PLANNED: &[&str] = &[
-    "place_device_sheet_symbol",
-    "place_reuse_block",
-];
+const PLANNED: &[&str] = &["place_device_sheet_symbol", "place_reuse_block"];
 
 /// The hand annotation of `(id, form)`, if any.
 pub(super) fn of(id: &str, form: Form) -> Option<&'static [Input]> {

@@ -16,7 +16,8 @@ never changes it. No rendered output is ever stored.
 **`note_formats`.** A table in `[extras.sheet]` from note uuid to a format
 word. Only a rich note is written, as `"typst"`; a plain note has no entry,
 and the table is omitted when no note is rich. A sheet with only plain notes
-therefore re-saves byte-identical, and the format token stays `snxsch/1.1`.
+therefore re-saves byte-identical. Neither table takes a format token: the
+sheet writes the token its other content needs (`docs/FORMAT_VERSIONS.md`).
 
 The format is kept beside the notes rather than as a key in the typed
 `text_notes` array, for the reason the note font family and the lock are

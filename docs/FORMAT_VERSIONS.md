@@ -109,17 +109,25 @@ drops unknown keys of a typed `buses` row on save, so it opens a 1.4 sheet
 read-only and refuses its saves. A sheet with no styled bus keeps its lower
 token, byte for byte.
 
-**Images need no token.** Placed images (#1116) are `[[extras.sheet.images]]`
-rows, a key of `[extras.sheet]` written only when the sheet has an image, not
-entries of `drawings`. An older build keeps the key as an unknown key and
-writes it back, so a sheet with images keeps its token
-(`docs/SCHEMATIC_IMAGES.md`, "File format").
 **`snxsch/1.5` and older builds.** A curve drawing is a new drawing `type`,
 `curve`, whose `shape` table names its kind (`ellipse`, `elliptical_arc` or
 `round_rect`) and geometry in mm and degrees. A build that reads up to
 `snxsch/1.4` has no such type, so it opens a 1.5 sheet read-only and refuses
 its saves instead of failing on the drawing. A sheet with no curve drawing
 keeps its lower token, byte for byte.
+
+**Images need no token.** Placed images (#1116) are `[[extras.sheet.images]]`
+rows, a key of `[extras.sheet]` written only when the sheet has an image, not
+entries of `drawings`. An older build keeps the key as an unknown key and
+writes it back, so a sheet with images keeps its token
+(`docs/SCHEMATIC_IMAGES.md`, "File format").
+
+**Rich text notes need no token.** A note's format and its Frame and Size
+(#1114) are `[extras.sheet.note_formats]` and `[extras.sheet.note_layouts]`,
+keys of `[extras.sheet]` written only when a note is rich or has a layout. An
+older build keeps them as unknown keys and writes them back, so a sheet with
+rich notes keeps the token its other content needs
+(`docs/architecture/snxsch-note-format.md`).
 
 **`.snxprj` stays `snxprj/1`.** The Schematic Refinement project settings
 (`schematic_design`: channel naming, harness definitions, differential pair
