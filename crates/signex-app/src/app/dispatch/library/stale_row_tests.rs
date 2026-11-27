@@ -99,6 +99,7 @@ fn app_with_row_and_symbol(stored: u64, read: u64) -> (Signex, EditorAddress, Sy
         own_edit_stamp: None,
         display: LibraryDisplaySettings::default(),
         pricing: Default::default(),
+        alternate_supply: Default::default(),
         provenance: Default::default(),
     });
     let mut preview = ComponentPreviewState::from_row(root, TABLE.into(), row);

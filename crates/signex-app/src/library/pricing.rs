@@ -249,6 +249,7 @@ mod tests {
                 currency: "EUR".into(),
                 stock: Some(7),
                 part_number: None,
+                lifecycle: None,
                 by_distributor: BTreeMap::from([(
                     self.0.to_string(),
                     vec![PriceBreak {

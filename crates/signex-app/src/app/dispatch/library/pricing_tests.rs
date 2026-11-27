@@ -55,6 +55,7 @@ fn app_with_library_at(name: &str, root: PathBuf) -> (Signex, LibraryRowRef) {
         observed_stamp: None,
         dangling: Default::default(),
         pricing: Default::default(),
+        alternate_supply: Default::default(),
         own_edit_stamp: None,
         display: LibraryDisplaySettings::default(),
         provenance: Default::default(),

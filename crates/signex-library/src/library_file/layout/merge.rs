@@ -199,19 +199,20 @@ fn classes_section(entries: Vec<Item>) -> Item {
     Item::ArrayOfTables(out)
 }
 
-/// Under `[tables.<name>.pricing]` the reader drops a row, distributor or
-/// record it cannot use (it is fetched again); such a key is not kept.
+/// Under `[tables.<name>.pricing]` and `[tables.<name>.alternate_supply]`
+/// the reader drops a row, distributor or record it cannot use (it is
+/// fetched again); such a key is not kept.
 pub(super) fn reader_drops(path: &[String]) -> bool {
     is_under_pricing(path) && path.len() <= 6
 }
 
-/// `path` names one cached price record.
+/// `path` names one cached price or alternate supply record.
 pub(super) fn is_price_record(path: &[String]) -> bool {
     is_under_pricing(path) && path.len() == 6
 }
 
 fn is_under_pricing(path: &[String]) -> bool {
-    matches!(path, [t, _, p, ..] if t == "tables" && p == "pricing")
+    matches!(path, [t, _, p, ..] if t == "tables" && (p == "pricing" || p == "alternate_supply"))
 }
 
 /// The record was fetched again since the read.

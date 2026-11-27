@@ -300,6 +300,26 @@ impl LibraryAdapter for ReadOnlyAdapter {
         self.refuse()
     }
 
+    fn table_alternate_supply(
+        &self,
+        table: &str,
+    ) -> Result<
+        std::collections::BTreeMap<Uuid, crate::alternate_supply::RowAlternateSupply>,
+        LibraryError,
+    > {
+        self.inner.table_alternate_supply(table)
+    }
+
+    fn store_supply(
+        &self,
+        _prices: Vec<crate::pricing::PricingUpdate>,
+        _alternates: Vec<crate::alternate_supply::AlternateSupplyUpdate>,
+        _cancel: &std::sync::atomic::AtomicBool,
+        _msg: &str,
+    ) -> Result<crate::pricing::StoreOutcome, LibraryError> {
+        self.refuse()
+    }
+
     fn history(&self, primitive_path: &Path) -> Result<Vec<HistoryEntry>, LibraryError> {
         self.inner.history(primitive_path)
     }

@@ -302,7 +302,15 @@ fn view_active_tab<'a>(
         PreviewTab::Supply => inert::unless_read_only_veiled(
             read_only,
             veil,
-            supply::view(state, tokens, i18n, address),
+            supply::view(
+                state,
+                library_state
+                    .library_at(&state.library_path)
+                    .and_then(|lib| lib.alternate_supply.get(&state.row.row_id)),
+                tokens,
+                i18n,
+                address,
+            ),
         ),
         // Open stays live on a read-only library, so the tab veils its
         // own editing controls instead of being wrapped whole.

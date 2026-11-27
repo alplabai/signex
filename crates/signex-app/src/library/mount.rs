@@ -176,6 +176,7 @@ fn prepare_opened(path: &Path, adapter: LocalGitAdapter, history_missing: bool) 
         observed_stamp: None,
         dangling: Default::default(),
         pricing: Default::default(),
+        alternate_supply: Default::default(),
         own_edit_stamp: None,
         display: LibraryDisplaySettings::default(),
         provenance: adapter.provenance(),

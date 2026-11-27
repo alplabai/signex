@@ -1,0 +1,97 @@
+{
+  "Errors": [],
+  "SearchResults": {
+    "NumberOfResult": 6,
+    "Parts": [
+      {
+        "MouserPartNumber": "000-SYN-M-1",
+        "ManufacturerPartNumber": "SYN-M-1",
+        "Manufacturer": "Example Corp",
+        "Description": "Synthetic part for lifecycle parsing",
+        "AvailabilityInStock": "100",
+        "PriceBreaks": [
+          {
+            "Quantity": 1,
+            "Price": "$0.10",
+            "Currency": "USD"
+          }
+        ],
+        "LifecycleStatus": "New Product"
+      },
+      {
+        "MouserPartNumber": "000-SYN-M-2",
+        "ManufacturerPartNumber": "SYN-M-2",
+        "Manufacturer": "Example Corp",
+        "Description": "Synthetic part for lifecycle parsing",
+        "AvailabilityInStock": "100",
+        "PriceBreaks": [
+          {
+            "Quantity": 1,
+            "Price": "$0.10",
+            "Currency": "USD"
+          }
+        ],
+        "LifecycleStatus": "Not Recommended for New Designs"
+      },
+      {
+        "MouserPartNumber": "000-SYN-M-3",
+        "ManufacturerPartNumber": "SYN-M-3",
+        "Manufacturer": "Example Corp",
+        "Description": "Synthetic part for lifecycle parsing",
+        "AvailabilityInStock": "100",
+        "PriceBreaks": [
+          {
+            "Quantity": 1,
+            "Price": "$0.10",
+            "Currency": "USD"
+          }
+        ],
+        "LifecycleStatus": "End of Life"
+      },
+      {
+        "MouserPartNumber": "000-SYN-M-4",
+        "ManufacturerPartNumber": "SYN-M-4",
+        "Manufacturer": "Example Corp",
+        "Description": "Synthetic part for lifecycle parsing",
+        "AvailabilityInStock": "100",
+        "PriceBreaks": [
+          {
+            "Quantity": 1,
+            "Price": "$0.10",
+            "Currency": "USD"
+          }
+        ],
+        "LifecycleStatus": "Obsolete"
+      },
+      {
+        "MouserPartNumber": "000-SYN-M-5",
+        "ManufacturerPartNumber": "SYN-M-5",
+        "Manufacturer": "Example Corp",
+        "Description": "Synthetic part for lifecycle parsing",
+        "AvailabilityInStock": "100",
+        "PriceBreaks": [
+          {
+            "Quantity": 1,
+            "Price": "$0.10",
+            "Currency": "USD"
+          }
+        ],
+        "LifecycleStatus": null
+      },
+      {
+        "MouserPartNumber": "000-SYN-M-6",
+        "ManufacturerPartNumber": "SYN-M-6",
+        "Manufacturer": "Example Corp",
+        "Description": "Synthetic part for lifecycle parsing",
+        "AvailabilityInStock": "100",
+        "PriceBreaks": [
+          {
+            "Quantity": 1,
+            "Price": "$0.10",
+            "Currency": "USD"
+          }
+        ]
+      }
+    ]
+  }
+}

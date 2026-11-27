@@ -601,6 +601,8 @@ pub(super) fn prune_stale_pricing(lf: &mut LibraryFile) -> bool {
         table.pricing.retain(|_, cached| !cached.is_empty());
         changed |= table.pricing.len() != before;
     }
+    // The fetched alternate supply is the same kind of cache (#3046).
+    changed |= super::alternate_supply::prune_stale_alternate_supply(lf);
     changed
 }
 

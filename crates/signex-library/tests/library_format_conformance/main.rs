@@ -45,7 +45,10 @@ use signex_library::library_file::{
 };
 use signex_library::lifecycle::LifecycleState;
 use signex_library::manifest::{LibraryMode, UserEntry, UsersConfig, WorkflowConfig};
-use signex_library::manufacturer::{AlternateStatus, DistributorListing, ManufacturerPart};
+use signex_library::alternate_supply::FetchedSupply;
+use signex_library::manufacturer::{
+    AlternateStatus, DistributorListing, ManufacturerLifecycle, ManufacturerPart,
+};
 use signex_library::param::{ParamMap, ParamValue};
 use signex_library::pricing::CachedPricing;
 use signex_library::primitive::footprint::{FpGraphic, FpGraphicKind};

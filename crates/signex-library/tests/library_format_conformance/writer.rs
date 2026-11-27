@@ -23,6 +23,7 @@ fn the_library_writer_reproduces_the_fixture_library() {
         let draft = writer.table_mut(name);
         draft.column_types = table.column_types.clone();
         draft.pricing = table.pricing.clone();
+        draft.alternate_supply = table.alternate_supply.clone();
     }
     let envelope = writer.add_symbol_file(symbol_envelope());
     assert_eq!(format!("symbols/{envelope}"), SYMBOL_ENVELOPE);

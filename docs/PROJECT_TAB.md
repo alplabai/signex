@@ -318,9 +318,16 @@ before a compile. Code: `crates/signex-app/src/app/variant_part_edit/`.
   The libraries are read off the update thread on open and on each change of
   the search; a read the picker no longer waits for is dropped. A row shows
   MPN, manufacturer, value, footprint (amber when it differs from Base),
-  stock from the cached prices ("—" when unknown), the library's status
-  (an alternate's approval, a row's lifecycle state) and "used in <variant>"
-  when another variant already uses that part number for the part. Same
+  stock ("—" when unknown), a lifecycle and "used in <variant>" when another
+  variant already uses that part number for the part. A search result's
+  stock comes from its cached prices and its lifecycle is the row's state
+  (Draft, Released, ...). A library alternate's stock and lifecycle (Active,
+  NRND, EOL) are the ones entered by hand in the editor's Supply tab, else
+  what Refresh All Pricing fetched for its MPN (#3046); hovering either says
+  which, from which distributor and when. An alternate approved only as
+  Conditional or Disqualified shows that beside its MPN. For a picked
+  alternate the compare strip adds a fourth cell, Stock and lifecycle, with
+  the same tooltips. Same
   footprint only hides the rest. The compare strip of the picked row: pins
   (numbers and names), footprint, and what the variant gets: the part
   number, and the value and footprint where they differ from the placed

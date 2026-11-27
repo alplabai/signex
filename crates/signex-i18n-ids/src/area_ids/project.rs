@@ -364,6 +364,9 @@ define_ids! {
     VARIANT_EDIT_SAME_FOOTPRINT_DETAIL = "variant-edit-same-footprint-detail";
     VARIANT_EDIT_FOOTPRINT_DIFFERS = "variant-edit-footprint-differs";
     VARIANT_EDIT_FOOTPRINT_DIFFERS_DETAIL = "variant-edit-footprint-differs-detail";
+    VARIANT_EDIT_SUPPLY_HEAD = "variant-edit-supply-head";
+    VARIANT_EDIT_SUPPLY_STOCK = "variant-edit-supply-stock";
+    VARIANT_EDIT_SUPPLY_LIFECYCLE = "variant-edit-supply-lifecycle";
     VARIANT_EDIT_GETS = "variant-edit-gets";
     VARIANT_EDIT_GETS_DETAIL = "variant-edit-gets-detail";
     VARIANT_EDIT_SCOPE = "variant-edit-scope";

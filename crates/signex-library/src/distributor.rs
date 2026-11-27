@@ -39,6 +39,9 @@ pub struct PricingSnapshot {
     /// priced, so a caller can refuse a price for another part.
     #[serde(default)]
     pub part_number: Option<String>,
+    /// The maker's lifecycle, when the distributor reports it (#3046).
+    #[serde(default)]
+    pub lifecycle: Option<crate::manufacturer::ManufacturerLifecycle>,
     pub by_distributor: BTreeMap<String, Vec<PriceBreak>>,
 }
 

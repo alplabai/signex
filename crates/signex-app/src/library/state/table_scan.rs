@@ -9,6 +9,9 @@ pub(super) struct TableScan {
     pub tables: HashMap<String, Vec<ComponentRow>>,
     pub summaries: Vec<ComponentSummary>,
     pub pricing: HashMap<Uuid, signex_library::RowPricing>,
+    /// Fetched alternate supply (#3046), read with the prices and under the
+    /// same failure rule.
+    pub alternate_supply: HashMap<Uuid, signex_library::RowAlternateSupply>,
     /// Tables whose rows failed to read (cached empty), sorted.
     pub unreadable: Vec<String>,
 }
@@ -28,11 +31,16 @@ pub(super) fn scan_tables(
         tables: HashMap::new(),
         summaries: Vec::new(),
         pricing: HashMap::new(),
+        alternate_supply: HashMap::new(),
         unreadable: Vec::new(),
     };
     for name in names {
         match adapter.table_pricing(&name) {
             Ok(cached) => scan.pricing.extend(cached),
+            Err(e) => on_pricing_err(&name, &e),
+        }
+        match adapter.table_alternate_supply(&name) {
+            Ok(cached) => scan.alternate_supply.extend(cached),
             Err(e) => on_pricing_err(&name, &e),
         }
         match adapter.read_table(&name) {

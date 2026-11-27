@@ -12,8 +12,8 @@
 use std::path::PathBuf;
 
 use signex_library::{
-    AlternateStatus, BodyShape, ComponentClass, DistributorSource, LifecycleState, PrimitiveRef,
-    SimKind, SimModel,
+    AlternateStatus, BodyShape, ComponentClass, DistributorSource, LifecycleState,
+    ManufacturerLifecycle, PrimitiveRef, SimKind, SimModel,
 };
 use uuid::Uuid;
 
@@ -208,6 +208,18 @@ pub enum EditorMsg {
     /// Drop the alternate row at `idx`.
     SupplyAlternateRemove {
         idx: usize,
+    },
+    /// The hand-entered stock of the alternate at `idx` was typed (#3046);
+    /// empty clears it, so a fetched value shows again.
+    SupplyAlternateStockEdited {
+        idx: usize,
+        value: String,
+    },
+    /// A hand-entered lifecycle was picked for the alternate at `idx`;
+    /// `None` uses the fetched one.
+    SupplyAlternateLifecyclePicked {
+        idx: usize,
+        value: Option<ManufacturerLifecycle>,
     },
 
     // Distributor listings

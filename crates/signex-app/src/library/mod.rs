@@ -22,6 +22,7 @@
 //!   (`settings/distributor_apis.rs`).
 
 pub mod alternate_reads;
+pub mod alternate_supply_words;
 pub mod bom_prices;
 pub mod browser;
 pub mod close_prompt;

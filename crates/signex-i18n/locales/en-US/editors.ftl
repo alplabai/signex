@@ -179,6 +179,9 @@ editors-component-column-manufacturer = MANUFACTURER
 # Manufacturer part number.
 editors-component-column-mpn = MPN
 editors-component-column-notes = NOTES
+# An alternate's units in stock and its maker's lifecycle (#3046).
+editors-component-column-stock = STOCK
+editors-component-column-lifecycle = LIFECYCLE
 editors-component-column-distributor = DISTRIBUTOR
 # The distributor's stock-keeping unit number.
 editors-component-column-sku = SKU

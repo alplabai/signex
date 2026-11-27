@@ -35,14 +35,21 @@ use crate::manifest::{LibraryMode, UsersConfig, WorkflowConfig};
 
 pub use layout::SourceLayout;
 
-/// Format token written at the top of every `.snxlib`. Bumping this is a
-/// wire-format break — older Signex versions refuse to open the file.
+/// Format token of a `.snxlib` whose content `snxlib/2` holds: every file
+/// without hand-entered alternate supply ([`FORMAT_TOKEN_MANUAL_SUPPLY`]).
 pub const FORMAT_TOKEN: &str = "snxlib/2";
 
-/// `.snxlib` version policy: one version; any other token is refused.
+/// Written instead of [`FORMAT_TOKEN`] while a manufacturer part carries a
+/// hand-entered stock or lifecycle (#3046): a `snxlib/2` build would drop
+/// them on save, so it refuses the file by name. See
+/// [`LibraryFile::format_token`].
+pub const FORMAT_TOKEN_MANUAL_SUPPLY: &str = "snxlib/2.1";
+
+/// `.snxlib` version policy: the token follows the content
+/// (`docs/FORMAT_VERSIONS.md`); any newer token is refused.
 pub const FORMAT_VERSION: FormatVersion = FormatVersion {
-    current: FORMAT_TOKEN,
-    readable: &[FORMAT_TOKEN],
+    current: FORMAT_TOKEN_MANUAL_SUPPLY,
+    readable: &[FORMAT_TOKEN, FORMAT_TOKEN_MANUAL_SUPPLY],
     newer_minor: NewerMinor::Refused,
     missing: MissingToken::Refused,
 };
@@ -202,6 +209,11 @@ pub struct LibraryTable {
     pub rows: Vec<Arc<LibraryRow>>,
     pub column_types: BTreeMap<String, ColumnType>,
     pub pricing: BTreeMap<String, crate::pricing::RowPricing>,
+    /// What a distributor refresh fetched for each row's alternates, keyed
+    /// by the row's `row_id` text (#3046). A sidecar like `pricing`:
+    /// `[tables.<name>.alternate_supply.<row_id>.<distributor>.<mpn>]`,
+    /// written only when non-empty.
+    pub alternate_supply: BTreeMap<String, crate::alternate_supply::RowAlternateSupply>,
 }
 
 /// Per-column type declared in `[tables.<name>.column_types]`.
@@ -418,12 +430,16 @@ impl From<LibraryFileError> for LibraryError {
     }
 }
 
+mod alternate_supply_codec;
 mod codec;
+mod format_token;
 mod layout;
 #[cfg(test)]
 mod layout_tests;
 mod row_lines;
 pub(crate) use row_lines::RowLines;
+#[cfg(test)]
+mod alternate_supply_tests;
 #[cfg(test)]
 mod pricing_tests;
 #[cfg(test)]

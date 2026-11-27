@@ -344,6 +344,7 @@ pub(crate) struct PricedAdapter {
     manifest: Manifest,
     pub(crate) priced_row: Uuid,
     rows: Vec<signex_library::ComponentRow>,
+    alternate_supply: std::collections::BTreeMap<Uuid, signex_library::RowAlternateSupply>,
 }
 
 impl PricedAdapter {
@@ -352,7 +353,17 @@ impl PricedAdapter {
             manifest: FailingListingAdapter::new(library_id).manifest,
             priced_row: Uuid::now_v7(),
             rows: Vec::new(),
+            alternate_supply: Default::default(),
         }
+    }
+
+    /// Serve `supply` as the one table's fetched alternate supply.
+    pub(crate) fn with_alternate_supply(
+        mut self,
+        supply: std::collections::BTreeMap<Uuid, signex_library::RowAlternateSupply>,
+    ) -> Self {
+        self.alternate_supply = supply;
+        self
     }
 
     /// Serve `rows` from the one table.
@@ -380,5 +391,13 @@ impl LibraryAdapter for PricedAdapter {
         _table: &str,
     ) -> Result<std::collections::BTreeMap<Uuid, signex_library::RowPricing>, LibraryError> {
         Ok([(self.priced_row, signex_library::RowPricing::new())].into())
+    }
+
+    fn table_alternate_supply(
+        &self,
+        _table: &str,
+    ) -> Result<std::collections::BTreeMap<Uuid, signex_library::RowAlternateSupply>, LibraryError>
+    {
+        Ok(self.alternate_supply.clone())
     }
 }

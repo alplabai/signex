@@ -189,6 +189,7 @@ mod tests {
                 display: Default::default(),
                 dangling: Default::default(),
                 pricing: Default::default(),
+                alternate_supply: Default::default(),
                 provenance: Default::default(),
             });
         app.library.touch_data();

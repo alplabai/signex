@@ -1,5 +1,8 @@
 //! `.snxlib` TOML+TSV parse / write codec for `LibraryFile`.
 
+use super::alternate_supply_codec::{
+    alternate_supply_table, read_alternate_supply, write_alternate_supply,
+};
 use super::row_lines::RowLines;
 use super::*;
 
@@ -43,6 +46,8 @@ impl LibraryFile {
             column_types: BTreeMap<String, ColumnType>,
             #[serde(default)]
             pricing: Option<toml::Value>,
+            #[serde(default)]
+            alternate_supply: Option<toml::Value>,
         }
 
         let raw: Raw = toml::from_str(text)?;
@@ -67,6 +72,8 @@ impl LibraryFile {
             }
             table.column_types = body.column_types;
             table.pricing = read_pricing(&name, pricing_table(&name, body.pricing))?;
+            table.alternate_supply =
+                read_alternate_supply(&name, alternate_supply_table(&name, body.alternate_supply));
             tables.insert(name, table);
         }
 
@@ -145,7 +152,7 @@ impl LibraryFile {
                 reason: source.to_string(),
             }
         })?;
-        if reread.manifest != self.manifest {
+        if reread.manifest != self.written_manifest() {
             return Err(LibraryFileError::WrittenDocumentDiffers {
                 table: "(manifest)".to_string(),
             });
@@ -213,7 +220,7 @@ impl LibraryFile {
     fn encode(&self, mut lines: Option<&mut RowLines>) -> Result<String, LibraryFileError> {
         // Header section — toml-rs reorders root scalars before sub-tables
         // automatically so `format` / `library_id` land at the top.
-        let mut out = toml::to_string_pretty(&self.manifest)?;
+        let mut out = toml::to_string_pretty(&self.written_manifest())?;
         // Normalize trailing whitespace to exactly one `\n` so the table
         // separator below is predictable.
         let header_len = out.trim_end_matches('\n').len();
@@ -248,6 +255,7 @@ impl LibraryFile {
             // Optional cached distributor prices — one sub-table per
             // (row, distributor, part number), only when the table has any.
             write_pricing(&mut out, name, &table.pricing);
+            write_alternate_supply(&mut out, name, &table.alternate_supply);
         }
         if let Some(lines) = lines {
             lines.retain_tables(|name| self.tables.contains_key(name));
@@ -323,7 +331,7 @@ fn has_disallowed_char(text: &str) -> bool {
 /// otherwise a basic (double-quoted) string with every character that TOML
 /// forbids raw escaped. Table names and column names are user input, so an
 /// unquoted key would make the written file unreadable (#687).
-fn toml_key(name: &str) -> String {
+pub(super) fn toml_key(name: &str) -> String {
     let is_bare = !name.is_empty()
         && name
             .chars()
@@ -416,6 +424,7 @@ fn parse_tsv(
         rows,
         column_types: BTreeMap::new(),
         pricing: BTreeMap::new(),
+        alternate_supply: Default::default(),
     })
 }
 
@@ -517,6 +526,7 @@ fn same_table_content(a: &LibraryTable, b: &LibraryTable) -> bool {
     a.columns == b.columns
         && a.column_types == b.column_types
         && a.pricing == b.pricing
+        && a.alternate_supply == b.alternate_supply
         && canonical_rows(a) == canonical_rows(b)
 }
 
@@ -689,7 +699,7 @@ fn write_pricing(
 }
 
 /// A TOML basic string, escaped.
-fn toml_string(text: &str) -> String {
+pub(super) fn toml_string(text: &str) -> String {
     toml::Value::String(text.to_string()).to_string()
 }
 

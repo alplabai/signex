@@ -960,3 +960,18 @@ library-import-update-restored = The update failed, and the library was restored
 library-import-update-not-restored = The update failed: { $error } The library could not be restored to its last import ({ $reason }); check its folder before using it.
 # $path is the imported library, $other the mounted library with the same id.
 library-import-id-clash = The imported library { $path } has the same library id as { $other }, which is already open, so it was not added. Close the other library first.
+# A manufacturer part's lifecycle as its maker states it (#3046); not the
+# library row's own Draft / Released state.
+library-mfr-lifecycle-active = Active
+library-mfr-lifecycle-nrnd = NRND
+library-mfr-lifecycle-eol = EOL
+library-mfr-lifecycle-unknown = Unknown
+# Where an alternate's stock or lifecycle comes from. $distributor is the
+# distributor that reported it, $when the time it was fetched.
+library-supply-manual = Entered by hand in the library
+library-supply-fetched = From { $distributor }, { $when }
+# A hand-entered value hides a fetched one: $value is what the distributor reported.
+library-supply-manual-over-fetched = Entered by hand in the library; { $distributor } reported { $value } on { $when }
+library-supply-none = No value yet: Refresh All Pricing asks the distributors the row lists
+# The Supply tab's lifecycle picker: no hand-entered value, the fetched one is used.
+library-supply-lifecycle-fetched = From distributor

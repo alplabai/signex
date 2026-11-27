@@ -247,6 +247,7 @@ impl LibraryAdapter for LocalGitAdapter {
                         rows: Vec::new(),
                         column_types: std::collections::BTreeMap::new(),
                         pricing: Default::default(),
+                        alternate_supply: Default::default(),
                     },
                 );
                 Ok(())
@@ -308,6 +309,7 @@ impl LibraryAdapter for LocalGitAdapter {
                         rows: Vec::new(),
                         column_types: std::collections::BTreeMap::new(),
                         pricing: Default::default(),
+                        alternate_supply: Default::default(),
                     });
                 validate_legacy_header(&table_owned, &entry.columns)?;
                 declare_alternate_symbols_column(&mut entry.columns, &lib_row);
@@ -407,8 +409,9 @@ impl LibraryAdapter for LocalGitAdapter {
                         "row {row_id} in table {table_owned}"
                     )));
                 }
-                // A deleted row's cached prices go with it.
+                // A deleted row's cached prices and alternate supply go with it.
                 entry.pricing.remove(&target);
+                entry.alternate_supply.remove(&target);
                 Ok(RowChange::Removed(target))
             },
             &[],
@@ -442,27 +445,71 @@ impl LibraryAdapter for LocalGitAdapter {
         cancel: &std::sync::atomic::AtomicBool,
         msg: &str,
     ) -> Result<crate::pricing::StoreOutcome, LibraryError> {
+        self.store_supply(updates, Vec::new(), cancel, msg)
+    }
+
+    fn table_alternate_supply(
+        &self,
+        table: &str,
+    ) -> Result<
+        std::collections::BTreeMap<Uuid, crate::alternate_supply::RowAlternateSupply>,
+        LibraryError,
+    > {
+        self.refresh_for_read();
+        let guard = self
+            .library_file
+            .read()
+            .map_err(|_| LibraryError::Backend("library_file read lock poisoned".into()))?;
+        let Some(entry) = guard.tables.get(table) else {
+            return Ok(Default::default());
+        };
+        Ok(entry
+            .alternate_supply
+            .iter()
+            .filter_map(|(id, s)| Uuid::parse_str(id).ok().map(|id| (id, s.clone())))
+            .collect())
+    }
+
+    fn store_supply(
+        &self,
+        prices: Vec<crate::pricing::PricingUpdate>,
+        alternates: Vec<crate::alternate_supply::AlternateSupplyUpdate>,
+        cancel: &std::sync::atomic::AtomicBool,
+        msg: &str,
+    ) -> Result<crate::pricing::StoreOutcome, LibraryError> {
         let mut outcome = crate::pricing::StoreOutcome::default();
-        let fallback = format!("refresh pricing for {} rows", updates.len());
+        let fallback = format!(
+            "refresh pricing for {} rows",
+            prices.len() + alternates.len()
+        );
         // Every update is checked against the row as it is under the write
         // lock, after the reload, so a fetch that raced an edit cannot
-        // attach a price to a SKU the row no longer has.
+        // attach a price to a SKU, or a record to an alternate, the row no
+        // longer has.
         self.mutate_library_file_if_changed(
             |lf| {
                 // Last chance to stop: the lock is held, the write is next.
                 if cancel.load(std::sync::atomic::Ordering::SeqCst) {
                     return Ok(false);
                 }
-                for update in updates {
-                    match apply_pricing_update(lf, &update) {
+                let mut tally =
+                    |key: (String, Uuid, String), applied: Result<(), String>| match applied {
                         Ok(()) => outcome.stored += 1,
                         Err(reason) => outcome.dropped.push(crate::pricing::DroppedUpdate {
-                            table: update.table,
-                            row_id: update.row_id,
-                            distributor: update.distributor,
+                            table: key.0,
+                            row_id: key.1,
+                            distributor: key.2,
                             reason,
                         }),
-                    }
+                    };
+                for update in prices {
+                    let applied = apply_pricing_update(lf, &update);
+                    tally((update.table, update.row_id, update.distributor), applied);
+                }
+                for update in alternates {
+                    let applied =
+                        super::alternate_supply::apply_alternate_supply_update(lf, &update);
+                    tally((update.table, update.row_id, update.distributor), applied);
                 }
                 Ok(outcome.stored > 0)
             },
