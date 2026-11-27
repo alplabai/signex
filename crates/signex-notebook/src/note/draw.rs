@@ -114,6 +114,15 @@ pub(super) fn lower(document: &PagedDocument) -> Result<NoteDrawing, String> {
             ));
         }
     }
+    // Typst sizes a line by its text's edges, so an inline equation's
+    // fraction or subscript on the last line can hang below the page. The
+    // drawing reaches down to the lowest ink, so the box holds every glyph.
+    let height_mm = sink
+        .shapes
+        .iter()
+        .filter_map(NoteShape::bounds)
+        .map(|[_, _, _, bottom]| bottom)
+        .fold(height_mm, f64::max);
     Ok(NoteDrawing {
         width_mm,
         height_mm,
