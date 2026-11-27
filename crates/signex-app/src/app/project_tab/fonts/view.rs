@@ -16,9 +16,9 @@ use super::super::look::{
 use super::super::table::{
     SP, TS, TableRow, grid_table, note, problem, section_with_action, word_cell,
 };
+use super::FontsTabState;
 use super::{ProjectFontsMsg, draft_key, embedding_word, message};
 use crate::app::Message;
-use crate::app::core::project_fonts::FontsTabState;
 use crate::app::state::{LoadedProject, ProjectId};
 use crate::styles::{ti, tokens::resolve};
 

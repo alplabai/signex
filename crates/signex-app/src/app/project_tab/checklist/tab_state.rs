@@ -1,8 +1,8 @@
 //! The Design Checklist tab's own state (#1291, mockup row 206): the picked
 //! template, the filter, the selected item, what is typed and not committed,
 //! the open menus, the user's saved templates as last read, the last refusal
-//! or notice and the last run of the linked checks. Plain state, UI-free
-//! (ADR-0006). Not project data: it is never saved.
+//! or notice and the last run of the linked checks. The tab's adapter state,
+//! outside the core (ADR-0006 H7). Not project data: it is never saved.
 
 use std::collections::HashMap;
 use std::sync::Arc;

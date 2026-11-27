@@ -21,6 +21,7 @@ mod link_card;
 mod links;
 mod run;
 mod tab;
+mod tab_state;
 mod templates;
 mod transfer;
 mod view;
@@ -55,7 +56,7 @@ pub(crate) use templates::{
 pub use transfer::Imported;
 pub(crate) use transfer::{project_export_checklist_csv, project_import_checklist};
 
-pub use crate::app::core::checklist_tab::{
+pub use tab_state::{
     ChecklistFilter, ChecklistNotice, ChecklistRun, ChecklistTabState, SavedTemplates,
 };
 

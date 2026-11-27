@@ -9,6 +9,7 @@
 
 mod commands;
 mod store;
+mod tab_state;
 mod view;
 
 #[cfg(test)]
@@ -25,12 +26,12 @@ use signex_types::project::{FontEmbedding, MAX_FONT_LICENSE_CHARS, ProjectFontPr
 
 pub(crate) use commands::{project_add_font, project_remove_font, project_set_font_license};
 pub use store::StoredFont;
+pub use tab_state::FontsTabState;
 pub(super) use view::view;
 
 use super::ProjectTabMsg;
 use crate::app::agent::WaitingCommand;
 use crate::app::command::CommandOutcome;
-use crate::app::core::project_fonts::FontsTabState;
 use crate::app::state::ProjectId;
 use crate::app::{Message, ProjectMsg, Signex};
 use crate::ignore::IgnoreResult;

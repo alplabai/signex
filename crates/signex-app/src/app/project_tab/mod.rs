@@ -59,7 +59,7 @@ mod setup_tests;
 mod undo_routing_tests;
 
 pub(crate) use bom_alternates::{bom_add_alternate, bom_remove_alternate, bom_set_alternate_order};
-pub use checklist::ChecklistMsg;
+pub use checklist::{ChecklistMsg, ChecklistTabState};
 pub(crate) use checklist::{
     project_add_checklist_item, project_checklist_templates, project_export_checklist_csv,
     project_import_checklist, project_open_checklist_link, project_remove_checklist_item,
@@ -71,7 +71,7 @@ pub(crate) use commands::{
     project_rename_variant, project_set_active_variant, project_set_annotate_numbering,
     project_set_annotate_undo, project_set_default_variant, project_set_version_control,
 };
-pub use fonts::ProjectFontsMsg;
+pub use fonts::{FontsTabState, ProjectFontsMsg};
 pub(crate) use fonts::{project_add_font, project_remove_font, project_set_font_license};
 pub use general::ProjectGeneralFacts;
 pub use parameters::ParameterGroup;
@@ -223,10 +223,10 @@ pub struct ProjectTabState {
     pub requirements: RequirementsTabState,
     /// The Design Checklist tab's filter, selection, drafts and last run
     /// (#1291).
-    pub checklist: crate::app::core::checklist_tab::ChecklistTabState,
+    pub checklist: ChecklistTabState,
     /// The Fonts section's license drafts, refusal and add in progress
     /// (#1178).
-    pub fonts: crate::app::core::project_fonts::FontsTabState,
+    pub fonts: FontsTabState,
     /// The Parameters filter as typed (mockup row 30).
     pub parameter_filter: String,
     /// The Parameters Title block group is folded shut.

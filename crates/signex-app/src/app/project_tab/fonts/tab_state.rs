@@ -1,6 +1,6 @@
 //! The Project tab Fonts section's own state (#1178, mockup row 205): the
 //! licenses as typed, the last refusal and whether a file is being copied.
-//! Plain state, UI-free (ADR-0006); never saved.
+//! The section's adapter state, outside the core (ADR-0006 H7); never saved.
 
 use std::collections::HashMap;
 
