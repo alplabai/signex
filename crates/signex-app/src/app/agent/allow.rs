@@ -95,6 +95,8 @@ mod tests {
                 "add_net_class",
                 "add_teardrops",
                 "apply_edits",
+                // #3013: Library Updates' Update Selected on the named sheet.
+                "apply_library_updates",
                 "arrange_in_box",
                 "assign_board_net_class",
                 "assign_net_class",
@@ -122,6 +124,10 @@ mod tests {
                 "filter_drc_results",
                 "find_items",
                 "find_similar_items",
+                // #3013: Move Selection By and Align Selection on the named
+                // footprint's pads.
+                "footprint_align_pads",
+                "footprint_move_pads",
                 "gloss_selected_routes",
                 // #2394: the board view's layers, on the named board.
                 "hide_layer",

@@ -15,6 +15,7 @@ use super::forms::Form::{self, ActiveBar, Bridge, BridgeContextMenu, HeadlessWit
 use super::forms::Form::{AgentWindowLayout, Check, CloseInWindow, HeadlessNewDocument};
 use super::forms::Form::{Operand, Query, SplitCore, StillRunsRefusal, StillRunsUnavailable};
 use super::inputs::Input::{self, *};
+use super::plain_operands::{LIBRARY_DIALOGS, NAMED_DOCUMENT_ONLY, PLACEMENTS};
 
 /// `(ids, form, inputs)`: each id's row of `form` reads `inputs` too.
 pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
@@ -144,72 +145,10 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
     // Read: they act on the named document and their operands only. A board
     // edit repaints the board's canvas when that board is in view; the
     // repaint is a projection and reads nothing into the result.
-    (
-        &[
-            "clear_all_net_colors",
-            "color_net",
-            "export_board_report",
-            "export_board_step",
-            "export_assembly_svg",
-            "board_assembly_drawing",
-            "board_report_bom",
-            "board_report_components",
-            "board_report_net_length",
-            "board_report_netlist",
-            "add_net_class",
-            "rename_net_class",
-            "delete_net_class",
-            "set_net_class_rules",
-            "assign_board_net_class",
-            "set_layer_stack",
-            "lock_board_items",
-            "unlock_board_items",
-            "set_via_span",
-            "set_layer_sizes",
-            "set_pad_shape",
-            "hide_layer",
-            "highlight_layer",
-            "hide_layer_group",
-            "show_layer_group",
-            "set_layer_visible",
-            "set_active_layer",
-            "set_layer_color",
-            "show_used_layers_only",
-            "set_object_visible",
-            "set_object_transparency",
-            "set_board_graphic",
-            "set_footprint_text",
-            "repour_all",
-            "panelize_board",
-            "remove_board_panel",
-            "set_board_panel",
-            "swap_pins",
-            "swap_gates",
-            "save_board_reuse_block",
-            "place_board_reuse_block",
-            "autoplace_fields",
-            "sync_sheet_pins",
-            "set_sheet_symbol_size",
-            "set_symbol_parameter",
-            "project_move_sheet",
-            "project_add_variant",
-            "project_rename_variant",
-            "project_remove_variant",
-            "project_set_active_variant",
-            "project_move_library",
-            "project_set_annotate_undo",
-            "project_set_version_control",
-            "project_set_requirement",
-            "project_enable_requirement",
-            "bring_drawings_forward",
-            "bring_drawings_to_front",
-            "send_drawings_backward",
-            "send_drawings_to_back",
-            "delete_selection",
-        ],
-        Operand,
-        &[],
-    ),
+    (NAMED_DOCUMENT_ONLY, Operand, &[]),
+    // #3013: the library dialogs' actions read the dialog they fill, the
+    // library state and their operands; nothing implicit.
+    (LIBRARY_DIALOGS, Operand, &[]),
     // The DRC results act on the board in view only (`drc_results_board`,
     // handlers/pcb_drc_results.rs); Show also centres that window's camera
     // (`center_on_world` reads the canvas `viewport`). The last DRC run
@@ -500,35 +439,7 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
     // pre-placement form (#2326).
     (&["place_wire", "draw_wire"], Operand, &[ToolState]),
     (&["place_bus", "draw_bus"], Operand, &[ToolState]),
-    (
-        &[
-            "draw_line",
-            "draw_graphic_line",
-            "draw_rectangle",
-            "place_net_label",
-            "place_local_net_label",
-            "place_global_label",
-            "place_hierarchical_label",
-            "place_power_symbol",
-            "place_no_connect",
-            "place_junction",
-            "place_no_erc",
-            "place_text",
-            "place_text_string",
-            "place_blanket",
-            "edit_blanket",
-            "place_compile_mask",
-            "place_diff_pair",
-            "place_parameter_set",
-            "place_component",
-            "place_sheet_symbol",
-            "place_sheet_entry",
-            "place_design_block",
-            "import_graphics",
-        ],
-        Operand,
-        &[ToolState],
-    ),
+    (PLACEMENTS, Operand, &[ToolState]),
     // Move Keeps Wires is not read: both take `keep_wires` as an operand
     // (#2552; rotation, Hakan 2026-11-25, #2326 comment 7167743982).
     (

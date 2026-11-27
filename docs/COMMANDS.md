@@ -77,6 +77,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `apply_layout_notebook` | Workspace layout: Notebook | window | — | — |
 | `apply_layout_review` | Workspace layout: Review | window | — | — |
 | `apply_layout_schematic` | Workspace layout: Schematic | window | — | — |
+| `apply_library_updates` | Apply the library updates waiting for a sheet | modify | — | — |
 | `autoplace_fields` | Autoplace fields | edit | — | `O` |
 | `break_wire` | Break wire | modify | `E W` | — |
 | `bring_drawings_forward` | Bring drawings forward | edit | — | — |
@@ -91,6 +92,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `close_all_documents` | Close all documents | window | — | — |
 | `copy` | Copy | edit | `Mod+C` | `Mod+C` |
 | `copy_attributes_or_add_vertex` | Copy attributes from object under cursor or add vertex while drawing | interactive | `Insert`, `Alt+I` (macOS) | — |
+| `copy_stock_to_library` | Copy a stock symbol or footprint to a library | file | — | — |
 | `cross_probe` | Cross probe the selection to the board or schematic | select | `T C` | `Shift+C` |
 | `cut` | Cut | edit | `Mod+X` | `Mod+X` |
 | `cycle_fast_grid` | Cycle fast grid | view | — | `Alt+4` |
@@ -131,6 +133,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `move_object` | Move object | modify | `M M` | — |
 | `move_selection` | Move selection | modify | — | `M` |
 | `new_document` | New | file | `Mod+N` | `Mod+N` |
+| `new_library` | Create a library for a project | file | — | — |
 | `new_project_with_profile` | New project from a profile | file | — | — |
 | `next_document_tab` | Next open document tab | window | `Ctrl+Tab` | — |
 | `next_grid` | Next grid | view | — | `N` |
@@ -171,6 +174,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `project_settings` | Read the settings of the project | design | — | — |
 | `query_pins` | Query pins | file | — | — |
 | `read_document` | Read document | file | — | — |
+| `recover_library` | Recover a library that is missing or has lost its history | file | — | — |
 | `redo` | Redo | edit | `Mod+Shift+Z` (macOS), `Ctrl+Shift+Z`, `Ctrl+Y` | `Ctrl+Shift+Z`, `Mod+Shift+Z` (macOS), `Ctrl+Y` |
 | `refresh_view` | Refresh/redraw | view | `End` | `F5` |
 | `remove_last_vertex` | Remove last placed vertex while drawing | interactive | `Backspace` | — |
@@ -191,6 +195,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `select_all` | Select all | select | `Mod+A` | `Mod+A` |
 | `send_drawings_backward` | Send drawings backward | edit | — | — |
 | `send_drawings_to_back` | Send drawings to back | edit | — | — |
+| `set_library_document_options` | Set the document options of a library | view | — | — |
 | `show_all_design_objects` | Show all design objects | view | — | — |
 | `show_current_command_hotkeys` | Show graphical editing hotkey list for current command | help | `F1` | — |
 | `show_current_command_shortcuts` | Show valid shortcuts for the current interactive command | help | `Shift+F1` | — |
@@ -512,7 +517,9 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 
 | command id | label | category | Signex Standard | Classic |
 | --- | --- | --- | --- | --- |
+| `footprint_align_pads` | Align footprint pads | modify | — | — |
 | `footprint_mode_pads` | Switch footprint editor to Pads mode | library | `2` | `2` |
 | `footprint_mode_sketch` | Switch footprint editor to Sketch mode | library | `1` | `1` |
 | `footprint_mode_view_3d` | Switch footprint editor to 3D View mode | library | `3` | `3` |
+| `footprint_move_pads` | Move footprint pads by an offset | modify | — | — |
 | `footprint_recompute_courtyard_outline` | Recompute footprint courtyard outline from pads | library | — | — |

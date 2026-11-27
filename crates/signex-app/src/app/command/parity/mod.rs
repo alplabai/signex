@@ -29,6 +29,7 @@ mod inputs;
 #[cfg(test)]
 mod needs_owner_tests;
 mod owners;
+mod plain_operands;
 #[cfg(test)]
 mod probe_tests;
 #[cfg(test)]

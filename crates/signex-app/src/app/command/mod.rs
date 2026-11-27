@@ -41,6 +41,9 @@ pub(crate) mod enablement;
 mod file_operand_tests;
 mod file_operands;
 #[cfg(test)]
+mod footprint_pad_operand_tests;
+mod footprint_pad_operands;
+#[cfg(test)]
 mod footprint_text_operand_tests;
 mod footprint_text_operands;
 #[cfg(test)]
@@ -51,6 +54,15 @@ mod hierarchy_operands;
 #[cfg(test)]
 pub(in crate::app) mod interaction_snapshot_tests;
 mod layer_strip_operands;
+#[cfg(test)]
+mod library_dialog_operand_tests;
+mod library_dialog_operands;
+#[cfg(test)]
+mod library_recovery_operand_tests;
+mod library_recovery_operands;
+#[cfg(test)]
+mod library_update_operand_tests;
+mod library_update_operands;
 mod need_context;
 mod needs;
 #[cfg(test)]

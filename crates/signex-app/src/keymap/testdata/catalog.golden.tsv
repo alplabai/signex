@@ -407,6 +407,13 @@ footprint_mode_pads	library	Switch footprint editor to Pads mode	-	3D	-	-	Requir
 footprint_mode_sketch	library	Switch footprint editor to Sketch mode	-	3D	-	-	RequiresDocument(Footprint)	gui_only	-
 footprint_mode_view_3d	library	Switch footprint editor to 3D View mode	-	3D	-	-	RequiresDocument(Footprint)	gui_only	-
 footprint_recompute_courtyard_outline	library	Recompute footprint courtyard outline from pads	-	3D	-	-	RequiresDocument(Footprint)	gui_only	-
+footprint_move_pads	modify	Move footprint pads by an offset	-	3D	-	-	RequiresDocument(Footprint)	mutates_doc,undoable	document:document,pads:text,by:point/mm
+footprint_align_pads	modify	Align footprint pads	-	3D	-	-	RequiresDocument(Footprint)	mutates_doc,undoable	document:document,pads:text,horizontal:text?,vertical:text?
+set_library_document_options	view	Set the document options of a library	-	General	-	-	Always	-	library:text,sheet_color:text?,grid:bool?,grid_spacing:length/mm?,unit:text?
+apply_library_updates	modify	Apply the library updates waiting for a sheet	-	General	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	document:document,designators:text?,use_library:text?
+copy_stock_to_library	file	Copy a stock symbol or footprint to a library	-	General	-	-	Always	-	name:text,kind:text,path:path
+recover_library	file	Recover a library that is missing or has lost its history	-	General	-	-	Always	mutates_doc	path:path,action:text,located:path?
+new_library	file	Create a library for a project	-	General	-	-	Always	mutates_doc	document:document,path:path,git:bool?,lfs:bool?
 open_command_palette	commands	Open command palette	-	General	-	-	Always	gui_only	-
 open_preferences	preferences	Open preferences	Preferences...	General	-	-	Always	gui_only	-
 open_schematic_preferences	preferences	Open schematic preferences	-	General	-	-	Always	gui_only	-

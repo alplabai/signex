@@ -20,6 +20,7 @@ apply_layout_board
 apply_layout_notebook
 apply_layout_review
 apply_layout_schematic
+apply_library_updates
 apply_selection_filter_preset
 arrange_in_box
 assign_board_net_class
@@ -61,6 +62,7 @@ compile_project
 copy
 copy_attributes_or_add_vertex
 copy_board_3d_screenshot
+copy_stock_to_library
 create_rooms_from_sheets
 create_sheet_from_sheet_symbol
 create_sheet_symbol_from_sheet
@@ -133,9 +135,11 @@ flip_board_view
 flip_selected_x
 flip_selected_y
 flip_selection
+footprint_align_pads
 footprint_mode_pads
 footprint_mode_sketch
 footprint_mode_view_3d
+footprint_move_pads
 footprint_recompute_courtyard_outline
 force_annotate_all_schematics
 gloss_selected_routes
@@ -166,6 +170,7 @@ move_selection_xy
 move_to_front
 navigate_up_hierarchy
 new_document
+new_library
 new_pcb_document
 new_project_with_profile
 new_schematic_sheet
@@ -293,6 +298,7 @@ query_board_nets
 query_pins
 read_document
 reannotate_board
+recover_library
 redo
 refresh_view
 remove_board_panel
@@ -361,6 +367,7 @@ set_layer_sizes
 set_layer_stack
 set_layer_tab_names
 set_layer_visible
+set_library_document_options
 set_net_class_rules
 set_object_position
 set_object_rotation
