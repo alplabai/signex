@@ -3,7 +3,8 @@
 //! repository; the converter only writes plain files
 //! (`docs/LIBRARY_CONVERTER_CONTRACT.md` §5).
 
-use std::path::Path;
+use std::ffi::OsStr;
+use std::path::{Path, PathBuf};
 
 use crate::adapter::LibraryError;
 use crate::adapters::local_git::{is_write_lock_file, lfs, skip_write_lock_files};
@@ -19,8 +20,58 @@ pub const FOOTPRINT_DIFF_ATTRIBUTE: &str = "*.snxfpt diff=snxfpt";
 /// The repo-local setting that names the textconv driver.
 pub const FOOTPRINT_TEXTCONV_KEY: &str = "diff.snxfpt.textconv";
 
-/// The textconv command for footprint files.
-pub const FOOTPRINT_TEXTCONV: &str = "signex-cli library textconv";
+/// The file name of the CLI that provides the textconv driver.
+const CLI_NAME: &str = if cfg!(windows) {
+    "signex-cli.exe"
+} else {
+    "signex-cli"
+};
+
+/// The arguments after the CLI's path in the textconv command.
+const TEXTCONV_ARGS: &str = "library textconv";
+
+/// The textconv command for the CLI at `exe`: its absolute path quoted for
+/// the shell git runs the driver in.
+pub fn footprint_textconv_command(exe: &Path) -> String {
+    let quoted = exe.to_string_lossy().replace('\'', "'\\''");
+    format!("'{quoted}' {TEXTCONV_ARGS}")
+}
+
+/// The `signex-cli` executable, if one is installed: an absolute `PATH`
+/// entry first, then the folder of the running app. Release builds ship the
+/// app alone, so this is often `None`.
+pub fn find_signex_cli() -> Option<PathBuf> {
+    let app_dir = std::env::current_exe()
+        .ok()
+        .and_then(|exe| exe.parent().map(Path::to_path_buf));
+    find_signex_cli_in(std::env::var_os("PATH").as_deref(), app_dir.as_deref())
+}
+
+fn find_signex_cli_in(path_var: Option<&OsStr>, app_dir: Option<&Path>) -> Option<PathBuf> {
+    let on_path = path_var
+        .into_iter()
+        .flat_map(std::env::split_paths)
+        .filter(|dir| dir.is_absolute());
+    on_path
+        .chain(app_dir.map(Path::to_path_buf))
+        .map(|dir| dir.join(CLI_NAME))
+        .find(|candidate| is_executable(candidate))
+}
+
+fn is_executable(path: &Path) -> bool {
+    let Ok(meta) = std::fs::metadata(path) else {
+        return false;
+    };
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        meta.is_file() && meta.permissions().mode() & 0o111 != 0
+    }
+    #[cfg(not(unix))]
+    {
+        meta.is_file()
+    }
+}
 
 /// What a library folder's repository holds before an update.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -167,9 +218,14 @@ fn remove_untracked(repo: &git2::Repository, root: &Path) -> Result<(), LibraryE
 
 /// Make `root` an import repository: `git init` when it has no `.git`
 /// (with Signex's managed `.gitignore` block), the footprint diff line in
-/// `.gitattributes`, and the repo-local textconv setting. Returns whether
-/// this call created the repository. Safe to repeat.
+/// `.gitattributes`, and, when a `signex-cli` is installed, the repo-local
+/// textconv setting. Without a driver git falls back to the plain text diff.
+/// Returns whether this call created the repository. Safe to repeat.
 pub fn prepare_snapshot_repo(root: &Path) -> Result<bool, LibraryError> {
+    prepare_snapshot_repo_with(root, find_signex_cli().as_deref())
+}
+
+fn prepare_snapshot_repo_with(root: &Path, cli: Option<&Path>) -> Result<bool, LibraryError> {
     let created = !root.join(".git").exists();
     if created {
         let mut files = crate::vcs_init_files::VcsFilePlan::new(root, false, false, None, true)?;
@@ -182,9 +238,15 @@ pub fn prepare_snapshot_repo(root: &Path) -> Result<bool, LibraryError> {
     let mut local = config
         .open_level(git2::ConfigLevel::Local)
         .map_err(|e| backend("git config", e))?;
-    local
-        .set_str(FOOTPRINT_TEXTCONV_KEY, FOOTPRINT_TEXTCONV)
-        .map_err(|e| backend("git config diff.snxfpt.textconv", e))?;
+    match cli {
+        Some(exe) => local
+            .set_str(FOOTPRINT_TEXTCONV_KEY, &footprint_textconv_command(exe))
+            .map_err(|e| backend("git config diff.snxfpt.textconv", e))?,
+        None => tracing::info!(
+            target: "signex::library",
+            "signex-cli not found: footprint diffs in this library stay plain text"
+        ),
+    }
     Ok(created)
 }
 
@@ -269,16 +331,60 @@ mod tests {
     #[test]
     fn a_fresh_folder_gets_a_repo_attributes_and_textconv() {
         let dir = library_dir();
-        assert!(prepare_snapshot_repo(dir.path()).unwrap());
-        assert!(!prepare_snapshot_repo(dir.path()).unwrap(), "repeatable");
+        let cli = Path::new("/opt/it's/signex-cli");
+        assert!(prepare_snapshot_repo_with(dir.path(), Some(cli)).unwrap());
+        assert!(!prepare_snapshot_repo_with(dir.path(), Some(cli)).unwrap());
         let attributes = std::fs::read_to_string(dir.path().join(".gitattributes")).unwrap();
         assert_eq!(attributes.matches(FOOTPRINT_DIFF_ATTRIBUTE).count(), 1);
         let repo = git2::Repository::open(dir.path()).unwrap();
         let config = repo.config().unwrap();
         assert_eq!(
             config.get_string(FOOTPRINT_TEXTCONV_KEY).unwrap(),
-            FOOTPRINT_TEXTCONV
+            "'/opt/it'\\''s/signex-cli' library textconv"
         );
+    }
+
+    #[test]
+    fn without_a_signex_cli_the_attribute_is_written_and_textconv_is_not() {
+        let dir = library_dir();
+        prepare_snapshot_repo_with(dir.path(), None).unwrap();
+        let attributes = std::fs::read_to_string(dir.path().join(".gitattributes")).unwrap();
+        assert!(attributes.contains(FOOTPRINT_DIFF_ATTRIBUTE));
+        let repo = git2::Repository::open(dir.path()).unwrap();
+        assert!(
+            repo.config()
+                .unwrap()
+                .get_string(FOOTPRINT_TEXTCONV_KEY)
+                .is_err()
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn signex_cli_is_found_on_an_absolute_path_entry_or_beside_the_app() {
+        use std::os::unix::fs::PermissionsExt;
+        let make = |dir: &Path, mode| {
+            let exe = dir.join(CLI_NAME);
+            std::fs::write(&exe, "#!/bin/sh\n").unwrap();
+            std::fs::set_permissions(&exe, std::fs::Permissions::from_mode(mode)).unwrap();
+            exe
+        };
+        let (bin, app, empty) = (
+            tempfile::tempdir().unwrap(),
+            tempfile::tempdir().unwrap(),
+            tempfile::tempdir().unwrap(),
+        );
+        let fake = make(bin.path(), 0o755);
+        let path = std::env::join_paths([Path::new("relative"), empty.path(), bin.path()]).unwrap();
+        assert_eq!(find_signex_cli_in(Some(&path), None), Some(fake));
+        let beside = make(app.path(), 0o755);
+        assert_eq!(
+            find_signex_cli_in(Some(empty.path().as_os_str()), Some(app.path())),
+            Some(beside)
+        );
+        make(app.path(), 0o644);
+        assert_eq!(find_signex_cli_in(None, Some(app.path())), None);
+        assert_eq!(find_signex_cli_in(None, None), None);
     }
 
     #[test]

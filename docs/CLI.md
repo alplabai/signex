@@ -14,6 +14,7 @@ signex-cli commands [--json]
 signex-cli agent-log <project> [--access]
 signex-cli notebook export-pdf --project <project> [options]
 signex-cli library check <library> [--with <library>]... [--strict] [--json]
+signex-cli library render <library> [--out <dir>] [--symbol <uuid|name>]... [--footprint <uuid|name>]... [--png]
 signex-cli library textconv <file.snxfpt>
 ```
 
@@ -185,16 +186,24 @@ Every other line is printed as it is, so a file with no embedded model comes
 out unchanged, and a file that is not text is printed byte for byte. It is
 meant as git's `textconv` driver, so that `git diff` and `git log -p` show a
 changed model as its `hash`, `size` and summary lines instead of thousands of
-base64 lines. A library's git setup wires it with this `.gitattributes` line
-and local setting (written when an imported library is initialised, #3114):
+base64 lines. When an imported library is initialised (#3114) its git setup
+always gets this `.gitattributes` line:
 
 ```
 *.snxfpt diff=snxfpt
-git config diff.snxfpt.textconv "signex-cli library textconv"
 ```
 
-Without the setting, git shows the full text diff, which is correct, only
-long. The exit code is `0`, or `2` when the file cannot be read.
+and, only when a `signex-cli` executable is found (an absolute `PATH` entry,
+or next to the running app), the local setting with the absolute path, quoted
+for git's shell:
+
+```
+git config diff.snxfpt.textconv "'/path/to/signex-cli' library textconv"
+```
+
+Release builds ship the app without `signex-cli`; then the setting is not
+written (one line goes to the log) and git, given the attribute but no driver,
+shows the full text diff, which is correct, only long. The exit code is `0`, or `2` when the file cannot be read.
 
 ## JSON Lines
 

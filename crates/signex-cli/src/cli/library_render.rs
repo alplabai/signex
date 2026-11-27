@@ -92,6 +92,11 @@ fn files(root: &Path, sub: &str, ext: &str) -> Vec<PathBuf> {
     found
 }
 
+/// One output line; a write error is the run's error, as in the other verbs.
+fn say(out: &mut (impl Write + ?Sized), line: std::fmt::Arguments<'_>) -> Result<(), String> {
+    writeln!(out, "{line}").map_err(|e| format!("writing to standard output: {e}"))
+}
+
 /// Render and write the selected primitives. `Ok(false)` when a selector
 /// matched nothing or a file did not read.
 pub fn run(options: &LibraryRenderOptions, out: &mut impl Write) -> Result<bool, String> {
@@ -115,16 +120,16 @@ pub fn run(options: &LibraryRenderOptions, out: &mut impl Write) -> Result<bool,
     let mut footprint_hit = vec![false; options.footprints.len()];
     let emit = |stem: String, svg: Option<String>, out: &mut dyn Write| -> Result<(), String> {
         let Some(svg) = svg else {
-            let _ = writeln!(out, "skipped {stem}: draws nothing");
+            say(out, format_args!("skipped {stem}: draws nothing"))?;
             return Ok(());
         };
         let path = options.out.join(format!("{stem}.svg"));
         std::fs::write(&path, &svg).map_err(|e| format!("writing {}: {e}", path.display()))?;
-        let _ = writeln!(out, "{}", path.display());
+        say(out, format_args!("{}", path.display()))?;
         if options.png {
             let png = options.out.join(format!("{stem}.png"));
             raster::write_png(&svg, &png)?;
-            let _ = writeln!(out, "{}", png.display());
+            say(out, format_args!("{}", png.display()))?;
         }
         Ok(())
     };
@@ -132,7 +137,7 @@ pub fn run(options: &LibraryRenderOptions, out: &mut impl Write) -> Result<bool,
     for path in files(&root, "symbols", "snxsym") {
         let bytes = std::fs::read(&path).map_err(|e| format!("reading {}: {e}", path.display()))?;
         let Ok(file) = SymbolFile::from_bytes(&bytes) else {
-            let _ = writeln!(out, "unreadable {}", path.display());
+            say(out, format_args!("unreadable {}", path.display()))?;
             ok = false;
             continue;
         };
@@ -147,22 +152,15 @@ pub fn run(options: &LibraryRenderOptions, out: &mut impl Write) -> Result<bool,
                 continue;
             }
             let lib = symbol.to_lib_symbol(symbol.uuid.to_string());
-            let svg = symbol_scene(&lib, &colors).and_then(|scene| {
-                scene_to_svg(
-                    &scene,
-                    &SceneSvgOptions {
-                        background: paper,
-                        ..Default::default()
-                    },
-                )
-            });
+            let svg = symbol_scene(&lib, &colors)
+                .and_then(|scene| scene_to_svg(&scene, &SceneSvgOptions::new(paper)));
             emit(file_stem("symbol", &symbol.name, symbol.uuid), svg, out)?;
         }
     }
     for path in files(&root, "footprints", "snxfpt") {
         let bytes = std::fs::read(&path).map_err(|e| format!("reading {}: {e}", path.display()))?;
         let Ok(file) = FootprintFile::from_bytes(&bytes) else {
-            let _ = writeln!(out, "unreadable {}", path.display());
+            say(out, format_args!("unreadable {}", path.display()))?;
             ok = false;
             continue;
         };
@@ -177,13 +175,7 @@ pub fn run(options: &LibraryRenderOptions, out: &mut impl Write) -> Result<bool,
                 continue;
             }
             let scene = signex_app::library::editor::footprint::PreviewFootprint::build(fp).scene();
-            let svg = scene_to_svg(
-                &scene,
-                &SceneSvgOptions {
-                    background: board,
-                    ..Default::default()
-                },
-            );
+            let svg = scene_to_svg(&scene, &SceneSvgOptions::new(board));
             emit(file_stem("footprint", &fp.name, fp.uuid), svg, out)?;
         }
     }
@@ -194,7 +186,7 @@ pub fn run(options: &LibraryRenderOptions, out: &mut impl Write) -> Result<bool,
         .chain(options.footprints.iter().zip(&footprint_hit))
         .filter(|(_, hit)| !**hit);
     for (selector, _) in missing {
-        let _ = writeln!(out, "no primitive matches `{selector}`");
+        say(out, format_args!("no primitive matches `{selector}`"))?;
         ok = false;
     }
     Ok(ok)

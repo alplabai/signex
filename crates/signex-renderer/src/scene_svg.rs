@@ -28,10 +28,12 @@ pub struct SceneSvgOptions {
     pub min_stroke_mm: f32,
 }
 
-impl Default for SceneSvgOptions {
-    fn default() -> Self {
+impl SceneSvgOptions {
+    /// The default framing on a page of the given colour; the caller picks it
+    /// from its theme.
+    pub fn new(background: [f32; 4]) -> Self {
         Self {
-            background: [1.0, 1.0, 1.0, 1.0],
+            background,
             margin_mm: 1.0,
             min_stroke_mm: 0.05,
         }
@@ -337,7 +339,13 @@ mod tests {
 
     #[test]
     fn an_empty_scene_draws_nothing() {
-        assert!(scene_to_svg(&Scene::default(), &SceneSvgOptions::default()).is_none());
+        assert!(
+            scene_to_svg(
+                &Scene::default(),
+                &SceneSvgOptions::new([1.0, 1.0, 1.0, 1.0])
+            )
+            .is_none()
+        );
     }
 
     #[test]
@@ -360,7 +368,7 @@ mod tests {
             color: [0.0, 0.0, 1.0, 1.0],
             _pad: [0.0; 3],
         });
-        let svg = scene_to_svg(&scene, &SceneSvgOptions::default()).unwrap();
+        let svg = scene_to_svg(&scene, &SceneSvgOptions::new([1.0, 1.0, 1.0, 1.0])).unwrap();
         assert!(
             svg.contains("<line x1=\"0\" y1=\"0\" x2=\"2\" y2=\"0\""),
             "{svg}"
