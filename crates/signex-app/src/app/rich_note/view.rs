@@ -156,7 +156,7 @@ pub(super) fn editor_card<'a>(
             "line" => error.line,
             "message" => error.message.clone()
         );
-        content = content.push(text(line).size(TS.caption).color(ti(tokens.error)));
+        content = content.push_boxed(text(line).size(TS.caption).color(ti(tokens.error)));
     }
     content = content.push(footer(i18n, &tokens));
     let (raised, line) = (r.raised, ti(tokens.border));
@@ -218,7 +218,7 @@ fn source<'a>(editor: &'a RichNoteEditor, tokens: &ThemeTokens) -> Element<'a, M
         } else {
             r.ink4
         };
-        gutter = gutter.push(
+        gutter = gutter.push_boxed(
             text(UserText::new(line.to_string()))
                 .size(TS.body)
                 .line_height(LineHeight::Relative(LINE_EM))
@@ -280,13 +280,13 @@ fn preview<'a>(
     if let Some(drawing) = editor.shown_drawing() {
         let shown_mm = width_mm.unwrap_or(drawing.width_mm);
         let caption = t!(i18n, ids::OVERLAY_RICH_NOTE_PREVIEW, "width" => format!("{shown_mm:.2}"));
-        col = col.push(text(caption).size(TS.caption).color(r.ink3));
+        col = col.push_boxed(text(caption).size(TS.caption).color(r.ink3));
         let px_per_mm = preview_scale(drawing.width_mm.max(shown_mm));
         let size = (
             (drawing.width_mm as f32 * px_per_mm).max(1.0),
             (drawing.height_mm as f32 * px_per_mm).max(1.0),
         );
-        col = col.push(
+        col = col.push_boxed(
             iced::widget::canvas(NotePreview {
                 drawing,
                 ink: ti(tokens.text),

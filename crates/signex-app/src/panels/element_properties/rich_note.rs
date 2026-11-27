@@ -8,6 +8,7 @@ use super::super::*;
 use super::rows::{labelled_row, sunken_value, unit_input, unit_suffix};
 use super::text_note::segmented_row;
 use crate::panels::{NoteLayout, NoteLength, PlacedEditMsg, PlacedField};
+use iced::Widget as _;
 use signex_i18n::{ids, t};
 use signex_types::measure::length_field_text;
 use signex_types::schematic::{NoteFrame, NoteSize, RichNoteLayout, SelectedItem};
@@ -24,7 +25,7 @@ pub(super) fn edit_row<'a>(ctx: &'a PanelContext, item: SelectedItem) -> Element
         )));
     labelled_row(
         Label::from(t!(i18n, ids::PROPERTIES_NOTE_SOURCE)),
-        edit.into(),
+        edit.boxed(),
     )
 }
 
@@ -173,6 +174,7 @@ fn length_row<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use iced::Widget as _;
 
     fn ctx_with(layout: RichNoteLayout) -> PanelContext {
         let (app, _boot) = crate::app::Signex::new();
@@ -219,7 +221,7 @@ mod tests {
                 ..RichNoteLayout::default()
             });
             let col: Element<'_, PanelMsg> =
-                push_sections(Column::new(), &ctx, item, style(&ctx)).into();
+                push_sections(Column::new(), &ctx, item, style(&ctx)).boxed();
             crate::layout_probe::root_size(col, iced::Size::new(300.0, 2000.0)).height
         };
         let fit = height(NoteSize::FitText);

@@ -205,6 +205,7 @@ fn missing_banner<'a>(rows: &Rows<'a>, image: &SchImage) -> Element<'a, PanelMsg
                     width: 1.0,
                     color: warn,
                     radius: 4.0.into(),
+                    ..Border::default()
                 },
                 ..container::Style::default()
             }),

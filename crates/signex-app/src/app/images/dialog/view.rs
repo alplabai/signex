@@ -70,6 +70,7 @@ fn paper<'a>(
                 width: 1.0,
                 color: edge,
                 radius: Radii::GRAPHITE.control.into(),
+                ..Border::default()
             },
             ..container::Style::default()
         })
@@ -124,6 +125,7 @@ fn thumb<'a>(
                     width: if chosen { 1.5 } else { 0.0 },
                     color: accent,
                     radius: Radii::GRAPHITE.control.into(),
+                    ..Border::default()
                 },
                 ..button::Style::default()
             }

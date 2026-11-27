@@ -56,7 +56,7 @@ impl Signex {
         };
         // A shape with no visible size is not placed; the tool starts over.
         if let Some(shape) = tool.placed(&clicked) {
-            let (width, fill) = pre_placement_shape(&self.document_state);
+            let (width, fill) = pre_placement_shape(&self.document_state, &self.document_view);
             self.place_curve_at(shape, width, fill);
         }
         self.sync_annotation_draft();
