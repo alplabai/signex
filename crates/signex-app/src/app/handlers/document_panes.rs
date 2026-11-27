@@ -50,6 +50,8 @@ pub(crate) fn pane_tab(tab: &TabInfo) -> PaneTab {
         TabKind::PinTable => "pin_table",
         TabKind::OutputJob => "output_job",
         TabKind::DesignChecklist(_) => "checklist",
+        TabKind::BlockDiagram(_) => "block_diagram",
+        TabKind::Notebook(_) => "notebook",
     };
     PaneTab {
         path: tab.path.clone(),

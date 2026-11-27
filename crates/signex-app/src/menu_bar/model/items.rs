@@ -157,6 +157,7 @@ pub(super) fn extension_item(
         state: live(MenuMessage::Command(row.command.clone()), enabled(ctx, id)),
         checked: None,
         icon: None,
+        preview: None,
     })
 }
 
