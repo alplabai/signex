@@ -1,8 +1,8 @@
-//! Change Component (#1260) as one dialog (mockup row 155): the part list
-//! on the left, and beside it the comparison of the placed part with the
-//! picked one, the Keep now boxes and Apply to. The read of a picked row is
-//! a `Task`; nothing touches the sheet until Change, which is one engine
-//! batch and so one undo step.
+//! Change Component (#1260) in two steps (mockup row 129, #3018): the part
+//! list with the picked row's preview tiles, then Next to the comparison of
+//! the placed part with the picked one, the Keep now boxes and Apply to.
+//! The read of a picked row is a `Task`; nothing touches the sheet until
+//! Change, which is one engine batch and so one undo step.
 
 use iced::Task;
 use signex_engine::{
@@ -23,7 +23,7 @@ use crate::library::messages::{
     LibraryMessage, PlacedPartMsg, PlacedPartTarget, ResolvedPlacement,
 };
 use crate::library::place::resolve_placement;
-use crate::library::state::{ChangePreview, ChangeScope, ChangeSession, PickerMode};
+use crate::library::state::{ChangePreview, ChangeScope, ChangeSession, ChangeStep, PickerMode};
 
 impl Signex {
     pub(super) fn start_change_component(&mut self, part: PlacedPart) -> Task<Message> {
@@ -169,6 +169,7 @@ impl Signex {
             preview,
             Vec::new(),
             ChangeScope::default(),
+            ChangeStep::Pick,
         );
         Task::none()
     }
@@ -182,11 +183,28 @@ impl Signex {
         Task::none()
     }
 
+    /// Next or Back (mockup row 129). Next shows the comparison only once
+    /// the row the list shows picked is read; Back keeps the pick and its
+    /// read, so Next is enabled again at once.
+    pub(super) fn step_change(&mut self, step: ChangeStep) -> Task<Message> {
+        let Some(picker) = self.library.picker.as_mut() else {
+            return Task::none();
+        };
+        let shown = picker.shown_selection().map(|(_, summary)| summary.row_id);
+        if let PickerMode::ChangePreview(change) = &mut picker.mode
+            && (step == ChangeStep::Pick || change.compares_shown(shown))
+        {
+            change.step = step;
+        }
+        Task::none()
+    }
+
     /// Apply the reviewed change to every part of the Apply to choice as one
     /// engine batch (one undo step), if the sheet still gives the preview
     /// the user saw; otherwise show the fresh preview instead of committing
     /// something unreviewed. A user parameter whose Keep now box is cleared
-    /// is cleared by the swap.
+    /// is cleared by the swap. The dialog draws Change on the compare step
+    /// only; the message itself applies a read preview on either step.
     pub(super) fn confirm_change_component(&mut self) -> Task<Message> {
         let Some(PickerState {
             mode: PickerMode::ChangePreview(change),
@@ -227,7 +245,14 @@ impl Signex {
             crate::diagnostics::log_warning(format!(
                 "Review the changed pins and confirm again: the sheet changed since the preview of {reference}."
             ));
-            self.show_preview(session, resolved, fresh, dropped, scope);
+            self.show_preview(
+                session,
+                resolved,
+                fresh,
+                dropped,
+                scope,
+                ChangeStep::Compare,
+            );
             return Task::none();
         }
         let parts = match scope {
@@ -312,7 +337,7 @@ impl Signex {
 
     /// Show the comparison of the placed part with `resolved`: the Now /
     /// After table, the user parameters' Keep now boxes (`dropped` cleared)
-    /// and the Apply to choice.
+    /// and the Apply to choice, on `step`.
     fn show_preview(
         &mut self,
         session: ChangeSession,
@@ -320,6 +345,7 @@ impl Signex {
         preview: ComponentChangePreview,
         dropped: Vec<String>,
         scope: ChangeScope,
+        step: ChangeStep,
     ) {
         let symbol_id = session.target.symbol_id;
         let Some(doc) = self.target_document(&session.target) else {
@@ -340,6 +366,7 @@ impl Signex {
                 rows,
                 dropped,
                 scope,
+                step,
             }));
         }
     }

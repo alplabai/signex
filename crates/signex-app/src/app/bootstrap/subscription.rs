@@ -82,6 +82,8 @@ struct OpenOverlays {
     manage_layouts_open: bool,
     manage_layouts_renaming: bool,
     library_picker_open: bool,
+    /// Change Component's compare step: Esc goes Back (mockup row 129).
+    library_picker_comparing: bool,
     library_document_options_open: bool,
     library_updates_open: bool,
     library_primitive_picker_open: bool,
@@ -478,9 +480,14 @@ impl OpenOverlays {
                 .then(|| Message::from(crate::workspace_layouts::SaveLayoutMsg::Cancelled)),
 
             // ── Library modals ──────────────────────────────────────
-            OverlayId::LibraryPicker => self
-                .library_picker_open
-                .then(|| Message::Library(crate::library::messages::LibraryMessage::ClosePicker)),
+            OverlayId::LibraryPicker => self.library_picker_open.then(|| {
+                use crate::library::messages::{LibraryMessage, PlacedPartMsg};
+                Message::Library(if self.library_picker_comparing {
+                    LibraryMessage::PlacedPart(PlacedPartMsg::ChangeBackPressed)
+                } else {
+                    LibraryMessage::ClosePicker
+                })
+            }),
             // Addressed to ONE library, like `DeleteConfirm`.
             OverlayId::EditRowModal => self.edit_row_modal.clone().map(|library_path| {
                 Message::Library(crate::library::messages::LibraryMessage::BrowserEdit {
@@ -811,6 +818,11 @@ impl Signex {
                 .is_some_and(|dialog| dialog.rename.is_some()),
             library_picker_open: self.library.picker.is_some()
                 && !modal_detached(crate::app::state::ModalId::LibraryPicker),
+            library_picker_comparing: self
+                .library
+                .picker
+                .as_ref()
+                .is_some_and(|picker| picker.mode.is_comparing()),
             library_document_options_open: self.library.document_options.is_some()
                 && !modal_detached(crate::app::state::ModalId::LibraryDocumentOptions),
             library_stock_copy_open: self.library.stock_copy.is_some()
@@ -1512,6 +1524,18 @@ mod tests {
                 crate::library::messages::LibraryMessage::ClosePicker
             ))
         ));
+        // Change Component's compare step (mockup row 129): Esc goes Back.
+        assert!(matches!(
+            only(|o| {
+                o.library_picker_open = true;
+                o.library_picker_comparing = true
+            }),
+            Some(Message::Library(
+                crate::library::messages::LibraryMessage::PlacedPart(
+                    crate::library::messages::PlacedPartMsg::ChangeBackPressed
+                )
+            ))
+        ));
         assert!(matches!(
             only(|o| o.recovery_kind = Some(RecoveryKind::LibraryMissing)),
             Some(Message::Library(
@@ -2023,6 +2047,7 @@ mod tests {
             manage_layouts_open,
             manage_layouts_renaming,
             library_picker_open,
+            library_picker_comparing,
             library_document_options_open,
             library_updates_open,
             library_primitive_picker_open,
@@ -2137,6 +2162,10 @@ mod tests {
             }),
             ("symbol_delete_open", |o| o.symbol_delete_open = true),
             ("library_picker_open", |o| o.library_picker_open = true),
+            ("library_picker_comparing", |o| {
+                o.library_picker_open = true;
+                o.library_picker_comparing = true
+            }),
             ("recovery_kind", |o| {
                 o.recovery_kind = Some(RecoveryKind::LibraryMissing)
             }),

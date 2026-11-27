@@ -1,4 +1,5 @@
-//! Layout probes of Change Component's one dialog (mockup row 155).
+//! Layout probes of Change Component's two steps (mockup row 129, #3018):
+//! the pick and the comparison Next leads to.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -11,13 +12,18 @@ use uuid::Uuid;
 
 use super::view;
 use crate::layout_probe::{lay_out_texts, messages_on_click};
+use crate::library::browser::PreviewLook;
 use crate::library::messages::{
     LibraryMessage, PlacedPartMsg, PlacedPartTarget, ResolvedPlacement,
 };
 use crate::library::state::{
-    ChangePreview, ChangeScope, ChangeSession, CompareField, CompareKind, CompareRow, LibraryState,
-    OpenLibrary, PickerMode, PickerState,
+    ChangePreview, ChangeScope, ChangeSession, ChangeStep, CompareField, CompareKind, CompareRow,
+    LibraryState, OpenLibrary, PickerMode, PickerState,
 };
+
+fn look() -> PreviewLook {
+    PreviewLook::for_tests()
+}
 
 const LIB: Uuid = Uuid::from_u128(0x11);
 const SAME: Uuid = Uuid::from_u128(0x21);
@@ -102,7 +108,7 @@ fn resolved() -> ResolvedPlacement {
     }
 }
 
-/// The state with SAME picked and compared.
+/// The state with SAME picked, read and shown on the compare step.
 fn compared() -> LibraryState {
     let mut state = state();
     let picker = state.picker.as_mut().unwrap();
@@ -141,7 +147,19 @@ fn compared() -> LibraryState {
         ],
         dropped: Vec::new(),
         scope: ChangeScope::ThisPart,
+        step: ChangeStep::Compare,
     }));
+    state
+}
+
+/// The state with SAME picked and read, still on the pick step.
+fn picked() -> LibraryState {
+    let mut state = compared();
+    if let Some(picker) = state.picker.as_mut()
+        && let PickerMode::ChangePreview(change) = &mut picker.mode
+    {
+        change.step = ChangeStep::Pick;
+    }
     state
 }
 
@@ -150,7 +168,7 @@ fn compared() -> LibraryState {
 fn texts(state: &LibraryState) -> Vec<String> {
     let i18n = I18n::en_us_ref();
     let tokens = theme_tokens(ThemeId::GraphiteLight);
-    let card = view(state.picker.as_ref().unwrap(), &tokens, i18n, false).expect("a card");
+    let card = view(state.picker.as_ref().unwrap(), &tokens, i18n, false, look()).expect("a card");
     lay_out_texts(card, WINDOW)
         .into_iter()
         .map(|t| t.text.replace(['\u{2068}', '\u{2069}'], ""))
@@ -160,7 +178,7 @@ fn texts(state: &LibraryState) -> Vec<String> {
 fn clicks(state: &LibraryState, label: &str) -> Vec<LibraryMessage> {
     let i18n = I18n::en_us_ref();
     let tokens = theme_tokens(ThemeId::GraphiteLight);
-    let card = view(state.picker.as_ref().unwrap(), &tokens, i18n, false).expect("a card");
+    let card = view(state.picker.as_ref().unwrap(), &tokens, i18n, false, look()).expect("a card");
     messages_on_click(card, WINDOW, label)
 }
 
@@ -230,7 +248,7 @@ fn the_comparison_shows_both_parts_the_table_kept_and_apply_to() {
     assert_eq!(only, "Only R5 on this sheet");
     let tokens = theme_tokens(ThemeId::GraphiteLight);
     let state = compared();
-    let card = || view(state.picker.as_ref().unwrap(), &tokens, i18n, false).unwrap();
+    let card = || view(state.picker.as_ref().unwrap(), &tokens, i18n, false, look()).unwrap();
     let laid = lay_out_texts(card(), WINDOW);
     let apply_to = upper(ids::LIBRARY_CHANGE_COMPONENT_APPLY_TO);
     let heading = crate::layout_probe::find(&laid, &apply_to).bounds;
@@ -299,13 +317,13 @@ fn a_user_parameter_box_toggles_its_keep() {
     }
     let i18n = I18n::en_us_ref();
     let tokens = theme_tokens(ThemeId::GraphiteLight);
-    let card = view(state.picker.as_ref().unwrap(), &tokens, i18n, false).unwrap();
+    let card = view(state.picker.as_ref().unwrap(), &tokens, i18n, false, look()).unwrap();
     let laid = lay_out_texts(card, WINDOW);
     let note = crate::layout_probe::find(&laid, "Note").bounds;
     let keep = crate::layout_probe::find(&laid, "Keep now").bounds;
     // The box sits in the Keep now column, on the Note row.
     let at = iced::Point::new(keep.x + keep.height / 2.0, note.center_y());
-    let card = view(state.picker.as_ref().unwrap(), &tokens, i18n, false).unwrap();
+    let card = view(state.picker.as_ref().unwrap(), &tokens, i18n, false, look()).unwrap();
     let toggled = crate::layout_probe::messages_on_click_at(card, WINDOW, None, at);
     assert!(
         toggled.iter().any(|m| matches!(
@@ -319,10 +337,105 @@ fn a_user_parameter_box_toggles_its_keep() {
 #[test]
 fn the_dialog_builds_on_every_theme() {
     let i18n = I18n::en_us_ref();
-    for state in [state(), compared()] {
+    for state in [state(), picked(), compared()] {
         for id in ThemeId::BUILTINS {
             let tokens = theme_tokens(*id);
-            assert!(view(state.picker.as_ref().unwrap(), &tokens, i18n, false).is_some());
+            assert!(view(state.picker.as_ref().unwrap(), &tokens, i18n, false, look()).is_some());
         }
     }
+}
+
+fn next_pressed(messages: &[LibraryMessage]) -> bool {
+    messages.iter().any(|m| {
+        matches!(
+            m,
+            LibraryMessage::PlacedPart(PlacedPartMsg::ChangeNextPressed)
+        )
+    })
+}
+
+/// Mockup row 129, step 1: the list with the picked row, the Symbol and
+/// Footprint tiles and Next as primary; no comparison and no Change yet.
+#[test]
+fn the_pick_step_shows_the_tiles_and_next_and_no_comparison() {
+    let shown = texts(&picked());
+    for label in [
+        "Same symbol",
+        "RC0603FR-0731K6L",
+        "SYMBOL",
+        "FOOTPRINT",
+        "Next",
+        "Cancel",
+        "Pick a part in the list to compare it with R5.",
+    ] {
+        assert!(shown.iter().any(|t| t == label), "{label:?} in {shown:#?}");
+    }
+    for label in ["Placed now", "Replace with", "Change 1 part", "Back"] {
+        assert!(!shown.iter().any(|t| t == label), "{label:?} in {shown:#?}");
+    }
+    assert!(next_pressed(&clicks(&picked(), "Next")));
+}
+
+/// Next waits for the read of the row the list shows picked: nothing read
+/// yet, or the read row hidden by a chip, leaves it inert.
+#[test]
+fn next_acts_only_on_the_read_row_the_list_shows() {
+    assert!(!next_pressed(&clicks(&state(), "Next")), "nothing read");
+    let mut hidden = picked();
+    if let Some(picker) = hidden.picker.as_mut()
+        && let PickerMode::ChangePreview(change) = &mut picker.mode
+    {
+        change.session.hidden.insert(SAME);
+    }
+    assert!(!next_pressed(&clicks(&hidden, "Next")), "a hidden part");
+}
+
+/// Mockup row 129, step 2: the comparison with Back, Cancel and Change;
+/// the list, its chips and the tiles are gone, and Back says so.
+#[test]
+fn the_compare_step_has_back_and_no_list() {
+    let shown = texts(&compared());
+    for label in ["Placed now", "Replace with", "Back", "Change 1 part"] {
+        assert!(shown.iter().any(|t| t == label), "{label:?} in {shown:#?}");
+    }
+    for label in ["Same symbol", "SYMBOL", "FOOTPRINT", "Next"] {
+        assert!(!shown.iter().any(|t| t == label), "{label:?} in {shown:#?}");
+    }
+    let back = clicks(&compared(), "Back");
+    assert!(
+        back.iter().any(|m| matches!(
+            m,
+            LibraryMessage::PlacedPart(PlacedPartMsg::ChangeBackPressed)
+        )),
+        "{back:?}"
+    );
+}
+
+/// Both steps lay out on the same 880 × 600 card; on the pick step the
+/// tiles sit in the right-hand 250 px column, the symbol over the
+/// footprint, as on Place Component.
+#[test]
+fn both_steps_share_the_card_and_the_pick_step_has_the_preview_column() {
+    let i18n = I18n::en_us_ref();
+    let tokens = theme_tokens(ThemeId::GraphiteLight);
+    for state in [picked(), compared()] {
+        let card = view(state.picker.as_ref().unwrap(), &tokens, i18n, false, look()).unwrap();
+        let size = crate::layout_probe::root_size(card, WINDOW);
+        assert!(
+            (size.width - super::CARD_W).abs() < 0.5 && (size.height - super::CARD_H).abs() < 0.5,
+            "{size:?}"
+        );
+    }
+    let state = picked();
+    let card = view(state.picker.as_ref().unwrap(), &tokens, i18n, false, look()).unwrap();
+    let laid = lay_out_texts(card, WINDOW);
+    let sp = crate::styles::Spacing::DEFAULT;
+    let tag_x = super::CARD_W - 250.0 + sp.m + crate::styles::HAIRLINE + sp.m;
+    for tag in ["SYMBOL", "FOOTPRINT"] {
+        let bounds = crate::layout_probe::find(&laid, tag).bounds;
+        assert!((bounds.x - tag_x).abs() < 0.5, "{tag} at {bounds:?}");
+    }
+    let symbol = crate::layout_probe::find(&laid, "SYMBOL").bounds;
+    let footprint = crate::layout_probe::find(&laid, "FOOTPRINT").bounds;
+    assert!(symbol.y < footprint.y);
 }
