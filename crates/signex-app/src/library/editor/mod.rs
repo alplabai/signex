@@ -127,8 +127,8 @@ fn missing_required_in(
 }
 
 /// The missing-required count the Parameters tab shows; `None` draws no
-/// error badge. Hidden at 0 and on a read-only library, where the tab is
-/// inert and the user cannot act on it.
+/// error badge. Hidden at 0. A read-only library shows the same count as an
+/// editable one (mockup row 128, #3010).
 fn tab_badge(
     tab: PreviewTab,
     state: &ComponentPreviewState,
@@ -136,9 +136,6 @@ fn tab_badge(
 ) -> Option<usize> {
     match tab {
         PreviewTab::Parameters => {
-            if library_state.is_read_only(&state.library_path) {
-                return None;
-            }
             let library_id = params::library_id_of(state, library_state)?;
             let n = missing_required_in(
                 &library_state.template_registry,
@@ -330,6 +327,9 @@ fn view_active_tab<'a>(
         .height(Length::Fill)
         .boxed()
 }
+
+#[cfg(test)]
+mod tab_count_tests;
 
 #[cfg(test)]
 mod tests {
