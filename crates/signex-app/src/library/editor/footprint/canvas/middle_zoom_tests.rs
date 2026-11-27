@@ -54,6 +54,7 @@ impl Rig {
             trackpad_pan: false,
             wheel_mode: Default::default(),
             mirror_card: None,
+            body_3d: None,
         };
         let cursor = mouse::Cursor::Available(at);
         let action = canvas::Program::update(&fpc, &mut self.cstate, &event, BOUNDS, cursor);

@@ -461,6 +461,7 @@ fn translating_a_chamfered_pad_carries_its_chamfer_anchor_with_it() {
             idx: 0,
             x_mm: 5.0,
             y_mm: 3.0,
+            with_selection: true,
         },
     );
 

@@ -574,7 +574,12 @@ fn a_pad_drag_is_one_row_and_its_replay_is_refused() {
     let start = pads(&app, &path);
     pick_pad(&mut app, &path, 0);
     let (x, y) = start[0].1;
-    let tick = |x_mm, y_mm| FootprintEditorMsg::MovePad { idx: 0, x_mm, y_mm };
+    let tick = |x_mm, y_mm| FootprintEditorMsg::MovePad {
+        idx: 0,
+        x_mm,
+        y_mm,
+        with_selection: true,
+    };
     footprint_edit(&mut app, &path, tick(x + 1.27, y));
     let row = newest(&app);
     assert_eq!(row.command, "move_selection");

@@ -12,7 +12,8 @@
 //! `signex_widgets::active_bar_dropdown` renderer, so the card has one icon
 //! column, every label starts at the same x and the shortcuts sit
 //! right-aligned. A shortcut shown for a command comes from the active
-//! keymap; Space and X are the canvas's own rotate and flip keys.
+//! keymap; Space and X are the canvas's own rotate and flip keys. A row no
+//! key runs shows none.
 //!
 //! Mounting: `app/view/overlays/bars.rs` (`footprint_context_menu_overlay`)
 //! places the card at `editor.state.context_menu.x/y`, window-absolute
@@ -120,15 +121,16 @@ fn empty_canvas_rows(menu: &mut Menu<'_>, has_clipboard: bool) {
         ic::icon_dd_place_menu(ICON_THEME),
         FootprintContextSubmenu::Place,
     ) {
-        for (label, key, tool) in [
-            (menu_ids::CTX_FP_PAD, "P", PadsTool::PlacePad),
-            (menu_ids::CTX_FP_TRACK, "T", PadsTool::PlaceTrack),
-            (menu_ids::CTX_SHAPE_ARC, "A", PadsTool::PlaceArc),
-            (menu_ids::CTX_FP_POLYGON_REGION, "R", PadsTool::PlacePolygon),
-            (menu_ids::CTX_FP_STRING_TEXT, "S", PadsTool::PlaceString),
+        // No key arms a Pads-mode tool, so these rows show none (#2603).
+        for (label, tool) in [
+            (menu_ids::CTX_FP_PAD, PadsTool::PlacePad),
+            (menu_ids::CTX_FP_TRACK, PadsTool::PlaceTrack),
+            (menu_ids::CTX_SHAPE_ARC, PadsTool::PlaceArc),
+            (menu_ids::CTX_FP_POLYGON_REGION, PadsTool::PlacePolygon),
+            (menu_ids::CTX_FP_STRING_TEXT, PadsTool::PlaceString),
         ] {
             let text = menu.text(label);
-            menu.child(text, key.to_string(), FootprintEditorMsg::SetPadsTool(tool));
+            menu.child(text, String::new(), FootprintEditorMsg::SetPadsTool(tool));
         }
     }
 
@@ -137,13 +139,18 @@ fn empty_canvas_rows(menu: &mut Menu<'_>, has_clipboard: bool) {
         ic::icon_dd_select_all(ICON_THEME),
         FootprintContextSubmenu::Selection,
     ) {
-        let (label, keys) = (menu.command_label("select_all"), menu.keys("select_all"));
-        menu.child(label, keys, action(FootprintContextAction::SelectAllPads));
-        let (label, keys) = (
-            menu.text(menu_ids::CTX_DESELECT_ALL),
-            menu.keys("unselect_all"),
+        let label = menu.command_label("select_all");
+        menu.command_child(
+            label,
+            "select_all",
+            action(FootprintContextAction::SelectAllPads),
         );
-        menu.child(label, keys, action(FootprintContextAction::DeselectAll));
+        let label = menu.text(menu_ids::CTX_DESELECT_ALL);
+        menu.command_child(
+            label,
+            "unselect_all",
+            action(FootprintContextAction::DeselectAll),
+        );
     }
 
     if menu.submenu(
@@ -151,10 +158,11 @@ fn empty_canvas_rows(menu: &mut Menu<'_>, has_clipboard: bool) {
         ic::icon_dd_preferences(ICON_THEME),
         FootprintContextSubmenu::View,
     ) {
+        // Fit All does not reach the footprint canvas: no key (#2603).
         let label = menu.text(menu_ids::CTX_FIT_TO_WINDOW);
         menu.child(
             label,
-            "V, F".to_string(),
+            String::new(),
             action(FootprintContextAction::FitToWindow),
         );
     }
@@ -181,6 +189,7 @@ fn pad_rows(menu: &mut Menu<'_>, header: String, has_clipboard: bool) {
     menu.separator();
 
     // The selection: transforms first, as on the active bar's Move menu.
+    // No command opens Move By, so it shows no key (#2603).
     menu.pick(
         menu_ids::CTX_FP_MOVE_BY,
         ic::icon_dd_move_xy(ICON_THEME),
@@ -455,6 +464,13 @@ impl Menu<'_> {
     /// A row of an open submenu, indented under its launcher.
     fn child(&mut self, label: String, keys: String, msg: FootprintEditorMsg) {
         let item = DropdownItem::new(format!("  {label}"), self.msg(msg));
+        self.push(item, keys);
+    }
+
+    /// A submenu row of command `id`, with the command's key.
+    fn command_child(&mut self, label: String, id: &'static str, msg: FootprintEditorMsg) {
+        let keys = self.keys(id);
+        let item = DropdownItem::new(format!("  {label}"), self.msg(msg)).command(id);
         self.push(item, keys);
     }
 }

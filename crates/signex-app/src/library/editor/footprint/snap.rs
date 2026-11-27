@@ -9,7 +9,8 @@
 //!    ([`super::snap_board`]).
 //! 2. **Midpoint / Centre** — a Line's midpoint or a Circle's / Arc's
 //!    centre within the same radius, while a drawing tool is armed (mockup row 188).
-//! 3. **Guide**, then **Intersection** of two sketch curves.
+//! 3. **Guide** (behind the Guides switch), then **Intersection** of two
+//!    sketch curves.
 //! 4. **Horizontal / Vertical inference** — when a multi-click tool
 //!    is mid-gesture (line first endpoint, rect first corner, ...),
 //!    if the cursor's angle relative to the anchor falls within
@@ -18,8 +19,13 @@
 //! 5. **Angle snap** — same anchor-relative angle, snap to nearest
 //!    [`ANGLE_STEP_DEG`] increment if within
 //!    [`ANGLE_THRESHOLD_DEG`].
-//! 6. **Grid snap** — fall through: round each axis to the nearest
+//! 6. **Axes** — line up with a footprint object in Axis Snap Range
+//!    ([`super::snap_objects::axis_snap`]).
+//! 7. **Grid snap** — fall through: round each axis to the nearest
 //!    [`GRID_STEP_MM`] increment.
+//!
+//! Between 1 and 2 the footprint's own objects snap
+//! ([`super::snap_objects`]).
 //!
 //! [`snap_cursor_with`] with `infer = false` (Ctrl held while drawing)
 //! skips Midpoint, Centre, Intersection, H / V and Angle: point reuse,
@@ -88,7 +94,7 @@ pub enum SnapKind {
     Midpoint(SketchEntityId),
     /// The centre of the sketch Circle or Arc with this id (mockup row 188).
     Centre(SketchEntityId),
-    /// A pad centre, track vertex, arc centre or the origin, in Pads mode.
+    /// A footprint object hotspot or an Axes alignment with one.
     /// See [`super::snap_objects`].
     Object,
 }
@@ -220,8 +226,8 @@ pub fn snap_cursor_with(
     snap_cursor_among(raw, sketch, state, point_hit, infer, None)
 }
 
-/// [`snap_cursor_with`] that also reaches the footprint's own objects in
-/// Pads mode, the canvas's snap.
+/// [`snap_cursor_with`] that also reaches the footprint's own objects and
+/// their Axes alignment, the canvas's snap.
 pub fn snap_cursor_among(
     raw: (f64, f64),
     sketch: Option<&SketchData>,
@@ -272,7 +278,8 @@ pub fn snap_cursor_among(
         return hit;
     }
 
-    // Priority 1.25 — the footprint's own objects, in Pads mode only.
+    // Priority 1.25 — the footprint's own objects (Sketch mode: those the
+    // sketch does not draw).
     if let Some(hit) = objects.and_then(|o| super::snap_objects::object_snap(raw, state, o)) {
         return hit;
     }
@@ -285,11 +292,11 @@ pub fn snap_cursor_among(
         return hit;
     }
 
-    // Priority 1.5 — Guide snap. Snaps the cursor onto enabled
-    // vertical / horizontal guides whose axis is within
-    // `GUIDE_SNAP_TOLERANCE_MM`. When both fire, snap both axes (a
+    // Priority 1.5 — Guide snap, behind the Guides switch (#2726). Snaps
+    // the cursor onto enabled vertical / horizontal guides whose axis is
+    // within `GUIDE_SNAP_TOLERANCE_MM`. When both fire, snap both axes (a
     // guide-intersection lock).
-    if !state.guides.is_empty() {
+    if opts.snap_to_guides && !state.guides.is_empty() {
         use super::state::GuideAxis;
         let mut snapped_x: Option<f64> = None;
         let mut snapped_y: Option<f64> = None;
@@ -404,6 +411,28 @@ pub fn snap_cursor_among(
                     };
                 }
             }
+        }
+    }
+
+    // Priority 3.5 — Axes: line up with a footprint object in Axis Snap
+    // Range; the axis nothing lines up on takes the grid (#2726).
+    if let Some(objects) = objects {
+        let (x, y) = super::snap_objects::axis_snap(raw, state, objects);
+        if x.is_some() || y.is_some() {
+            let free = |v: f64, from: f64| {
+                if opts.snaps_to_grid() {
+                    on_grid(v, from, opts.grid_step_mm)
+                } else {
+                    v
+                }
+            };
+            return SnapResult {
+                pos: (
+                    x.unwrap_or_else(|| free(raw.0, grid_from.0)),
+                    y.unwrap_or_else(|| free(raw.1, grid_from.1)),
+                ),
+                kind: SnapKind::Object,
+            };
         }
     }
 

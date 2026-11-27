@@ -164,7 +164,12 @@ fn footprint_input(
 ) -> Option<ReplayInput> {
     use FootprintEditorMsg as M;
     let messages = match msg {
-        M::MovePad { idx, x_mm, y_mm } => {
+        M::MovePad {
+            idx,
+            x_mm,
+            y_mm,
+            with_selection,
+        } => {
             let pad = editor.state.pads.get(*idx)?;
             if let EditorTargets::Footprint { pads, .. } = &mut targets
                 && !pads.iter().any(|(i, _)| i == idx)
@@ -177,6 +182,7 @@ fn footprint_input(
                 idx: *idx,
                 start: pad.position_mm,
                 to: (*x_mm, *y_mm),
+                with_selection: *with_selection,
             });
         }
         M::MoveByConfirm => {

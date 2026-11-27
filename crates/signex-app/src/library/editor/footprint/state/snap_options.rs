@@ -105,7 +105,7 @@ impl Default for SnapOptions {
             snap_distance_mm: 0.203,
             axis_snap_range_mm: 5.08,
             snap_to_grids: true,
-            snap_to_guides: false,
+            snap_to_guides: true,
             snap_to_axes: false,
             board_features: BoardFeatureSnaps::default(),
             snap_midpoints: true,
