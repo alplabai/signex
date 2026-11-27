@@ -7,7 +7,18 @@ use std::collections::BTreeSet;
 use signex_library::{PinDirection, PinOrientation, Symbol, SymbolPin};
 
 use super::pin_table_ui::{BulkEdit, PasteMode, PastedRow};
-use super::{DEFAULT_PIN_LENGTH_MM, PartView, add_pin};
+use super::{DEFAULT_PIN_LENGTH_MM, PartView, SymbolSelection, add_pin};
+
+/// Drop a selection that names pins by index: after a delete or a paste
+/// the indices may name other pins.
+pub fn drop_pin_selection(selected: &mut Option<SymbolSelection>) {
+    if matches!(
+        selected,
+        Some(SymbolSelection::Pin(_) | SymbolSelection::Multiple { .. } | SymbolSelection::All)
+    ) {
+        *selected = None;
+    }
+}
 
 /// The pitch of rows added from the table, one grid step below the lowest
 /// pin.

@@ -155,6 +155,7 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "color_net",
             "export_board_report",
             "export_board_step",
+            "export_schematic_pdf",
             "export_assembly_svg",
             "board_assembly_drawing",
             "board_report_bom",
@@ -184,6 +185,9 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "set_object_transparency",
             "set_board_graphic",
             "set_footprint_text",
+            // #2817: the symbol file `document` names; new pasted pins go
+            // on part 1's normal body, not the editor's view.
+            "edit_symbol_pins",
             "repour_all",
             "panelize_board",
             "remove_board_panel",

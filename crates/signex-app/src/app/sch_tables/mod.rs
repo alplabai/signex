@@ -23,6 +23,8 @@ pub(crate) use annotation_edit::{
 };
 pub(crate) use rows::{designators, source_is_missing};
 #[cfg(test)]
+mod pin_edit_golden_tests;
+#[cfg(test)]
 mod tests;
 
 use crate::app::{Message, Signex};

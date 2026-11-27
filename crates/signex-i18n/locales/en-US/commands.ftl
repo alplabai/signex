@@ -677,6 +677,7 @@ cmd-export-board-report = Export a board report as a CSV file
 cmd-menu-export-board-report = Export Report as CSV…
 cmd-export-board-pdf = Print the board's layers to a PDF file
 cmd-menu-export-board-pdf = Board Print / PDF…
+cmd-export-schematic-pdf = Print the project's sheets to a PDF file
 cmd-export-assembly-svg = Write the board's top and bottom assembly drawings as SVG files
 cmd-menu-export-assembly-svg = Assembly Drawings as SVG…
 cmd-board-assembly-drawing = Open Board Print / PDF for an assembly drawing
@@ -711,6 +712,7 @@ cmd-symbol-draw-elliptical-arc = Draw an elliptical arc on a symbol
 cmd-symbol-draw-bezier = Draw a Bezier curve on a symbol
 cmd-symbol-draw-round-rectangle = Draw a round rectangle on a symbol
 cmd-symbol-draw-pie = Draw a pie chart on a symbol
+cmd-edit-symbol-pins = Set a symbol's pins by number, or paste pin rows
 
 cmd-category-edit = Edit
 cmd-category-modify = Modify

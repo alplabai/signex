@@ -51,6 +51,22 @@ const SYMBOL_PIE: &[Operand] = &[
     operand("start_angle", OperandKind::Turn, true),
     operand("end_angle", OperandKind::Turn, true),
 ];
+/// `edit_symbol_pins` (#2817): the open `.snxsym` and, when it holds more
+/// than one, the `symbol` by name; then `pins`, a JSON object of pin number
+/// to the fields to set (or null to remove the pin), or `paste`, pin rows as
+/// the Pin table's Paste rows reads them (`\n` between rows, `\t` or two
+/// spaces between cells) with the column map `fields` and the paste `mode`
+/// (`update_by_number`, `append`, `replace_all`). `dry_run` answers without
+/// changing the symbol.
+const SYMBOL_PINS: &[Operand] = &[
+    operand("document", OperandKind::Document, true),
+    operand("symbol", OperandKind::Text, false),
+    operand("pins", OperandKind::Text, false),
+    operand("paste", OperandKind::Text, false),
+    operand("fields", OperandKind::Text, false),
+    operand("mode", OperandKind::Text, false),
+    operand("dry_run", OperandKind::Bool, false),
+];
 
 pub(super) const LIBRARY: &[CommandMetadata] = &[
     CommandMetadata {
@@ -175,6 +191,20 @@ pub(super) const LIBRARY: &[CommandMetadata] = &[
         enable: Enablement::RequiresDocument(DocumentKind::Symbol),
         flags: CommandFlags::MUTATES,
         operands: SYMBOL_PIE,
+        ..CommandMetadata::DEFAULT
+    },
+    // #2817: the Pin table tab's bulk edit and Paste rows (mockup row 122b)
+    // for an agent or the CLI; one undo step on the symbol file. A person
+    // uses the tab. No default key.
+    CommandMetadata {
+        id: "edit_symbol_pins",
+        category: "edit",
+        label: command_ids::CMD_EDIT_SYMBOL_PINS,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::RequiresDocument(DocumentKind::Symbol),
+        flags: CommandFlags::MUTATES,
+        operands: SYMBOL_PINS,
         ..CommandMetadata::DEFAULT
     },
 ];

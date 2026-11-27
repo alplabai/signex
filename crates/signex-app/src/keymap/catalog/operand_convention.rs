@@ -163,6 +163,9 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("corner_radius", OperandKind::Length),
     ("control_1", OperandKind::Point),
     ("control_2", OperandKind::Point),
+    // #2817: the Pin table's Paste rows text and its paste mode.
+    ("paste", OperandKind::Text),
+    ("mode", OperandKind::Text),
 ];
 
 /// The commands whose `ids` is still text, not targets (#2326): a design

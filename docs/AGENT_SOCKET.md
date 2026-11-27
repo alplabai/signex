@@ -153,7 +153,11 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
   symbol editor's curve shapes `symbol_draw_elliptical_arc`,
   `symbol_draw_bezier`, `symbol_draw_round_rectangle` and `symbol_draw_pie`
   (#2838; one undo step of the named symbol's editor, answered with the
-  graphic as JSON, [CLI.md](CLI.md) "Symbol shapes"), and the
+  graphic as JSON, [CLI.md](CLI.md) "Symbol shapes"), and
+  `edit_symbol_pins` (#2817; the Pin table's bulk edit and Paste rows on a
+  symbol file, one undo step on it, answered with the pins as JSON; an
+  agent names only an open project's documents, so a loose symbol file is
+  for the CLI; [CLI.md](CLI.md), "Symbol pins"), and the
   length tuning commands
   `tune_net_length` and `tune_diff_pair` (#2389; one undo step on the named
   board, answered with the tuned nets and their lengths as JSON), and the
@@ -191,8 +195,8 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
   `name` are null for a pane outside an open project). They never change the
   active tab.
   The CSV, PDF, SVG and STEP writers `export_board_report`,
-  `export_board_pdf`, `export_assembly_svg` and `export_board_step` take a
-  `path`, so they are CLI only.
+  `export_board_pdf`, `export_schematic_pdf`, `export_assembly_svg` and
+  `export_board_step` take a `path`, so they are CLI only.
 
 The last three are open to agents by the maintainer's decision (#1924):
 

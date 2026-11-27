@@ -5,6 +5,10 @@ define_ids! {
     PDF_PREVIEW;
     PDF_DIALOG_SUBTITLE = "pdf-dialog-subtitle";
     PDF_EXPORT_PDF = "pdf-export-pdf";
+    // #2663: refusals of `export_schematic_pdf`
+    PDF_EXPORT_NOT_A_SHEET = "pdf-export-not-a-sheet";
+    PDF_EXPORT_PATH_NEEDED = "pdf-export-path-needed";
+    PDF_EXPORT_NO_PAGES = "pdf-export-no-pages";
     PDF_FOOTER_STATUS = "pdf-footer-status";
     PDF_THUMB_CAPTION = "pdf-thumb-caption";
     PDF_PAGE_N = "pdf-page-n";

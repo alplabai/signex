@@ -10,7 +10,7 @@ use super::*;
 use crate::app::handlers::canvas::placement_tests::{app_with_tool, click, doc};
 use crate::app::{EditMsg, Tool};
 
-fn undo(app: &mut Signex) {
+pub(super) fn undo(app: &mut Signex) {
     let _ = app.update(Message::Edit(EditMsg::Undo));
 }
 
@@ -260,7 +260,7 @@ fn a_csv_import_lands_on_its_own_sheet_after_a_tab_switch() {
     );
 }
 
-fn pin(number: &str, name: &str, direction: PinDirection) -> LibPin {
+pub(super) fn pin(number: &str, name: &str, direction: PinDirection) -> LibPin {
     LibPin {
         unit: 1,
         body_style: 1,
@@ -281,7 +281,7 @@ fn pin(number: &str, name: &str, direction: PinDirection) -> LibPin {
 
 /// A sheet with part U1 (pins 1 BOOT, 2 VIN) and a pin table for it whose
 /// rows are stale.
-fn sheet_with_pin_table() -> SchematicSheet {
+pub(super) fn sheet_with_pin_table() -> SchematicSheet {
     let mut body: LibSymbol = serde_json::from_str(r#"{"id":"U"}"#).expect("body");
     body.pins = vec![
         pin("2", "VIN", PinDirection::PowerInput),
@@ -307,7 +307,7 @@ fn sheet_with_pin_table() -> SchematicSheet {
     sheet
 }
 
-fn app_with_sheet(sheet: SchematicSheet) -> Signex {
+pub(super) fn app_with_sheet(sheet: SchematicSheet) -> Signex {
     let mut app = app_with_tool(Tool::Select);
     let path = app.document_state.active_path.clone().expect("active");
     app.document_state
@@ -316,7 +316,7 @@ fn app_with_sheet(sheet: SchematicSheet) -> Signex {
     app
 }
 
-fn pin_table(app: &Signex) -> SchTable {
+pub(super) fn pin_table(app: &Signex) -> SchTable {
     doc(app)
         .drawings
         .iter()

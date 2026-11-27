@@ -653,6 +653,7 @@ define_ids! {
         CMD_MENU_EXPORT_BOARD_REPORT = "cmd-menu-export-board-report";
         CMD_EXPORT_BOARD_PDF = "cmd-export-board-pdf";
         CMD_MENU_EXPORT_BOARD_PDF = "cmd-menu-export-board-pdf";
+        CMD_EXPORT_SCHEMATIC_PDF = "cmd-export-schematic-pdf";
         CMD_EXPORT_ASSEMBLY_SVG = "cmd-export-assembly-svg";
         CMD_MENU_EXPORT_ASSEMBLY_SVG = "cmd-menu-export-assembly-svg";
         CMD_BOARD_ASSEMBLY_DRAWING = "cmd-board-assembly-drawing";
@@ -686,6 +687,7 @@ define_ids! {
         CMD_SYMBOL_DRAW_BEZIER = "cmd-symbol-draw-bezier";
         CMD_SYMBOL_DRAW_ROUND_RECTANGLE = "cmd-symbol-draw-round-rectangle";
         CMD_SYMBOL_DRAW_PIE = "cmd-symbol-draw-pie";
+        CMD_EDIT_SYMBOL_PINS = "cmd-edit-symbol-pins";
         CMD_CATEGORY_EDIT = "cmd-category-edit";
         CMD_CATEGORY_MODIFY = "cmd-category-modify";
         CMD_CATEGORY_INTERACTIVE = "cmd-category-interactive";

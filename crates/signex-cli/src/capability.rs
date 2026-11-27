@@ -230,6 +230,7 @@ mod tests {
             (Capability::Export, "export_board_step"),
             (Capability::Export, "export_notebook_timeline"),
             (Capability::Export, "export_notebook_pdf"),
+            (Capability::Export, "export_schematic_pdf"),
         ]);
         assert_eq!(non_default, pinned);
     }

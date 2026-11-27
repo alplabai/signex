@@ -103,6 +103,9 @@ mod replay;
 mod rich_note_operands;
 mod routing;
 #[cfg(test)]
+mod schematic_pdf_operand_tests;
+mod schematic_pdf_operands;
+#[cfg(test)]
 mod selection_filter_operand_tests;
 mod selection_filter_operands;
 #[cfg(test)]
@@ -118,6 +121,9 @@ mod sheet_sync_operand_tests;
 mod sheet_sync_operands;
 #[cfg(test)]
 mod sheet_variable_operand_tests;
+#[cfg(test)]
+mod symbol_pin_operand_tests;
+mod symbol_pin_operands;
 #[cfg(test)]
 mod symbol_shape_operand_tests;
 mod symbol_shape_operands;

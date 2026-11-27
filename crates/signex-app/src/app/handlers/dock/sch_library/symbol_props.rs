@@ -11,8 +11,8 @@ use std::path::Path;
 
 use super::*;
 use crate::library::editor::symbol::{
-    PartStep, PinTableMsg, PinTableUi, SymbolPropsMsg, SymbolSelection, add_table_pin, apply_bulk,
-    apply_paste, parse_mm, remove_pins,
+    PartStep, PinTableMsg, PinTableUi, SymbolPropsMsg, add_table_pin, apply_bulk, apply_paste,
+    drop_pin_selection, parse_mm, remove_pins,
 };
 use crate::library::messages::{SymbolEditorMsg, SymbolToolMsg};
 
@@ -220,15 +220,5 @@ impl Signex {
             editor.canvas_cache.clear();
         }
         self.refresh_panel_ctx();
-    }
-}
-
-/// Drop a selection that names pins by index.
-fn drop_pin_selection(selected: &mut Option<SymbolSelection>) {
-    if matches!(
-        selected,
-        Some(SymbolSelection::Pin(_) | SymbolSelection::Multiple { .. } | SymbolSelection::All)
-    ) {
-        *selected = None;
     }
 }

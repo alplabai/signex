@@ -1,0 +1,9 @@
+# before the pin edit
+Pin	Name	Type	Unit	Pin length
+1	BOOT	Passive		2.54
+2	VIN	Power input		2.54
+# after the pin edit
+Pin	Name	Type	Unit	Pin length
+1	BOOT	Input	A	5.08
+2	VCC	Power input	A	2.54
+3	EN	Input	A	2.54

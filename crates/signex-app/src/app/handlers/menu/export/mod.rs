@@ -16,6 +16,7 @@ mod current_page_tests;
 mod erc_report;
 #[cfg(test)]
 mod filter_names_tests;
+mod headless_pdf;
 mod loose_bom;
 mod omitted;
 pub(crate) mod page_list;

@@ -37,7 +37,10 @@ in table…`) is a page of its symbol in the same way: its path is the
 `.snxsym`, it sits after the symbol editor's tab, Save, Undo and the dirty dot
 are the symbol's, and closing the symbol closes it (`app/pin_table_tab.rs`).
 Its title is `<symbol> · Pin table`, the symbol's own name rather than a
-project's.
+project's. Its bulk edit, Delete selected and Paste rows are the catalog
+command `edit_symbol_pins` for an agent or the CLI ([CLI.md](CLI.md),
+"Symbol pins"); what the command writes shows in the tab, and the ticks
+follow their pins.
 
 A shared page shell, `signex_widgets::doc_tab_shell`, holds the Layer Stack
 and Polygon Manager tabs; the Project and Rules tabs do not use it yet. It

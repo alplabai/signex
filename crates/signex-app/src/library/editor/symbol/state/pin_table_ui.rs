@@ -92,11 +92,7 @@ impl PartialEq for PasteDraft {
 impl PasteDraft {
     /// What column `index` is read as.
     pub fn field_of(&self, index: usize) -> PasteField {
-        self.columns
-            .get(index)
-            .or_else(|| DEFAULT_COLUMNS.get(index))
-            .copied()
-            .unwrap_or(PasteField::Ignore)
+        field_at(&self.columns, index)
     }
 
     /// How many columns the map shows: the widest pasted line, at least
@@ -107,10 +103,27 @@ impl PasteDraft {
 
     /// The pasted rows, read through the column map.
     pub fn rows(&self) -> Vec<PastedRow> {
-        let count = self.column_count();
-        let fields: Vec<PasteField> = (0..count).map(|i| self.field_of(i)).collect();
-        read_rows(&self.content.text(), &fields)
+        read_mapped(&self.content.text(), &self.columns)
     }
+}
+
+/// What column `index` is read as under the map `columns`: a column past
+/// its end is read by its default, and past the defaults it is ignored.
+pub fn field_at(columns: &[PasteField], index: usize) -> PasteField {
+    columns
+        .get(index)
+        .or_else(|| DEFAULT_COLUMNS.get(index))
+        .copied()
+        .unwrap_or(PasteField::Ignore)
+}
+
+/// The rows of `text` read through the column map `columns`, as Apply
+/// paste reads the Paste rows box.
+pub fn read_mapped(text: &str, columns: &[PasteField]) -> Vec<PastedRow> {
+    let fields: Vec<PasteField> = (0..column_count(text))
+        .map(|i| field_at(columns, i))
+        .collect();
+    read_rows(text, &fields)
 }
 
 /// The bulk edit bar: each field set is written to every ticked row; an

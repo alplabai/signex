@@ -119,6 +119,8 @@ mod tests {
                 "delete_net_class",
                 "delete_selection",
                 "document_info",
+                // #2817: the pins of the named symbol file, one undo step.
+                "edit_symbol_pins",
                 "filter_drc_results",
                 "find_items",
                 "find_similar_items",

@@ -159,3 +159,24 @@ fn a_number_parses_with_a_decimal_comma() {
     assert_eq!(parse_mm("nan"), None);
     assert_eq!(parse_mm("x"), None);
 }
+
+/// #2817: `edit_symbol_pins` reads its `paste` text through the same map
+/// as the Paste rows box, so both read a sheet alike.
+#[test]
+fn the_box_and_a_bare_column_map_read_the_same_rows() {
+    let mut box_draft = draft("1\tOUTA\t2\t3,5\textra");
+    box_draft.columns = vec![
+        PasteField::Number,
+        PasteField::Name,
+        PasteField::Part,
+        PasteField::Length,
+    ];
+    let bare = read_mapped(&box_draft.content.text(), &box_draft.columns);
+    assert_eq!(bare, box_draft.rows());
+    assert_eq!(bare[0].part, Some(2));
+    assert_eq!(bare[0].length, Some(3.5));
+    assert_eq!(bare[0].description, None, "column 5 is past the defaults");
+    assert_eq!(field_at(&[], 1), PasteField::Name, "the default map");
+    assert_eq!(field_at(&[], 9), PasteField::Ignore);
+    assert_eq!(read_mapped(SHEET, &[]), draft(SHEET).rows());
+}

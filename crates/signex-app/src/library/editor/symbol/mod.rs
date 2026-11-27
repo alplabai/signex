@@ -31,8 +31,14 @@ pub use state::{
     BodyScope, BodyScopeRow, PartChip, PartStep, SymActiveBarMenu, SymbolPropsMsg, SymbolPropsTab,
     SymbolPropsUi, SymbolSelection, rect_end_for_extent, rect_extent,
 };
+/// The rows `edit_symbol_pins` sets and pastes (#2817), read and applied
+/// by the same rules as the Pin table tab.
+pub use state::{
+    PartView, PinRow, PinRowChange, RowsApplied, apply_rows, electrical_id, orientation_id,
+    parse_paste_fields, parse_paste_mode, parse_pin_rows, read_mapped, unescape_paste,
+};
 /// The Pin table document tab's state, messages and edits (mockup row 122b).
 pub use state::{
     PasteDraft, PasteField, PasteMode, PinTableMsg, PinTableUi, add_table_pin, apply_bulk,
-    apply_paste, parse_mm, paste_preview, remove_pins,
+    apply_paste, drop_pin_selection, parse_mm, paste_preview, remove_pins,
 };

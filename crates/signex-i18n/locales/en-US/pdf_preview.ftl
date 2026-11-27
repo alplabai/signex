@@ -11,6 +11,11 @@ pdf-dialog-subtitle = { $file } · { $count ->
 }
 # The footer action; it opens a save dialog.
 pdf-export-pdf = Export PDF…
+# Refusals of the export_schematic_pdf command (#2663). $document is the
+# document the command named, an id or a path.
+pdf-export-not-a-sheet = { $document } is not an open sheet, so no PDF was written.
+pdf-export-path-needed = Name the PDF file to write with the operand path.
+pdf-export-no-pages = The project of { $document } has no page to print, so no PDF was written.
 # The footer caption: $count pages print (a whole number), on $paper (such
 # as "ISO A4 landscape"), at $quality (such as "Medium (300 dpi)").
 pdf-footer-status = { $count ->

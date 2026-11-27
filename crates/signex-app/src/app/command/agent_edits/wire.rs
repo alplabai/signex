@@ -262,6 +262,11 @@ const PROJECT_WIDE: &[(&str, &str)] = &[
     ("symbol_draw_bezier", SYMBOL_EDIT),
     ("symbol_draw_round_rectangle", SYMBOL_EDIT),
     ("symbol_draw_pie", SYMBOL_EDIT),
+    // #2817: one undo step on the symbol file it names.
+    (
+        "edit_symbol_pins",
+        "it edits a library symbol, which no sheet's undo step covers; run it as its own command",
+    ),
     // #2389: length tuning lands on the named board's own undo stack.
     (
         "tune_net_length",
@@ -649,6 +654,8 @@ mod tests {
             ("send_drawings_backward", "does not carry it yet"),
             ("send_drawings_to_back", "does not carry it yet"),
             ("delete_selection", "does not carry it yet"),
+            // #2817: a symbol file's pins, on its own undo stack.
+            ("edit_symbol_pins", "edits a library symbol"),
         ] {
             let reason = edit_refusal(&id(command)).unwrap_or_else(|| panic!("{command}"));
             assert!(reason.contains(needle), "{command}: {reason}");
