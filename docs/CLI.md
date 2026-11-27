@@ -1553,8 +1553,10 @@ run that cannot build every output writes nothing and is refused with the
 reason. A headless run leaves the job's history as it is.
 
 The Export Job tab's actions are commands too: `new_output_job`,
-`add_job_output`, `set_job_output`, `set_job_profile` and
-`set_job_triggers` write the job file (`--save`); `read_output_job`,
+`add_job_output`, `set_job_output`, `set_job_profile`,
+`set_job_triggers` and the Gerber settings `set_job_gerber_units`,
+`set_job_gerber_format`, `set_job_gerber_zeros`, `set_job_gerber_layers` and
+`set_job_gerber_apertures` write the job file (`--save`); `read_output_job`,
 `open_output_job`, `stop_output_job` and `view_output_job_run` read or show.
 The file format, the commands' operands and the rules are in
 [OUTPUT_JOBS.md](OUTPUT_JOBS.md).
