@@ -465,6 +465,7 @@ fn every_step_builds_in_both_graphite_themes() {
                     let ctx = ImportDialogContext {
                         running: None,
                         project_open,
+                        library_open: project_open,
                     };
                     drop(view(state, ctx, &tokens, &i18n, windowed));
                 }

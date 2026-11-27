@@ -1062,3 +1062,36 @@ library-import-dialog-unchanged = The import was refused before it started, so n
 library-import-dialog-other-run = Another library import is running.
 # $path is the chosen folder.
 library-import-dialog-target-link = { $path } is a link to another place. Choose the folder itself, or a new folder.
+# Import Library dialog, the result and loss report (#3121).
+library-import-dialog-step-done = Done
+# $name is the library's name.
+library-import-dialog-stored-note = Loss report · { $name }
+library-import-dialog-tab-result = Result
+library-import-dialog-tab-report = Loss report
+# $name is the library's name.
+library-import-dialog-result-imported = { $name } imported
+library-import-dialog-result-updated = { $name } updated
+library-import-dialog-count-imported = Imported
+# $approximated, $dropped and $skipped are whole numbers.
+library-import-dialog-report-summary = { $approximated } approximated · { $dropped } dropped · { $skipped } skipped
+library-import-dialog-view-report = View loss report
+library-import-dialog-meaning-error = not imported
+library-import-dialog-meaning-dropped = imported without this item
+library-import-dialog-meaning-approximated = imported, drawn as close as Signex can
+library-import-dialog-meaning-info = imported, nothing lost
+library-import-dialog-meaning-other = a kind of loss this Signex does not know
+# $path is the library folder, $why what was wrong with its report.
+library-import-dialog-report-unreadable = { $path } has no readable import report ({ $why }). Only a library made by Import Library has one.
+# $converter and $version come from the report.
+library-import-dialog-report-header = { $name } · converted by { $converter } { $version }
+# $code is the converter's item code, $count a whole number.
+library-import-dialog-code-count = { $code } · { $count }
+# $path is the file the report was saved to.
+library-import-dialog-report-saved = Saved the report to { $path }.
+library-import-dialog-report-save-failed = Could not save the report to { $path }: { $error }
+library-import-dialog-report-open-failed = Could not open { $path }: { $error }
+library-import-dialog-save-report = Save report…
+library-import-dialog-open-report = Open report
+library-import-dialog-open-in-browser = Open in Library Browser
+library-import-dialog-save-report-title = Save the loss report
+library-import-dialog-menu-view-report = View import report

@@ -8,10 +8,11 @@
 //!    and report items.
 //! 3. Import ([`progress`]): the run's phases, bar and current item, and
 //!    Cancel, which stops after the current item and removes what was
-//!    written.
+//!    written. A finished import ends on its result card and loss report
+//!    ([`result`]); the same report opens later from the Library Browser.
 //!
 //! The state is a pure model; the handlers are in
-//! `app/dispatch/library/import_dialog.rs` and the run itself goes through
+//! `app/dispatch/library/import_dialog/` and the run itself goes through
 //! `Signex::start_library_import`. See docs/architecture/library-dialogs.md,
 //! "Import Library dialog".
 
@@ -25,9 +26,12 @@ use crate::library_import::{Discovery, DiscoveryCache, RunOutcome};
 
 pub mod preview;
 pub mod progress;
+pub mod result;
 pub mod source;
 mod view;
 
+#[cfg(test)]
+mod report_tests;
 #[cfg(test)]
 mod tests;
 
@@ -127,6 +131,11 @@ pub struct ImportDialogState {
     pub other_run_active: bool,
     pub phases: Vec<progress::PhaseLine>,
     pub import_end: Option<ImportEnd>,
+    /// The finished import (or a stored report) step 3 ends on.
+    pub result: Option<Box<result::ImportResult>>,
+    pub result_tab: result::ResultTab,
+    /// What the last Save report… or Open report did.
+    pub report_note: Option<result::ReportNote>,
 }
 
 impl ImportDialogState {
@@ -160,6 +169,9 @@ impl ImportDialogState {
             other_run_active: false,
             phases: Vec::new(),
             import_end: None,
+            result: None,
+            result_tab: result::ResultTab::Result,
+            report_note: None,
         }
     }
 }
@@ -211,6 +223,27 @@ pub enum ImportDialogMsg {
     CancelPressed,
     /// The header close, Esc or the window's close button.
     Closed,
+    /// Result or Loss report was picked at the end of step 3.
+    ResultTabPicked(result::ResultTab),
+    SaveReportPressed,
+    /// The save picker closed; `None` when dismissed.
+    ReportSavePicked(Option<PathBuf>),
+    /// The report copy finished: the file written, or why not.
+    ReportSaved(Result<PathBuf, (PathBuf, String)>),
+    OpenReportPressed,
+    /// The viewer launch for the report finished; why it failed.
+    ReportOpened(Result<(), String>),
+    OpenInBrowserPressed,
+    /// A library row in the Library Browser was right-clicked: its menu
+    /// opened, or closed when it was open. By the library's `.snxlib`.
+    LibraryMenuToggled(PathBuf),
+    /// View import report in that menu was pressed.
+    StoredReportRequested(PathBuf),
+    /// The stored report of the library `library_file` was read.
+    StoredReportRead {
+        library_file: PathBuf,
+        report: Result<Box<crate::library_import::ImportReport>, String>,
+    },
 }
 
 /// The message the `import_library` command sends.

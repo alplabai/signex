@@ -602,6 +602,12 @@ impl Signex {
                 crate::library::import_dialog::ImportDialogContext {
                     running: lib.import.running.as_ref(),
                     project_open: self.document_state.active_project.is_some(),
+                    library_open: lib
+                        .import_dialog
+                        .as_deref()
+                        .and_then(|d| d.finished())
+                        .and_then(|r| r.library_file.as_deref())
+                        .is_some_and(|file| lib.library_at(file).is_some()),
                 },
                 tokens,
                 &self.ui_state.i18n,

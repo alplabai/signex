@@ -7,6 +7,11 @@ use serde::Deserialize;
 /// The report file's size limit; a report is per-item text, not data.
 pub const MAX_REPORT_BYTES: u64 = 64 << 20;
 
+/// The report a converter writes into the library folder (contract §4).
+pub const REPORT_JSON: &str = "import-report.json";
+/// Its human-readable copy, beside it.
+pub const REPORT_MD: &str = "import-report.md";
+
 /// How much of an item was lost.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -100,6 +105,27 @@ pub fn read_report(path: &Path) -> Result<ImportReport, String> {
     parse_report(&text)
 }
 
+/// The report stored in an imported library's folder `library_dir`.
+/// Blocking.
+pub fn read_stored_report(library_dir: &Path) -> Result<ImportReport, String> {
+    read_report(&library_dir.join(REPORT_JSON))
+}
+
+/// Copy the stored readable report of `library_dir` to `target` with an
+/// atomic write, so a failed copy leaves `target` as it was. Blocking.
+pub fn save_stored_report(library_dir: &Path, target: &Path) -> Result<(), String> {
+    use std::io::Read as _;
+    let file = std::fs::File::open(library_dir.join(REPORT_MD)).map_err(|e| e.to_string())?;
+    let mut bytes = Vec::new();
+    file.take(MAX_REPORT_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|e| e.to_string())?;
+    if bytes.len() as u64 > MAX_REPORT_BYTES {
+        return Err(format!("larger than {MAX_REPORT_BYTES} bytes"));
+    }
+    signex_types::atomic_io::atomic_write(target, &bytes).map_err(|e| e.to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -117,6 +143,20 @@ mod tests {
         assert_eq!(r.count(Severity::Error), 1);
         assert_eq!(r.items[2].id, None);
         assert_eq!(r.items[0].detail["pads"], 2);
+    }
+
+    #[test]
+    fn the_stored_report_is_read_and_its_readable_copy_saved_whole() {
+        let dir = tempfile::tempdir().unwrap();
+        assert!(read_stored_report(dir.path()).is_err(), "none yet");
+        std::fs::write(dir.path().join(REPORT_JSON), FIXTURE).unwrap();
+        assert_eq!(read_stored_report(dir.path()).unwrap().items.len(), 3);
+        let target = dir.path().join("saved.md");
+        assert!(save_stored_report(dir.path(), &target).is_err(), "no .md");
+        assert!(!target.exists(), "a failed save writes nothing");
+        std::fs::write(dir.path().join(REPORT_MD), "# Report\n").unwrap();
+        save_stored_report(dir.path(), &target).unwrap();
+        assert_eq!(std::fs::read_to_string(&target).unwrap(), "# Report\n");
     }
 
     #[test]

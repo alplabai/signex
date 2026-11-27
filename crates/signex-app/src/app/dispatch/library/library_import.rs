@@ -194,8 +194,9 @@ impl Signex {
         }
     }
 
-    /// A run ended. The Import Library dialog shows a dry run's result and
-    /// a failed import itself; no notice repeats them.
+    /// A run ended. The Import Library dialog shows the result of a run it
+    /// waits for (a dry run, a failed import, a finished import with its
+    /// report); no notice repeats it.
     fn finish_library_import(&mut self, finished: ImportFinished) -> Task<Message> {
         let run = self.library.import.running.take();
         let mode = run.as_ref().map(|run| run.mode);
@@ -227,7 +228,7 @@ impl Signex {
                 self.report_library_import_failure(failure);
                 Task::none()
             }
-            Ok(outcome) => self.mount_imported_library(outcome, &finished),
+            Ok(outcome) => self.mount_imported_library(outcome, &finished, shown),
         };
         self.library.import.last = Some(Box::new(finished));
         Task::batch([task, leftover])
@@ -270,6 +271,7 @@ impl Signex {
         &mut self,
         outcome: &ImportJobOutcome,
         finished: &ImportFinished,
+        shown: bool,
     ) -> Task<Message> {
         let Some(file) = outcome.library_file.clone() else {
             return Task::none();
@@ -290,7 +292,7 @@ impl Signex {
                 self.add_imported_library_to_project(project, &file, outcome.library_id)
             }
         }
-        self.log_import_result(outcome, &file);
+        self.log_import_result(outcome, &file, shown);
         tasks.push(
             match self.library.request_mount(&file, MountIntent::Silent) {
                 MountRequest::Spawn => spawn_pending_mounts(vec![file]),
@@ -357,7 +359,14 @@ impl Signex {
         self.document_state.mark_document_dirty(&project_path);
     }
 
-    fn log_import_result(&mut self, outcome: &ImportJobOutcome, file: &std::path::Path) {
+    /// Log a written library; a partial import raises a notice unless the
+    /// dialog shows its result (`shown`).
+    fn log_import_result(
+        &mut self,
+        outcome: &ImportJobOutcome,
+        file: &std::path::Path,
+        shown: bool,
+    ) {
         let summary = &outcome.run.summary;
         let name = file
             .file_stem()
@@ -379,7 +388,7 @@ impl Signex {
                     .render_en_us(),
             );
         }
-        if outcome.run.exit == ExitKind::Partial {
+        if outcome.run.exit == ExitKind::Partial && !shown {
             self.document_view.error_notice =
                 Some(ErrorNotice::new(ids::LIBRARY_IMPORT_DONE_TITLE, done));
         }

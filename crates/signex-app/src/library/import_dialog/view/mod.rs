@@ -1,7 +1,8 @@
 //! The Import Library dialog (mockup row 211): the header with the step
-//! note, the three-step stepper, the step's body and its footer. A pure
-//! read of the dialog state and the running import; every colour comes
-//! from theme tokens.
+//! note, the three-step stepper, the step's body and its footer; at the
+//! end of step 3 the result card and loss report ([`result`]). A pure read
+//! of the dialog state and the running import; every colour comes from
+//! theme tokens.
 
 use iced::widget::text::{Ellipsis, Wrapping};
 use iced::widget::{Space, column, container, row, scrollable};
@@ -18,6 +19,7 @@ use crate::styles::{HAIRLINE, PillTone, Radii, Spacing, TypeScale, pill, pill_co
 
 mod preview;
 mod progress;
+mod result;
 mod source;
 
 #[cfg(test)]
@@ -40,6 +42,9 @@ pub struct ImportDialogContext<'a> {
     pub running: Option<&'a ImportRun>,
     /// A project is open, so "This project" can be chosen.
     pub project_open: bool,
+    /// The finished import's library is open, so Open in Library Browser
+    /// can show it.
+    pub library_open: bool,
 }
 
 pub fn view<'a>(
@@ -50,7 +55,7 @@ pub fn view<'a>(
     windowed: bool,
 ) -> Element<'a, LibraryMessage> {
     let title = t!(i18n, ids::DIALOG_TITLE_IMPORT_LIBRARY).into_string();
-    let note = step_note(state.step, i18n).into_string();
+    let note = header_note(state, i18n).into_string();
     let header = header_with_note_closing(
         &title,
         Some(note),
@@ -67,10 +72,16 @@ pub fn view<'a>(
             preview::body(state, ctx, tokens, i18n),
             preview::footer(state, tokens, i18n),
         ),
-        Step::Import => (
-            progress::body(state, ctx, tokens, i18n),
-            progress::footer(state, tokens, i18n),
-        ),
+        Step::Import => match state.finished() {
+            Some(finished) => (
+                result::body(state, finished, tokens, i18n),
+                result::footer(finished, ctx, tokens, i18n),
+            ),
+            None => (
+                progress::body(state, ctx, tokens, i18n),
+                progress::footer(state, tokens, i18n),
+            ),
+        },
     };
     let content = scrollable(container(body).padding([SP.l, SP.xl]).width(Length::Fill))
         .height(Length::Fill)
@@ -80,8 +91,14 @@ pub fn view<'a>(
     } else {
         Length::Fixed(super::CARD_H)
     };
+    let mut card = column![header];
+    // A stored report is no step of an import.
+    if !state.is_stored_report() {
+        card = card.push(stepper(state.step, tokens, i18n));
+    }
     container(
-        column![header, stepper(state.step, tokens, i18n), content, footer]
+        card.push(content)
+            .push(footer)
             .width(crate::library::card_len(windowed, super::CARD_W))
             .height(height),
     )
@@ -106,7 +123,26 @@ fn step_number(step: Step) -> u32 {
     }
 }
 
-/// The header note, "Step 2 of 3 · Preview".
+/// The header note: the step ("Step 3 of 3 · Done" once finished), or the
+/// library a stored report belongs to.
+pub(crate) fn header_note(state: &ImportDialogState, i18n: &I18n) -> Localized {
+    match state.finished() {
+        Some(finished) if finished.run.is_none() => t!(
+            i18n,
+            ids::LIBRARY_IMPORT_DIALOG_STORED_NOTE,
+            "name" => finished.library_name()
+        ),
+        Some(_) => t!(
+            i18n,
+            ids::LIBRARY_IMPORT_DIALOG_STEP_NOTE,
+            "step" => step_number(Step::Import),
+            "name" => t!(i18n, ids::LIBRARY_IMPORT_DIALOG_STEP_DONE).into_string()
+        ),
+        None => step_note(state.step, i18n),
+    }
+}
+
+/// The step note, "Step 2 of 3 · Preview".
 pub(crate) fn step_note(step: Step, i18n: &I18n) -> Localized {
     t!(
         i18n,

@@ -109,9 +109,13 @@ fn discover_preview_and_import_through_the_dialog() {
     assert!(!out.exists(), "nothing is written before Import");
     assert!(app.library.import.last.as_ref().is_some());
 
-    // Step 3: the import writes, commits and mounts; the dialog closes.
+    // Step 3: the import writes, commits and mounts; the dialog ends on
+    // the result card with the run's report.
     settle(&mut app, d(ImportDialogMsg::ImportPressed));
-    assert!(app.library.import_dialog.is_none());
+    let state = app.library.import_dialog.as_deref().expect("the result");
+    let result = state.finished().expect("finished");
+    assert!(result.run.is_some());
+    assert_eq!(state.report_items().len(), 3);
     assert!(!preview_dir.exists(), "the temp folder is gone");
     let last = app.library.import.last.as_ref().unwrap();
     let outcome = last.result.as_ref().expect("imported");
@@ -121,6 +125,9 @@ fn discover_preview_and_import_through_the_dialog() {
     assert!(outcome.commit.is_some());
     assert!(app.library.library_at(&file).is_some(), "mounted");
     assert!(app.library.import.running.is_none());
+    // Open in Library Browser closes the dialog on the library's tab.
+    settle(&mut app, d(ImportDialogMsg::OpenInBrowserPressed));
+    assert!(app.library.import_dialog.is_none());
 }
 
 #[test]

@@ -163,7 +163,7 @@ fn ready<'a>(
 
 /// The severity chips (a press hides or shows that severity) and the
 /// filter field.
-fn filter_row<'a>(
+pub(super) fn filter_row<'a>(
     state: &'a ImportDialogState,
     tokens: &ThemeTokens,
     i18n: &I18n,

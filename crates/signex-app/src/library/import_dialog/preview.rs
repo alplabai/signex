@@ -1,6 +1,7 @@
 //! Step 2, preview: what the dry run reported. Pure reads of the report;
-//! the list filter and the severity chips. A dry run writes only the report
-//! (contract §2.2), so the list is the report's items.
+//! the list filter and the severity chips, which the loss report after the
+//! import shares. A dry run writes only the report (contract §2.2), so the
+//! list is the report's items.
 
 use super::{ImportDialogState, PreviewState};
 use crate::library_import::RunOutcome;
@@ -26,11 +27,10 @@ impl ImportDialogState {
         }
     }
 
-    /// The report's items, when the dry run left a readable report.
+    /// The shown report's items ([`Self::shown_report`]): the dry run's
+    /// on step 2, the finished run's or the stored one after step 3.
     pub fn report_items(&self) -> &[ReportItem] {
-        self.preview_outcome()
-            .and_then(|o| o.report.as_ref())
-            .map_or(&[], |r| r.items.as_slice())
+        self.shown_report().map_or(&[], |r| r.items.as_slice())
     }
 
     /// `(severity, count)` for each chip severity the report has.

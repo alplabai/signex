@@ -1,7 +1,8 @@
-//! The Import Library dialog's handlers (mockup row 211, #3117–#3120). The
+//! The Import Library dialog's handlers (mockup row 211, #3117–#3121). The
 //! dialog's model is `crate::library::import_dialog`; the converter search,
 //! the pickers and the folder check run as tasks, and both runs (the dry
-//! run and the import) go through [`Signex::start_library_import`].
+//! run and the import) go through [`Signex::start_library_import`]. The
+//! result's report actions are in [`report`].
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::Ordering;
@@ -10,12 +11,15 @@ use signex_i18n::{Translatable, ids};
 
 use super::*;
 use crate::library::import_dialog::progress::{ends_item, item_in_flight};
+use crate::library::import_dialog::result::ImportResult;
 use crate::library::import_dialog::{
     self as dialog, ImportDialogMsg, ImportDialogState, ImportEnd, PreviewState, SourceKind, Step,
 };
 use crate::library_import::run_state::ImportFinished;
 use crate::library_import::snapshot::default_libraries_root;
 use crate::library_import::{MountScope, ProgressEvent, RunMode};
+
+mod report;
 
 /// The temp folders of dry runs are named with this prefix; only such a
 /// folder is ever removed by the dialog.
@@ -160,6 +164,23 @@ impl Signex {
                 self.edit_import_dialog(|d| d.selected_item = Some(index))
             }
             ImportDialogMsg::CancelPressed | ImportDialogMsg::Closed => self.import_dialog_closed(),
+            ImportDialogMsg::ResultTabPicked(tab) => self.edit_import_dialog(|d| d.result_tab = tab),
+            ImportDialogMsg::SaveReportPressed => self.pick_import_report_target(),
+            ImportDialogMsg::ReportSavePicked(target) => self.save_import_report(target),
+            ImportDialogMsg::ReportSaved(saved) => self.import_report_saved(saved),
+            ImportDialogMsg::OpenReportPressed => self.open_import_report(),
+            ImportDialogMsg::ReportOpened(opened) => self.import_report_opened(opened),
+            ImportDialogMsg::OpenInBrowserPressed => self.open_imported_library(),
+            ImportDialogMsg::LibraryMenuToggled(file) => {
+                let open = self.library.import_menu.as_ref() == Some(&file);
+                self.library.import_menu = (!open).then_some(file);
+                Task::none()
+            }
+            ImportDialogMsg::StoredReportRequested(file) => self.read_stored_import_report(file),
+            ImportDialogMsg::StoredReportRead {
+                library_file,
+                report,
+            } => self.stored_import_report_read(library_file, report),
         }
     }
 
@@ -539,7 +560,11 @@ impl Signex {
             (Some(RunMode::Preview), Err(failure)) => {
                 d.preview = Some(PreviewState::Failed(failure.error.to_translatable()));
             }
-            (_, Ok(_)) => self.library.import_dialog = None,
+            (Some(mode), Ok(outcome)) => {
+                let output = d.location_path();
+                d.show_result(ImportResult::of_run(mode, outcome, &output));
+            }
+            (None, Ok(_)) => {}
             (_, Err(failure)) => {
                 let removed = failure.removed_output;
                 d.import_end = Some(match *failure.error {

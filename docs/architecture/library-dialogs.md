@@ -123,13 +123,13 @@ check. The card itself is in `updates_dialog::view`.
 
 ## Import Library dialog
 
-`crates/signex-app/src/library/import_dialog/` (mockup row 211, #3117–#3120),
+`crates/signex-app/src/library/import_dialog/` (mockup row 211, #3117–#3125),
 opened by File ▸ Import ▸ Library… (`import_library`, also in the command
 palette). It runs an installed library converter
 ([LIBRARY_CONVERTER_CONTRACT.md](../LIBRARY_CONVERTER_CONTRACT.md)) through the
 engine in `crate::library_import`, in three steps under a stepper; the header
 note repeats the step ("Step 2 of 3 · Preview"). Handlers:
-`app/dispatch/library/import_dialog.rs`. It is a tool window (resizable), and
+`app/dispatch/library/import_dialog/`. It is a tool window (resizable), and
 `ModalId::LibraryImport` follows `import_dialog` like the other library
 dialogs.
 
@@ -188,6 +188,26 @@ Stop now: a second Cancel (or Esc, or Close) stops the run at once, so a
 converter stuck on one item, silent, or never exiting is always stopped.
 Quitting kills a running converter's process group. Esc and the close button cancel
 too while the import runs; the dialog stays until it has stopped, then says
-whether the folder was removed, with Back and Close. A finished import closes
-the dialog; the library is committed and mounted as described in
-DECISIONS.md (the result card and loss report are a later step, #3121).
+whether the folder was removed, with Back and Close.
+
+**Done: result and loss report (#3121).** A finished import stays on step 3
+("Step 3 of 3 · Done") with two tabs. Result is the result card: the library
+name, tiles for imported parts, approximated, dropped and skipped items, the
+library folder, and View loss report with the counts. Loss report is the
+report the run wrote (`import-report.json`), with the same severity chips and
+filter as step 2, grouped by severity (most severe first, each with what it
+means for the item) and then by code (most items first), each row the item's
+name in the source and the converter's message; at most 200 rows, with a
+caption when the filter leaves more. The footer has Save report…, which copies
+the library's `import-report.md` to a file the user picks (an atomic write;
+nothing is written until a file is picked), Open report (the `.md` in the
+system viewer), Close, and Open in Library Browser, on once the library is
+mounted. Model: `library::import_dialog::result`; handlers:
+`app/dispatch/library/import_dialog/report.rs`.
+
+**The stored report.** A right-click on a library in the Library Browser's
+LIBRARIES list opens a menu under it with View import report, which reads the
+library's `import-report.json` on a worker and opens the dialog on that loss
+report alone (no stepper; the header note names the library), or on why there
+is none. An open dialog stays as it is, as File ▸ Import ▸ Library… leaves it.
+The menu's open state is `LibraryState::import_menu`.
