@@ -8,7 +8,8 @@
 #          in crates/signex-app/src/app/core.rs and app/core/**/*.rs. Skipped:
 #          items directly under `#[cfg(test)]` and everything inside them
 #          (scripts/uifree-test-item.yml), files whose every top-level `mod x;`
-#          is under `#[cfg(test)]` (and the modules below them), and types
+#          (found by ast-grep, however its lines are split) is under
+#          `#[cfg(test)]` (and the modules below them), and types
 #          declared inside a fn, an impl or a trait. A file that is not mounted,
 #          or mounted once without `#[cfg(test)]`, is production whatever its name.
 #   roots  The text of: `struct DocumentState` in
@@ -26,10 +27,13 @@
 #
 # Also fails on: two core types with one name; a name in DocumentState that two
 # app/state/ types share (each would add its definition); a core type named
-# like a common std or dependency type (String, Vec, Uuid, ...), which would
-# collect edges from that outside use; a `macro_rules!` or an item-level macro
-# call in core production code, whose items the scan cannot see. `#[path]` and
-# `include!` are banned in app/core/ by scripts/check_core_guard.sh.
+# like a common std or dependency type (String, Vec, Uuid, ...), like a name a
+# non-test `use` in a core or app/state file imports from another crate (std or
+# a dependency in crates/signex-app/Cargo.toml), or like an app/state type, any
+# of which would collect edges from that outside use; a `macro_rules!` or an
+# item-level macro call in core production code, whose items the scan cannot
+# see; `#[rustfmt::skip]` on a core `mod` declaration. `#[path]` and `include!`
+# are banned in app/core/ by scripts/check_core_guard.sh.
 #
 # A node no root reaches is a violation. scripts/core-closure-baseline.txt lists
 # the ones known today (`path Name`); it may only shrink: a new violation fails,
@@ -37,11 +41,14 @@
 # does a baseline line that `<ref>`'s baseline does not have (a `<ref>` without
 # the baseline passes only if it has no guard script either).
 #
-# Method: ast-grep finds the items, impl fns, macros and test ranges; the lexer of
-# scripts/check_core_guard.awk drops comments and strings, so a doc comment
-# naming a type is no edge. Names are matched by identifier, not resolved.
-# Known blind spots: a core type name that is also a crate-external name not on
-# the shadow list (`Point`) gets an edge from that outside use; a type reached
+# Method: ast-grep finds the items, impl fns, macros, `mod x;` declarations and
+# test ranges; the lexer of scripts/check_core_guard.awk drops comments and
+# strings (a doc comment naming a type is no edge) and flattens `use` trees.
+# Names are matched by identifier, not resolved.
+# Known blind spots: a core type name that is also an outside name reached
+# without a `use` naming it (a glob import, a full path in a field, a type of
+# another signex-app module imported by a `crate::` path, which may be a
+# re-export of the core type) gets an edge from that outside use; a type reached
 # only through a free fn or a non-core, non-app/state wrapper of DocumentState
 # needs a root; a `#[path]` mount in app/state/ is not followed; a field or signature compiled out by a non-test cfg
 # (`#[cfg(any())]`) still makes an edge; and a view type added as a field or in
@@ -69,6 +76,7 @@ APP_SRC="crates/signex-app/src"
 CORE_REL="$APP_SRC/app/core"
 STATE_DIR="$APP_SRC/app/state"
 STATE="$STATE_DIR/mod.rs"
+CARGO="crates/signex-app/Cargo.toml"
 ROOTS="scripts/core-closure-roots.txt"
 BASELINE="scripts/core-closure-baseline.txt"
 
@@ -118,7 +126,26 @@ rule:
           - kind: source_file
           - kind: declaration_list
           - kind: expression_statement
-            inside: {any: [{kind: source_file}, {kind: declaration_list}]}'
+            inside: {any: [{kind: source_file}, {kind: declaration_list}]}
+---
+id: core-fmt-skip
+language: rust
+rule:
+  kind: mod_item
+  follows:
+    stopBy: {not: {any: [{kind: attribute_item}, {kind: line_comment}, {kind: block_comment}]}}
+    kind: attribute_item
+    regex: "rustfmt::skip"'
+
+# Bodiless `mod x;` declarations at the top level of a file (an inline
+# `mod x { }` mounts another file), however rustfmt::skip splits their lines.
+MOD_RULE='id: mod-decl
+language: rust
+rule:
+  kind: mod_item
+  has: {field: name, pattern: $NAME}
+  not: {has: {kind: declaration_list}}
+  inside: {kind: source_file}'
 
 STATE_RULES="id: state-type
 $TYPE_RULE"
@@ -192,6 +219,7 @@ feed() {
   ast_grep --inline-rules "$STATE_RULES" "$STATE_DIR" || return 2
   ast_grep --inline-rules "$DOC_FN_RULE" "$STATE_DIR" || return 2
   ast_grep --rule "$TEST_RULE" "${core[@]}" "${state_files[@]}" || return 2
+  ast_grep --inline-rules "$MOD_RULE" "${core[@]}" "${state_files[@]}" || return 2
   for f in "${core[@]}" "${state_files[@]}"; do
     printf 'F\t%s\n' "$f"
     "$AWK" -v f="$f" -v depth=0 -v mode=lines -f "$LEXER" "$f" | "$AWK" '{ print "L\t" $0 }' || return 2
@@ -200,6 +228,15 @@ feed() {
 }
 
 input="$(feed)" || exit 2
+
+# The crates a `use` path can start from: std's and signex-app's dependencies.
+# shortcut: a `[dependencies.name]` table header is not read; none exists today.
+crates="std core alloc"
+if [[ -f "$CARGO" ]]; then
+  crates="$crates $(tr -d '\r' < "$CARGO" | "$AWK" '
+    /^\[/ { dep = $0 ~ /dependencies\]$/; next }
+    dep && /^[A-Za-z0-9_-]+[[:space:]]*[=.]/ { sub(/[[:space:]]*[=.].*$/, ""); gsub(/-/, "_"); printf " %s", $0 }')"
+fi
 if ! "$AWK" -F'\t' -v s="$STATE" '$1 == "state-type" && $2 == s && $5 == "DocumentState" { f = 1 } END { exit !f }' <<<"$input"; then
   echo "Core closure: FAIL — no struct DocumentState in $STATE."
   exit 2
@@ -207,8 +244,10 @@ fi
 
 # V path name: unreachable; U name: a root that is no core type; D name paths:
 # a shared name; E name paths: a DocumentState type name two app/state types
-# share; S path name: a shadowed std name; M path:line: a macro.
-result="$("$AWK" -F'\t' -v state="$STATE" -v state_dir="$STATE_DIR" -v core_rel="$CORE_REL" '
+# share; S path name: a shadowed std name; I path name import: a name a `use`
+# brings in from outside app/core/; M path:line: a macro; K path:line: a
+# rustfmt::skip mod declaration.
+result="$("$AWK" -F'\t' -v state="$STATE" -v state_dir="$STATE_DIR" -v core_rel="$CORE_REL" -v crates="$crates" '
   BEGIN {
     n = split("String Vec Option Result Box Path PathBuf HashMap HashSet BTreeMap BTreeSet " \
       "VecDeque Arc Rc Cell RefCell Mutex RwLock Cow Uuid Value Map Duration Instant " \
@@ -221,18 +260,28 @@ result="$("$AWK" -F'\t' -v state="$STATE" -v state_dir="$STATE_DIR" -v core_rel=
     for (i = 1; i <= nt; i++) if (tf[i] == file && line >= ts[i] && line <= te[i]) return 1
     return 0
   }
-  # Count the `mod stem;` lines at the top level of parent (an inline `mod x { }`
-  # mounts another file) into dn, those under #[cfg(test)] into dt.
-  function decls(parent, stem,   l, d, c, pre) {
-    d = 0
-    for (l = 1; l <= maxl[parent]; l++) {
-      if (!((parent, l) in code)) continue
-      c = code[parent, l]
-      if (match(c, "(^|[^A-Za-z0-9_])mod[[:space:]]+" stem "[[:space:]]*;")) {
-        pre = substr(c, 1, RSTART)
-        if (d + gsub(/\{/, "{", pre) - gsub(/\}/, "}", pre) == 0) { dn++; dt += inrange(parent, l) }
-      }
-      d += gsub(/\{/, "{", c) - gsub(/\}/, "}", c)
+  # Count the top-level `mod stem;` declarations of parent (mod-decl) into dn,
+  # those under #[cfg(test)] into dt.
+  function decls(parent, stem,   n, ls, i) {
+    if (!((parent, stem) in mdecl)) return
+    n = split(mdecl[parent, stem], ls, SUBSEP)
+    for (i = 2; i <= n; i++) { dn++; dt += inrange(parent, ls[i]) }
+  }
+  # imp[name]: where a non-test `use` binds name to a path in another crate
+  # (a dependency of signex-app, or std/core/alloc). A `crate::` path may be a
+  # re-export of the core type itself, so it is not judged.
+  function imports(   i, n, w, ext, p, name) {
+    n = split(crates, w, " ")
+    for (i = 1; i <= n; i++) ext[w[i]] = 1
+    for (i = 1; i <= nu; i++) {
+      if (inrange(uf[i], ul[i])) continue
+      p = up[i]; name = ""
+      if (match(p, / as [A-Za-z_][A-Za-z0-9_]*$/)) { name = substr(p, RSTART + 4); p = substr(p, 1, RSTART - 1) }
+      sub(/^::/, "", p); sub(/::self$/, "", p)
+      if (name == "") { name = p; sub(/^.*::/, "", name) }
+      w[1] = p; sub(/::.*$/, "", w[1])
+      if (name == "*" || name == "_" || !(w[1] in ext) || (name in imp)) continue
+      imp[name] = p " (" uf[i] ":" ul[i] ")"
     }
   }
   # Split f into the module stem and the directory its parent file names.
@@ -328,9 +377,12 @@ result="$("$AWK" -F'\t' -v state="$STATE" -v state_dir="$STATE_DIR" -v core_rel=
     rest = substr($0, 3); p = index(rest, ":"); file = substr(rest, 1, p - 1)
     rest = substr(rest, p + 1); p = index(rest, ":"); l = substr(rest, 1, p - 1) + 0
     code[file, l] = substr(rest, p + 1)
-    if (l > maxl[file]) maxl[file] = l
+    # The lexer flattens each use tree into `use path;` records.
+    if (code[file, l] ~ /^use .*;$/) { nu++; uf[nu] = file; ul[nu] = l; up[nu] = substr(code[file, l], 5, length(code[file, l]) - 5) }
     next
   }
+  $1 == "mod-decl" { mdecl[$2, $5] = mdecl[$2, $5] SUBSEP $3; next }
+  $1 == "core-fmt-skip" { nk++; kf[nk] = $2; ks[nk] = $3; next }
   $1 == "F" { isfile[$2] = 1; next }
   $1 == "uifree-test-item" { nt++; tf[nt] = $2; ts[nt] = $3; te[nt] = $4; next }
   $1 == "core-type" { nn++; nf[nn] = $2; ns[nn] = $3; ne[nn] = $4; nname[nn] = $5; next }
@@ -341,6 +393,10 @@ result="$("$AWK" -F'\t' -v state="$STATE" -v state_dir="$STATE_DIR" -v core_rel=
   $1 == "R" { nr++; rname[nr] = $2; next }
   END {
     for (i = 1; i <= nx; i++) if (!intest(xf[i], xs[i])) print "M\t" xf[i] ":" xs[i]
+    for (i = 1; i <= nk; i++) if (!intest(kf[i], ks[i])) print "K\t" kf[i] ":" ks[i]
+    imports()
+    for (i = 1; i <= ns2; i++)
+      if (!inrange(sf[i], ss[i]) && !(sname[i] in imp)) imp[sname[i]] = "the app/state type in " sf[i]
     for (i = 1; i <= nn; i++) {
       if (intest(nf[i], ns[i])) continue
       id = nf[i] " " nname[i]
@@ -349,6 +405,7 @@ result="$("$AWK" -F'\t' -v state="$STATE" -v state_dir="$STATE_DIR" -v core_rel=
       if (nname[i] in byname) dup[nname[i]] = 1
       byname[nname[i]] = byname[nname[i]] SUBSEP id
       if (nname[i] in shadow) print "S\t" id
+      if (nname[i] in imp) print "I\t" id "\t" imp[nname[i]]
     }
     for (name in dup) { s = byname[name]; gsub(SUBSEP, ", ", s); print "D\t" name "\t" substr(s, 3) }
     for (id in node) { i = node[id]; reach_names(item_text(nf[i], ns[i], ne[i], nname[i]), id) }
@@ -423,6 +480,17 @@ while IFS= read -r id; do
   echo "Core closure: FAIL — $id is named like a std or dependency type; rename it."
   status=1
 done < <(lines S)
+while IFS=$'\t' read -r id from; do
+  [[ -z "$id" ]] && continue
+  echo "Core closure: FAIL — $id shares its name with $from; rename it."
+  echo "  Names are matched by identifier: the core type would take that type's edges."
+  status=1
+done < <(lines I)
+while IFS= read -r at; do
+  [[ -z "$at" ]] && continue
+  echo "Core closure: FAIL — $at puts #[rustfmt::skip] on a mod declaration; keep it on one line."
+  status=1
+done < <(lines K)
 while IFS= read -r at; do
   [[ -z "$at" ]] && continue
   echo "Core closure: FAIL — $at defines or calls a macro at item level; the closure scan"

@@ -79,6 +79,8 @@ run_case() {
   printf '%s\n' "$BASE_CORE" "$3" > "$t/$CORE_REL/a.rs"
   printf '%s\n' 'pub(crate) mod a;' "${CORE_RS:-}" > "$t/$CORE_REL.rs"
   printf '%s\n' '# roots' "${5:-$BASE_ROOTS}" > "$t/scripts/core-closure-roots.txt"
+  printf '%s\n' '[package]' 'name = "signex-app"' '[dependencies]' 'signex-types = { workspace = true }' \
+    > "$t/crates/signex-app/Cargo.toml"
   for n in 1 2 3; do
     f="XF$n" b="XB$n"
     [[ -z "${!f:-}" ]] && continue
@@ -142,6 +144,14 @@ STATE_RS='mod sub;' XF1="$APP/state/sub/mod.rs" XB1='mod edit;' XF2="$APP/state/
 GROW_BASE="$A ViewState
 $A Gone" run_case baseline_shrinks_against_ref pass "$V" '' '' "$A ViewState"
 GROW_BASE="$A ViewState" run_case baseline_same_as_ref pass "$V" '' '' "$A ViewState"
+# A `crate::`/`super::` import may re-export the core type; a glob or a test
+# import binds no name to judge.
+run_case local_and_glob_imports_are_no_collision pass 'use crate::app::state::Inner as _;
+use crate::app::Doc;
+use super::a::Payload;
+use signex_types::*;
+#[cfg(test)]
+use signex_types::Event;'
 
 # --- positive controls: the gate must flag these ---------------------------
 
@@ -217,6 +227,33 @@ mod t {
     mod zz_evil;
 }' XF1="$CORE_REL/zz_evil.rs" XB1="$EVIL" XF2="$CORE_REL/t/zz_evil.rs" XB2='' \
   run_case nested_test_decl_is_another_file fail '' "    $CORE_REL/zz_evil.rs EvilView"
+# Issue #3195 hole 1: a production mount split under #[rustfmt::skip].
+CORE_RS='#[cfg(test)]
+mod zz_evil;
+#[cfg(not(test))]
+#[rustfmt::skip]
+pub(crate) mod
+    zz_evil;' XF1="$CORE_REL/zz_evil.rs" XB1="$EVIL" \
+  run_case split_production_mount fail '' "    $CORE_REL/zz_evil.rs EvilView"
+CORE_RS='#[rustfmt::skip]
+// one line
+mod b;' XF1="$CORE_REL/b.rs" XB1='' \
+  run_case rustfmt_skip_on_mod fail '' "$CORE_REL.rs:4 puts #[rustfmt::skip] on a mod declaration"
+# Issue #3195 hole 2: a core type named after an imported external type takes
+# its edges (BlockDiagramEditor.diagram: signex_types' BlockDiagram).
+BLOCK='pub(crate) struct BlockDiagram { pub zoom: f32, pub pan: (f64, f64) }'
+XF1="$CORE_REL/zz_evil.rs" XB1="$BLOCK" \
+  run_case core_type_named_like_import fail 'use signex_types::block_diagram::{BlockDiagram, Endpoint};
+impl Inner { pub fn diagram(&self) -> Option<BlockDiagram> { None } }' \
+  "$CORE_REL/zz_evil.rs BlockDiagram shares its name with signex_types::block_diagram::BlockDiagram"
+STATE_RS='use ::signex_types::Sheet as BlockDiagram;' DOC_FIELDS='    pub diagram: BlockDiagram,' \
+  XF1="$CORE_REL/zz_evil.rs" XB1="$BLOCK" \
+  run_case core_type_named_like_state_import_alias fail '' \
+  "$CORE_REL/zz_evil.rs BlockDiagram shares its name with signex_types::Sheet"
+STATE_RS='mod agent;' DOC_FIELDS='    pub agent: agent::AgentEdits,' \
+  XF1="$APP/state/agent.rs" XB1='pub struct AgentEdits { pub n: u8 }' \
+  run_case core_type_named_like_state_type fail 'pub struct AgentEdits { pub zoom: f32 }' \
+  "$A AgentEdits shares its name with the app/state type in $APP/state/agent.rs"
 run_case stale_baseline_entry fail '' "lists types that are no longer unreachable:
     $A Gone" '' "$A Gone"
 run_case stale_says_delete fail '' "delete these lines from scripts/core-closure-baseline.txt" \
