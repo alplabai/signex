@@ -131,7 +131,7 @@ fn writes_25000_rows_in_under_a_minute() {
     );
     assert!(total.as_secs() < 60, "took {total:?}");
     let adapter = LocalGitAdapter::open(snxlib).unwrap();
-    assert_eq!(adapter.iter_rows().unwrap().into_iter().count(), 25_000);
+    assert_eq!(adapter.iter_rows().unwrap().len(), 25_000);
 }
 
 #[test]

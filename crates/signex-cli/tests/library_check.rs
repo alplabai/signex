@@ -1,5 +1,10 @@
 //! End to end (#3111): `signex-cli library check` and its exit codes.
 
+#![allow(
+    clippy::disallowed_methods,
+    reason = "the tests run the signex-cli binary as a child process"
+)]
+
 use std::path::Path;
 use std::process::Command;
 

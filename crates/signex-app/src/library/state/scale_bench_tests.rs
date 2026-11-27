@@ -160,7 +160,7 @@ fn row(n: usize, symbols: usize, footprints: usize) -> ComponentRow {
         ParamValue::Text(["1%", "5%", "10%"][n % 3].into()),
     );
     parameters.insert("package".into(), ParamValue::Text(package.into()));
-    parameters.insert("aec_q200".into(), ParamValue::Bool(n % 4 == 0));
+    parameters.insert("aec_q200".into(), ParamValue::Bool(n.is_multiple_of(4)));
     ComponentRow {
         row_id: id(4, n),
         internal_pn: InternalPn::new(format!("{}-{n:06}", TABLES[table][..3].to_uppercase())),
@@ -178,7 +178,7 @@ fn row(n: usize, symbols: usize, footprints: usize) -> ComponentRow {
         pin_map_overrides: Vec::new(),
         primary_mpn: ManufacturerPart::draft(
             maker,
-            format!("{}-{n:06}-{package}", &maker[..3].to_uppercase()),
+            format!("{}-{n:06}-{package}", maker[..3].to_uppercase()),
         ),
         alternates: vec![ManufacturerPart::draft(
             MAKERS[(n + 1) % 6],

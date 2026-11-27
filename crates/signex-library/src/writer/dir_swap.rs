@@ -161,6 +161,8 @@ fn sync_dir(dir: &Path) {
     if let Err(e) = std::fs::File::open(dir).and_then(|handle| handle.sync_all()) {
         tracing::debug!(target: "signex::library", "fsync of {} failed: {e}", dir.display());
     }
+    // `dir` is read only by the unix branch.
     #[cfg(not(unix))]
+    // ast-grep-ignore: no-binding-silencer
     let _ = dir;
 }

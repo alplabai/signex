@@ -10,8 +10,10 @@ use resvg::{tiny_skia, usvg};
 const LONG_SIDE_PX: f32 = 1024.0;
 
 pub(super) fn write_png(svg: &str, path: &Path) -> Result<(), String> {
-    let mut options = usvg::Options::default();
-    options.font_family = signex_types::font::BUNDLED_DEFAULT_FAMILY.to_string();
+    let mut options = usvg::Options {
+        font_family: signex_types::font::BUNDLED_DEFAULT_FAMILY.to_string(),
+        ..Default::default()
+    };
     let fonts = options.fontdb_mut();
     for face in [
         signex_app::fonts::bundled::IOSEVKA_REGULAR,

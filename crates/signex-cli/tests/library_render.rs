@@ -3,6 +3,11 @@
 //! The writer prints every number to four decimals, so the bytes are the
 //! contract. Regenerate with `SIGNEX_BLESS_LIBRARY_RENDER=1`.
 
+#![allow(
+    clippy::disallowed_methods,
+    reason = "the tests run the signex-cli binary as a child process"
+)]
+
 use std::path::{Path, PathBuf};
 use std::process::Command;
 

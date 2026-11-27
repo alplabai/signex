@@ -51,7 +51,7 @@ fn library_with(dir: &Path, file: &FootprintFile) -> (PathBuf, FootprintSourceRe
 }
 
 fn read_one(library: PathBuf, source: FootprintSourceRef) -> Result<ComponentModel, String> {
-    let mut read = read_models(&[source.clone()], &[(source.library, library)]);
+    let mut read = read_models(std::slice::from_ref(&source), &[(source.library, library)]);
     match (read.models.pop(), read.failures.pop()) {
         (Some((_, model)), None) => Ok(model),
         (None, Some((_, why))) => Err(why),
