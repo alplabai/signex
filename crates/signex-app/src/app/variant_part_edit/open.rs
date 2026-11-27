@@ -60,7 +60,8 @@ impl Signex {
                     return Task::none();
                 };
                 let popover = ValuePopover::new(part, &project.data.variant_settings);
-                self.ui_state.variant_part_edit = Some(Box::new(VariantPartEdit::Value(Box::new(popover))));
+                self.ui_state.variant_part_edit =
+                    Some(Box::new(VariantPartEdit::Value(Box::new(popover))));
                 iced::widget::operation::focus(VARIANT_VALUE_INPUT_ID.clone())
             }
         }

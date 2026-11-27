@@ -76,7 +76,7 @@ impl Signex {
                 p.corners = corners;
                 // Sharp corners take no size, so a pour switched back to
                 // Sharp writes neither key, as one that never had corners.
-                if corners.is_sharp() {
+                if corners == PourCorners::Sharp {
                     p.corner_size = 0.0;
                 }
                 rebuild_sketch(editor);
