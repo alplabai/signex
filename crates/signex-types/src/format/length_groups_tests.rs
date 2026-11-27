@@ -135,3 +135,17 @@ fn groups_open_read_only_in_a_build_that_knows_only_1_11() {
     assert!(older.refuse_save(token).is_err(), "{token}");
     assert!(!SNXPCB_VERSION.is_newer_minor(token), "this build reads it");
 }
+
+/// A target under half a nm would be written as 0 nm, which the reader
+/// refuses: the save refuses it instead, so the board can always reopen.
+#[test]
+fn a_target_that_rounds_to_zero_nm_is_refused_on_write() {
+    let mut board = empty_board();
+    let mut tiny = group(1, "CLK", &[]);
+    tiny.target_mm = 4e-7;
+    board.options.length_groups.push(tiny);
+    assert!(matches!(
+        SnxPcb::new(board).write_string(),
+        Err(FormatError::NonFiniteField { .. })
+    ));
+}

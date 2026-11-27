@@ -20,12 +20,12 @@ use signex_types::pcb_layer::PcbLayer;
 use signex_types::theme::Color;
 use signex_types::violation::Severity;
 
+use super::operand_mm::operand_mm;
 use super::{CommandArgs, CommandOutcome, OperandValue};
 use crate::app::document::DocumentKey;
 use crate::app::handlers::board_net_classes::{typed_mm, with_rule};
 use crate::app::handlers::pcb_tool::RouteOptionsEdit;
 use crate::app::{Message, Signex};
-use crate::panels::pcb_primitive_properties::parse_number;
 use crate::panels::{BoardNetClassField, DrcFilter};
 
 /// What running one command from its operands did, and any follow-up task.
@@ -293,11 +293,13 @@ fn route_options_answer(app: &mut Signex, args: &CommandArgs) -> Result<Value, S
         })
         .transpose()?;
     // `width`, `via_diameter` and `via_hole` are Text by the one operand
-    // convention; `route_options` refuses a size not above zero.
+    // convention, read by the one `operand_mm`.
     let length = |name: &str| {
         text(args, name)
             .map(|raw| {
-                parse_number(raw).ok_or_else(|| format!("`{name}` is a length in mm, not `{raw}`"))
+                operand_mm(raw).ok_or_else(|| {
+                    format!("`{name}` is a length above 0 mm the board can store, not `{raw}`")
+                })
             })
             .transpose()
     };

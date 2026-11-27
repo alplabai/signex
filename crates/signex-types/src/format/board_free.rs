@@ -243,7 +243,10 @@ fn write_arc(a: &TrackArc) -> Result<ArcRaw, NonFiniteField> {
 fn write_pad(p: &Pad) -> Result<PadRaw, NonFiniteField> {
     refuse_unreadable_shape(p)?;
     // A free pad has no thermal key yet (#2593 sets footprint pads only): its
-    // own values would be lost, so the save is refused instead.
+    // own values would be lost, so the save is refused instead. No edit or
+    // load gives a free pad values (`set_pad_thermal_relief` takes footprint
+    // pads, the reader none), so this guard is unreachable today and keeps
+    // the generic error; `pcb_pad_thermal_tests` pins it.
     if !p.thermal.is_rule() {
         return Err(NonFiniteField("thermal"));
     }

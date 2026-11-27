@@ -16,9 +16,9 @@ use uuid::Uuid;
 
 use super::CommandArgs;
 use super::board_edit_operands::{Ran, answered, board, named_board, refused, text, uuids};
+use super::operand_mm::operand_mm_or_zero;
 use crate::app::Signex;
 use crate::app::handlers::pcb_pour::pour_report;
-use crate::panels::pcb_primitive_properties::parse_number;
 
 /// `set_pour_corners document=.. ids=.. corners=sharp|rounded|chamfer
 /// [corner_size=<mm>]`: the pours' Corners, and their Corner Size when
@@ -84,13 +84,14 @@ pub(super) fn set_pour_fill(app: &mut Signex, args: &CommandArgs) -> Ran {
     )
 }
 
-/// The optional length operand `name`, in mm.
+/// The optional length operand `name`, in mm, 0 or more (the engine refuses
+/// a negative one too), read by the one `operand_mm`.
 fn length(args: &CommandArgs, name: &str) -> Result<Option<f64>, String> {
     match text(args, name) {
         None => Ok(None),
-        Some(raw) => parse_number(raw)
-            .map(Some)
-            .ok_or_else(|| format!("`{name}` must be a length in mm, not `{raw}`")),
+        Some(raw) => operand_mm_or_zero(raw).map(Some).ok_or_else(|| {
+            format!("`{name}` must be a length of 0 mm or more the board can store, not `{raw}`")
+        }),
     }
 }
 

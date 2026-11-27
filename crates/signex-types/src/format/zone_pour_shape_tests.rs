@@ -108,8 +108,8 @@ fn a_rounded_hatched_pour_writes_snxpcb_1_12_and_round_trips() {
 }
 
 /// A board with sharp, solid pours writes none of the keys and keeps its
-/// token; a chamfer alone raises it, and putting the pour back writes the
-/// bytes it had before.
+/// token; a chamfer with a size raises it (with no size it fills as Sharp
+/// and does not), and putting the pour back writes the bytes it had before.
 #[test]
 fn a_board_without_a_shaped_pour_keeps_its_token() {
     let mut board = empty_board();
@@ -120,7 +120,14 @@ fn a_board_without_a_shaped_pour_keeps_its_token() {
     }
     assert_eq!(token_of(&before), SNXPCB_FORMAT_V1);
     board.zones[0].corners = PourCorners::Chamfer;
+    assert_eq!(
+        token_of(&save(&board)),
+        SNXPCB_FORMAT_V1,
+        "no size: as Sharp"
+    );
+    board.zones[0].corner_size = 0.5;
     assert_eq!(token_of(&save(&board)), SNXPCB_FORMAT_V1_12);
+    board.zones[0].corner_size = 0.0;
     board.zones[0].corners = PourCorners::Sharp;
     board.zones[0].fill_mode = PourFillMode::Hatched;
     assert_eq!(token_of(&save(&board)), SNXPCB_FORMAT_V1_12);

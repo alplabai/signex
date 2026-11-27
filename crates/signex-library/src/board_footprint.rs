@@ -226,6 +226,14 @@ fn copper_pad(pad: &Pad) -> Result<pcb::Pad, FootprintResolveError> {
         unknown: Default::default(),
         unknown_columns: Default::default(),
     };
+    // Thermal values the board could not store (under 1 nm, say) are
+    // refused here, naming the pad, rather than placed and refused on save.
+    if let Some(fault) = board.thermal.fault() {
+        return Err(unconvertible(
+            fault.field(),
+            format!("pad {}: {fault}", pad.number),
+        ));
+    }
     // A trapezoid or outline the board could not save is refused here,
     // naming the pad, rather than placed and lost on the next save.
     match pad_shape_fault(&board) {

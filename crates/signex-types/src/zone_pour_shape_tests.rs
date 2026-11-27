@@ -100,3 +100,17 @@ fn the_tokens_read_back() {
     assert_eq!(PourCorners::from_token("round"), None);
     assert_eq!(PourFillMode::from_token("none"), None, "Shelve, not None");
 }
+
+/// Rounded or Chamfer corners with no size fill exactly as Sharp, so they
+/// do not raise the file token; a size does.
+#[test]
+fn corners_with_no_size_do_not_count_as_a_pour_shape() {
+    let mut zone = pour();
+    for corners in [PourCorners::Rounded, PourCorners::Chamfer] {
+        zone.corners = corners;
+        zone.corner_size = 0.0;
+        assert!(!zone.has_pour_shape(), "{corners:?} with no size");
+        zone.corner_size = 0.5;
+        assert!(zone.has_pour_shape(), "{corners:?} with a size");
+    }
+}

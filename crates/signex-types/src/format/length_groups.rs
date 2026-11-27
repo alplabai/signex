@@ -75,7 +75,8 @@ fn read_group(row: usize, g: LengthGroupRaw) -> Result<LengthGroup, FormatError>
     })
 }
 
-/// The groups as stored; a length that is not finite refuses the save.
+/// The groups as stored; a length that is not finite, or that the reader
+/// would refuse, refuses the save.
 pub(in crate::format) fn write(groups: &[LengthGroup]) -> Result<Vec<LengthGroupRaw>, FormatError> {
     groups
         .iter()
@@ -90,12 +91,23 @@ pub(in crate::format) fn write(groups: &[LengthGroup]) -> Result<Vec<LengthGroup
         .collect()
 }
 
+/// A target or tolerance the reader would refuse (a target stored as 0 nm or
+/// less, a negative tolerance) is not written, so the board can always
+/// reopen.
 fn write_group(g: &LengthGroup) -> Result<LengthGroupRaw, NonFiniteField> {
+    let target = mm_to_nm(g.target_mm, "target")?;
+    let tolerance = mm_to_nm(g.tolerance_mm, "tolerance")?;
+    if target <= 0 {
+        return Err(NonFiniteField("target"));
+    }
+    if tolerance < 0 {
+        return Err(NonFiniteField("tolerance"));
+    }
     Ok(LengthGroupRaw {
         uuid: g.uuid,
         name: g.name.clone(),
-        target: mm_to_nm(g.target_mm, "target")?,
-        tolerance: mm_to_nm(g.tolerance_mm, "tolerance")?,
+        target,
+        tolerance,
         topology: g.topology.token().to_string(),
         members: g.members.clone(),
     })

@@ -191,3 +191,25 @@ fn a_route_being_drawn_is_named_and_takes_a_width_set_mid_route() {
     let widths_ok = tracks.iter().all(|t| (t.width - 0.3).abs() < 1e-9);
     assert!(widths_ok, "{tracks:?}");
 }
+
+/// A size is read by the one `operand_mm`: a doubled suffix, another unit,
+/// a value past the file's range and one that would be stored as 0 nm are
+/// refused, and nothing changes.
+#[test]
+fn a_size_the_board_cannot_store_is_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app(dir.path());
+    for size in [
+        "width=1mmmm",
+        "width=0.25°",
+        "width=1e13",
+        "via_diameter=4e-7",
+    ] {
+        let refused = options(&mut app, &path, &[size], true);
+        let is_refused = matches!(refused, CommandOutcome::Disabled { .. });
+        assert!(is_refused, "{size}: {refused:?}");
+    }
+    assert_eq!(app.interaction_state.pcb_tool_defaults.track_width_mm, None);
+    let got = answer(options(&mut app, &path, &["width=0.3mm"], true));
+    assert_eq!(got["width_mm"], 0.3);
+}

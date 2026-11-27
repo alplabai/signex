@@ -130,3 +130,29 @@ fn a_free_pad_with_its_own_values_is_refused_on_save() {
     let err = SnxPcb::new(board).write_string().unwrap_err().to_string();
     assert!(err.contains("thermal"), "{err}");
 }
+
+/// A length under half a nm would be written as 0 nm, which the reader
+/// refuses: it is no thermal length, so the save refuses it rather than
+/// write a board that cannot reopen.
+#[test]
+fn a_length_that_rounds_to_zero_nm_is_refused_on_save_not_written() {
+    let tiny = PadThermal {
+        air_gap: Some(4e-7),
+        ..PadThermal::RULE
+    };
+    assert!(!crate::pad_thermal::is_thermal_length(4e-7));
+    assert!(tiny.fault().is_some());
+    let err = SnxPcb::new(board_with(vec![pad(1, tiny)]))
+        .write_string()
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("thermal"), "{err}");
+    // One nm is the smallest length that survives the round trip.
+    let one_nm = PadThermal {
+        air_gap: Some(1e-6),
+        ..PadThermal::RULE
+    };
+    let text = save(&board_with(vec![pad(1, one_nm)]));
+    let back = SnxPcb::parse(&text).expect("the board reopens").board;
+    assert_eq!(back.footprints[0].pads[0].thermal, one_nm);
+}

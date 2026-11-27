@@ -11,9 +11,9 @@ use signex_types::pad_thermal::PadThermal;
 use uuid::Uuid;
 
 use super::board_edit_operands::{Ran, answered, board, named_board, refused, text, uuids};
+use super::operand_mm::operand_mm;
 use super::{CommandArgs, OperandValue};
 use crate::app::Signex;
-use crate::panels::pcb_primitive_properties::parse_number;
 
 /// `set_pour_thermal_relief document=.. ids=.. [on=true|false]
 /// [spoke_width=<mm>] [air_gap=<mm>]`: polygon pours by uuid take the
@@ -76,7 +76,7 @@ pub(super) fn set_pour_thermal_relief(app: &mut Signex, args: &CommandArgs) -> R
 
 /// The pour edits the operands ask for, the switch first so switching on
 /// seeds what the others then set. The lengths are Text by the one operand
-/// convention; the engine refuses one not above 0.
+/// convention, read by the one `operand_mm`.
 fn pour_edits(args: &CommandArgs) -> Result<Vec<ZoneEdit>, String> {
     let mut edits = Vec::new();
     if let Some(OperandValue::Bool(on)) = args.operand("on") {
@@ -85,7 +85,9 @@ fn pour_edits(args: &CommandArgs) -> Result<Vec<ZoneEdit>, String> {
     let length = |name: &str| {
         text(args, name)
             .map(|raw| {
-                parse_number(raw).ok_or_else(|| format!("`{name}` is a length in mm, not `{raw}`"))
+                operand_mm(raw).ok_or_else(|| {
+                    format!("`{name}` is a length above 0 mm the board can store, not `{raw}`")
+                })
             })
             .transpose()
     };
@@ -168,9 +170,12 @@ fn pad_edit(args: &CommandArgs) -> Result<Option<PadEdit>, String> {
         match text(args, name).map(str::trim) {
             None => Ok(None),
             Some("rule") => Ok(Some(None)),
-            Some(raw) => parse_number(raw)
-                .map(|mm| Some(Some(mm)))
-                .ok_or_else(|| format!("`{name}` must be `rule` or a length in mm, not `{raw}`")),
+            Some(raw) => operand_mm(raw).map(|mm| Some(Some(mm))).ok_or_else(|| {
+                format!(
+                    "`{name}` must be `rule` or a length above 0 mm the board can store, \
+                     not `{raw}`"
+                )
+            }),
         }
     };
     let spokes = match text(args, "spokes").map(str::trim) {

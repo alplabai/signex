@@ -226,3 +226,25 @@ fn the_engine_refuses_a_group_the_file_cannot_hold() {
     assert!(refused.is_err(), "{refused:?}");
     assert!(engine.board().options.length_groups.is_empty());
 }
+
+/// A target under half a nm is stored as 0 nm, which the file refuses on
+/// load: the edit and the options command refuse it, judged on the stored
+/// value.
+#[test]
+fn a_target_that_rounds_to_zero_nm_is_refused() {
+    let tiny = GroupEdit {
+        target_mm: Some(4e-7),
+        ..ddr()
+    };
+    assert_eq!(
+        set_group(&board(), &tiny, Uuid::nil),
+        Err(LengthGroupRefusal::TargetNotPositive)
+    );
+    let mut options = with(&board(), &ddr(), 100).options;
+    options.length_groups[0].target_mm = 4e-7;
+    let mut engine = BoardEngine::new(board(), 1);
+    let refused = engine.execute(BoardCommand::SetBoardOptions {
+        options: Box::new(options),
+    });
+    assert!(refused.is_err(), "{refused:?}");
+}

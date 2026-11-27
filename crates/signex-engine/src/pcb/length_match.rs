@@ -7,6 +7,7 @@
 //! Track panel and the board reports show.
 
 use pcb_geom::net_routed_length_mm;
+use signex_types::format::mm_as_stored_nm;
 use signex_types::pcb::PcbBoard;
 use signex_types::pcb_length::{LengthGroup, LengthTopology};
 use signex_types::pcb_options::BoardOptions;
@@ -23,9 +24,9 @@ pub enum LengthGroupRefusal {
     NameTaken(String),
     #[error("a new length-matching group needs a target and a tolerance")]
     NewGroupNeedsBand,
-    #[error("the target must be a length above zero")]
+    #[error("the target must be a length above zero that the board file can store")]
     TargetNotPositive,
-    #[error("the tolerance must be a length of zero or more")]
+    #[error("the tolerance must be a length of zero or more that the board file can store")]
     ToleranceNegative,
     #[error("the board has no net called `{0}`")]
     UnknownNet(String),
@@ -85,13 +86,15 @@ pub fn set_group(
         groups[at].name = rename.to_string();
     }
     if let Some(target) = edit.target_mm {
-        if !target.is_finite() || target <= 0.0 {
+        // Judged on the stored nm, as the file reads it back (a target under
+        // half a nm would be written as 0 and refused on load).
+        if !mm_as_stored_nm(target).is_some_and(|nm| nm > 0) {
             return Err(LengthGroupRefusal::TargetNotPositive);
         }
         groups[at].target_mm = target;
     }
     if let Some(tolerance) = edit.tolerance_mm {
-        if !tolerance.is_finite() || tolerance < 0.0 {
+        if tolerance < 0.0 || !mm_as_stored_nm(tolerance).is_some_and(|nm| nm >= 0) {
             return Err(LengthGroupRefusal::ToleranceNegative);
         }
         groups[at].tolerance_mm = tolerance;

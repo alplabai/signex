@@ -52,8 +52,10 @@ impl PadThermalFault {
 impl fmt::Display for PadThermalFault {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            PadThermalFault::AirGap => f.write_str("an air gap must be a length above 0 mm"),
-            PadThermalFault::SpokeWidth => f.write_str("a spoke width must be a length above 0 mm"),
+            PadThermalFault::AirGap => f.write_str("an air gap must be a length of at least 1 nm"),
+            PadThermalFault::SpokeWidth => {
+                f.write_str("a spoke width must be a length of at least 1 nm")
+            }
             PadThermalFault::Spokes => {
                 write!(f, "spokes must be a whole number from 1 to {MAX_SPOKES}")
             }
@@ -61,9 +63,11 @@ impl fmt::Display for PadThermalFault {
     }
 }
 
-/// Whether `mm` can be an air gap or a spoke width: a finite length above 0.
+/// Whether `mm` can be an air gap or a spoke width: a length the board file
+/// stores as a whole nm above 0. A value under half a nm would be written as
+/// 0, which the reader refuses, so it is refused here too.
 pub fn is_thermal_length(mm: f64) -> bool {
-    mm.is_finite() && mm > 0.0
+    crate::format::mm_as_stored_nm(mm).is_some_and(|nm| nm > 0)
 }
 
 /// Whether `n` can be a pad's spoke count.

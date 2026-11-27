@@ -4,6 +4,7 @@
 
 use std::collections::BTreeSet;
 
+use signex_types::format::mm_as_stored_nm;
 use signex_types::pcb::PcbBoard;
 use signex_types::pcb_options::BoardOptions;
 
@@ -77,7 +78,9 @@ fn check(options: &BoardOptions) -> Result<(), BoardCommandError> {
     for group in &options.length_groups {
         finite(group.target_mm, "group target")?;
         finite(group.tolerance_mm, "group tolerance")?;
-        if group.target_mm <= 0.0 {
+        // Judged on the stored nm: under half a nm is written as 0, which the
+        // file refuses on load.
+        if !mm_as_stored_nm(group.target_mm).is_some_and(|nm| nm > 0) {
             return Err(BoardCommandError::NotPositive {
                 field: "group target",
             });

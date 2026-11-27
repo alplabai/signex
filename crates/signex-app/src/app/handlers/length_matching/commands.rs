@@ -10,6 +10,7 @@ use serde_json::{Value, json};
 use signex_engine::pcb::length_match::{self, GroupEdit, GroupReport};
 use signex_types::pcb_length::LengthTopology;
 
+use crate::app::command::operand_mm::{operand_mm, operand_mm_or_zero};
 use crate::app::command::{CommandArgs, CommandOutcome};
 use crate::app::handlers::pcb_tune::{outcome, text_operand};
 use crate::app::{Message, Signex};
@@ -51,8 +52,8 @@ fn set_answer(app: &mut Signex, args: &CommandArgs) -> Result<Value, String> {
     let edit = GroupEdit {
         name: name.to_string(),
         rename: text_operand(args, "rename").map(str::to_string),
-        target_mm: mm_operand(args, "target")?,
-        tolerance_mm: mm_operand(args, "tolerance")?,
+        target_mm: mm_operand(args, "target", operand_mm, "above 0 mm")?,
+        tolerance_mm: mm_operand(args, "tolerance", operand_mm_or_zero, "0 mm or more")?,
         topology,
         members: text_operand(args, "members")
             .map(|list| list.split(',').map(|m| m.trim().to_string()).collect()),
@@ -79,19 +80,20 @@ fn remove_answer(app: &mut Signex, args: &CommandArgs) -> Result<Value, String> 
     Ok(answer)
 }
 
-/// `name` as a length in mm, `mm` optional; `None` when not given. The
-/// engine checks the range.
-fn mm_operand(args: &CommandArgs, name: &str) -> Result<Option<f64>, String> {
+/// `name` as a length in mm, read by `read` (one of the `operand_mm`
+/// readers; `band` says what it takes); `None` when not given.
+fn mm_operand(
+    args: &CommandArgs,
+    name: &str,
+    read: fn(&str) -> Option<f64>,
+    band: &str,
+) -> Result<Option<f64>, String> {
     let Some(text) = text_operand(args, name) else {
         return Ok(None);
     };
-    text.trim_end_matches("mm")
-        .trim()
-        .parse::<f64>()
-        .ok()
-        .filter(|v| v.is_finite())
+    read(text)
         .map(Some)
-        .ok_or_else(|| format!("`{name}` is a length in mm, not `{text}`"))
+        .ok_or_else(|| format!("`{name}` is a length {band} the board can store, not `{text}`"))
 }
 
 /// The board's groups as JSON, or only the group called `only`.

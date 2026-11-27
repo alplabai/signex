@@ -648,3 +648,21 @@ fn a_pads_own_thermal_relief_values_are_carried() {
     };
     assert_eq!(convert_one(tht.clone()).unwrap().thermal, tht.thermal);
 }
+
+/// A library pad whose thermal value the board file cannot store (under
+/// 1 nm) is refused as it is placed, naming the pad and the value, rather
+/// than placed and then refused by every save of the board.
+#[test]
+fn a_thermal_value_the_board_cannot_store_is_refused_naming_the_pad() {
+    let mut tiny = pad("3", PadKind::Smd, PadShape::Rect, &["F.Cu"]);
+    tiny.thermal.air_gap = Some(4e-7);
+    let refused = convert_one(tiny).unwrap_err();
+    let FootprintResolveError::Unconvertible { what, value } = &refused else {
+        panic!("{refused:?}");
+    };
+    assert_eq!(*what, "air_gap");
+    assert!(value.starts_with("pad 3:"), "{value}");
+    let mut fine = pad("4", PadKind::Smd, PadShape::Rect, &["F.Cu"]);
+    fine.thermal.air_gap = Some(0.3);
+    assert_eq!(convert_one(fine).unwrap().thermal.air_gap, Some(0.3));
+}

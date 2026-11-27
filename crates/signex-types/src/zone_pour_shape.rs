@@ -123,12 +123,12 @@ impl Zone {
         }
     }
 
-    /// Whether this pour stores corners other than Sharp or a hatched fill:
-    /// what a build that does not know the keys would fill differently
-    /// (`format::snxpcb_token`).
+    /// Whether this pour fills with shaped corners or a hatch: what a build
+    /// that does not know the keys would fill differently
+    /// (`format::snxpcb_token`). Rounded or Chamfer with no size fills as
+    /// Sharp, so it does not count.
     pub fn has_pour_shape(&self) -> bool {
-        self.is_pour()
-            && (self.corners != PourCorners::Sharp || self.fill_mode != PourFillMode::Solid)
+        self.pour_corner_shape().is_some() || self.pour_hatch().is_some()
     }
 }
 

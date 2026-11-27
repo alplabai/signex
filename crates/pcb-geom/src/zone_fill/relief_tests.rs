@@ -2,7 +2,9 @@
 //! through spokes across an air gap; off, it joins them solidly.
 
 use signex_types::pad_thermal::PadThermal;
-use signex_types::pcb::{Footprint, Pad, PadNet, PadShape, PadType, PcbBoard, Point, Zone};
+use signex_types::pcb::{
+    Footprint, Pad, PadNet, PadShape, PadType, PcbBoard, Point, Segment, Zone,
+};
 use signex_types::zone_pour::POUR_FILL;
 use uuid::Uuid;
 
@@ -192,4 +194,64 @@ fn a_pad_of_another_net_keeps_its_clearance_and_gets_no_spokes() {
     for (x, y) in [(0.75, 0.0), (0.0, 0.75), (0.0, 0.0)] {
         assert!(!copper_at(&b, x, y), "({x}, {y})");
     }
+}
+
+/// Caner (2026-11-27): a board's stored thermal relief is honoured as it
+/// loads, so a board saved or imported with it on fills with spokes.
+#[test]
+fn a_board_stored_with_thermal_relief_on_loads_with_its_spokes() {
+    let saved = signex_types::format::SnxPcb::new(board(true, 0.0, pad(PadThermal::RULE)))
+        .write_string()
+        .expect("the board writes");
+    let loaded = signex_types::format::SnxPcb::parse(&saved)
+        .expect("the board parses")
+        .board;
+    assert!(loaded.zones[0].thermal_relief, "the switch is kept");
+    assert!(copper_at(&loaded, 0.75, 0.0), "a spoke");
+    assert!(!copper_at(&loaded, 0.75, 0.4), "the gap");
+    assert!(
+        crate::ratsnest(&loaded).is_empty(),
+        "the spokes join the pad"
+    );
+}
+
+/// Caner (2026-11-27): a pad whose every spoke is blocked sits alone in its
+/// air gap, so the ratsnest (and the DRC's unconnected check, which reads
+/// it) draws a line to it; with thermal relief off the pad is joined.
+#[test]
+fn a_pad_whose_every_spoke_is_blocked_is_left_unconnected() {
+    let one_spoke = PadThermal {
+        air_gap: None,
+        spoke_width: None,
+        spokes: Some(1),
+    };
+    // A net-2 track across the one spoke (along +x), its clearance band
+    // over x 0.6..1.8: the spoke meets no fill.
+    let blocker = Segment {
+        uuid: Uuid::from_u128(20),
+        start: Point::new(1.2, -3.0),
+        end: Point::new(1.2, 3.0),
+        width: 0.2,
+        layer: "TopCopper".into(),
+        net: 2,
+        locked: false,
+        attributes: Default::default(),
+        unknown_columns: Default::default(),
+    };
+    let mut joined = pad(PadThermal::RULE);
+    joined.uuid = Uuid::from_u128(11);
+    joined.number = "2".into();
+    joined.position = Point::new(5.0, 5.0);
+    let with = |relief: bool| {
+        let mut b = board(relief, 0.0, pad(one_spoke));
+        b.footprints[0].pads.push(joined.clone());
+        b.segments.push(blocker.clone());
+        b
+    };
+    let blocked = with(true);
+    assert!(!copper_at(&blocked, 0.75, 0.0), "the spoke is left out");
+    let lines = crate::ratsnest(&blocked);
+    assert_eq!(lines.len(), 1, "{lines:?}");
+    assert_eq!(lines[0].net, 1);
+    assert!(crate::ratsnest(&with(false)).is_empty(), "solid join");
 }
