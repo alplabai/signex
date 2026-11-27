@@ -13,6 +13,10 @@ file-dialog-export-pdf = Export PDF
 file-dialog-export-bom = Export Bill of Materials
 file-dialog-export-erc-report = Export ERC Report
 file-dialog-export-netlist = Export Netlist
+# Picks the .snxout file to run (#1299).
+file-dialog-run-output-job = Run Export Job
+# Picks the folder the PNG pages go to (#1299).
+file-dialog-export-sheet-png = Export Pages as PNG
 file-dialog-import-shortcuts = Import { -brand-name } Keyboard Shortcuts
 file-dialog-export-shortcuts = Export { -brand-name } Keyboard Shortcuts
 # Picks a library folder ending in .snxlib.
@@ -70,3 +74,5 @@ file-filter-xlsx-ext = Excel (.xlsx)
 file-filter-netlist-listing = { -brand-name } Netlist Listing
 # The `.NET` text netlist format (component blocks and net blocks).
 file-filter-netlist-net-text = Netlist (.NET)
+# The .snxout file an Export Job is kept in (#1299).
+file-filter-output-job = Export Job (.snxout)

@@ -18,9 +18,11 @@
 //! sections (#1689-#1693) edit through the same history; their commands are
 //! in `sections` and each is a step of its own. So do the Requirements
 //! section's edits (#2339, `requirements`), the rails edit (#2943,
-//! `rails`) and a BOM line's alternates (#2938, `bom_alternates`).
+//! `rails`), a BOM line's alternates (#2938, `bom_alternates`) and the
+//! Design Checklist tab's (#1291, `checklist`).
 
 mod bom_alternates;
+mod checklist;
 mod rails;
 mod requirements;
 mod sections;
@@ -37,6 +39,7 @@ use signex_types::project::{
 };
 
 pub use bom_alternates::ProjectBomCommand;
+pub use checklist::ProjectChecklistCommand;
 pub use rails::ProjectRailCommand;
 pub use requirements::ProjectRequirementCommand;
 pub use sections::ProjectSectionCommand;
@@ -374,6 +377,16 @@ impl ProjectGeneralHistory {
         data: &mut ProjectData,
         command: &ProjectRequirementCommand,
     ) -> Result<bool, signex_types::project::RequirementProblem> {
+        self.apply_step(data, |data| command.apply(data))
+    }
+
+    /// Apply one Design Checklist edit (#1291) as an undo step of its own,
+    /// like [`Self::apply_section`].
+    pub fn apply_checklist(
+        &mut self,
+        data: &mut ProjectData,
+        command: &ProjectChecklistCommand,
+    ) -> Result<bool, signex_types::project::ChecklistProblem> {
         self.apply_step(data, |data| command.apply(data))
     }
 

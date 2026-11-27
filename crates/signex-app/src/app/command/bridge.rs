@@ -299,6 +299,19 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         }
         // View ▸ Window ▸ Untile (#2249).
         "untile_documents" => Message::Window(WindowMsg::UntileRequested),
+        // View ▸ Window ▸ Tile Grid and the pane commands (mockup row 207).
+        "tile_windows_grid" => {
+            Message::Window(WindowMsg::TileRequested(crate::app::TileLayout::Grid))
+        }
+        "split_pane_right"
+        | "split_pane_down"
+        | "open_second_view"
+        | "move_tab_to_other_pane"
+        | "close_pane"
+        | "sync_pane_zoom"
+        | "equalize_panes" => Message::Window(WindowMsg::Pane(crate::app::PaneMsg::for_command(
+            command.as_str(),
+        )?)),
         // View ▸ Window ▸ Layouts (mockup row 166).
         "apply_layout_schematic"
         | "apply_layout_board"
@@ -321,6 +334,16 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "import_parameters" => crate::app::parameter_io::ParameterIoMsg::ImportRequested.into(),
         "print" => Message::PrintPreview(PrintPreviewMsg::Requested),
         "redo" => Message::Edit(EditMsg::Redo),
+        // #2896: the Gerber Viewer tab, as it holds; a path is the operand
+        // handler's.
+        "open_gerber_viewer" => Message::from(crate::app::GerberViewerMsg::ViewerRequested),
+        // Mockup row 193: the viewer's toolbar and Esc, as the tab sends
+        // them; operands are the operand handlers'.
+        "select_gerber_object" => Message::from(crate::app::GerberViewerMsg::SelectionCleared),
+        "flip_gerber_view" => Message::from(crate::app::GerberViewerMsg::FlipToggled),
+        "show_gerber_drills_on_top" => Message::from(crate::app::GerberViewerMsg::DrillsToggled),
+        "highlight_gerber_net" => Message::from(crate::app::GerberViewerMsg::NetHighlightToggled),
+        "show_gerber_open_menu" => Message::from(crate::app::GerberViewerMsg::OpenMenuToggled),
         // Tools ▸ Assign Footprints (#2248) and View ▸ Net Inspector (#1269).
         "assign_footprints" => Message::from(crate::app::AssignFootprintsMsg::Requested),
         "open_net_inspector" => Message::Overlay(OverlayMsg::OpenPanel(
@@ -380,6 +403,16 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
                 project: None,
             }))
         }
+        // Project ▸ Design Checklist (#1291): the active document's project;
+        // from a Projects panel row, that row's project.
+        "open_design_checklist" => match &args.context.project {
+            Some(id) => Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
+                crate::app::ProjectTreeAction::OpenDesignChecklist(vec![id.clone()]),
+            )),
+            None => Message::Project(ProjectMsg::Tab(
+                crate::app::ProjectTabMsg::ChecklistOpenRequested { project: None },
+            )),
+        },
         // The Design Notebook of the active document's project (mockup rows
         // 195, 201, 202) and the schematic's Notebook badges (row 197).
         "open_design_notebook" => NotebookMsg::OpenRequested { project: None }.into(),
@@ -400,6 +433,8 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "board_report_components" => board_report(signex_output::BoardReportKind::Components),
         "export_board_report" => Message::from(crate::app::BoardOutputMsg::CsvExportRequested),
         "export_board_pdf" => Message::from(crate::app::BoardOutputMsg::PrintRequested),
+        // #1298, #2609: Export PDF on the sheet in view, as File > Export > PDF.
+        "export_schematic_pdf" => Message::Export(crate::app::ExportMsg::PdfOpenDialog),
         // #2486: the assembly drawings as SVG; one drawing opens Board Print /
         // PDF on the assembly set of its `side`.
         "export_assembly_svg" => Message::from(crate::app::BoardOutputMsg::SvgExportRequested),
@@ -409,6 +444,12 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
             ))
         }
         "export_board_step" => Message::from(crate::app::BoardOutputMsg::StepExportRequested),
+        // #1299: the PNG pages and an Export Job, each through its picker.
+        "export_sheet_png" => Message::from(crate::app::OutputJobMsg::PngRequested),
+        "run_output_job" => Message::from(crate::app::OutputJobMsg::RunRequested),
+        // Mockup row 114: View ▸ Panels ▸ Export Jobs and New Export Job.
+        "open_output_job" => Message::from(crate::app::OutputJobMsg::OpenRequested),
+        "new_output_job" => Message::from(crate::app::OutputJobMsg::NewRequested),
         // #2796: the diagram in view (or one picked), then the SVG or PDF file.
         "export_block_diagram" => Message::from(crate::app::BlockDiagramExportMsg::Requested),
         // #2410: Tools ▸ Panelize Board and Remove Panel, on the board in view.

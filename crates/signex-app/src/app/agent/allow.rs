@@ -22,6 +22,15 @@ pub(super) const WINDOW_LAYOUT: &[&str] = &[
     "tile_windows_horizontally",
     "tile_windows_vertically",
     "untile_documents",
+    // Mockup row 207: the document area's panes.
+    "split_pane_right",
+    "split_pane_down",
+    "open_second_view",
+    "tile_windows_grid",
+    "move_tab_to_other_pane",
+    "close_pane",
+    "sync_pane_zoom",
+    "equalize_panes",
     "zoom_to_fit",
     "set_dock_panel",
 ];
@@ -208,6 +217,8 @@ mod tests {
                 "check_requirements",
                 "clear_all_net_colors",
                 "close_active_document",
+                // Mockup row 207: the pane commands, as the window layout.
+                "close_pane",
                 "color_net",
                 // #2949: the Variant Manager's top bar actions.
                 "compare_variants",
@@ -215,6 +226,7 @@ mod tests {
                 "delete_net_class",
                 "delete_selection",
                 "document_info",
+                "equalize_panes",
                 // #2470: the board writers, into a path inside the project.
                 "export_board_pdf",
                 "export_board_report",
@@ -252,6 +264,9 @@ mod tests {
                 // attachments, and Mark still valid, on the named project.
                 "mark_notebook_attachment_valid",
                 "measure_board",
+                "move_tab_to_other_pane",
+                // Mockup row 207: the panes, as the window layout.
+                "open_second_view",
                 // #2795, mockup rows 195-199: the Design Notebook tab, its
                 // references, badges and measurements, on the named project.
                 "notebook_attachments",
@@ -283,20 +298,32 @@ mod tests {
                 "place_board_track",
                 "place_board_via",
                 // #2339: the Requirements section's edits and run.
+                // #1291: the Design Checklist's read, edits and run.
+                "project_add_checklist_item",
                 "project_add_requirement",
                 "project_add_variant",
+                "project_checklist",
+                "project_checklist_link_choices",
+                "project_checklist_templates",
                 // #3038: the Variant Manager's part edits and Duplicate.
                 "project_duplicate_variant",
                 "project_enable_requirement",
                 "project_move_library",
                 "project_move_sheet",
+                "project_open_checklist_link",
+                "project_remove_checklist_item",
                 "project_remove_requirement",
                 "project_remove_variant",
                 "project_rename_variant",
+                "project_reset_checklist",
+                "project_run_checklist",
                 "project_run_requirements",
+                "project_save_checklist_template",
                 "project_set_active_variant",
                 "project_set_annotate_numbering",
                 "project_set_annotate_undo",
+                "project_set_checklist_item",
+                "project_set_checklist_state",
                 "project_set_default_variant",
                 // #2943: the project's rails and their budget.
                 "project_set_rail",
@@ -306,11 +333,14 @@ mod tests {
                 "project_set_variant_override",
                 "project_set_version_control",
                 "project_settings",
+                "project_start_checklist",
                 // #2796: a block diagram as JSON.
                 "query_block_diagram",
                 "query_board_nets",
                 // #2938: the priced BOM of the named project.
                 "query_bom",
+                // #1273: a sheet's off-sheet cross references, as JSON.
+                "query_cross_references",
                 "query_footprint_assignments",
                 // #2944, #2939: an open library's rows; each part's height.
                 "query_library",
@@ -397,14 +427,18 @@ mod tests {
                 "show_layer_group",
                 "show_layer_set",
                 "show_used_layers_only",
+                "split_pane_down",
+                "split_pane_right",
                 "stitch_vias",
                 "swap_gates",
                 "swap_pins",
+                "sync_pane_zoom",
                 // #1261: the same swaps started on the named sheet.
                 "swap_schematic_gates",
                 "swap_schematic_pins",
                 // #2249: the window layout, by the maintainer's rule that
                 // everything is AI-controllable.
+                "tile_windows_grid",
                 "tile_windows_horizontally",
                 "tile_windows_vertically",
                 // #2389: length tuning on the named board.

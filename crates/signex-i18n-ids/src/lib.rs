@@ -441,6 +441,7 @@ define_ids! {
     PANELS_MESSAGES_SOURCE_PREFERENCES = "panels-messages-source-preferences";
     PANELS_MESSAGES_SOURCE_SKETCH = "panels-messages-source-sketch";
     PANELS_MESSAGES_SOURCE_PROJECT = "panels-messages-source-project";
+    PANELS_MESSAGES_SOURCE_GERBER_VIEWER = "panels-messages-source-gerber-viewer";
     PANELS_MESSAGES_SOURCE_GRAPHICS = "panels-messages-source-graphics";
     PANELS_MESSAGES_SOURCE_INTERFACE = "panels-messages-source-interface";
     PANELS_MESSAGES_SOURCE_SYSTEM = "panels-messages-source-system";

@@ -98,6 +98,7 @@ define_ids! {
     PDF_LAYER_NET_LABELS = "pdf-layer-net-labels";
     PDF_LAYER_POWER_PORTS = "pdf-layer-power-ports";
     PDF_LAYER_TITLE_BLOCK = "pdf-layer-title-block";
+    PDF_LAYER_NOT_FITTED = "pdf-layer-not-fitted";
     PDF_LAYER_WATERMARK = "pdf-layer-watermark";
     PDF_LAYER_WATERMARK_LOCKED = "pdf-layer-watermark-locked";
     PDF_LAYER_WATERMARK_OFF = "pdf-layer-watermark-off";
@@ -150,4 +151,23 @@ define_ids! {
     PDF_PAPER_SIZE_A5 = "pdf-paper-size-a5";
     PDF_PAPER_SIZE_B5 = "pdf-paper-size-b5";
     PDF_SECTION_NEW = "pdf-section-new";
+    PDF_PREVIEW_COMMAND_NEEDS_WATERMARK = "pdf-preview-command-needs-watermark";
+    PDF_PREVIEW_COMMAND_WATERMARK_TEXT = "pdf-preview-command-watermark-text";
+    PDF_PREVIEW_COMMAND_WATERMARK_OPACITY = "pdf-preview-command-watermark-opacity";
+    PDF_PREVIEW_COMMAND_WATERMARK_ANGLE = "pdf-preview-command-watermark-angle";
+    PDF_PREVIEW_COMMAND_WATERMARK_PAGES = "pdf-preview-command-watermark-pages";
+    PDF_PREVIEW_COMMAND_NEEDS_DOCUMENT = "pdf-preview-command-needs-document";
+    PDF_PREVIEW_COMMAND_DOCUMENT = "pdf-preview-command-document";
+    PDF_PREVIEW_COMMAND_NOT_A_SHEET = "pdf-preview-command-not-a-sheet";
+    PDF_PREVIEW_COMMAND_NO_FILE = "pdf-preview-command-no-file";
+    PDF_PREVIEW_COMMAND_NOT_OPEN = "pdf-preview-command-not-open";
+    PDF_PREVIEW_COMMAND_NEEDS_PATH = "pdf-preview-command-needs-path";
+    PDF_PREVIEW_COMMAND_SHEET_CLOSED = "pdf-preview-command-sheet-closed";
+    PDF_PREVIEW_COMMAND_CHANNEL_NAMING = "pdf-preview-command-channel-naming";
+    PDF_PREVIEW_COMMAND_NO_SHEET = "pdf-preview-command-no-sheet";
+    PDF_PREVIEW_COMMAND_BAD_PAGES = "pdf-preview-command-bad-pages";
+    PDF_PREVIEW_COMMAND_BAD_LAYER = "pdf-preview-command-bad-layer";
+    PDF_PREVIEW_COMMAND_NO_LAYER = "pdf-preview-command-no-layer";
+    PDF_PREVIEW_COMMAND_BAD_VARIANT = "pdf-preview-command-bad-variant";
+    PDF_PREVIEW_COMMAND_PAGES_NOT_PRINTED = "pdf-preview-command-pages-not-printed";
 }

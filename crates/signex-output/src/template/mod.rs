@@ -19,10 +19,12 @@ use signex_types::schematic::SheetOrientation;
 pub mod builtin;
 pub mod format;
 pub mod frame;
+pub mod zone;
 
 pub use builtin::{all_builtin_ids, load_builtin, standard_title_block};
 pub use format::{SnxshtError, emit_template, parse_template};
 pub use frame::{CELL_CAPTION_MM, FramePrimitive, FrameTextAnchor, lower_sheet_frame};
+pub use zone::zone_at;
 
 /// Opaque identifier for a template. Built-ins use well-known strings
 /// (`"iso_a4_landscape"`, `"ansi_c_landscape"`); user templates will later

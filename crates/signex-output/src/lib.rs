@@ -14,6 +14,7 @@ pub mod assembly;
 pub mod block_diagram;
 pub mod board_report;
 pub mod bom;
+pub mod cross_ref;
 pub mod erc;
 mod expression;
 pub mod fab;
@@ -41,6 +42,7 @@ pub use bom::{
     BomOptions, BomOutput, BomRow, BomRule, BomRuleOptions, BomTable, BomValidationIssue,
     BomValidationReport, ComputedCell, ComputedColumn, ComputedIssue, rollup,
 };
+pub use cross_ref::{CrossRefTarget, PortCrossRefs, cross_ref_text};
 pub use erc::{
     ErcReportError, ErcReportExporter, ErcReportFormat, ErcReportOptions, ErcReportOutput,
     ErcReportRow, ErcReportRuleSet, ErcReportSeverity, report as erc_report,
@@ -60,11 +62,11 @@ pub use pdf::{
     MarginEdge, MarginUpdate, Margins, PageRange, PageSetupError, PageSize, PageSizeKind,
     PartBookmarkOrder, PdfExporter, PdfLayer, PdfLayerVisibility, PdfOptions, PdfOutput, PdfScale,
     PdfScaleMode, SchematicPalette, Watermark, WatermarkPages, WatermarkPlacement, WatermarkText,
-    check_page_range, parse_custom_edge_mm, parse_mm, parse_percent,
+    check_page_range, parse_custom_edge_mm, parse_mm, parse_percent, printed_sheet_numbers,
 };
 pub use preview::{
-    MAX_PREVIEW_EDGE_PX, PreviewOptions, PreviewPage, PreviewPageInfo, PreviewRasterizer,
-    preview_raster_size,
+    MAX_PREVIEW_EDGE_PX, PreviewOptions, PreviewPage, PreviewPageInfo, PreviewRasterizer, SheetPng,
+    encode_png, png_resolution_capped, preview_raster_size,
 };
 pub use reference_display::show_board_references;
 pub use substitution::{SubstitutionContext, resolve, resolve_text};

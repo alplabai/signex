@@ -107,6 +107,10 @@ impl Signex {
     ) -> anyhow::Result<Option<Task<Message>>> {
         // Reported as this file's failure; the rest of the batch still saves.
         self.refuse_save_while_restoring(path)?;
+        // An Export Job's draft, open or parked (`app/output_job/document`).
+        if self.document_state.output_jobs.contains_key(path) {
+            return Ok(Some(self.write_output_job_draft(path, None)));
+        }
         // A block diagram is held by its slice (mockup row 171).
         if self
             .document_state

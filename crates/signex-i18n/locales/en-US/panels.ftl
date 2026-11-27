@@ -536,6 +536,7 @@ panels-messages-source-library = Library
 panels-messages-source-preferences = Preferences
 panels-messages-source-sketch = Sketch
 panels-messages-source-project = Project
+panels-messages-source-gerber-viewer = Gerber Viewer
 panels-messages-source-graphics = Graphics
 panels-messages-source-interface = Interface
 panels-messages-source-system = System

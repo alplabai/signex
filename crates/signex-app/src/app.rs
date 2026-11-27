@@ -62,6 +62,7 @@ mod library_delete;
 mod load_gateway;
 mod mutation_gateway;
 pub(crate) mod new_project;
+pub(crate) mod output_job;
 // #2945, mockup row 201: Generate design notebook.
 pub(crate) mod notebook_generate;
 pub use notebook_generate::{NotebookGenerateMsg, NotebookGenerateUi};
@@ -139,6 +140,7 @@ pub(crate) use state::volume_case::probe_directory_case;
 // The Library dialogs' window-size tests name the modal they open.
 #[cfg(test)]
 pub(crate) use state::ModalId;
+pub(crate) mod cross_refs;
 #[cfg(test)]
 mod draft_save_point_tests;
 pub(crate) mod stitched_netlist;
@@ -173,6 +175,7 @@ pub use compare_board::{CompareBoardMsg, CompareBoardState, CompareRead, JumpSid
 pub use compiled_design::CompiledDesignMsg;
 pub use contracts::Board3dShot;
 pub use contracts::ErcProfileAction;
+pub use contracts::PaneMsg;
 pub use contracts::{
     AnnotateMsg, AppQuitConfirmState, Board3dGesture, Board3dModelsRead, Board3dMsg, BoardNetMsg,
     BoardSketchMsg, BoardToolsMsg, BomPreviewMsg, CommandPaletteMsg, ContextAction, ContextMenuMsg,
@@ -207,8 +210,13 @@ pub(crate) use handlers::document_files::is_pcb_path;
 pub(crate) use handlers::menu::export::tests::app_workspace;
 pub(crate) use handlers::selection_workflow::passes_filter;
 pub use handlers::window_geometry_events::GeometryReadout;
-pub use handlers::window_tiling::{Tile, TileLayout, TilePlan, tiles};
+pub use handlers::window_tiling::{Tile, TileLayout, TilePlan, grid_tiles, linear_tiles, tiles};
 pub use new_project::{NewProjectMsg, NewProjectState, ProfileUndo};
+pub use output_job::{
+    AutoMsg, Built, CheckCounts, JobDocMsg, JobRead, JobReport, JobTabMsg, JobWritten, ListPurpose,
+    NamingMode, OutputJobMsg, Packaged, PackagingSwitch, RunAsk, RunMsg, TabPage, TriggerEdit,
+    ValidateOutcome, WrittenOutput,
+};
 pub use sheet_numbering::{NumberingProblem, SheetNumberingMsg, SheetNumberingState};
 pub use sheet_swap::SheetSwapMsg;
 pub use sheet_sync::{SheetSyncMsg, SheetSyncProblem, SheetSyncState};

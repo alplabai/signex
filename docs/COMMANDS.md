@@ -44,6 +44,10 @@ one board. Rules in [CLI.md](CLI.md), "Checks on demand".
 [baseline=<run>]` runs the project's requirements list as checks and
 answers in the same shape; rules in [CLI.md](CLI.md), "Requirement
 checks".
+`query_cross_references document=<sheet>` lists each Global label of an
+open sheet with the pages and frame zones its net continues on, the
+`[2/B3]` text the canvas and the PDF print beside it; it answers once the
+project's net index is current.
 `list_annotations document=<project or one of its documents> [id=<block
 id>] [kind=<kind>] [part=<designator>]` answers, once the notebook files
 are read, with every annotation block of the project's Design Notebook
@@ -244,6 +248,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `project_set_variant_override` | Set a parameter value a variant gives a part of the project | design | — | — |
 | `project_set_version_control` | Turn commit on save on or off for the project | design | — | — |
 | `project_settings` | Read the settings of the project | design | — | — |
+| `query_cross_references` | Query off-sheet cross references | file | — | — |
 | `query_block_diagram` | Query a block diagram | search | — | — |
 | `query_bom` | Query the priced BOM | design | — | — |
 | `query_library` | Query a library | library | — | — |

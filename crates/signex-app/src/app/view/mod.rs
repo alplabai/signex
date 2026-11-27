@@ -21,6 +21,9 @@ mod library_tab;
 mod modals;
 mod net_color;
 mod overlays;
+pub(crate) mod pane_chrome;
+#[cfg(test)]
+mod pane_chrome_tests;
 pub(crate) mod parameter_manager;
 mod pcb_active_bar;
 pub(in crate::app) mod pcb_strip;
@@ -45,8 +48,8 @@ pub(crate) const CHROME_SEARCH_LEFT_GAP: f32 = 16.0;
 pub(crate) const CHROME_SEARCH_RIGHT_GAP: f32 = 16.0;
 
 /// Pointer travel (px) before a tab press counts as a drag, for both the
-/// grab cursor and the drag ghost.
-const TAB_DRAG_THRESHOLD_PX: f32 = 6.0;
+/// grab cursor, the drag ghost and the pane drop targets.
+pub(in crate::app) const TAB_DRAG_THRESHOLD_PX: f32 = 6.0;
 
 impl Signex {
     pub fn view(&self, window_id: iced::window::Id) -> Element<'_, Message> {
@@ -174,6 +177,7 @@ impl Signex {
             notebook_badges: !ui.annotations.badges_hidden,
             pcb_sync: self.pcb_sync_label(Some(window_id)),
             layouts: self.layouts_menu(),
+            tile_previews: self.tile_previews(),
             extension_rows: self.extensions.menu_rows(),
             extension_panels: self.extensions.panels(),
         };
@@ -381,6 +385,15 @@ impl Signex {
             .is_some()
             .then(|| self.locked_window_layer());
         let mut overlays = self.collect_overlays(lock, window_id);
+        // Mockup row 207: the half a dropped tab would split into, under
+        // the ghost.
+        if is_main_window && let Some(target) = self.pane_drop_overlay() {
+            overlays.push(target);
+        }
+        // The pane menu of a pane's ⋯ button.
+        if is_main_window && let Some(menu) = self.pane_menu_overlay() {
+            overlays.push(menu);
+        }
         // Tab drag ghost: only renders once the cursor has travelled past
         // the same 6 px threshold the cursor gating uses
         // (`tab_bar::view`). Mirrors that gate here so press-without-move
@@ -453,6 +466,9 @@ impl Signex {
         if self.gerber_viewer_tab_in_window(is_main) {
             return self.view_gerber_viewer_tab();
         }
+        if let Some(job) = self.output_job_tab_in_window(is_main) {
+            return self.view_output_job_tab(job);
+        }
         if let Some(path) = self.block_diagram_tab_in_window(is_main) {
             return self.view_block_diagram_tab(path);
         }
@@ -467,6 +483,9 @@ impl Signex {
         }
         if let Some(project_id) = self.variant_manager_tab_in_window(is_main) {
             return self.view_variant_manager_tab(project_id);
+        }
+        if let Some(project_id) = self.design_checklist_tab_in_window(is_main) {
+            return self.view_design_checklist_tab(project_id);
         }
         if self.layer_stack_tab_in_window(is_main) {
             return self.view_layer_stack_tab();

@@ -76,3 +76,14 @@ fn variants_round_trip_through_the_file() {
     assert_eq!(read.variant_definitions, ["Lite"]);
     assert_eq!(read.active_variant.as_deref(), Some("Lite"));
 }
+
+/// #1299: an Export Job names its variant; Base and a definition are found
+/// in any case and come back as the project spells them.
+#[test]
+fn a_named_variant_is_found_as_the_project_spells_it() {
+    let mut data = project();
+    data.add_variant("Lite").unwrap();
+    assert_eq!(data.named_variant(" base "), Some(BASE_VARIANT));
+    assert_eq!(data.named_variant("LITE"), Some("Lite"));
+    assert_eq!(data.named_variant("Pro"), None);
+}

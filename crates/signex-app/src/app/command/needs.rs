@@ -413,6 +413,12 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         // The Export menu row is gated on `has_schematic`; without an
         // engine the handler does nothing.
         "report_manager_bom" => Needs::Schematic,
+        // #1298: Export PDF of the sheet in view.
+        "export_schematic_pdf" => Needs::Schematic,
+        // #1299: the pages of the schematic in view as PNG; an Export Job
+        // belongs to an open project.
+        "export_sheet_png" => Needs::Schematic,
+        "run_output_job" | "open_output_job" | "new_output_job" => Needs::OpenProject,
         "leave_sheet" | "navigate_up_hierarchy" => Needs::ParentSheet,
         "delete_selection" => Needs::DeleteTarget,
         "rotate_clockwise"
@@ -627,6 +633,8 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         // #2462: gated like Update PCB.
         "compare_board_with_schematic" => Needs::PcbSync,
         "new_pcb_document" | "new_schematic_sheet" | "open_rules" => Needs::OpenProject,
+        // #1291: the checklist is a page of the project.
+        "open_design_checklist" => Needs::OpenProject,
         // #2796: the diagram goes in the project's folder.
         "new_block_diagram" => Needs::OpenProject,
         // #1282: the class dialog edits the project.
@@ -695,9 +703,17 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         "open_library_browser" => Needs::Library,
         "number_schematic_sheets" => Needs::ProjectSheet,
         "compile_project" => Needs::ProjectSheet,
+        "tile_windows_horizontally" | "tile_windows_vertically" | "tile_windows_grid" => {
+            Needs::TileableWindows
+        }
+        "untile_documents" | "move_tab_to_other_pane" | "close_pane" | "sync_pane_zoom"
+        | "equalize_panes" => Needs::Tiled,
+        // Mockup row 207: moving a tab out needs another to stay behind; a
+        // second view needs only a document. The handler refuses what the
+        // gate lets through (a lone tab beside undocked windows).
+        "split_pane_right" | "split_pane_down" => Needs::TileableWindows,
+        "open_second_view" => Needs::Document,
         "generate_block_diagram" | "regenerate_block_diagram" => Needs::ProjectSheet,
-        "tile_windows_horizontally" | "tile_windows_vertically" => Needs::TileableWindows,
-        "untile_documents" => Needs::Tiled,
         _ => return None,
     })
 }

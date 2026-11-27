@@ -218,7 +218,7 @@ fn chip_fill(color: Color) -> impl Fn(&Theme) -> container::Style + 'static {
     }
 }
 
-fn centred<'a>(content: Element<'a, Message>) -> Element<'a, Message> {
+pub(super) fn centred<'a>(content: Element<'a, Message>) -> Element<'a, Message> {
     container(content)
         .width(Length::Fill)
         .height(Length::Fill)
@@ -228,7 +228,7 @@ fn centred<'a>(content: Element<'a, Message>) -> Element<'a, Message> {
 }
 
 /// A window-sized layer with each card sized to and placed at its bounds.
-fn window_layer<'a>(
+pub(super) fn window_layer<'a>(
     cards: impl IntoIterator<Item = (Element<'a, Message>, Rectangle)>,
 ) -> Element<'a, Message> {
     let mut layer = Stack::new().width(Length::Fill).height(Length::Fill);

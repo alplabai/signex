@@ -107,6 +107,21 @@ const SAVES: &[&str] = &[
     "save_layer_set",
     // Writes the named workspace layout into the user's preferences (mockup row 166).
     "save_workspace_layout",
+    // Write an Export Job file: a new one, or an edit of one no tab holds
+    // (#1299, mockup row 114).
+    "new_output_job",
+    "add_job_output",
+    "set_job_output",
+    "set_job_profile",
+    "set_job_triggers",
+    "set_job_gerber_units",
+    "set_job_gerber_format",
+    "set_job_gerber_zeros",
+    "set_job_gerber_layers",
+    "set_job_gerber_apertures",
+    // Writes the design checklist as a template into the user's config
+    // folder (#1291, mockup row 206).
+    "project_save_checklist_template",
     // Write the project's block diagram file (#2968); a regenerate without
     // `apply` lists its changes and writes nothing.
     "generate_block_diagram",
@@ -349,6 +364,7 @@ mod tests {
             (Capability::Save, "save_snippet"),
             (Capability::Save, "save_layer_set"),
             (Capability::Save, "save_workspace_layout"),
+            (Capability::Save, "project_save_checklist_template"),
             (Capability::Save, "generate_block_diagram"),
             (Capability::Save, "regenerate_block_diagram"),
             (Capability::Save, "mark_notebook_attachment_valid"),
@@ -360,8 +376,24 @@ mod tests {
             (Capability::Export, "report_manager_bom"),
             (Capability::Export, "export_board_report"),
             (Capability::Export, "export_board_pdf"),
+            (Capability::Export, "export_schematic_pdf"),
             (Capability::Export, "export_assembly_svg"),
             (Capability::Export, "export_board_step"),
+            // #1299: PNG pages, and an Export Job's outputs.
+            (Capability::Export, "export_sheet_png"),
+            (Capability::Export, "run_output_job"),
+            // Mockup row 114: the Export Job edits write its file.
+            (Capability::Save, "new_output_job"),
+            (Capability::Save, "add_job_output"),
+            (Capability::Save, "set_job_output"),
+            (Capability::Save, "set_job_profile"),
+            (Capability::Save, "set_job_triggers"),
+            (Capability::Save, "set_job_gerber_units"),
+            (Capability::Save, "set_job_gerber_format"),
+            (Capability::Save, "set_job_gerber_zeros"),
+            (Capability::Save, "set_job_gerber_layers"),
+            (Capability::Save, "set_job_gerber_apertures"),
+            (Capability::Export, "project_export_checklist_csv"),
             (Capability::Export, "export_block_diagram"),
             (Capability::Export, "export_notebook_timeline"),
             (Capability::Export, "export_notebook_pdf"),

@@ -517,6 +517,7 @@ impl Signex {
                 diff_pair_classes: None,
                 notebook_generate: Default::default(),
                 fab_outputs_writes: 0,
+                output_jobs: Default::default(),
                 board_output: Default::default(),
                 notebook_pdf: Default::default(),
                 notebook_tabs: Default::default(),
@@ -687,6 +688,7 @@ impl Signex {
                 block_diagrams: Default::default(),
                 notebooks: std::collections::HashMap::new(),
                 generated_reports: std::collections::HashMap::new(),
+                output_jobs: Default::default(),
             },
             document_view: DocumentViewState {
                 drafts: drafts.clone(),

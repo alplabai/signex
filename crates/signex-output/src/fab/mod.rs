@@ -38,6 +38,7 @@ mod text;
 mod tests;
 
 use pcb_geom::PointNm;
+use signex_types::output_job::GerberSettings;
 use signex_types::pcb::{PCB_DEFAULT_THICKNESS_MM, PcbBoard, Point, Zone};
 use signex_types::pcb_layer::PcbLayer;
 use signex_types::zone_keepout::KEEPOUT_FILL;
@@ -47,7 +48,7 @@ pub use frame::FabFrame;
 pub use notes::{DrawnCopperItem, FabNote};
 pub use pcb_geom::DrawnCopperFault;
 
-use layers::{CopperStack, FabLayer, file_function, file_polarity, file_suffix};
+use layers::{CopperStack, FabLayer, file_function, file_polarity, file_suffix, layer_id};
 use notes::Tally;
 
 /// Which files to generate, and the name every file starts with.
@@ -68,6 +69,9 @@ pub struct FabOptions {
     /// (`show_board_references`, #1416); the test netlist writes them
     /// stored. `None`: as they are.
     pub designator_standard: Option<signex_types::designator::DesignatorStandard>,
+    /// How the Gerber images are written (#1299): the writer's own
+    /// units, format, zeros, layers and apertures by default.
+    pub gerber_settings: GerberSettings,
 }
 
 /// How the ODB++ job is written.
@@ -93,6 +97,7 @@ impl FabOptions {
             ipc2581: true,
             odb: Some(OdbForm::Archive),
             designator_standard: None,
+            gerber_settings: GerberSettings::default(),
         }
     }
 
@@ -227,7 +232,10 @@ pub fn generate(
     let mut skipped = 0;
     let mut files = Vec::new();
     if options.gerber {
-        gerber_files(board, extras, &stack, name, &mut tally, &mut files);
+        let settings = &options.gerber_settings;
+        gerber_files(
+            board, extras, &stack, name, settings, &mut tally, &mut files,
+        );
         skipped = skipped.max(tally.skipped);
     }
     if options.drill {
@@ -331,6 +339,7 @@ fn gerber_files(
     extras: &FabExtras,
     stack: &CopperStack,
     name: &str,
+    settings: &GerberSettings,
     tally: &mut Tally,
     files: &mut Vec<FabFile>,
 ) {
@@ -339,13 +348,17 @@ fn gerber_files(
         images.entry(FabLayer::Copper(*copper)).or_default();
     }
     for (layer, marks) in &images {
+        // An Export Job may write only some layers (#1299).
+        if !settings.writes_layer(&layer_id(*layer), layer.is_copper()) {
+            continue;
+        }
         files.push(FabFile {
             name: format!("{name}-{}.gbr", file_suffix(*layer, stack)),
             kind: FabFileKind::Gerber {
                 function: file_function(*layer, stack),
                 polarity: file_polarity(*layer),
             },
-            contents: gerber::write_image(*layer, marks, stack),
+            contents: gerber::write_image(*layer, marks, stack, settings),
         });
     }
 }

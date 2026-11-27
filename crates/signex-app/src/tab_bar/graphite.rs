@@ -58,6 +58,8 @@ pub fn kind_glyph(kind: &TabKind) -> signex_i18n::MessageId {
         TabKind::LayerStack => ids::PCB_STACK_TAB_KIND,
         TabKind::PinTable => ids::EDITORS_PIN_TABLE_TAB_KIND,
         TabKind::VariantManager(_) => ids::VARIANT_MANAGER_TAB_KIND,
+        TabKind::OutputJob => ids::PANELS_TAB_KIND_OUTPUT_JOB,
+        TabKind::DesignChecklist(_) => ids::CHECKLIST_TAB_KIND,
         TabKind::BlockDiagram(_) => ids::BLOCK_DIAGRAM_TAB_KIND,
         TabKind::Notebook(_) => ids::NOTEBOOK_TAB_KIND,
     }

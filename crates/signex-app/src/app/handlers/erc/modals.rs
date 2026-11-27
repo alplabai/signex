@@ -88,9 +88,9 @@ impl Signex {
             );
             return Task::none();
         }
-        // The Gerber Viewer (mockup row 193) and a block diagram (mockup row
-        // 171) draw in the main window only.
-        if tab.kind.is_gerber_viewer() || tab.kind.is_block_diagram() {
+        // The Gerber Viewer (mockup row 193), an Export Job (mockup row 114)
+        // and a block diagram (mockup row 171) draw in the main window only.
+        if tab.kind.is_gerber_viewer() || tab.kind.is_output_job() || tab.kind.is_block_diagram() {
             self.ui_state.tab_dragging = None;
             return Task::none();
         }

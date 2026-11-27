@@ -115,4 +115,13 @@ define_ids! {
     GERBER_VIEWER_FOOTER_NOTE = "gerber-viewer-footer-note";
     GERBER_VIEWER_READ_UNOPENABLE = "gerber-viewer-read-unopenable";
     GERBER_VIEWER_READ_TOO_LARGE = "gerber-viewer-read-too-large";
+    // gerber-viewer-command
+    GERBER_VIEWER_READ_SUPERSEDED = "gerber-viewer-read-superseded";
+    GERBER_VIEWER_RECENT_CHECK_FAILED = "gerber-viewer-recent-check-failed";
+    // gerber-viewer-view-command
+    GERBER_VIEWER_COMMAND_NO_PACKAGE = "gerber-viewer-command-no-package";
+    GERBER_VIEWER_COMMAND_NO_LAYER = "gerber-viewer-command-no-layer";
+    GERBER_VIEWER_COMMAND_LAYER_HIDDEN = "gerber-viewer-command-layer-hidden";
+    GERBER_VIEWER_COMMAND_AT_NOT_A_POINT = "gerber-viewer-command-at-not-a-point";
+    GERBER_VIEWER_COMMAND_NO_SUCH_NET = "gerber-viewer-command-no-such-net";
 }

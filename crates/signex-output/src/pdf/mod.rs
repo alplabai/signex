@@ -31,10 +31,12 @@ pub mod block_diagram;
 pub mod board;
 mod bookmarks;
 mod colour;
+pub(crate) mod cross_ref;
 mod embed;
 mod font;
 pub(crate) mod frame;
 pub(crate) mod layout;
+mod links;
 pub(crate) mod optional_content;
 mod page;
 mod page_setup;
@@ -167,6 +169,10 @@ pub struct PdfOptions {
     /// Write PDF layers (optional content groups). `None` writes a flat
     /// PDF.
     pub layers: Option<PdfLayerVisibility>,
+    /// Write link annotations: ports to their partners, sheet symbols to
+    /// their child pages, parts to web datasheets, text links to their
+    /// addresses (#1298). On by default.
+    pub links: bool,
     /// Schematic-element colour palette. The unified Print Preview
     /// passes the active theme's `CanvasColors` here so PDF wires /
     /// symbols / labels match the on-screen schematic. Default is
@@ -182,6 +188,10 @@ pub struct PdfOptions {
     /// The project's resolved defaults for unset widths and sizes (#2026),
     /// the same value the canvas draws with. Built-in by default.
     pub schematic_defaults: signex_types::schematic::SchematicDefaults,
+    /// Off-sheet cross references beside Global labels (#1273), derived by
+    /// the caller from the stitched project; each entry is a link to its
+    /// page. Empty (the default) prints none.
+    pub port_cross_refs: crate::cross_ref::PortCrossRefs,
     /// Draw a part that is not fitted in `variant` (or marked DNP) greyed
     /// and crossed out, as the canvas does (#1294). The user's "Cross out
     /// not-fitted parts" preference; on by default.
@@ -303,9 +313,11 @@ impl Default for PdfOptions {
             part_bookmark_order: PartBookmarkOrder::BySheet,
             watermark: None,
             layers: None,
+            links: true,
             palette: SchematicPalette::classic(),
             net_class_styles: std::collections::HashMap::new(),
             schematic_defaults: Default::default(),
+            port_cross_refs: Default::default(),
             draw_not_fitted: true,
         }
     }
@@ -397,13 +409,10 @@ impl Exporter for PdfExporter {
         let bookmark_id_base = outline_root_id.get() + 1;
 
         // One `/OCG` object per written PDF layer, after the outline items.
-        let layer_groups = match &opts.layers {
-            Some(_) => optional_content::assign_refs(
-                &optional_content::written_layers(opts.watermark.is_some()),
-                bookmark_id_base + pending_bookmarks.len() as i32,
-            ),
-            None => Vec::new(),
-        };
+        let layer_groups = optional_content::assign_refs(
+            &opts.written_layers(),
+            bookmark_id_base + pending_bookmarks.len() as i32,
+        );
 
         let mut catalog = pdf.catalog(catalog_id);
         catalog.pages(page_tree_id);
@@ -423,7 +432,7 @@ impl Exporter for PdfExporter {
         // Build every page's content first: encoding text is what discovers
         // the glyphs each embedded font must carry.
         let mut fonts = FontUsage::new();
-        let contents = sheet_indices
+        let mut contents = sheet_indices
             .iter()
             .enumerate()
             .map(|(page_idx, &sheet_idx)| {
@@ -440,6 +449,20 @@ impl Exporter for PdfExporter {
             .collect::<Result<Vec<_>, _>>()?;
         let embedded = write_fonts(&mut pdf, &fonts, font_base)?;
 
+        // Link annotations (#1298) and the cross-reference entries (#1273),
+        // one `/Annots` array per page, numbered after the layer groups.
+        let page_links = links::page_links(
+            ctx,
+            opts,
+            &sheet_indices,
+            (page_w_mm, page_h_mm),
+            &mut contents,
+        );
+        let annot_refs = links::assign_refs(
+            &page_links,
+            bookmark_id_base + pending_bookmarks.len() as i32 + layer_groups.len() as i32,
+        );
+
         for (idx, content) in contents.iter().enumerate() {
             let content_ref = content_refs[idx];
             pdf.stream(content_ref, &content.bytes);
@@ -449,6 +472,9 @@ impl Exporter for PdfExporter {
             page.parent(page_tree_id)
                 .media_box(Rect::new(0.0, 0.0, page_w_pt, page_h_pt))
                 .contents(content_ref);
+            if !annot_refs[idx].is_empty() {
+                page.annotations(annot_refs[idx].iter().copied());
+            }
 
             // /Font resources dict — maps the F1-F4 aliases used in the
             // content streams to the embedded Type0 font objects.
@@ -477,6 +503,7 @@ impl Exporter for PdfExporter {
                 opts,
             );
         }
+        links::write_annotations(&mut pdf, &page_links, &annot_refs, &page_refs);
 
         let bytes = pdf.finish();
 
@@ -490,7 +517,11 @@ impl Exporter for PdfExporter {
 
 mod content;
 #[cfg(test)]
+mod cross_ref_tests;
+#[cfg(test)]
 mod glyph_height_tests;
+#[cfg(test)]
+mod links_tests;
 #[cfg(test)]
 mod optional_content_tests;
 pub(crate) mod page_range;
@@ -504,5 +535,5 @@ mod unicode_tests;
 mod watermark_tests;
 
 use content::build_page_content;
-pub use page_range::check_page_range;
 use page_range::resolve_page_range;
+pub use page_range::{check_page_range, printed_sheet_numbers};

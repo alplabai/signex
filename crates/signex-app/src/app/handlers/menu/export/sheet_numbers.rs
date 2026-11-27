@@ -4,7 +4,7 @@
 use std::path::{Path, PathBuf};
 
 use signex_net::{NumberingIssue, SheetNumbering, SheetPage};
-use signex_output::SheetSnapshot;
+use signex_output::{PortCrossRefs, SheetSnapshot};
 use signex_types::schematic::InstancePath;
 
 use crate::app::state::scope::CaseFold;
@@ -20,6 +20,8 @@ pub(crate) struct ScopeNumbering {
     issues: Vec<NumberingIssue>,
     base_dir: Option<PathBuf>,
     fold: CaseFold,
+    /// The off-sheet cross references (#1273), on these page numbers.
+    cross_refs: PortCrossRefs,
 }
 
 impl ScopeNumbering {
@@ -34,7 +36,18 @@ impl ScopeNumbering {
             issues,
             base_dir,
             fold,
+            cross_refs: PortCrossRefs::default(),
         }
+    }
+
+    /// This numbering with the cross references derived on it.
+    pub(super) fn with_cross_refs(self, cross_refs: PortCrossRefs) -> Self {
+        Self { cross_refs, ..self }
+    }
+
+    /// The cross references the PDF and its preview print.
+    pub(super) fn cross_refs(&self) -> &PortCrossRefs {
+        &self.cross_refs
     }
 
     /// M in "Sheet N of M".

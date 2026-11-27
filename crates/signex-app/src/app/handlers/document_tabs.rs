@@ -236,6 +236,12 @@ impl Signex {
         {
             return self.close_gerber_viewer_tab(idx, keep_session);
         }
+        // An Export Job's draft is keyed by its path (`app/output_job`).
+        if let Some(tab) = self.document_state.tabs.get(idx)
+            && tab.kind.is_output_job()
+        {
+            return self.close_output_job_tab(idx, park_dirty, keep_session);
+        }
         // A block diagram is held by its slice, not by an engine or a draft.
         if self
             .document_state

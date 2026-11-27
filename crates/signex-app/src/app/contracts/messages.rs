@@ -130,9 +130,13 @@ pub enum WindowMsg {
     TileRequested(crate::app::TileLayout),
     /// View ▸ Window ▸ Untile (#2249): back to one document in the main window.
     UntileRequested,
-    /// A press on an unfocused tile pane, carrying the index of the tab it
-    /// shows: that document becomes the active one (#2249).
+    /// A press on an unfocused tile pane, carrying its place among the
+    /// panes: it takes the focus and its document becomes the active one
+    /// (#2249, #1307).
     TilePanePressed(usize),
+    /// The document area's panes (mockup row 207): split, pane strips and
+    /// menus, splitters.
+    Pane(super::PaneMsg),
     /// Dock back was pressed in the title strip of the detached panel
     /// window: the window closes, which re-docks the panel (mockup row 8).
     DetachedPanelDockBackPressed(iced::window::Id),

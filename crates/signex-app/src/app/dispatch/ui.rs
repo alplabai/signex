@@ -135,11 +135,17 @@ impl Signex {
             }
             UiMsg::DragEnd(released_in) => {
                 let dropped = self.finish_components_row_drag(released_in);
+                // Mockup row 207: a document tab let go on an edge splits.
+                let pane_drop = self.pane_drop_on_release(released_in);
                 self.handle_layout_drag_finished();
                 self.interaction_state.pointer_window = None;
+                let split =
+                    pane_drop.map_or_else(Task::none, |drop| self.drop_tab_on_pane_edge(drop));
+                // A pane splitter drag keeps its sizes with the project.
+                let sized = self.end_pane_splitter_drag();
                 // A dock drag changed a preferred width the layout saves.
                 let persist = self.persist_dock_layout_soon();
-                Task::batch([dropped, persist, self.finish_update()])
+                Task::batch([dropped, split, sized, persist, self.finish_update()])
             }
             UiMsg::GridCycle => {
                 let cycled = self.cycle_grid_size(true);

@@ -21,6 +21,7 @@ pub mod net_class;
 pub mod net_tie;
 pub mod numeric;
 pub mod object_id;
+pub mod output_job;
 pub mod pad_thermal;
 pub mod part;
 pub mod part_fields;

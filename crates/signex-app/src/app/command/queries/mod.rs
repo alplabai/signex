@@ -13,6 +13,7 @@
 //! `layout_plan_get` and `layout_plan_status` (#2942, `app::layout_plan`),
 //! the Project tab's `project_settings` (#1689-#1693, `app::project_tab`)
 //! with the Variant Manager's `compare_variants` and `variant_bom` (#2949),
+//! `project_checklist` (#1291, with the last run of the checklist's checks),
 //! `list_snippets` and `list_templates` (#1283, `app::design_reuse`),
 //! `query_net_ties` (#1277), the BOM's `bom_lines` (#1988), the project's
 //! differential pairs `list_diff_pairs` (#2952, `app::diff_pair_classes`),
@@ -21,9 +22,10 @@
 //! `board_status` (#2460), `query_rail_budget` (#2943), the BOM and part
 //! search queries `query_bom` (#2938) and `search_parts` (#1297, `bom`),
 //! `query_library` (#2944, the rows of an open library),
-//! `list_annotations` (mockup row 198, the project's notebook files) and
-//! `query_power_tree` (#1313, `app::power_tree`, run by `off_thread`),
-//! answered once their reads land. Each
+//! `list_annotations` (mockup row 198, the project's notebook files),
+//! `query_cross_references` (#1273, once the project's net index is
+//! current) and `query_power_tree` (#1313, `app::power_tree`, run by
+//! `off_thread`), answered once their reads land. Each
 //! answers with data through [`CommandOutcome::Answered`], never a bare
 //! `Ran`, and reads only the documents (engines, boards, editors, projects,
 //! the library): no active tab, window, selection or panel is looked at, and
@@ -46,6 +48,7 @@ mod check_erc;
 mod check_requirements;
 mod check_run;
 pub use check_run::CheckFinished;
+mod cross_refs;
 mod documents;
 mod elements;
 mod find;
@@ -76,6 +79,7 @@ const QUERY_IDS: &[&str] = &[
     "find_items",
     "read_document",
     "query_pins",
+    "query_cross_references",
     "query_net_ties",
     "check_erc",
     "check_drc",
@@ -92,6 +96,8 @@ const QUERY_IDS: &[&str] = &[
     "rules_preset_diff",
     "board_panel",
     "project_settings",
+    "project_checklist",
+    "project_checklist_link_choices",
     // #2796: a block diagram's blocks, ports, connections and groups.
     "query_block_diagram",
     "query_power_tree",
@@ -177,6 +183,8 @@ impl Signex {
             "check_erc" => return Some(self.check_erc(command, args)),
             "check_drc" => return Some(self.check_drc(command, args)),
             "check_requirements" => return Some(self.check_requirements(command, args)),
+            // Waits for the project's net index when it is not current.
+            "query_cross_references" => return Some(self.query_cross_references(command, args)),
             // The project's power tree, stitched off the UI thread (#1313).
             "query_power_tree" => return Some(self.query_power_tree(command, args)),
             // The project's notebook files are read first (mockup row 198).
@@ -223,6 +231,19 @@ impl Signex {
                 let outcome = match answer {
                     Ok(value) => CommandOutcome::Answered(value),
                     Err(reason) => CommandOutcome::disabled(reason),
+                };
+                return Some((outcome, Task::none()));
+            }
+            // The Design Checklist tab (#1291) and its link picker.
+            "project_checklist" | "project_checklist_link_choices" => {
+                let answer = if id == "project_checklist" {
+                    self.project_checklist(args)
+                } else {
+                    self.project_checklist_link_choices(args)
+                };
+                let outcome = match answer {
+                    Ok(value) => CommandOutcome::Answered(value),
+                    Err(reason) => CommandOutcome::Disabled { reason },
                 };
                 return Some((outcome, Task::none()));
             }

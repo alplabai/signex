@@ -612,11 +612,8 @@ pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, Pan
         PanelKind::NetClasses if ctx.net_classes.board.is_some() => board_net_classes::view(ctx),
         PanelKind::NetClasses => net_class_panel::view_panel(ctx),
         PanelKind::Variants => view_stub(ids::PANELS_KIND_VARIANTS, ids::PANELS_STUB_VARIANTS, ctx),
-        PanelKind::OutputJobs => view_stub(
-            ids::PANELS_KIND_OUTPUT_JOBS,
-            ids::PANELS_STUB_OUTPUT_JOBS,
-            ctx,
-        ),
+        // Opens as the Export Job document tab (mockup row 114); never docked.
+        PanelKind::OutputJobs => iced::widget::Space::new().boxed(),
         PanelKind::ObjectList => return object_list::view(ctx),
         PanelKind::BomStudio => view_stub(
             ids::PANELS_KIND_BOM_STUDIO,

@@ -146,6 +146,23 @@ pub(crate) fn file_polarity(layer: FabLayer) -> &'static str {
 }
 
 /// The file-name suffix of an image, before `.gbr`.
+/// The id an Export Job's Gerber layer list names the image by (#1299):
+/// the file suffix without the copper layer's number, so an id keeps its
+/// layer when the stack changes (`copper-top`, `copper-inner2`,
+/// `legend-top`, `soldermask-bottom`, `profile`, ...).
+pub(crate) fn layer_id(layer: FabLayer) -> String {
+    match layer {
+        FabLayer::Copper(CopperLayer::Top) => "copper-top".to_string(),
+        FabLayer::Copper(CopperLayer::Bottom) => "copper-bottom".to_string(),
+        FabLayer::Copper(CopperLayer::Inner(inner)) => format!("copper-inner{}", inner.index()),
+        FabLayer::Legend(face) => format!("legend-{}", face.file_word()),
+        FabLayer::Mask(face) => format!("soldermask-{}", face.file_word()),
+        FabLayer::Paste(face) => format!("paste-{}", face.file_word()),
+        FabLayer::Profile => "profile".to_string(),
+        FabLayer::VScore => "vscore".to_string(),
+    }
+}
+
 pub(crate) fn file_suffix(layer: FabLayer, stack: &CopperStack) -> String {
     match layer {
         FabLayer::Copper(copper) => {

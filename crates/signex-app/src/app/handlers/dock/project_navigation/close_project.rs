@@ -88,7 +88,9 @@ impl Signex {
         if sketched && !self.settle_board_sketch_of(None) {
             return Task::none();
         }
-        self.spawn_close_refs_resolve(project_id)
+        // Export Job profiles that run before close (mockup row 114).
+        let before = self.auto_runs_before_close(project_id);
+        Task::batch([before, self.spawn_close_refs_resolve(project_id)])
     }
 
     /// Start the off-thread child-sheet read for closing `project_id`. Used by

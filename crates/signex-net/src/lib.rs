@@ -86,6 +86,7 @@ pub use project::{
     number_issues, parse_page_number, project_name_changes, project_occurrences, sheet_numbering,
     with_page_number,
 };
+pub use project::{CrossRefPartner, PortCrossRef};
 
 mod compiled;
 #[cfg(test)]

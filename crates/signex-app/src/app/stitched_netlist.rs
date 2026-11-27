@@ -35,6 +35,9 @@ pub(crate) struct Stitched {
     pub(crate) index: Option<signex_net::NetIndex>,
     /// The file each sheet key of `index` was assembled from.
     pub(crate) sheet_paths: HashMap<signex_net::SheetKey, PathBuf>,
+    /// The off-sheet cross references of the Global labels (#1273), with
+    /// `index`; empty otherwise.
+    pub(crate) cross_refs: signex_output::PortCrossRefs,
 }
 
 impl Stitched {
@@ -44,6 +47,7 @@ impl Stitched {
             warnings,
             index: None,
             sheet_paths: HashMap::new(),
+            cross_refs: signex_output::PortCrossRefs::default(),
         }
     }
 }
@@ -65,7 +69,8 @@ pub(crate) fn stitched_project_netlist_from(
 /// The project netlist rooted at `root` and an index of what sits on each net
 /// (navigation, highlight, hover), over a snapshot of the open sheets, so it
 /// can run on a blocking thread (it must not run inside `update`): only the
-/// sheets absent from `open` are read from disk.
+/// sheets absent from `open` are read from disk. `project_name` picks the
+/// manual page numbers the cross references print.
 pub(crate) fn stitched_index_from(
     open: &OpenSheets,
     pages: &[PathBuf],
@@ -73,9 +78,16 @@ pub(crate) fn stitched_index_from(
     fold: CaseFold,
     project_dir: Option<PathBuf>,
     naming: &ChannelNaming,
+    project_name: &str,
 ) -> Stitched {
     let set = super::project_sheets::assemble_project_sheets_from(open, pages, root, fold);
-    stitch_set(&set, project_dir, true, naming, project_graph_with)
+    stitch_set(
+        &set,
+        project_dir,
+        Some(project_name),
+        naming,
+        project_graph_with,
+    )
 }
 
 /// One project's stitch, computed by whichever of the net-class style job and
@@ -131,7 +143,7 @@ pub(crate) fn netlist_of_set(
     project_dir: Option<PathBuf>,
     naming: &ChannelNaming,
 ) -> Stitched {
-    stitch_set(set, project_dir, false, naming, project_graph_with)
+    stitch_set(set, project_dir, None, naming, project_graph_with)
 }
 
 /// [`netlist_of_set`] for a check that only asks (#2549): a refused child
@@ -141,7 +153,7 @@ pub(crate) fn netlist_of_set_quiet(
     project_dir: Option<PathBuf>,
     naming: &ChannelNaming,
 ) -> Stitched {
-    stitch_set(set, project_dir, false, naming, project_graph_quiet)
+    stitch_set(set, project_dir, None, naming, project_graph_quiet)
 }
 
 /// How the sheet graph is assembled: logging refused child references or not.
@@ -158,10 +170,12 @@ thread_local! {
     pub(crate) static STITCH_RUNS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
+/// `index_for` is the project's name when the net index and the cross
+/// references are wanted, `None` for the netlist alone.
 fn stitch_set(
     set: &ProjectSheetSet,
     project_dir: Option<PathBuf>,
-    want_index: bool,
+    index_for: Option<&str>,
     naming: &ChannelNaming,
     assemble: AssembleGraph,
 ) -> Stitched {
@@ -196,7 +210,7 @@ fn stitch_set(
         resolved: &graph.resolved,
         roots: &roots,
     };
-    let (result, index) = if want_index {
+    let (result, index) = if index_for.is_some() {
         let (result, index) = signex_net::build_project_netlist_indexed_named(&project, naming);
         (result, Some(index))
     } else {
@@ -205,17 +219,25 @@ fn stitch_set(
             None,
         )
     };
+    let cross_refs = match (&index, index_for) {
+        (Some(index), Some(project_name)) => {
+            let (numbering, _) = signex_net::sheet_numbering(&project, project_name);
+            super::cross_refs::project_cross_refs(&project, &graph.paths, index, &numbering)
+        }
+        _ => signex_output::PortCrossRefs::default(),
+    };
     warnings.extend(graph.issues.iter().map(stitch_issue_message));
     warnings.extend(result.issues.iter().map(stitch_issue_message));
     Stitched {
         netlist: Some(result.netlist),
         warnings,
-        index,
-        sheet_paths: if want_index {
+        sheet_paths: if index.is_some() {
             graph.paths
         } else {
             HashMap::new()
         },
+        index,
+        cross_refs,
     }
 }
 

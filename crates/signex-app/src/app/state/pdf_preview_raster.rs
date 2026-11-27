@@ -254,13 +254,15 @@ impl RasterQueue {
     }
 }
 
-/// The page-setup half of [`PdfOptions`] a document keeps for the session.
+/// The page-setup half of [`PdfOptions`] a document keeps for the session,
+/// with the watermark colour picked in the dialog (#2609).
 #[derive(Debug, Clone)]
 pub struct RememberedPageSetup {
     page_size: PageSize,
     orientation: SheetOrientation,
     margins: Margins,
     scale: PdfScale,
+    watermark_rgb: Option<[u8; 3]>,
 }
 
 impl RememberedPageSetup {
@@ -270,6 +272,15 @@ impl RememberedPageSetup {
             orientation: options.orientation,
             margins: options.margins,
             scale: options.scale,
+            watermark_rgb: None,
+        }
+    }
+
+    /// The same, remembering the dialog's watermark colour too.
+    pub fn with_watermark_colour(self, rgb: [u8; 3]) -> Self {
+        Self {
+            watermark_rgb: Some(rgb),
+            ..self
         }
     }
 
@@ -278,6 +289,11 @@ impl RememberedPageSetup {
         options.orientation = self.orientation;
         options.margins = self.margins;
         options.scale = self.scale;
+    }
+
+    /// The watermark colour the dialog last had for this document.
+    pub fn watermark_colour(&self) -> Option<[u8; 3]> {
+        self.watermark_rgb
     }
 }
 

@@ -14,6 +14,7 @@ mod board_sketch;
 mod board_status;
 mod board_view;
 mod bom;
+mod checklist;
 mod chrome;
 mod command_log;
 mod command_needs;
@@ -34,6 +35,7 @@ mod notebook_pdf;
 mod notebook_references;
 mod notebook_tab;
 mod notice;
+mod output_job;
 mod overlay;
 mod panel_body;
 mod panels;
@@ -74,6 +76,7 @@ pub use board_sketch::*;
 pub use board_status::*;
 pub use board_view::*;
 pub use bom::*;
+pub use checklist::*;
 pub use chrome::*;
 pub use command_log::*;
 pub use command_needs::*;
@@ -94,6 +97,7 @@ pub use notebook_pdf::*;
 pub use notebook_references::*;
 pub use notebook_tab::*;
 pub use notice::*;
+pub use output_job::*;
 pub use overlay::*;
 pub use panel_body::*;
 pub use panels::*;
@@ -137,6 +141,7 @@ pub(crate) fn area_lists() -> Vec<crate::MessageId> {
         board_status::BOARD_STATUS,
         board_view::BOARD_VIEW,
         bom::BOM,
+        checklist::CHECKLIST,
         chrome::CHROME,
         command_log::COMMAND_LOG,
         command_needs::COMMAND_NEEDS,
@@ -157,6 +162,7 @@ pub(crate) fn area_lists() -> Vec<crate::MessageId> {
         notebook_references::NOTEBOOK_REFERENCES,
         notebook_tab::NOTEBOOK_TAB,
         notice::NOTICE,
+        output_job::OUTPUT_JOB,
         overlay::OVERLAY,
         panel_body::PANEL_BODY,
         panels::PANELS,

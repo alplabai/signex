@@ -78,6 +78,13 @@ pub enum TabKind {
     /// is the `.snxsym` path, which Save writes; it sits after the symbol's
     /// own tab (`app/pin_table_tab`).
     PinTable,
+    /// An Export Job (`.snxout`, mockup row 114), main window only. Its
+    /// draft lives in [`crate::app::DocumentState::output_jobs`] keyed by
+    /// `TabInfo.path`, which Save writes (`app/output_job`).
+    OutputJob,
+    /// The project's Design Checklist as a page tab (mockup row 206);
+    /// `TabInfo.path` is the `.snxprj` path, which Save writes.
+    DesignChecklist(super::state::ProjectId),
     /// A `.snxblk` block diagram (mockup row 171). State lives in
     /// [`crate::app::DocumentState::block_diagrams`] keyed by this path,
     /// which `TabInfo.path` also holds; drawn in the main window only.
@@ -99,6 +106,11 @@ impl TabKind {
     /// save or restore from History.
     pub fn is_gerber_viewer(&self) -> bool {
         matches!(self, TabKind::GerberViewer)
+    }
+
+    /// An Export Job tab: never undocked, not restored from History.
+    pub fn is_output_job(&self) -> bool {
+        matches!(self, TabKind::OutputJob)
     }
 
     pub fn is_component_editor(&self) -> bool {
@@ -185,6 +197,14 @@ impl TabKind {
         }
     }
 
+    /// `Some(id)` if this tab is a project's Design Checklist tab.
+    pub fn as_design_checklist(&self) -> Option<super::state::ProjectId> {
+        match self {
+            TabKind::DesignChecklist(id) => Some(*id),
+            _ => None,
+        }
+    }
+
     /// A symbol's Pin table tab.
     pub fn is_pin_table(&self) -> bool {
         matches!(self, TabKind::PinTable)
@@ -207,8 +227,8 @@ impl TabKind {
     }
 
     /// A page tab, not a drawing: the Project, Rules, Layer Stack, Pin
-    /// table, Variant Manager and Design Notebook tabs. None is undocked or
-    /// restored from History.
+    /// table, Variant Manager, Design Checklist and Design Notebook tabs.
+    /// None is undocked or restored from History.
     pub fn is_project_page(&self) -> bool {
         // Mockup rows 178 and 107: the Polygon Manager and Length Matching
         // are pages of their board.
@@ -222,6 +242,7 @@ impl TabKind {
                 | TabKind::LayerStack
                 | TabKind::PinTable
                 | TabKind::VariantManager(_)
+                | TabKind::DesignChecklist(_)
                 | TabKind::Notebook(_)
         )
     }

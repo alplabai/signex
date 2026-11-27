@@ -113,6 +113,9 @@ define_ids! {
     NOTICE_PDF_SOURCE_CLOSED = "notice-pdf-source-closed";
     NOTICE_PDF_NO_FILES = "notice-pdf-no-files";
     NOTICE_NETLIST_EXPORT_FAILED = "notice-netlist-export-failed";
+    NOTICE_OUTPUT_JOB_FAILED = "notice-output-job-failed";
+    NOTICE_OUTPUT_JOB_OUT_OF_DATE = "notice-output-job-out-of-date";
+    NOTICE_SHEET_PNG_FAILED = "notice-sheet-png-failed";
     NOTICE_PREVIEW_NO_PAGES = "notice-preview-no-pages";
     NOTICE_PREVIEW_RENDER_FAILED = "notice-preview-render-failed";
     NOTICE_LINK_NOT_OPENED = "notice-link-not-opened";

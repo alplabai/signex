@@ -24,7 +24,7 @@ const TEXT_CHARS: usize = 120;
 const HEADER: &str = "Agent edits since the previous commit:";
 
 /// Commands whose change lands in the project file, whatever sheet they name.
-const PROJECT_WIDE: [&str; 37] = [
+const PROJECT_WIDE: [&str; 44] = [
     "assign_net_class",
     "rules_add",
     "rules_set",
@@ -58,6 +58,13 @@ const PROJECT_WIDE: [&str; 37] = [
     "project_set_requirement",
     "project_remove_requirement",
     "project_enable_requirement",
+    "project_start_checklist",
+    "project_add_checklist_item",
+    "project_set_checklist_item",
+    "project_set_checklist_state",
+    "project_remove_checklist_item",
+    "project_reset_checklist",
+    "project_import_checklist",
     "project_set_rail",
     "bom_add_alternate",
     "bom_remove_alternate",

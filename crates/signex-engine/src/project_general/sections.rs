@@ -251,6 +251,8 @@ pub(super) struct SectionsSnapshot {
     channel_naming: ChannelNaming,
     /// The harness definitions (#1280); only the definitions view writes them.
     harness_definitions: Vec<signex_types::schematic::HarnessDefinition>,
+    /// The design checklist (#1291) as stored; only its tab writes it.
+    design_checklist: Option<serde_json::Value>,
     /// The project's rails as stored (#2943); only `project_set_rail`
     /// writes them.
     rails: Option<serde_json::Value>,
@@ -270,6 +272,7 @@ impl SectionsSnapshot {
             requirements: data.requirements.clone(),
             channel_naming: data.schematic_design.channel_naming.clone(),
             harness_definitions: data.schematic_design.harness_definitions.clone(),
+            design_checklist: data.design_checklist_value().cloned(),
             rails: data.rails_value(),
             bom_alternates: data.bom_alternates.clone(),
         }
@@ -285,6 +288,7 @@ impl SectionsSnapshot {
         data.requirements = self.requirements;
         data.schematic_design.channel_naming = self.channel_naming;
         data.schematic_design.harness_definitions = self.harness_definitions;
+        data.restore_design_checklist_value(self.design_checklist);
         data.restore_rails_value(self.rails);
         data.bom_alternates = self.bom_alternates;
     }

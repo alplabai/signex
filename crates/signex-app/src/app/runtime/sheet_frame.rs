@@ -15,7 +15,11 @@ impl Signex {
     pub(crate) fn refresh_canvas_sheet_frame(&mut self) {
         let canvas = self.interaction_state.active_canvas();
         let (w, h) = (canvas.paper_width_mm, canvas.paper_height_mm);
-        let frame = self.sheet_frame_for_active(w, h);
+        let mut frame = self.sheet_frame_for_active(w, h);
+        // The off-sheet cross references (#1273) draw with the frame.
+        if let Some(path) = self.document_state.active_path.as_deref() {
+            frame.extend(self.cross_ref_frame_text(path));
+        }
         let special = self
             .document_state
             .active_path

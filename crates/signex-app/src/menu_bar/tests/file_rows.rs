@@ -107,6 +107,25 @@ fn project_options_opens_the_project_tab_and_is_greyed_without_a_project() {
     assert_eq!(app.document_state.tabs.len(), tabs + 1, "no Project tab");
 }
 
+/// #1291 (mockup row 206): the project's checklist opens as a document tab.
+#[test]
+fn design_checklist_opens_its_tab_and_is_greyed_without_a_project() {
+    assert!(!row_is_live(&bare_app(), "Project/Design Checklist"));
+    let mut app = one_symbol_selected();
+    open_project(&mut app, "P.snxprj");
+    app.document_state.active_path = None;
+    let tabs = app.document_state.tabs.len();
+    let _ = click(&mut app, "Project/Design Checklist");
+    let docs = &app.document_state;
+    assert_eq!(docs.tabs.len(), tabs + 1, "no Design Checklist tab");
+    assert!(
+        docs.tabs[docs.active_tab]
+            .kind
+            .as_design_checklist()
+            .is_some()
+    );
+}
+
 #[test]
 fn save_writes_the_active_schematic() {
     let dir = tempfile::tempdir().expect("tempdir");

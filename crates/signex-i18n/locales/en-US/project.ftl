@@ -579,3 +579,10 @@ snippet-saved = Snippet { $name } saved to { $file }: { $items } objects
 snippet-not-written = Snippet { $name } could not be written to { $file }: { $why }
 # $what is the command's menu label, $why the reason.
 snippet-refused = { $what }: { $why }
+
+## Why `query_cross_references` (#1273) was refused.
+project-cross-refs-document = no sheet to read cross references from: { $reason }
+project-cross-refs-not-open = { $name } is not open; open it first (`open_document`)
+project-cross-refs-not-a-sheet = `query_cross_references` reads a schematic sheet; this document is not one
+project-cross-refs-no-index = the project's net index could not be built; see Messages
+project-cross-refs-index-failed = the project's net index could not be built: { $reason }

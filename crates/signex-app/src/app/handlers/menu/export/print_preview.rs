@@ -1,7 +1,7 @@
 //! Print-preview modal handlers. Split from `menu/export.rs`.
 
 use iced::Task;
-use signex_output::{PageRange, PageSize, PdfOptions, PreviewOptions};
+use signex_output::{PageRange, PdfOptions, PreviewOptions};
 
 use super::page_list::parse_page_list;
 use super::raster_job::PreviewRasterJob;
@@ -45,42 +45,16 @@ impl Signex {
         super::log_stitch_issues(&source, &ctx, &issues);
         super::sheet_numbers::log_numbering_issues(issues.sheet_numbering.as_ref());
 
-        // Derive page size and orientation from the active schematic document
-        // so the preview matches the actual sheet dimensions rather than
-        // always defaulting to A4 landscape. Pull the palette from the
-        // active theme so PDF wires / symbols / labels match the canvas.
-        let pdf_opts = {
-            let (sheet_size, sheet_orientation) = ctx
-                .sheets
-                .first()
-                .map(|s| s.schematic.sheet_size())
-                .unwrap_or((
-                    signex_types::schematic::SheetSize::IsoA4,
-                    signex_types::schematic::SheetOrientation::Landscape,
-                ));
-            let (page_size, orientation) =
-                PageSize::from_sheet_size(&sheet_size, sheet_orientation);
-            let palette = signex_output::SchematicPalette::from(
-                &self.canvas_colors_for(self.ui_state.theme_id),
-            );
-            let mut options = PdfOptions {
-                page_size,
-                orientation,
-                palette,
-                ..PdfOptions::default()
-            };
-            // Reopening for the same document restores what the user set up
-            // last time (this session only); otherwise the sheet's own size.
-            if let Some(remembered) = self
-                .document_state
-                .active_path
-                .as_ref()
-                .and_then(|path| self.document_view.page_setup_memory.get(path))
-            {
-                remembered.restore_into(&mut options);
-            }
-            options
-        };
+        // The sheet's own paper, the theme's palette and the project's
+        // active variant, as the headless export starts from too.
+        let mut pdf_opts = self.sheet_pdf_options(&ctx, &source);
+        // Reopening for the same document restores what the user set up
+        // last time (this session only), the watermark colour included.
+        let remembered = self.document_view.page_setup_memory.get(&source);
+        if let Some(remembered) = remembered {
+            remembered.restore_into(&mut pdf_opts);
+        }
+        let remembered_colour = remembered.and_then(|r| r.watermark_colour());
 
         // Open-modal default quality is Medium — same value seeded
         // into `PreviewState.quality` below, so the very first
@@ -92,19 +66,6 @@ impl Signex {
             .active_document_project()
             .map(|p| p.data.variant_definitions.clone())
             .unwrap_or_default();
-        // Seed `pdf_options.variant` from the project's active variant
-        // so the picker reflects the project state on open. The user
-        // can override locally without mutating the project. The choice is
-        // always named, Base included (#2430).
-        let mut pdf_opts = pdf_opts;
-        pdf_opts.variant = Some(
-            self.document_state
-                .active_document_project()
-                .map_or(signex_types::project::BASE_VARIANT, |p| {
-                    p.data.active_variant_name()
-                })
-                .to_string(),
-        );
         // Seed the file picker off the export context's own sheet set —
         // open-modal default is "export everything", and user toggles
         // take the box from checked to unchecked. Reading `ctx` rather
@@ -121,6 +82,9 @@ impl Signex {
         let mut dialog = crate::app::state::PdfDialogState::default();
         dialog.watermark.revision = ctx.metadata.revision.clone();
         dialog.watermark.date = export_date();
+        if let Some(rgb) = remembered_colour {
+            dialog.watermark.pick_colour(rgb);
+        }
         let mut preview = crate::app::state::PreviewState {
             source,
             pages: Vec::new(),
@@ -345,7 +309,8 @@ impl Signex {
         if let Some(preview) = self.document_view.preview.take()
             && let Some(path) = preview.source_path.clone()
         {
-            let remembered = crate::app::state::RememberedPageSetup::capture(&preview.pdf_options);
+            let remembered = crate::app::state::RememberedPageSetup::capture(&preview.pdf_options)
+                .with_watermark_colour(preview.dialog.watermark.settings.colour_rgb);
             self.document_view
                 .page_setup_memory
                 .insert(path, remembered);
@@ -411,6 +376,11 @@ impl Signex {
         pdf_opts.net_class_styles =
             super::class_styles::export_class_styles(&self.document_state, &source, &ctx);
         pdf_opts.schematic_defaults = self.document_state.schematic_defaults_for(&source);
+        pdf_opts.port_cross_refs = issues
+            .sheet_numbering
+            .as_ref()
+            .map(|numbering| numbering.cross_refs().clone())
+            .unwrap_or_default();
         pdf_opts.draw_not_fitted = self.ui_state.cross_out_not_fitted;
         // Re-seed the picker from the freshly built context. `sheet_files` was
         // captured once at modal open; if the active document changed while the
@@ -565,6 +535,8 @@ impl Signex {
             PdfOptionMsg::WatermarkTextChanged(text) => dialog.watermark.set_text(text),
             PdfOptionMsg::WatermarkOpacityChanged(text) => dialog.watermark.set_opacity(text),
             PdfOptionMsg::WatermarkAngleChanged(text) => dialog.watermark.set_angle(text),
+            PdfOptionMsg::WatermarkColourChanged(text) => dialog.watermark.set_colour(text),
+            PdfOptionMsg::WatermarkColourPicked(rgb) => dialog.watermark.pick_colour(rgb),
             PdfOptionMsg::WatermarkPagesPicked(pages) => dialog.watermark.settings.pages = pages,
             PdfOptionMsg::WatermarkRevisionToggled(on) => dialog.watermark.with_revision = on,
             PdfOptionMsg::PdfLayersToggled(on) => dialog.layers.is_on = on,
@@ -645,7 +617,7 @@ impl Signex {
 }
 
 /// Today as `YYYY-MM-DD`, the date the watermark's revision line prints.
-fn export_date() -> String {
+pub(super) fn export_date() -> String {
     chrono::Local::now().format("%Y-%m-%d").to_string()
 }
 

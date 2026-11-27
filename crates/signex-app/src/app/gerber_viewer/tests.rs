@@ -310,7 +310,9 @@ fn opening_paths_opens_one_tab_and_the_read_lands_on_it() {
     let job = app.document_view.gerber_viewer.reading.expect("a read");
     let stale = GerberViewerMsg::PackageRead {
         job: job - 1,
+        paths: paths.clone(),
         result: Ok(read_of(paths.clone())),
+        waiting: None,
     };
     let _ = app.update(Message::from(stale));
     assert!(
@@ -319,7 +321,9 @@ fn opening_paths_opens_one_tab_and_the_read_lands_on_it() {
     );
     let landed = GerberViewerMsg::PackageRead {
         job,
+        paths: paths.clone(),
         result: Ok(read_of(paths.clone())),
+        waiting: None,
     };
     let _ = app.update(Message::from(landed));
     let viewer = &app.document_view.gerber_viewer;
@@ -340,7 +344,9 @@ fn the_tab_holds_no_document_and_closing_it_keeps_recent() {
     let job = app.document_view.gerber_viewer.reading.unwrap();
     let landed = GerberViewerMsg::PackageRead {
         job,
+        paths: paths.clone(),
         result: Ok(read_of(paths)),
+        waiting: None,
     };
     let _ = app.update(Message::from(landed));
     let idx = app.gerber_viewer_tab().unwrap();
@@ -377,7 +383,9 @@ fn a_failed_read_keeps_the_empty_state() {
     let why = "gerber-viewer-failed-read-marker";
     let failed = GerberViewerMsg::PackageRead {
         job,
+        paths: vec![PathBuf::from("/x")],
         result: Err(why.into()),
+        waiting: None,
     };
     let check = app.update(Message::from(failed));
     assert!(check.units() > 0, "the recent packages are checked");

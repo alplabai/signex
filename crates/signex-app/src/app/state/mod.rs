@@ -88,7 +88,13 @@ pub use omitted_page::{OmittedPage, OmittedReason};
 pub use parameter_table::{ClosedSheetCopies, ParameterCell, ParameterTableState};
 pub(crate) use pcb_drc::DrcInput;
 pub(crate) use pcb_ratsnest::{PcbRatsnest, RatsnestKey, RouteRatsKey};
-pub use pdf_dialog::{ANGLE_PRESETS, PdfDialogState, PdfSection, WatermarkPreset};
+pub use pdf_dialog::{
+    ANGLE_PRESETS, PdfDialogState, PdfSection, WATERMARK_SWATCHES, WatermarkDraft, WatermarkPreset,
+    colour_hex,
+};
+pub(crate) use pdf_dialog::{
+    parse_angle as parse_watermark_angle, parse_percent as parse_watermark_opacity,
+};
 pub use pdf_page_setup::PageSetupInputs;
 pub use pdf_preview_raster::{
     PageSetupMemory, RasterOutcome, RasterQueue, RasterSource, RememberedPageSetup,
@@ -626,6 +632,8 @@ pub struct DocumentState {
     /// unsaved per project until Save writes it or Discard drops it.
     pub generated_reports:
         std::collections::HashMap<ProjectId, signex_notebook::generate::GeneratedNotebook>,
+    /// Export Jobs open as tabs, or closed with unsaved edits (#1299).
+    pub output_jobs: std::collections::BTreeMap<PathBuf, signex_types::output_job::OutputJob>,
 }
 
 /// A project folder a rename moved from `old` to `new`.

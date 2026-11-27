@@ -190,6 +190,7 @@ pub(crate) mod grid_properties;
 mod layer_strip;
 mod messages;
 mod net_nav;
+mod panes;
 mod pcb;
 mod pdf_option;
 mod placement_extras;
@@ -204,6 +205,7 @@ pub use layer_strip::{
 };
 pub use messages::*;
 pub use net_nav::NetNavMsg;
+pub use panes::PaneMsg;
 pub use pcb::Board3dShot;
 pub use pcb::{
     Board3dGesture, Board3dModelsRead, Board3dMsg, BoardNetMsg, BoardOriginMsg, BoardSketchMsg,

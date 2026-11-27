@@ -26,6 +26,8 @@ pub struct ProjectNetData {
     pub base_dir: Option<PathBuf>,
     pub fold: CaseFold,
     pub classes: Vec<NetClass>,
+    /// The off-sheet cross references of the Global labels (#1273).
+    pub cross_refs: signex_output::PortCrossRefs,
 }
 
 impl ProjectNetData {
@@ -195,6 +197,7 @@ mod tests {
             base_dir: None,
             fold: CaseFold::default(),
             classes: Vec::new(),
+            cross_refs: Default::default(),
         })
     }
 

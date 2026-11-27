@@ -85,9 +85,11 @@ fn default_opts() -> PdfOptions {
         part_bookmark_order: PartBookmarkOrder::BySheet,
         watermark: None,
         layers: None,
+        links: true,
         palette: SchematicPalette::classic(),
         net_class_styles: Default::default(),
         schematic_defaults: Default::default(),
+        port_cross_refs: Default::default(),
         draw_not_fitted: true,
     }
 }

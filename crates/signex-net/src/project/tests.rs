@@ -3,6 +3,7 @@ use super::*;
 use crate::fixtures::{empty_sheet, junction, label, pt, wire};
 
 mod components;
+mod cross_refs;
 mod instances;
 mod net_members;
 use crate::build_netlist;

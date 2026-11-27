@@ -47,7 +47,9 @@ use crate::app::block_diagram as diagram;
 use crate::app::board_output as output;
 use crate::app::board_reuse as reuse;
 use crate::app::board_tools as tools;
+use crate::app::gerber_viewer as gerber;
 use crate::app::handlers::length_matching as length;
+use crate::app::handlers::menu::export::pdf_operands as sheet_pdf;
 use crate::app::handlers::pcb_component::part_swap_operands as swap;
 use crate::app::handlers::pcb_tune as tune;
 use crate::app::notebook_references::commands as notebook;
@@ -78,6 +80,20 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("save_document_as", doc::save_as),
     ("close_active_document", doc::close),
     ("open_document", file::open),
+    // #2896: the Gerber Viewer, empty or on the package `path` names.
+    (
+        "open_gerber_viewer",
+        crate::app::gerber_viewer::open_gerber_viewer,
+    ),
+    // Mockup row 193: the viewer's states, each answered with what it shows.
+    ("select_gerber_object", gerber::select_gerber_object),
+    ("flip_gerber_view", gerber::flip_gerber_view),
+    (
+        "show_gerber_drills_on_top",
+        gerber::show_gerber_drills_on_top,
+    ),
+    ("highlight_gerber_net", gerber::highlight_gerber_net),
+    ("show_gerber_open_menu", gerber::show_gerber_open_menu),
     ("new_document", file::new_project),
     (
         "new_pcb_document",
@@ -203,9 +219,50 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("board_report_components", output::board_report_components),
     ("export_board_report", output::export_board_report),
     ("export_board_pdf", output::export_board_pdf),
+    ("export_schematic_pdf", sheet_pdf::export_schematic_pdf),
     ("export_assembly_svg", output::export_assembly_svg),
     ("board_assembly_drawing", output::board_assembly_drawing),
     ("export_board_step", output::export_board_step),
+    // #1299: the PNG pages of a schematic, and an Export Job run.
+    ("export_sheet_png", crate::app::output_job::export_sheet_png),
+    ("run_output_job", crate::app::output_job::run_output_job),
+    // Mockup row 114: the Export Job tab's actions.
+    ("new_output_job", crate::app::output_job::new_output_job),
+    ("open_output_job", crate::app::output_job::open_output_job),
+    (
+        "read_output_job",
+        crate::app::output_job::read_output_job_command,
+    ),
+    ("add_job_output", crate::app::output_job::add_job_output),
+    ("set_job_output", crate::app::output_job::set_job_output),
+    ("set_job_profile", crate::app::output_job::set_job_profile),
+    ("set_job_triggers", crate::app::output_job::set_job_triggers),
+    // #1299: a Gerber output's settings.
+    (
+        "set_job_gerber_units",
+        crate::app::output_job::set_job_gerber_units,
+    ),
+    (
+        "set_job_gerber_format",
+        crate::app::output_job::set_job_gerber_format,
+    ),
+    (
+        "set_job_gerber_zeros",
+        crate::app::output_job::set_job_gerber_zeros,
+    ),
+    (
+        "set_job_gerber_layers",
+        crate::app::output_job::set_job_gerber_layers,
+    ),
+    (
+        "set_job_gerber_apertures",
+        crate::app::output_job::set_job_gerber_apertures,
+    ),
+    ("stop_output_job", crate::app::output_job::stop_output_job),
+    (
+        "view_output_job_run",
+        crate::app::output_job::view_output_job_run,
+    ),
     // #2796: a block diagram's saved file as SVG or PDF.
     (
         "export_block_diagram",
@@ -461,6 +518,55 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
         "project_run_requirements",
         crate::app::project_tab::project_run_requirements,
     ),
+    // #1291: the Design Checklist tab.
+    (
+        "project_start_checklist",
+        crate::app::project_tab::project_start_checklist,
+    ),
+    (
+        "project_add_checklist_item",
+        crate::app::project_tab::project_add_checklist_item,
+    ),
+    (
+        "project_set_checklist_item",
+        crate::app::project_tab::project_set_checklist_item,
+    ),
+    (
+        "project_set_checklist_state",
+        crate::app::project_tab::project_set_checklist_state,
+    ),
+    (
+        "project_remove_checklist_item",
+        crate::app::project_tab::project_remove_checklist_item,
+    ),
+    (
+        "project_run_checklist",
+        crate::app::project_tab::project_run_checklist,
+    ),
+    (
+        "project_reset_checklist",
+        crate::app::project_tab::project_reset_checklist,
+    ),
+    (
+        "project_checklist_templates",
+        crate::app::project_tab::project_checklist_templates,
+    ),
+    (
+        "project_save_checklist_template",
+        crate::app::project_tab::project_save_checklist_template,
+    ),
+    (
+        "project_export_checklist_csv",
+        crate::app::project_tab::project_export_checklist_csv,
+    ),
+    (
+        "project_import_checklist",
+        crate::app::project_tab::project_import_checklist,
+    ),
+    (
+        "project_open_checklist_link",
+        crate::app::project_tab::project_open_checklist_link,
+    ),
     // #2796: the block diagram document (mockup row 171).
     ("new_block_diagram", diagram::new_block_diagram),
     ("block_add", diagram::block_add),
@@ -587,10 +693,12 @@ pub(crate) fn operand_handler(command: &AppCommandId) -> Option<OperandHandler> 
 /// it for the missing `path` rather than the picker's refusal reading as run.
 /// `repair_pin_junctions` goes there too, so a headless run on the sheet in
 /// view answers how many dots it added (0 when nothing needed one) instead of
-/// a bare `Ran`. `toggle_live_erc` too, so a headless flip answers with the
-/// preference it left. `update_pcb_from_schematic` (#2470) goes there so a
-/// bare headless run is refused for `apply=true` or `dry_run=true` rather
-/// than opening a dialog nobody sees.
+/// a bare `Ran`. `open_gerber_viewer` (#2896) and the viewer's state
+/// commands (mockup row 193) answer with what the tab shows. `toggle_live_erc`
+/// too, so a headless flip answers with the preference it left.
+/// `update_pcb_from_schematic` (#2470) goes there so a bare headless run is
+/// refused for `apply=true` or `dry_run=true` rather than opening a dialog
+/// nobody sees.
 pub(crate) fn runs_headless_without_operands(command: &AppCommandId) -> bool {
     matches!(
         command.as_str(),
@@ -598,6 +706,12 @@ pub(crate) fn runs_headless_without_operands(command: &AppCommandId) -> bool {
             | "new_schematic_sheet"
             | "create_sheet_symbol_from_sheet"
             | "repair_pin_junctions"
+            | "open_gerber_viewer"
+            | "select_gerber_object"
+            | "flip_gerber_view"
+            | "show_gerber_drills_on_top"
+            | "highlight_gerber_net"
+            | "show_gerber_open_menu"
             | "new_block_diagram"
             | "toggle_live_erc"
             | "update_pcb_from_schematic"
@@ -645,6 +759,22 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
         "set_layer_tab_names" => Some(
             "`set_layer_tab_names` needs the operand `style` — \
              right-click a layer tab under the board",
+        ),
+        // Mockup row 114: a person uses the Export Job tab.
+        "read_output_job"
+        | "add_job_output"
+        | "set_job_output"
+        | "set_job_profile"
+        | "set_job_triggers"
+        | "set_job_gerber_units"
+        | "set_job_gerber_format"
+        | "set_job_gerber_zeros"
+        | "set_job_gerber_layers"
+        | "set_job_gerber_apertures"
+        | "stop_output_job"
+        | "view_output_job_run" => Some(
+            "this command needs the operand `path` and the job's settings — \
+             use the Export Job tab",
         ),
         // #2470: for agents and scripts; a person uses the dock itself.
         "set_dock_panel" => Some(
@@ -888,6 +1018,21 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
         | "project_run_requirements" => Some(
             "the `project_*` edits need their operands — \
              use the Project tab (Project ▸ Project Options...)",
+        ),
+        "project_start_checklist"
+        | "project_add_checklist_item"
+        | "project_set_checklist_item"
+        | "project_set_checklist_state"
+        | "project_remove_checklist_item"
+        | "project_run_checklist"
+        | "project_reset_checklist"
+        | "project_checklist_templates"
+        | "project_save_checklist_template"
+        | "project_export_checklist_csv"
+        | "project_import_checklist"
+        | "project_open_checklist_link" => Some(
+            "the design checklist edits need their operands — \
+             use the Design Checklist tab (Project ▸ Design Checklist)",
         ),
         // #2796: a person edits on the block diagram's tab.
         "block_add" | "block_set" | "block_remove" | "block_port_add" | "block_port_remove"

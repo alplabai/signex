@@ -45,6 +45,9 @@ pub(crate) struct GenerateJob {
     /// The standard `board`'s designators are shown under (#1416): the
     /// test netlist writes them stored.
     pub designator_standard: Option<signex_types::designator::DesignatorStandard>,
+    /// How the Gerber images are written: an Export Job's Gerber output's
+    /// settings (#1299), the writer's own from the dialog.
+    pub gerber: signex_types::output_job::GerberSettings,
 }
 
 /// One written file as the `fabrication_outputs` answer lists it (#2470):
@@ -83,6 +86,30 @@ pub(crate) fn run_generate(job: GenerateJob) -> Result<FabWritten, FabProblem> {
 
 /// [`run_generate`], with the facts of every file it wrote.
 pub(crate) fn run_generate_listed(job: GenerateJob) -> Result<Listed, FabProblem> {
+    let folder = job.folder.clone();
+    let made = make_generate(job)?;
+    let facts = made.files.iter().map(FileFacts::of).collect();
+    write_made(
+        made.files,
+        &folder,
+        &made.name,
+        made.notes,
+        made.board_notes,
+    )
+    .map(|written| (written, facts))
+}
+
+/// The files one Generate makes, not written yet: an Export Job run (#1299)
+/// writes them with the rest of its outputs.
+pub(crate) struct Made {
+    pub name: String,
+    pub files: Vec<MadeFile>,
+    pub notes: Vec<FabNote>,
+    pub board_notes: Vec<BoardNote>,
+}
+
+/// Make every file of `job`; when one cannot be made, none is.
+pub(crate) fn make_generate(job: GenerateJob) -> Result<Made, FabProblem> {
     let board = fab_board(job.board, job.whole_panel)?;
     let name = check_job(&board, &job.name)
         .map_err(FabProblem::Refused)?
@@ -91,6 +118,7 @@ pub(crate) fn run_generate_listed(job: GenerateJob) -> Result<Listed, FabProblem
     let notes = if job.kinds.has_fab_files() {
         let options = FabOptions {
             designator_standard: job.designator_standard,
+            gerber_settings: job.gerber.clone(),
             ..fab_options(&job.kinds, &name)
         };
         fab_files(&board, &options, &mut made)?
@@ -104,8 +132,12 @@ pub(crate) fn run_generate_listed(job: GenerateJob) -> Result<Listed, FabProblem
         job.documents,
         &mut board_notes,
     )?);
-    let facts = made.iter().map(FileFacts::of).collect();
-    write_made(made, &job.folder, &name, notes, board_notes).map(|written| (written, facts))
+    Ok(Made {
+        name,
+        files: made,
+        notes,
+        board_notes,
+    })
 }
 
 /// Build `board`'s fabrication files and write them into `folder`,

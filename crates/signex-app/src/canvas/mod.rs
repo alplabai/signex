@@ -35,6 +35,7 @@ pub(crate) mod middle_zoom;
 mod move_pick;
 mod net_highlight;
 pub(crate) mod pan_reuse;
+mod pane_camera;
 pub(crate) mod paper;
 pub(crate) mod pin_focus;
 pub mod placement_ghost;

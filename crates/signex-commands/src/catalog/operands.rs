@@ -330,6 +330,8 @@ pub const PLACE_FILE: &[Operand] = &[
 ];
 /// An open dialog's answer.
 pub const OPEN_PATH: &[Operand] = &[required("path", OperandKind::Path)];
+/// A folder, zip or file to read, or none (#2896: the Gerber Viewer).
+pub const OPTIONAL_PATH: &[Operand] = &[optional("path", OperandKind::Path)];
 /// A save dialog's answer; `overwrite` lets it replace an existing file.
 pub const SAVE_PATH: &[Operand] = &[
     required("path", OperandKind::Path),
@@ -554,6 +556,13 @@ pub const BOARD_STEP: &[Operand] = &[
     required("document", OperandKind::Document),
     required("path", OperandKind::Path),
     optional("schema", OperandKind::Text),
+];
+/// The pages of a schematic's project as PNG files (#1299): which sheet, the
+/// folder, and `dpi`, whole dots per inch from 36 to 1200 (300 if absent).
+pub const SHEET_PNG_EXPORT: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("path", OperandKind::Path),
+    optional("dpi", OperandKind::Text),
 ];
 /// `add_board_graphic` (#2424): a drawing of `kind` (`line`, `arc`,
 /// `circle`, `rectangle`, `text_frame`) on the board `document` names. A

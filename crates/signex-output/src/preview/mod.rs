@@ -15,8 +15,10 @@ use crate::expression::build_expression_tables;
 use crate::pdf::PdfOptions;
 use crate::pdf::page_range::preview_page_indices;
 
+mod png;
 mod rasterize;
 
+pub use png::{SheetPng, encode_png, png_resolution_capped};
 pub use rasterize::{MAX_PREVIEW_EDGE_PX, preview_raster_size};
 
 pub struct PreviewRasterizer;

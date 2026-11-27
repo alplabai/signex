@@ -119,11 +119,94 @@ pub(super) const WORKSPACE: &[CommandMetadata] = &[
         flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
+    // Mockup row 207: up to four panes, one document kind each.
+    CommandMetadata {
+        id: "tile_windows_grid",
+        category: "window",
+        label: command_ids::CMD_TILE_WINDOWS_GRID,
+        menu_label: Some(command_ids::CMD_MENU_TILE_WINDOWS_GRID),
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
     CommandMetadata {
         id: "untile_documents",
         category: "window",
         label: command_ids::CMD_UNTILE_DOCUMENTS,
         menu_label: Some(command_ids::CMD_MENU_UNTILE_DOCUMENTS),
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
+    // Mockup row 207 (#1307): the document area's panes.
+    CommandMetadata {
+        id: "split_pane_right",
+        category: "window",
+        label: command_ids::CMD_SPLIT_PANE_RIGHT,
+        menu_label: Some(command_ids::CMD_MENU_SPLIT_PANE_RIGHT),
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "split_pane_down",
+        category: "window",
+        label: command_ids::CMD_SPLIT_PANE_DOWN,
+        menu_label: Some(command_ids::CMD_MENU_SPLIT_PANE_DOWN),
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "open_second_view",
+        category: "window",
+        label: command_ids::CMD_OPEN_SECOND_VIEW,
+        menu_label: Some(command_ids::CMD_MENU_OPEN_SECOND_VIEW),
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
+    // Mockup row 207: the pane menu.
+    CommandMetadata {
+        id: "move_tab_to_other_pane",
+        category: "window",
+        label: command_ids::CMD_MOVE_TAB_TO_OTHER_PANE,
+        menu_label: Some(command_ids::CMD_MENU_MOVE_TAB_TO_OTHER_PANE),
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "close_pane",
+        category: "window",
+        label: command_ids::CMD_CLOSE_PANE,
+        menu_label: Some(command_ids::CMD_MENU_CLOSE_PANE),
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "sync_pane_zoom",
+        category: "window",
+        label: command_ids::CMD_SYNC_PANE_ZOOM,
+        menu_label: Some(command_ids::CMD_MENU_SYNC_PANE_ZOOM),
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "equalize_panes",
+        category: "window",
+        label: command_ids::CMD_EQUALIZE_PANES,
+        menu_label: Some(command_ids::CMD_MENU_EQUALIZE_PANES),
         group: CommandGroup::General,
         enable: Enablement::Always,
         flags: CommandFlags::GUI_ONLY,

@@ -7,22 +7,54 @@ use iced::Widget as _;
 use iced::widget::{Space, column, container, row, slider};
 use signex_i18n::{ids, t};
 use signex_output::WatermarkPages;
-use signex_widgets::{Label, raw, segmented, text, text_input};
+use signex_widgets::{Label, raw, segmented, text_input};
 
 use super::super::*;
 use super::form::{
     Look, NUM_W, SP, TS, check_with_help, form_row, num_field, switch_section, unit,
 };
-use crate::app::state::{ANGLE_PRESETS, PreviewState, WatermarkPreset};
+#[cfg(test)]
+use crate::app::state::colour_hex;
+use crate::app::state::{ANGLE_PRESETS, PreviewState, WATERMARK_SWATCHES, WatermarkPreset};
 
-/// Side of the colour swatch.
+/// Side of a colour swatch.
 const SWATCH: f32 = 18.0;
-/// Corner radius of the colour swatch.
+/// Corner radius of a colour swatch.
 const SWATCH_RADIUS: f32 = 4.0;
+/// Width of the Colour field: a `#RRGGBB` code.
+const HEX_W: f32 = NUM_W * 1.5;
 
-/// The colour as the dialog prints it: `#RRGGBB`.
-pub(super) fn colour_hex([r, g, b]: [u8; 3]) -> String {
-    format!("#{r:02X}{g:02X}{b:02X}")
+/// The Colour field was typed in (#2609).
+fn colour_typed(text: String) -> PrintPreviewMsg {
+    PdfOptionMsg::WatermarkColourChanged(text).into()
+}
+
+/// One quick colour (#2609): a swatch button, ringed in the accent while it
+/// is the colour that prints.
+fn swatch_button<'a>(rgb: [u8; 3], is_picked: bool, look: &Look) -> Element<'a, Message> {
+    let [r, g, b] = rgb;
+    let fill = iced::Color::from_rgb8(r, g, b);
+    let (ring, ring_w) = if is_picked {
+        (look.accent, 2.0)
+    } else {
+        (look.line_strong, 1.0)
+    };
+    signex_widgets::button(container(Space::new()).width(SWATCH).height(SWATCH).style(
+        move |_: &iced::Theme| container::Style {
+            background: Some(fill.into()),
+            border: iced::Border {
+                width: ring_w,
+                color: ring,
+                radius: SWATCH_RADIUS.into(),
+                ..iced::Border::default()
+            },
+            ..container::Style::default()
+        },
+    ))
+    .padding(0)
+    .on_press(Message::from(PdfOptionMsg::WatermarkColourPicked(rgb)))
+    .style(|_: &iced::Theme, _| signex_widgets::button::Style::default())
+    .boxed()
 }
 
 /// The Opacity field was typed in.
@@ -119,32 +151,20 @@ impl Signex {
         .spacing(SP.s)
         .align_y(iced::Alignment::Center);
 
-        let swatch_colour = {
-            let [r, g, b] = settings.colour_rgb;
-            iced::Color::from_rgb8(r, g, b)
-        };
-        let colour = row![
-            container(Space::new())
-                .width(SWATCH)
-                .height(SWATCH)
-                .style(move |_: &iced::Theme| container::Style {
-                    background: Some(swatch_colour.into()),
-                    border: iced::Border {
-                        radius: SWATCH_RADIUS.into(),
-                        ..iced::Border::default()
-                    },
-                    ..container::Style::default()
-                }),
-            // raw: a colour code, the same in every language.
-            text(raw(colour_hex(settings.colour_rgb)))
-                .size(TS.caption)
-                .font(crate::fonts::iced_font_for_family(
-                    crate::fonts::CHROME_MONO_FONT,
-                ))
-                .color(look.ink4),
-        ]
-        .spacing(SP.s)
-        .align_y(iced::Alignment::Center);
+        // The quick swatches, then the code (#2609; mockup row 168 draws the
+        // swatch and its code). A typed code that names no colour is kept as
+        // typed and changes nothing.
+        let mut colour = row![].spacing(SP.s).align_y(iced::Alignment::Center);
+        for rgb in WATERMARK_SWATCHES {
+            colour = colour.push(swatch_button(rgb, settings.colour_rgb == rgb, &look));
+        }
+        let colour = colour
+            .push_boxed(Space::new().width(Length::Fill))
+            .push(num_field(
+                &draft.colour_input,
+                Length::Fixed(HEX_W),
+                Some(colour_typed),
+            ));
 
         let pages = segmented(
             [

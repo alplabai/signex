@@ -16,6 +16,9 @@ use super::forms::Form::{AgentWindowLayout, Check, CloseInWindow, HeadlessNewDoc
 use super::forms::Form::{Operand, Query, SplitCore, StillRunsRefusal, StillRunsUnavailable};
 use super::inputs::Input::{self, *};
 
+mod gerber_viewer;
+mod output_job;
+
 /// `(ids, form, inputs)`: each id's row of `form` reads `inputs` too.
 pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
     // Core edits and runs that read past their gate.
@@ -99,6 +102,13 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
         Operand,
         &[Settings],
     ),
+    // The PDF's printed text is in the UI locale (`print_text`); the sheet
+    // PDF draws in the theme's palette (`sheet_pdf_options`).
+    (
+        &["export_board_pdf", "export_schematic_pdf"],
+        Operand,
+        &[Settings],
+    ),
     // The routing tools from their operands (#2470): the rules the route
     // keeps come from `board_design_rules` -> `drc_inputs`; none reads the
     // person's tool form, corner rule or route mode (handlers/pcb_tool/
@@ -115,8 +125,6 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
         &[Settings],
     ),
     (&["place_board_via"], Operand, &[]),
-    // The PDF's printed text is in the UI locale (`print_text`).
-    (&["export_board_pdf"], Operand, &[Settings]),
     // Mockup row 202: the stale check reads the named project's design on
     // the worker (`notebook_design_inputs`), its open sheets as edited; the
     // dialog opens on the project in view.
@@ -153,6 +161,8 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "save_layer_set",
             "delete_layer_set",
             "set_layer_tab_names",
+            "project_checklist_templates",
+            "project_save_checklist_template",
         ],
         Operand,
         &[Settings],
@@ -188,6 +198,7 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "color_net",
             "export_board_report",
             "export_board_step",
+            "export_sheet_png",
             "fabrication_outputs",
             "export_assembly_svg",
             "board_assembly_drawing",
@@ -261,6 +272,15 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "project_set_version_control",
             "project_set_requirement",
             "project_enable_requirement",
+            "project_start_checklist",
+            "project_add_checklist_item",
+            "project_set_checklist_item",
+            "project_set_checklist_state",
+            "project_remove_checklist_item",
+            "project_reset_checklist",
+            "project_import_checklist",
+            "project_export_checklist_csv",
+            "project_open_checklist_link",
             "project_set_rail",
             "bring_drawings_forward",
             "bring_drawings_to_front",
@@ -368,8 +388,13 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
         Operand,
         &[InProgressEdit],
     ),
-    // A run already going in the Project tab skips this one.
-    (&["project_run_requirements"], Operand, &[Window]),
+    // A run already going in the Project tab (or the Design Checklist tab)
+    // skips this one.
+    (
+        &["project_run_requirements", "project_run_checklist"],
+        Operand,
+        &[Window],
+    ),
     // #2795: a compile reads the project's notebook as its tab holds it (or
     // its file) and the view writes that tab's session, nothing implicit; an
     // insert lands at the tab's cursor unless `line` names one.
@@ -573,6 +598,7 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             // #2796: the named diagram, open or saved.
             "query_block_diagram",
             "query_board_nets",
+            "query_cross_references",
             "query_net_ties",
             "query_pins",
             // #1313: the project's sheets, read off the UI thread.
@@ -600,6 +626,13 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
         Query,
         &[],
     ),
+    // The checklist's last run is check results, core-bound session state
+    // (scripts/uifree-state.txt), so it is no implicit input.
+    (
+        &["project_checklist", "project_checklist_link_choices"],
+        Query,
+        &[],
+    ),
     // #1283: the snippet and template folders of the project in view
     // (`reuse_roots_in_view`) and of the user's library.
     (
@@ -624,6 +657,14 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "tile_windows_horizontally",
             "tile_windows_vertically",
             "untile_documents",
+            "split_pane_right",
+            "split_pane_down",
+            "open_second_view",
+            "tile_windows_grid",
+            "move_tab_to_other_pane",
+            "close_pane",
+            "sync_pane_zoom",
+            "equalize_panes",
             // #2470: Fit frames the main window's active document.
             "zoom_to_fit",
         ],
@@ -1127,10 +1168,19 @@ const PLANNED: &[&str] = &[
     "place_reuse_block",
 ];
 
-/// The hand annotation of `(id, form)`, if any.
-pub(super) fn of(id: &str, form: Form) -> Option<&'static [Input]> {
+pub(super) type Annotation = (&'static [&'static str], Form, &'static [Input]);
+
+/// Every annotation: [`ANNOTATIONS`], then the tables split out by area.
+pub(super) fn all() -> impl Iterator<Item = &'static Annotation> {
     ANNOTATIONS
         .iter()
+        .chain(gerber_viewer::GERBER_VIEWER)
+        .chain(output_job::OUTPUT_JOB)
+}
+
+/// The hand annotation of `(id, form)`, if any.
+pub(super) fn of(id: &str, form: Form) -> Option<&'static [Input]> {
+    all()
         .find(|(ids, annotated, _)| *annotated == form && ids.contains(&id))
         .map(|(_, _, inputs)| *inputs)
 }

@@ -1,10 +1,10 @@
-# PDF export: watermark, layers and bookmarks
+# PDF export: watermark, layers, bookmarks and links
 
-This page describes three groups of schematic PDF options in
-`signex_output::PdfOptions`: the watermark, the PDF layers and the bookmarks
-(issue #1298). The Print Preview / Export PDF dialog sets them; the exporter
-itself chooses nothing. All three keep today's output when left at their
-defaults.
+This page describes four groups of schematic PDF options in
+`signex_output::PdfOptions`: the watermark, the PDF layers, the bookmarks and
+the links (issue #1298). The Print Preview / Export PDF dialog sets them; the
+exporter itself chooses nothing. The first three keep today's output when left
+at their defaults; links are on by default (see "Links").
 
 PDF text is locale-invariant (docs/DECISIONS.md, 2026-11-07). The watermark
 presets, the layer names and the bookmark group names are written in English
@@ -21,6 +21,7 @@ whatever the UI language.
 | `part_bookmark_order` | `BySheet` | Parts are listed under the sheet they are on. |
 | `generate_nets_info` | `true` | The "one bookmark per net" option, unchanged. |
 | `global_bookmarks` | `false` | The Components and Nets groups sit under each sheet. |
+| `links` | `true` | Link annotations as described in "Links". A sheet with nothing to link writes none, so its PDF is byte-identical to one written with `links` off. |
 
 The domain defaults keep the watermark and the layers off, and so does the
 Export PDF dialog ("Write PDF layers" is off by default, Caner 2026-11-20).
@@ -38,6 +39,39 @@ Structure on, `${VARIANT}` and the sheet bookmarks show a named variant
 and the sheet bookmarks carry no tag (Caner, 2026-11-20). The helper hands
 the renderer `variant: None` for Base, after it has taken the project's
 active variant out of the title-block fields.
+
+### Per-variant PDF goldens
+
+The Advanced Schematic exit criterion "a 4-channel design with two variants
+exports a correct per-variant BOM and PDF" is pinned by
+`handlers::menu::export::tests::variant_pdf`. It exports the variant-BOM
+fixture (a top sheet placing a channel sheet as `Repeat(CH, 1, 4)`, the
+variants Full and Lite) through the Export PDF dialog once per variant, Base
+included, with Use Physical Structure on and a note that prints
+`${VARIANT}`, and compares each file with
+`src/app/handlers/menu/export/tests/testdata/variant_pdf/<variant>.pdf.txt`.
+
+The golden is the PDF as text, so a review can read what changed:
+
+- `pages N`, the page count;
+- one `outline <title>` line per bookmark, as the file writes the title;
+- one `text …` line per text-showing operator (`Tj`, `TJ`), in order;
+- `drawing N lines, fnv1a <hash>`: the count and the 64-bit FNV-1a hash of
+  every other drawing operator line.
+
+Numbers are written to two decimals; font programs, object numbers and
+anything that is not printable ASCII are left out. Each variant is
+exported twice from two fixtures built the same way and must match before
+the golden is read, so an export that depends on a hash order fails as
+such. Regenerate with `UPDATE_GOLDEN=1 cargo test -p signex-app
+variant_pdf`; a diff is a behaviour change of the PDF.
+
+What differs between the variants: the variant name (the `${VARIANT}` text
+and the " [Full]" or " [Lite]" sheet bookmark tag), a variant's changed
+values, and the parts a variant leaves out, drawn greyed and crossed out
+(#1294) and, in a layered PDF, in the Not-fitted parts group (#2610). The
+goldens are written with the "Cross out not-fitted parts" preference on, its
+default.
 
 A part that is not fitted in the printed variant (or marked DNP) prints
 greyed with a cross over its body while `draw_not_fitted` is on: the user's
@@ -59,7 +93,10 @@ angle, the colour, the pages and an optional revision line. The default is
   graphics state and writes none.
 - **Colour.** The colour goes through the page's colour mode like any other
   text: Greyscale prints its luma, Black and White prints it black (still at
-  the chosen opacity, so it reads as grey).
+  the chosen opacity, so it reads as grey). The Export PDF dialog picks it
+  (#2609): a typed `#RRGGBB` code or one of four quick swatches, the default
+  red, a neutral grey, black and white. The dialog remembers the colour for
+  the document with the page setup, for the session.
 - **Font.** The bold sans face embedded for the rest of the page. A custom
   text that face cannot show falls back to the embedded face that covers
   most of it. Its glyphs are added to the font subset.
@@ -114,7 +151,18 @@ With `layers: Some(PdfLayerVisibility)` the export writes optional content:
 | `NetLabelsAndPorts` | Net labels and ports | Net, global and hierarchical labels (ports) |
 | `PowerPorts` | Power ports | Power port symbols and power labels |
 | `TitleBlockAndBorder` | Title block and border | The sheet border, the template frame and the title block |
+| `NotFittedParts` | Not-fitted parts | Parts not fitted in the printed variant or marked DNP: their bodies, pins, body fills and text (#2610) |
 | `Watermark` | Watermark | The watermark |
+
+A part goes in Not-fitted parts when it is not fitted in
+`PdfOptions::variant` (Base for `None`), by the rule the not-fitted look
+reads (`svg::not_fitted::not_fitted_on_page`, the project's placed fits when
+the caller gives them); the group follows the variant whatever
+`draw_not_fitted` says.
+Power ports never do. The group is written whenever layers are, like the
+other drawing groups, and it is visible on open unless the dialog's
+"Not-fitted parts (variant)" row is unticked; switched off in the reader it
+hides those parts and leaves every fitted part as it was.
 
 The group names in the file are English whatever the UI language (output is
 locale-invariant, DECISIONS 2026-11-07); the Export PDF dialog names each
@@ -134,6 +182,31 @@ prints, even when the reader opened it hidden.
 
 With `layers: None` none of this is written: no `/OCProperties`, no
 `/Properties`, no marked content.
+
+## Pages
+
+The Pages field takes All, Current or Specific. Specific reads sheet numbers
+and ranges such as `1-2, 4` (mockup row 111); text it cannot read stays in
+the box, marked, and Export refuses it. The preview shows the pages the file
+prints: both resolve the range by the export's rule, whose sheet numbers
+`printed_sheet_numbers` names (#2787). Switching
+away from Specific and back keeps the list in the box and prints it.
+
+## From the command line
+
+`export_schematic_pdf document=<sheet> path=<file> [pages=..] [layers=..]
+[variant=..] [watermark=..] [links=..]` writes the PDF the dialog would,
+starting from the options the dialog opens with (the sheet's paper, the
+theme's colours, the project's active variant). `pages` is `all`, `current`
+or the Pages list; `layers` is `all` or the ids of the groups visible on open
+(`wires`, `harnesses`, `parts`, `net_labels`, `power_ports`, `title_block`,
+`not_fitted`,
+`watermark`) and writes a flat PDF when left out; `variant` is Base or a
+variant the project defines. The watermark and link operands are under
+"Links" and in `docs/DECISIONS.md`. The answer names the sheet count, the
+sheet numbers printed, the variant, the groups written, the watermark and
+whether links are written. In a window the command opens the dialog, as
+File ▸ Export ▸ PDF does.
 
 ## Bookmarks
 
@@ -166,3 +239,77 @@ jumps to its own page and position.
 
 With `bookmark_sheets` off there is no sheet item to nest under, so every
 group sits at the top level, as in global mode.
+
+## Links
+
+With `links: true` (the default) each page lists `/Link` annotations in its
+`/Annots` array. A link has no border and no appearance of its own; the
+reader shows a hand cursor over it. Annotation objects are numbered after
+the PDF layer groups, so a page with no link writes nothing new.
+
+| Clickable area | Goes to |
+|---|---|
+| A sheet symbol's box | The top-left corner of the page that prints its child sheet. |
+| A sheet entry (a square one text height round the entry point) | The child page's port of the same name, else that page's top-left corner. |
+| A port (hierarchical label) on a child page | The entry of the same name on the sheet symbol that places the page, else that symbol's corner. |
+| A global label | The same-named global label on the next exported page that has one, wrapping round to the first page. |
+| A part whose datasheet is a web address | The datasheet, as a URI action, over the part's body. |
+| A `[label](address)` link in text | The address, as a URI action, over the label as printed. |
+
+- **Partner pages.** The child page is the exported page at the sheet
+  symbol's placement (`InstancePath`), else the exported page of the file the
+  symbol names, next to the parent sheet's file. A partner that is not among
+  the exported pages (left out by the page range or the sheet picks) gets no
+  link.
+- **Where a page link lands.** `/XYZ` at the target point, keeping the
+  reader's zoom.
+- **Addresses.** Only `https://`, `http://` and `mailto:` addresses become
+  links, and only plain ASCII ones with no space or control character
+  (`links::linkable_uri`). A file path, a `~` placeholder or any other scheme
+  prints as text with no link, so a PDF never asks a reader to open a local
+  file or run a script.
+- **Areas.** The area is the axis-aligned box of what is printed: a label's
+  text box with half a text height round it, a part's body box, a text link's
+  run from its ascent to its descent (turned text gets the box round the
+  turned run).
+- **Order.** Sheet symbols, then their entries, then parts, then ports and
+  global labels, then text links, then cross-reference entries (see "Cross
+  references"), so the smaller area wins where two overlap.
+
+The headless and CLI command `export_schematic_pdf` writes the same PDF; its
+`links=false` operand turns them off. The dialog has no switch for them yet
+(no mockup row draws one).
+
+## Cross references
+
+Beside each Global label whose net continues on another page, the canvas,
+the print preview and the PDF print where it continues: `[2/B3, 4/A1]`, the
+page number and frame zone of each partner (#1273).
+
+- A partner is another Global label on the same net of the stitched project
+  (`signex_net::NetIndex::port_cross_refs`), printed on another page. A
+  label on the same page is not a partner. Hierarchical labels, sheet
+  entries and power ports carry no cross reference.
+- The page is the project's page number (#1081), the one the title block
+  prints, so a sheet placed twice is two pages and each copy lists the
+  other.
+- The zone is the partner's frame zone, row letter then column number, on
+  the standard frame with the partner sheet's own zone counts. A partner
+  page that draws no zones prints the page number alone. Two partners in
+  the same zone of one page print once.
+- Entries are ordered by page, then left to right.
+- The text sits past the far end of the label's flag, on the side the flag
+  points to, in the frame's regular face and ink, at 0.8 of the label's
+  size.
+- In the PDF each entry is a link to its page, landing 15 mm above and left
+  of the partner label, written by the rules of "Links": in the page's one
+  `/Annots` array after its other links, and none with `links: false` (the
+  text still prints). An entry whose page is not in the export is printed
+  but not linked.
+- A loose sheet is one page, so its labels have none.
+- The canvas shows the index it has until the rebuild an edit asked for
+  lands; the sheet in view asks for one when it has a Global label.
+
+`query_cross_references document=<sheet>` answers the same table for an
+open sheet: each Global label with, per placement, the printed text and its
+targets (page, zone, position).

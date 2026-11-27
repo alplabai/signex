@@ -2,6 +2,7 @@
 //! jumps, sheet history, the persistent highlight and the hover insight.
 
 mod commands;
+mod cross_refs;
 mod fixture;
 mod followups;
 mod highlight;

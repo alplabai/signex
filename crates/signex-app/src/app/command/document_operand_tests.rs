@@ -413,6 +413,7 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
         "document_info",
         "read_document",
         "query_pins",
+        "query_cross_references",
         "query_net_ties",
         "apply_edits",
         "revert",
@@ -497,6 +498,7 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     "document_info",
                     "read_document",
                     "query_pins",
+                    "query_cross_references",
                     "query_net_ties",
                     // #1988: the BOM lines of the named sheet's project.
                     "bom_lines",
@@ -604,6 +606,22 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     "project_remove_requirement",
                     "project_enable_requirement",
                     "project_run_requirements",
+                    // #1291: the Design Checklist's read, edits and run.
+                    "project_checklist",
+                    "project_start_checklist",
+                    "project_add_checklist_item",
+                    "project_set_checklist_item",
+                    "project_set_checklist_state",
+                    "project_remove_checklist_item",
+                    "project_run_checklist",
+                    // #1291: its templates, files and links.
+                    "project_reset_checklist",
+                    "project_import_checklist",
+                    "project_checklist_templates",
+                    "project_save_checklist_template",
+                    "project_export_checklist_csv",
+                    "project_checklist_link_choices",
+                    "project_open_checklist_link",
                     // #1313: the project's power tree.
                     "query_power_tree",
                     // #2943: the project's rails and their budget.
@@ -648,11 +666,15 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     "board_report_components",
                     "export_board_report",
                     "export_board_pdf",
+                    // #1298, #2609: Export PDF of the named sheet.
+                    "export_schematic_pdf",
                     // #2486: the assembly drawings.
                     "export_assembly_svg",
                     "board_assembly_drawing",
                     // #2488: the board STEP model.
                     "export_board_step",
+                    // #1299: the PNG pages of the named schematic.
+                    "export_sheet_png",
                     // #2796: a block diagram as SVG or PDF.
                     "export_block_diagram",
                     // #2796: the block diagram edits and query.
