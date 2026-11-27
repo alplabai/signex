@@ -27,7 +27,7 @@ generation; an older read that lands late is dropped.
 A Global or Installed row has a ⋯ button; its menu holds Remove from
 Signex. Stock and a project's own libraries have no ⋯ button.
 
-1. Remove from Signex opens a confirm card (the notice card with
+1. Remove from Signex opens a confirm card, before any Close Library prompt, (the notice card with
    `NoticeAction::RemoveLibraryFromSignex`). It says the files stay on disk
    and shows the path. Cancel changes nothing.
 2. Remove from Signex on the card records `StartScreenState::removing_library`
@@ -42,7 +42,9 @@ Signex. Stock and a project's own libraries have no ⋯ button.
    start, and the save-failure notice says so.
 
 Cancel in the close prompt, a failed Save All, or a deferred close stopped by
-new edits drops the pending removal: nothing is removed, and a later plain
+new edits drops the pending removal, and so does opening the library again
+while the removal waits (`LibraryState::note_reopened`, drained in
+`finish_update`): nothing is removed, and a later plain
 Close Library does not remove it either. Nothing on disk is deleted. A
 project that lists the library keeps its own reference. There is no undo;
 Add library… adds it back.

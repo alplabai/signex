@@ -310,3 +310,28 @@ fn a_library_added_while_the_page_shows_gets_its_state_read() {
         Some(&LibraryVcsState::Off)
     );
 }
+
+/// Ruled 2026-11-27: opening a library again while its removal waits on
+/// Close Library cancels the removal; a later plain close keeps it
+/// registered.
+#[test]
+fn opening_the_library_again_cancels_its_pending_removal() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _startup) = Signex::new();
+    let file = mounted_library(&mut app, dir.path(), "Parts");
+    app.library.installed_libraries.push(file.clone());
+    app.ui_state.start_screen.removing_library = Some(file.clone());
+
+    let task = app.update(Message::Library(LibraryMessage::OpenLibraryBrowser(
+        file.clone(),
+    )));
+    settle(&mut app, task);
+    send(&mut app, StartScreenMsg::RowMenuDismissed);
+    assert_eq!(app.ui_state.start_screen.removing_library, None);
+
+    let task = app.update(Message::Library(LibraryMessage::CloseLibrary(file.clone())));
+    settle(&mut app, task);
+    send(&mut app, StartScreenMsg::RowMenuDismissed);
+    assert!(app.library.library_at(&file).is_none());
+    assert!(app.library.installed_libraries.contains(&file));
+}
