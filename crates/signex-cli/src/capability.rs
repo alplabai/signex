@@ -107,6 +107,10 @@ const SAVES: &[&str] = &[
     "save_layer_set",
     // Writes the named workspace layout into the user's preferences (mockup row 166).
     "save_workspace_layout",
+    // Write the project's block diagram file (#2968); a regenerate without
+    // `apply` lists its changes and writes nothing.
+    "generate_block_diagram",
+    "regenerate_block_diagram",
     // Writes the part values into the notebook file (mockup row 199).
     "mark_notebook_attachment_valid",
     // Copies a file into notebook/attachments/ and writes the notebook file
@@ -345,6 +349,8 @@ mod tests {
             (Capability::Save, "save_snippet"),
             (Capability::Save, "save_layer_set"),
             (Capability::Save, "save_workspace_layout"),
+            (Capability::Save, "generate_block_diagram"),
+            (Capability::Save, "regenerate_block_diagram"),
             (Capability::Save, "mark_notebook_attachment_valid"),
             (Capability::Save, "attach_notebook_file"),
             (Capability::Save, "generate_design_notebook"),
@@ -356,6 +362,7 @@ mod tests {
             (Capability::Export, "export_board_pdf"),
             (Capability::Export, "export_assembly_svg"),
             (Capability::Export, "export_board_step"),
+            (Capability::Export, "export_block_diagram"),
             (Capability::Export, "export_notebook_timeline"),
             (Capability::Export, "export_notebook_pdf"),
             (Capability::Export, "fabrication_outputs"),

@@ -632,6 +632,13 @@ pub const QUERY_PINS: &[Operand] = &[
     required("document", OperandKind::Document),
     required("designator", OperandKind::Text),
 ];
+/// `query_power_tree` (#1313): the power tree of the project the document
+/// belongs to, with the parts fitted in `variant` (a variant's name, or
+/// Base); without it, in the project's active variant.
+pub const QUERY_POWER_TREE: &[Operand] = &[
+    required("document", OperandKind::Document),
+    optional("variant", OperandKind::Text),
+];
 /// `bom_lines` (#1988): the BOM of the named sheet's project; `template` is
 /// a BOM template's text (`snxbomt/1`), `variant` a variant of the project
 /// or `Base`, `grouping` one of `grouped`, `ungrouped` and `flat`.
@@ -1057,6 +1064,26 @@ pub const SET_PAD_SHAPE: &[Operand] = &[
     required("shape", OperandKind::Text),
     optional("delta", OperandKind::Text),
     optional("corners", OperandKind::Text),
+];
+/// `generate_block_diagram` (#2968): a block diagram of the project
+/// `document` names (the project, or one of its documents), written to
+/// `path`, the project's `<name>.snxblk` when left out; an existing file is
+/// replaced only with `overwrite=true`.
+pub const GENERATE_BLOCK_DIAGRAM: &[Operand] = &[
+    required("document", OperandKind::Document),
+    optional("path", OperandKind::Path),
+    optional("overwrite", OperandKind::Bool),
+];
+/// `regenerate_block_diagram` (#2968): the changes the project's hierarchy
+/// makes to the diagram at `path` (the project's `<name>.snxblk` when left
+/// out), listed; with `apply=true` also written. `unlink=skip` leaves a
+/// block whose sheet left the project as it is and lists it as skipped
+/// (mockup row 210); `unlink=apply` is the default.
+pub const REGENERATE_BLOCK_DIAGRAM: &[Operand] = &[
+    required("document", OperandKind::Document),
+    optional("path", OperandKind::Path),
+    optional("apply", OperandKind::Bool),
+    optional("unlink", OperandKind::Text),
 ];
 
 mod board;

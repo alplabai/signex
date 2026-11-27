@@ -122,6 +122,15 @@ fn the_gitattributes_lfs_block_covers_models_and_raster_assets_not_svg() {
     assert!(!gitattributes_block_body(false).contains("filter=lfs"));
 }
 
+/// #2796: a block diagram is a native text format, kept LF like the others.
+#[test]
+fn the_gitattributes_block_keeps_every_native_text_format_lf() {
+    let body = gitattributes_block_body(false);
+    for ext in ["snxsch", "snxpcb", "snxprj", "snxblk"] {
+        assert!(body.contains(&format!("*.{ext}\ttext eol=lf")), "{ext}");
+    }
+}
+
 #[test]
 fn ensure_project_gitignore_creates_exactly_the_block() {
     let dir = tempfile::tempdir().unwrap();

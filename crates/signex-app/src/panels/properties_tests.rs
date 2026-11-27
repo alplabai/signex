@@ -1049,6 +1049,7 @@ fn page_tab_in_front(name: Option<&str>) -> PanelContext {
             is_active: true,
             is_dirty: false,
             version_control: false,
+            block_diagrams: Vec::new(),
         })
         .into_iter()
         .collect();

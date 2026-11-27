@@ -327,6 +327,8 @@ impl Signex {
             // (or activates it if a tab for the same library is
             // already open).
             "snxlib" => self.handle_open_library_browser(path),
+            // A block diagram opens in its own tab (mockup row 171).
+            "snxblk" => self.open_block_diagram_file(path),
             _ => anyhow::bail!("unsupported file type: .{ext}"),
         };
 

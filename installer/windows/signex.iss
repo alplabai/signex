@@ -115,6 +115,9 @@ Source: "files\snxlib.ico"; DestDir: "{app}\files"; Flags: ignoreversion
 #if FileExists("files\snxsym.ico")
 Source: "files\snxsym.ico"; DestDir: "{app}\files"; Flags: ignoreversion
 #endif
+#if FileExists("files\snxblk.ico")
+Source: "files\snxblk.ico"; DestDir: "{app}\files"; Flags: ignoreversion
+#endif
 #if FileExists("files\snxpkg.ico")
 Source: "files\snxpkg.ico"; DestDir: "{app}\files"; Flags: ignoreversion
 #endif
@@ -151,7 +154,7 @@ Name: "{autodesktop}\Signex"; Filename: "{app}\signex.exe"; Tasks: desktopicon{#
 ; a ProgId keyed under `Signex.<ext>`, a DefaultIcon pointing at the
 ; per-type .ico shipped in {app}\files\, and an `open` verb that passes
 ; the clicked file path to signex.exe via "%1".
-; Covers: snxprj, snxsch, snxpcb, snxfpt, snxsim, snxlib, snxsym.
+; Covers: snxprj, snxsch, snxpcb, snxfpt, snxsim, snxlib, snxsym, snxblk.
 Root: HKCU; Subkey: "Software\Classes\.snxprj"; ValueType: string; ValueData: "Signex.snxprj"; Flags: uninsdeletevalue
 Root: HKCU; Subkey: "Software\Classes\Signex.snxprj"; ValueType: string; ValueData: "Signex Project"; Flags: uninsdeletekey
 Root: HKCU; Subkey: "Software\Classes\Signex.snxprj\DefaultIcon"; ValueType: string; ValueData: "{app}\files\snxprj.ico"
@@ -186,6 +189,11 @@ Root: HKCU; Subkey: "Software\Classes\.snxsym"; ValueType: string; ValueData: "S
 Root: HKCU; Subkey: "Software\Classes\Signex.snxsym"; ValueType: string; ValueData: "Signex Symbol"; Flags: uninsdeletekey
 Root: HKCU; Subkey: "Software\Classes\Signex.snxsym\DefaultIcon"; ValueType: string; ValueData: "{app}\files\snxsym.ico"
 Root: HKCU; Subkey: "Software\Classes\Signex.snxsym\shell\open\command"; ValueType: string; ValueData: """{app}\signex.exe"" ""%1"""
+
+Root: HKCU; Subkey: "Software\Classes\.snxblk"; ValueType: string; ValueData: "Signex.snxblk"; Flags: uninsdeletevalue
+Root: HKCU; Subkey: "Software\Classes\Signex.snxblk"; ValueType: string; ValueData: "Signex Block Diagram"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Classes\Signex.snxblk\DefaultIcon"; ValueType: string; ValueData: "{app}\files\snxblk.ico"
+Root: HKCU; Subkey: "Software\Classes\Signex.snxblk\shell\open\command"; ValueType: string; ValueData: """{app}\signex.exe"" ""%1"""
 
 Root: HKCU; Subkey: "Software\Classes\.snxpkg"; ValueType: string; ValueData: "Signex.snxpkg"; Flags: uninsdeletevalue
 Root: HKCU; Subkey: "Software\Classes\Signex.snxpkg"; ValueType: string; ValueData: "Signex Package"; Flags: uninsdeletekey

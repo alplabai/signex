@@ -2522,6 +2522,173 @@ A board that is not open, an unknown kind or `kinds` naming none is
 `name`, and a folder or file that cannot be written, once the run is tried.
 `docs/FABRICATION_OUTPUTS.md` describes the files.
 
+## Block diagrams
+
+A block diagram is a `.snxblk` document (mockup row 171, #2796;
+`docs/architecture/snxblk-format.md`). `open_document path=<file>.snxblk`
+opens one and answers its id; `new_block_diagram [name=]` makes an empty one
+named after the project (or `name`) in the open project's folder, unsaved,
+and answers `id`, `path` and `kind` (`block_diagram`). Nothing is written
+until `save_document document=<diagram>`, and the first save of a new
+diagram refuses to replace a file already at its path. `list_documents`
+lists open diagrams as kind `block_diagram`.
+
+A diagram is not listed in its project, so `document` also names a
+`.snxblk` by path (relative to the project folder) anywhere in an open
+project's folder. An edit or `query_block_diagram` on a diagram that is not
+open reads it first and runs once the read lands, as if `open_document` had
+run; the diagram stays held without a tab. A file that does not read is
+refused with the reader's reason. A save is refused, with nothing written,
+when another program changed the file since it was read or saved.
+
+Every edit names its diagram by path or id, is one step of the diagram's
+own history (`undo` / `redo document=<diagram>`), and answers with the `id`
+of what it made or changed:
+
+```text
+block_add document=<diagram> name=<text> [at=x,y] [size=w,h] [function=] [note=]
+          [shape=rectangle|rounded_rectangle|ellipse|hexagon] [color=#rrggbb]
+          [group=<group id>] [rails=VIN,VOUT] [specs=Vout=3.3 V;Fsw=570 kHz]
+block_set document=<diagram> id=<block> [the same properties] [clear=color,group]
+block_remove document=<diagram> id=<block>
+block_port_add document=<diagram> block=<block> name=<text>
+               [side=left|right|top|bottom] [offset=<mm>] [direction=input|output|bidirectional]
+block_port_remove document=<diagram> id=<port>
+block_link document=<diagram> from=<block or port> to=<block or port>
+           [interface=signal|bus|power|analog|spi|i2c|uart|usb|lvds|<any name>] [label=]
+block_link_set document=<diagram> id=<connection> [interface=] [label=]
+block_unlink document=<diagram> id=<connection>
+block_group document=<diagram> name=<text> [ids=<block>,<block>] [color=#rrggbb]
+block_group_set document=<diagram> id=<group> [name=] [color=] [clear=color]
+block_ungroup document=<diagram> id=<group>
+query_block_diagram document=<diagram>
+```
+
+- `block_add` without `at` places the block right of the others, where the
+  tab's Add Block puts it. `block_add` and `block_set` answer the `block`;
+  `block_link` and `block_link_set` the `connection`; `block_group_set` the
+  `group`; `block_port_add` the port's `block`.
+- `block_remove` answers the `connections` that went with the block (its
+  ports go too); `block_port_remove` the connections that ended on the port;
+  `block_ungroup` the `blocks` it freed, which stay.
+- `query_block_diagram` answers `id`, `path`, `dirty`, `saved` (false until
+  the first save), `read_only` and `diagram`: `groups`, `blocks` (with their
+  `ports` and `sheet` link) and `connections` (`from` and `to` as `block`
+  and `port`, `interface`, `label`, `derived_from`), lengths in mm.
+- A diagram from a newer Signex opens read-only: every edit and its save are
+  refused with the reason.
+
+## Block diagram export
+
+`export_block_diagram` writes a block diagram (`.snxblk`) as an SVG or PDF
+file (#2796). It reads the diagram's saved file, not unsaved edits, so the
+diagram need not be open: `document` names it by path in an open project's
+folder (see "Block diagrams"). It needs the `export` capability.
+
+```text
+export_block_diagram document=<diagram.snxblk> path=<file> [kind=svg|pdf] [monochrome=true] [title_block=false]
+                     [pages=blocks,power_tree,budget] [paper=a4|a3|a2|letter|tabloid]
+                     [orientation=landscape|portrait] [variant=<name>]
+```
+
+- `document` is the diagram: a path (relative to the project folder) or the
+  id of an open or listed document. Anything but a `.snxblk` is refused.
+- `path` is the file to write; it is replaced if it exists. The format is
+  `kind`, else the extension of `path` (`.svg` or `.pdf`); a path with
+  neither and no `kind` is refused, as is `path` naming the diagram itself.
+- `monochrome=true` draws every mark in black. `title_block=false` leaves
+  the PDF's title block off; an SVG has none.
+- `pages` lists a PDF's pages in print order: `blocks` (the diagram, the
+  default), `power_tree` (the project's power tree as an outline, each rail
+  with its sources and loads) and `budget` (one row per rail: voltage,
+  source, limit, load, headroom). A table runs on over as many pages as it
+  needs. An SVG is the diagram only; another page is refused. The power
+  pages read the project whose folder holds the diagram, for `variant`
+  (its active variant without it); a variant the project does not have is
+  refused.
+- `paper` (default `a4`) and `orientation` (default `landscape`) set the
+  PDF's page.
+
+The command is answered once the file is written, with `document`, `path`,
+`kind`, `blocks`, `connections`, `groups`, `bytes` (the size written),
+`extent_mm` (`min` and `max`, diagram mm), `scale` (page mm per diagram mm
+on the PDF page; `null` for SVG, which is 1:1), `uncovered_chars`
+(characters no bundled font covers, PDF only) and `read_only` (the file is
+from a newer Signex; it still exports), `pages` (the page tokens printed)
+and `page_count` (pages written, 1 for SVG). A diagram that cannot be read is
+refused after the read, with nothing written. What is drawn is in
+[BLOCK_DIAGRAM_EXPORT.md](BLOCK_DIAGRAM_EXPORT.md).
+
+## Block diagrams from the hierarchy
+
+Two commands make a block diagram (`.snxblk`) from the project's sheet
+hierarchy and keep it in step with it (#2968, mockup row 171). Both need
+`--save`, read the hierarchy off the UI thread and are answered when the run
+lands. `document` is the project or one of its documents; `path` is the
+diagram file, read against the project folder, and the project's
+`<name>.snxblk` when left out.
+
+```text
+generate_block_diagram document=<project> [path=<file.snxblk>] [overwrite=true]
+regenerate_block_diagram document=<project> [path=<file.snxblk>] [apply=true] [unlink=apply|skip]
+```
+
+- `generate_block_diagram` writes a new diagram: one block per sheet, linked
+  to the sheet by its document id, its sheet entries as ports, and one
+  connection per signal group that crosses sheets. An existing file is
+  refused without `overwrite=true`. The answer holds `path`, `written`,
+  `summary` (`blocks`, `connections`, `unlinked`) and the whole `diagram`.
+- `regenerate_block_diagram` reads the diagram and lists what the hierarchy
+  changes in it as `changes`, each with its `change`: `block_added`,
+  `sheet_moved` (a renamed or moved sheet, with `from` and `to`),
+  `name_followed` (the block still had the name the old file gave it, so
+  it takes the new one; a name the person typed is kept),
+  `sheet_removed` (the block stays, marked unlinked), `sheet_returned`,
+  `rails_changed`, `port_added`, `port_removed`, `port_changed`,
+  `connection_added`, `connection_changed` and `connection_removed`.
+  Nothing is written unless `apply=true`; then `written` is true when there
+  was a change. Positions, sizes, names, colours, notes, groups and
+  hand-drawn blocks and connections are kept. `unlink=skip` leaves a block
+  whose sheet left the project as it is, linked, with its connections, and
+  lists its `sheet_removed` under `skipped` instead of `changes`;
+  `unlink=apply`, the default, unlinks it. `skipped` is always answered.
+
+A sheet that is in the project but does not read refuses the run, so its
+block is never marked unlinked by mistake. So does a sheet that would be a
+block but has no document id in its file yet: the nil `schematic_id` of a
+file no build has saved since ids came in, or an open sheet whose id was
+given when it opened and is not saved. No block can link to it for good, so
+the run names it instead of leaving it out. Opening it is not enough: save
+each such sheet (Ctrl+S on its tab; Save All skips a sheet with no edits),
+then run again. A run that writes (generate, or
+regenerate with `apply=true`) is refused while the diagram is open in a tab;
+close the tab first. In a window, the palette's
+Generate Block Diagram runs on the project in view and Regenerate Block
+Diagram lists the changes in Messages without applying them. Grouping and
+layout rules: [architecture/snxblk-format.md](architecture/snxblk-format.md),
+"Generate and regenerate".
+
+## Power tree
+
+`query_power_tree` answers the power tree of the project a document belongs
+to (#1313, mockup row 171): every rail with its voltage, its sources and
+loads, the current each load draws, the total, the limit and the budget
+level; the converters with what they deliver and draw; the rails at the top
+of the tree; and the power budget per sheet, which is the budget of the block
+that stands for the sheet in a block diagram. It is worked out from the
+schematic off the UI thread and answered once the run lands, changes
+nothing, and is on the agent channel.
+
+```text
+query_power_tree document=<project, or one of its documents> [variant=<name>]
+```
+
+`variant` names the variant whose fitted parts count (`Base` is the parts
+without a variant); without it, the project's active variant counts. A name
+the project does not have is refused. Which parts are rails, sources,
+converters and loads, where the numbers come from and the answer's shape:
+[POWER_TREE.md](POWER_TREE.md).
+
 ## Working through a running Signex
 
 When a person has the project open in Signex with Preferences > System ›

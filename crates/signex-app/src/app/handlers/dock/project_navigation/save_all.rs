@@ -93,7 +93,9 @@ impl Signex {
     /// * a project's **Design Notebook** (`.snxnbk`), held with or without
     ///   its tab → an off-thread notebook save;
     /// * a **design report** Generate made in the app → an off-thread write
-    ///   of it.
+    ///   of it;
+    /// * an open **block diagram** (`.snxblk`), held by its slice → an
+    ///   off-thread diagram save.
     ///
     /// A dirty `.snxsym`/`.snxfpt` draft or `.snxprj` has no engine, so a
     /// loop that only knew engines would fail on them (#104). `Ok(None)`
@@ -105,6 +107,18 @@ impl Signex {
     ) -> anyhow::Result<Option<Task<Message>>> {
         // Reported as this file's failure; the rest of the batch still saves.
         self.refuse_save_while_restoring(path)?;
+        // A block diagram is held by its slice (mockup row 171).
+        if self
+            .document_state
+            .block_diagrams
+            .editors
+            .contains_key(path)
+        {
+            return self
+                .begin_block_diagram_save(path)
+                .map(Some)
+                .map_err(|refusal| anyhow::anyhow!(refusal.english()));
+        }
         if self.notebook_at_path(path).is_some() {
             return self.begin_notebook_save_at(path).map(Some);
         }

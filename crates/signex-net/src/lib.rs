@@ -90,6 +90,11 @@ pub use project::{
 mod compiled;
 #[cfg(test)]
 mod compiled_tests;
+
+mod block_diagram;
+#[cfg(test)]
+mod block_diagram_tests;
+pub use block_diagram::derive_block_diagram;
 pub use compiled::{
     CompiledDesign, CompiledNet, CompiledPart, CompiledSheet, CompiledSheetNet, CompiledTarget,
     SheetTitle, compile_design,
@@ -113,3 +118,4 @@ pub use names_in_use::sheet_net_names;
 
 #[cfg(test)]
 mod net_tie_tests;
+pub mod power_tree;

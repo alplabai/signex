@@ -112,6 +112,7 @@ define_ids! {
         CMD_PRINT = "cmd-print";
         CMD_MENU_PRINT = "cmd-menu-print";
         CMD_QUERY_PINS = "cmd-query-pins";
+        CMD_QUERY_POWER_TREE = "cmd-query-power-tree";
         CMD_QUERY_NET_TIES = "cmd-query-net-ties";
         CMD_BOM_LINES = "cmd-bom-lines";
         CMD_READ_DOCUMENT = "cmd-read-document";
@@ -683,6 +684,7 @@ define_ids! {
         CMD_MENU_BOARD_ASSEMBLY_DRAWING = "cmd-menu-board-assembly-drawing";
         CMD_EXPORT_BOARD_STEP = "cmd-export-board-step";
         CMD_MENU_EXPORT_BOARD_STEP = "cmd-menu-export-board-step";
+        CMD_EXPORT_BLOCK_DIAGRAM = "cmd-export-block-diagram";
         CMD_SELECT_BOARD_NET = "cmd-select-board-net";
         CMD_MENU_SELECT_BOARD_NET = "cmd-menu-select-board-net";
         CMD_HIGHLIGHT_BOARD_NET = "cmd-highlight-board-net";
@@ -749,6 +751,11 @@ define_ids! {
         CMD_MENU_COMPILE_PROJECT = "cmd-menu-compile-project";
         CMD_OPEN_COMPILED_DESIGN = "cmd-open-compiled-design";
         CMD_MENU_OPEN_COMPILED_DESIGN = "cmd-menu-open-compiled-design";
+        // Block diagram from the sheet hierarchy (#2968).
+        CMD_GENERATE_BLOCK_DIAGRAM = "cmd-generate-block-diagram";
+        CMD_MENU_GENERATE_BLOCK_DIAGRAM = "cmd-menu-generate-block-diagram";
+        CMD_REGENERATE_BLOCK_DIAGRAM = "cmd-regenerate-block-diagram";
+        CMD_MENU_REGENERATE_BLOCK_DIAGRAM = "cmd-menu-regenerate-block-diagram";
         // Signal harnesses (#1280) and differential pair classes (#1282).
         CMD_OPEN_HARNESS_DEFINITIONS = "cmd-open-harness-definitions";
         CMD_OPEN_DIFF_PAIR_CLASSES = "cmd-open-diff-pair-classes";
@@ -770,6 +777,21 @@ define_ids! {
         CMD_FLIP_BOARD_3D = "cmd-flip-board-3d";
         CMD_CYCLE_BOARD_3D_LIGHTING = "cmd-cycle-board-3d-lighting";
         CMD_COPY_BOARD_3D_SCREENSHOT = "cmd-copy-board-3d-screenshot";
+        // block-diagram
+        CMD_NEW_BLOCK_DIAGRAM = "cmd-new-block-diagram";
+        CMD_MENU_NEW_BLOCK_DIAGRAM = "cmd-menu-new-block-diagram";
+        CMD_BLOCK_ADD = "cmd-block-add";
+        CMD_BLOCK_SET = "cmd-block-set";
+        CMD_BLOCK_REMOVE = "cmd-block-remove";
+        CMD_BLOCK_PORT_ADD = "cmd-block-port-add";
+        CMD_BLOCK_PORT_REMOVE = "cmd-block-port-remove";
+        CMD_BLOCK_LINK = "cmd-block-link";
+        CMD_BLOCK_LINK_SET = "cmd-block-link-set";
+        CMD_BLOCK_UNLINK = "cmd-block-unlink";
+        CMD_BLOCK_GROUP = "cmd-block-group";
+        CMD_BLOCK_GROUP_SET = "cmd-block-group-set";
+        CMD_BLOCK_UNGROUP = "cmd-block-ungroup";
+        CMD_QUERY_BLOCK_DIAGRAM = "cmd-query-block-diagram";
         // Snippets and templates (#1283).
         CMD_SAVE_SNIPPET = "cmd-save-snippet";
         CMD_MENU_SAVE_SNIPPET = "cmd-menu-save-snippet";

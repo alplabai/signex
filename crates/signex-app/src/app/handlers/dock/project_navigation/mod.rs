@@ -427,6 +427,7 @@ fn tree_row_opens(node: &signex_widgets::tree_view::TreeNode) -> bool {
             | TreeIcon::SnxSimulation
             | TreeIcon::SnxLibrary
             | TreeIcon::SnxSymbol
+            | TreeIcon::SnxBlockDiagram
     ) || crate::app::gerber_viewer::opens_by_name(&node.label)
         || crate::app::notebook_project::is_notebook_row(&node.label)
 }

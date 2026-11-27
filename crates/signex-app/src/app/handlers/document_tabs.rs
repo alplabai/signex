@@ -236,6 +236,15 @@ impl Signex {
         {
             return self.close_gerber_viewer_tab(idx, keep_session);
         }
+        // A block diagram is held by its slice, not by an engine or a draft.
+        if self
+            .document_state
+            .tabs
+            .get(idx)
+            .is_some_and(|tab| tab.kind.is_block_diagram())
+        {
+            return self.close_block_diagram_tab(idx, keep_session);
+        }
         // A notebook's text stays with its project (`app/notebook_tab`).
         if self
             .document_state

@@ -160,6 +160,7 @@ impl Signex {
             ProjectMsg::CloseConfirm(choice) => self.handle_project_close_choice(choice),
             ProjectMsg::AssignFootprints(msg) => self.dispatch_assign_footprints_message(msg),
             ProjectMsg::CompiledDesign(msg) => self.dispatch_compiled_design_message(msg),
+            ProjectMsg::BlockDiagramSync(msg) => self.dispatch_block_diagram_sync_message(msg),
             ProjectMsg::VariantPartEdit(msg) => self.dispatch_variant_part_edit_message(msg),
             ProjectMsg::CloseRefsResolved { project_id, result } => {
                 self.handle_close_refs_resolved(project_id, result)

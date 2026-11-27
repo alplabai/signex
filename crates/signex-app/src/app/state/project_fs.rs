@@ -26,6 +26,9 @@ pub struct ProjectFsRequest {
     pub exists: Vec<PathBuf>,
     /// The sheet hierarchy of each open project (#1618).
     pub hierarchy: HierarchyRequest,
+    /// Project folders listed for their block diagrams (`.snxblk`, which
+    /// `.snxprj` does not list).
+    pub diagram_dirs: Vec<PathBuf>,
 }
 
 /// The answer to a [`ProjectFsRequest`].
@@ -40,6 +43,8 @@ pub struct ProjectFsFacts {
     /// Closed sheets the walk found repeating ids. Consumed by
     /// [`ProjectFsCache::finish_probe`], never kept in the cache.
     repaired: Vec<RepairedSheet>,
+    /// The block diagrams under each listed folder, sorted.
+    diagrams: HashMap<PathBuf, Vec<PathBuf>>,
 }
 
 impl ProjectFsFacts {
@@ -80,6 +85,12 @@ impl ProjectFsFacts {
         self.hierarchies.get(&project)
     }
 
+    /// The `.snxblk` files the last probe found under `dir`; none before
+    /// the first probe lands.
+    pub fn diagrams_in(&self, dir: &Path) -> &[PathBuf] {
+        self.diagrams.get(dir).map_or(&[], Vec::as_slice)
+    }
+
     /// Record a fact the app itself just made true (a repository it created),
     /// so the UI does not wait for the next probe to see it.
     pub fn set_exists(&mut self, path: PathBuf, exists: bool) {
@@ -118,7 +129,48 @@ pub fn probe(request: &ProjectFsRequest) -> ProjectFsFacts {
         }
     }
     (facts.hierarchies, facts.repaired) = walk_hierarchies(&request.hierarchy);
+    for dir in request.diagram_dirs.iter().collect::<HashSet<_>>() {
+        facts.diagrams.insert(dir.clone(), list_diagrams(dir));
+    }
     facts
+}
+
+/// How deep under a project folder block diagrams are looked for.
+const DIAGRAM_DEPTH: usize = 3;
+/// The most entries one folder listing reads, so a huge folder (an output
+/// tree) cannot stall the probe.
+const DIAGRAM_SCAN_LIMIT: usize = 5_000;
+
+/// The `.snxblk` files under `dir`, `DIAGRAM_DEPTH` folders deep, hidden
+/// folders (`.git`, `.signex`) skipped, links not followed. Blocking.
+fn list_diagrams(dir: &Path) -> Vec<PathBuf> {
+    let mut found = Vec::new();
+    let mut seen = 0usize;
+    let mut todo = vec![(dir.to_path_buf(), 0usize)];
+    while let Some((folder, depth)) = todo.pop() {
+        let Ok(entries) = std::fs::read_dir(&folder) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            seen += 1;
+            if seen > DIAGRAM_SCAN_LIMIT {
+                found.sort();
+                return found;
+            }
+            let Ok(kind) = entry.file_type() else {
+                continue;
+            };
+            let path = entry.path();
+            let hidden = entry.file_name().to_string_lossy().starts_with('.');
+            if kind.is_dir() && !hidden && depth + 1 < DIAGRAM_DEPTH {
+                todo.push((path, depth + 1));
+            } else if kind.is_file() && crate::app::block_diagram::is_block_diagram_path(&path) {
+                found.push(path);
+            }
+        }
+    }
+    found.sort();
+    found
 }
 
 /// Completions that write, create, delete or rename files the project tree
@@ -156,7 +208,10 @@ pub fn message_touches_disk(message: &crate::app::Message) -> bool {
                 | ProjectMsg::AddExistingFilesCopied { .. }
                 | ProjectMsg::AddNewSchematicWritten { .. }
                 | ProjectMsg::FileSaved(_)
+                | ProjectMsg::BlockDiagramSync(crate::app::BlockDiagramSyncMsg::Synced(_))
         ),
+        // A diagram written makes a row of the Projects tree.
+        Message::BlockDiagram(crate::app::block_diagram::BlockDiagramMsg::Saved { .. }) => true,
         Message::Library(m) => matches!(
             m,
             L::CreateLibraryAt(_)
@@ -508,6 +563,7 @@ mod tests {
             hierarchy: HierarchyRequest {
                 jobs: ids.iter().copied().map(job).collect(),
             },
+            ..ProjectFsRequest::default()
         });
         cache
     }
@@ -534,6 +590,7 @@ mod tests {
             hierarchy: HierarchyRequest {
                 jobs: vec![job(a), changed],
             },
+            ..ProjectFsRequest::default()
         });
         let (_, request) = cache.begin_probe(false).unwrap();
         let walked: Vec<ProjectId> = request.hierarchy.jobs.iter().map(|j| j.id).collect();
@@ -587,6 +644,7 @@ mod tests {
         cache.want(ProjectFsRequest {
             exists: vec![sheet.clone()],
             hierarchy: HierarchyRequest { jobs: vec![one] },
+            ..ProjectFsRequest::default()
         });
         let (generation, request) = cache.begin_probe(false).unwrap();
         cache.finish_probe(generation, Ok(probe(&request)));

@@ -328,6 +328,20 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         )),
         // Design ▸ Compile Project and View ▸ Compiled Design (#1279, #1308).
         "compile_project" => Message::from(crate::app::CompiledDesignMsg::CompileRequested),
+        // #2968: the project in view, through the operand handler; a
+        // person's regenerate lists its changes without applying them.
+        "generate_block_diagram" => Message::Project(ProjectMsg::BlockDiagramSync(
+            crate::app::BlockDiagramSyncMsg::Requested {
+                regenerate: false,
+                apply: false,
+            },
+        )),
+        "regenerate_block_diagram" => Message::Project(ProjectMsg::BlockDiagramSync(
+            crate::app::BlockDiagramSyncMsg::Requested {
+                regenerate: true,
+                apply: false,
+            },
+        )),
         "open_compiled_design" => Message::Overlay(OverlayMsg::OpenPanel(
             crate::panels::PanelKind::CompiledDesign,
         )),
@@ -395,6 +409,8 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
             ))
         }
         "export_board_step" => Message::from(crate::app::BoardOutputMsg::StepExportRequested),
+        // #2796: the diagram in view (or one picked), then the SVG or PDF file.
+        "export_block_diagram" => Message::from(crate::app::BlockDiagramExportMsg::Requested),
         // #2410: Tools ▸ Panelize Board and Remove Panel, on the board in view.
         "panelize_board" => Message::from(crate::app::BoardPanelMsg::PanelizeRequested),
         "remove_board_panel" => Message::from(crate::app::BoardPanelMsg::RemoveRequested),
@@ -576,6 +592,8 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "compare_board_with_schematic" => Message::from(crate::app::CompareBoardMsg::Requested),
         "back_annotate_schematics" => Message::from(crate::app::BackAnnotateMsg::Requested),
         "new_pcb_document" => Message::UpdatePcb(UpdatePcbMsg::NewPcbRequested(None)),
+        // #2796: an empty block diagram named after the project, unsaved.
+        "new_block_diagram" => Message::from(crate::app::BlockDiagramMsg::NewRequested),
         // #2232: the setup dialogs; a headless run with `profile` makes the
         // document through `run_operands` instead.
         "new_schematic_sheet" => Message::from(crate::app::DocumentSetupMsg::OpenRequested {

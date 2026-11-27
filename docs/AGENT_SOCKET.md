@@ -118,10 +118,11 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
   (#1689-#1693), and the board against the schematic
   `check_board_against_schematic` (#2462) and the board's counters
   `board_status` (#2460), each answered once its reads land
-  ([CLI.md](CLI.md), "Board against schematic" and "Board status"), and
+  ([CLI.md](CLI.md), "Board against schematic" and "Board status"),
   `query_rail_budget` (#2943), answered once its parts are read
-  ([CLI.md](CLI.md), "Rail budgets"), and the BOM's `bom_lines` (#1988;
-  [CLI.md](CLI.md), "BOM lines");
+  ([CLI.md](CLI.md), "Rail budgets"), the BOM's `bom_lines` (#1988;
+  [CLI.md](CLI.md), "BOM lines"), and `query_power_tree` (#1313), answered
+  once its run lands ([CLI.md](CLI.md), "Power tree");
 - a command that names its document with a required `document` operand and
   takes no file path (the placements' optional `document` does not count; they
   stay reachable through `apply_edits`): today `apply_edits`, `revert`, `color_net`,
@@ -228,9 +229,9 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
   `name` are null for a pane outside an open project). They never change the
   active tab.
   The CSV, PDF, SVG and STEP writers `export_board_report`,
-  `export_board_pdf`, `export_assembly_svg` and `export_board_step`, and
-  `fabrication_outputs` with its operands (#2470), take a `path`, so they
-  are CLI only.
+  `export_board_pdf`, `export_assembly_svg`, `export_board_step` and
+  `export_block_diagram`, and `fabrication_outputs` with its operands
+  (#2470), take a `path`, so they are CLI only.
 
 The last three are open to agents by the maintainer's decision (#1924):
 

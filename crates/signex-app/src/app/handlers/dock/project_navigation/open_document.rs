@@ -199,6 +199,10 @@ impl Signex {
             return Ok(self.begin_document_read(file_path, ReadJob::TreePcb { title }));
         }
 
+        if crate::app::block_diagram::is_block_diagram_path(&file_path) {
+            return Ok(self.open_block_diagram_file(file_path));
+        }
+
         // Standalone primitive editor tabs — `.snxsym` / `.snxfpt`
         // route through the library subsystem so the same
         // `OpenPrimitiveEditor` path used by the Library panel

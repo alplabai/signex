@@ -576,6 +576,8 @@ pub enum ExportMsg {
         source: std::path::PathBuf,
         outcome: Box<ExportWriteOutcome>,
     },
+    /// A block diagram's SVG or PDF export (#2796).
+    BlockDiagram(crate::app::BlockDiagramExportMsg),
     /// Export Design Notebook PDF (mockup row 202), routed to
     /// `dispatch_notebook_pdf_message`.
     NotebookPdf(crate::app::NotebookPdfMsg),

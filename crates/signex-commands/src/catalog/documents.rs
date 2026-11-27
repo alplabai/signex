@@ -1,11 +1,30 @@
 //! Document commands: create, open, save, revert, close and print a
 //! document or project, plus the project options and report dialogs.
 
+use super::operands::{Operand, OperandKind, optional, required};
 use super::{
     CommandFlags, CommandGroup, CommandMetadata, DocumentKind, Enablement, operands,
     variant_operands,
 };
 use signex_i18n_ids::{command_ids, menu_ids};
+
+/// A block diagram written as SVG or PDF (#2796): the `.snxblk` and the
+/// file; `kind` is `svg` or `pdf` (else the file's extension), `monochrome`
+/// draws every mark in black, `title_block=false` leaves the PDF's off.
+const BLOCK_DIAGRAM_EXPORT: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("path", OperandKind::Path),
+    optional("kind", OperandKind::Text),
+    optional("monochrome", OperandKind::Bool),
+    optional("title_block", OperandKind::Bool),
+    // A PDF's pages (`blocks,power_tree,budget`), its paper
+    // (`a4|a3|a2|letter|tabloid`), `landscape|portrait`, and the variant
+    // the power tree pages read (mockup row 171).
+    optional("pages", OperandKind::Text),
+    optional("paper", OperandKind::Text),
+    optional("orientation", OperandKind::Text),
+    optional("variant", OperandKind::Text),
+];
 
 pub(super) const DOCUMENTS: &[CommandMetadata] = &[
     CommandMetadata {
@@ -303,6 +322,21 @@ pub(super) const DOCUMENTS: &[CommandMetadata] = &[
         enable: Enablement::RequiresDocument(DocumentKind::Pcb),
         flags: CommandFlags::NONE,
         operands: super::operands::BOARD_STEP,
+        ..CommandMetadata::DEFAULT
+    },
+    // #2796, mockup row 171: a block diagram (`.snxblk`) as an SVG or PDF
+    // file. In a window it asks for the diagram and the file; headless it
+    // writes `document` to `path`. No menu row: the diagram tab's toolbar
+    // (mockup row 171) is its home.
+    CommandMetadata {
+        id: "export_block_diagram",
+        category: "reports",
+        label: command_ids::CMD_EXPORT_BLOCK_DIAGRAM,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: BLOCK_DIAGRAM_EXPORT,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {

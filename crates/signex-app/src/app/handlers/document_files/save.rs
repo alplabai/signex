@@ -95,6 +95,11 @@ impl Signex {
             }
             None => None,
         };
+        if let Some(path) = self.block_diagram_tab_in_window(true) {
+            return self
+                .begin_block_diagram_save(&path)
+                .map_err(|refusal| anyhow::anyhow!(refusal.english()));
+        }
         match key {
             // A Project tab writes its `.snxprj` off the UI thread.
             Some(DocumentKey::Project(project_id)) => self.begin_project_save(project_id),

@@ -103,6 +103,39 @@ back_annotate_schematics	operand_handler	run_operands: named document	core	origi
 back_annotate_schematics	in_window_rewrite	document_window	gui	window	routing
 back_annotate_schematics	refusal_needs	PcbSync	gui	active document,window	routing
 back_annotate_schematics	headless_missing_operand	needs `document`	core	none	routing
+block_add	operand_handler	run_operands: named document	core	origin	handler
+block_add	refusal_needs_operands	needs_operands_reason	gui	none	routing
+block_add	headless_missing_operand	needs `document`	core	none	routing
+block_group	operand_handler	run_operands: named document	core	origin	handler
+block_group	refusal_needs_operands	needs_operands_reason	gui	none	routing
+block_group	headless_missing_operand	needs `document`	core	none	routing
+block_group_set	operand_handler	run_operands: named document	core	origin	handler
+block_group_set	refusal_needs_operands	needs_operands_reason	gui	none	routing
+block_group_set	headless_missing_operand	needs `document`	core	none	routing
+block_link	operand_handler	run_operands: named document	core	origin	handler
+block_link	refusal_needs_operands	needs_operands_reason	gui	none	routing
+block_link	headless_missing_operand	needs `document`	core	none	routing
+block_link_set	operand_handler	run_operands: named document	core	origin	handler
+block_link_set	refusal_needs_operands	needs_operands_reason	gui	none	routing
+block_link_set	headless_missing_operand	needs `document`	core	none	routing
+block_port_add	operand_handler	run_operands: named document	core	origin	handler
+block_port_add	refusal_needs_operands	needs_operands_reason	gui	none	routing
+block_port_add	headless_missing_operand	needs `document`	core	none	routing
+block_port_remove	operand_handler	run_operands: named document	core	origin	handler
+block_port_remove	refusal_needs_operands	needs_operands_reason	gui	none	routing
+block_port_remove	headless_missing_operand	needs `document`	core	none	routing
+block_remove	operand_handler	run_operands: named document	core	origin	handler
+block_remove	refusal_needs_operands	needs_operands_reason	gui	none	routing
+block_remove	headless_missing_operand	needs `document`	core	none	routing
+block_set	operand_handler	run_operands: named document	core	origin	handler
+block_set	refusal_needs_operands	needs_operands_reason	gui	none	routing
+block_set	headless_missing_operand	needs `document`	core	none	routing
+block_ungroup	operand_handler	run_operands: named document	core	origin	handler
+block_ungroup	refusal_needs_operands	needs_operands_reason	gui	none	routing
+block_ungroup	headless_missing_operand	needs `document`	core	none	routing
+block_unlink	operand_handler	run_operands: named document	core	origin	handler
+block_unlink	refusal_needs_operands	needs_operands_reason	gui	none	routing
+block_unlink	headless_missing_operand	needs `document`	core	none	routing
 board_assembly_drawing	bridge	Pcb(Output(AssemblyPrintRequested(None)))	gui	active document	gate
 board_assembly_drawing	operand_handler	run_operands: named document	core	origin	handler
 board_assembly_drawing	in_window_rewrite	document_window	gui	window	routing
@@ -446,6 +479,10 @@ export_assembly_svg	operand_handler	run_operands: named document	core	origin	han
 export_assembly_svg	in_window_rewrite	document_window	gui	window	routing
 export_assembly_svg	refusal_needs	Pcb	gui	active document	routing
 export_assembly_svg	headless_missing_operand	needs `document`	core	none	routing
+export_block_diagram	bridge	Export(BlockDiagram(Requested))	gui	active document,dialog answer	handler
+export_block_diagram	operand_handler	run_operands: named document	core	origin,settings	handler
+export_block_diagram	in_window_rewrite	document_window	gui	window	routing
+export_block_diagram	headless_missing_operand	needs `document`	core	none	routing
 export_board_pdf	bridge	Pcb(Output(PrintRequested))	gui	active document	gate
 export_board_pdf	operand_handler	run_operands: named document	core	origin,settings	handler
 export_board_pdf	in_window_rewrite	document_window	gui	window	routing
@@ -557,6 +594,11 @@ force_annotate_all_schematics	operand_handler	run_operands: active-tab gate unle
 force_annotate_all_schematics	in_window_rewrite	document_window	gui	window	routing
 force_annotate_all_schematics	refusal_needs	ActiveSheet	core	active document	routing
 force_annotate_all_schematics	disabled_still_runs	explains_when_unavailable	core	active document,dialog answer	handler
+generate_block_diagram	translator	Project(BlockDiagramSync(Requested { regenerate: false, apply: false }))	gui	active document	handler
+generate_block_diagram	operand_handler	run_operands: named document	core	origin	handler
+generate_block_diagram	in_window_rewrite	document_window	gui	window	routing
+generate_block_diagram	refusal_needs	ProjectSheet	gui	active document	routing
+generate_block_diagram	headless_missing_operand	needs `document`	core	none	routing
 generate_design_notebook	bridge	Project(Notebook(GenerateRequested { project: None }))	gui	active document	gate
 generate_design_notebook	operand_handler	run_operands: named document	core	origin,settings	handler
 generate_design_notebook	in_window_rewrite	document_window	gui	window	routing
@@ -693,6 +735,11 @@ navigate_up_hierarchy	in_window_rewrite	document_window	gui	window	routing
 navigate_up_hierarchy	refusal_needs	ParentSheet	gui	active document	routing
 navigate_up_hierarchy	disabled_still_runs	explains_when_unavailable	gui	active document	gate
 navigate_up_hierarchy	headless_refusal	headless_refusal	gui	none	routing
+new_block_diagram	bridge	BlockDiagram(NewRequested)	core	active document	handler
+new_block_diagram	operand_handler	run_operands: active-tab gate unless a document is named	core	active document	handler
+new_block_diagram	in_window_rewrite	document_window	gui	window	routing
+new_block_diagram	refusal_needs	OpenProject	core	active document	routing
+new_block_diagram	headless_without_operands	run_operands	core	active document	handler
 new_document	bridge	Menu(NewProject)	gui	dialog answer	handler
 new_document	operand_handler	run_operands: active-tab gate unless a document is named	core	settings	handler
 new_document	in_window_rewrite	document_window	gui	window	routing
@@ -1260,6 +1307,8 @@ project_set_version_control	refusal_needs_operands	needs_operands_reason	gui	non
 project_set_version_control	headless_missing_operand	needs `document`	core	none	routing
 project_settings	query	run_query	core	origin,settings	handler
 project_settings	headless_missing_operand	needs `document`	core	none	routing
+query_block_diagram	query	run_query	core	origin	handler
+query_block_diagram	headless_missing_operand	needs `document`	core	none	routing
 query_board_nets	query	run_query	core	origin	handler
 query_board_nets	headless_missing_operand	needs `document`	core	none	routing
 query_bom	query	run_query	core	origin	handler
@@ -1275,6 +1324,8 @@ query_part_heights	refusal_needs_operands	needs_operands_reason	gui	none	routing
 query_part_heights	headless_missing_operand	needs `document`	core	none	routing
 query_pins	query	run_query	core	origin	handler
 query_pins	headless_missing_operand	needs `document`	core	none	routing
+query_power_tree	query	run_query	core	origin	handler
+query_power_tree	headless_missing_operand	needs `document`	core	none	routing
 query_rail_budget	query	run_query	core	origin	handler
 query_rail_budget	headless_missing_operand	needs `document`	core	none	routing
 read_document	query	run_query	core	origin	handler
@@ -1296,6 +1347,11 @@ refresh_view	bridge	CanvasEvent(RedrawRequested)	gui	active document,window	gate
 refresh_view	in_window_rewrite	canvas_in_window|document_window	gui	window	routing
 refresh_view	refusal_needs	FitTarget	gui	active document,window	routing
 refresh_view	headless_refusal	headless_refusal	gui	none	routing
+regenerate_block_diagram	translator	Project(BlockDiagramSync(Requested { regenerate: true, apply: false }))	gui	active document	handler
+regenerate_block_diagram	operand_handler	run_operands: named document	core	origin	handler
+regenerate_block_diagram	in_window_rewrite	document_window	gui	window	routing
+regenerate_block_diagram	refusal_needs	ProjectSheet	gui	active document	routing
+regenerate_block_diagram	headless_missing_operand	needs `document`	core	none	routing
 remove_board_panel	bridge	Pcb(Panel(RemoveRequested))	core	active document	handler
 remove_board_panel	operand_handler	run_operands: named document	core	origin	handler
 remove_board_panel	in_window_rewrite	document_window	gui	window	routing

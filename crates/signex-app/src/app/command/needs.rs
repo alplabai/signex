@@ -618,6 +618,8 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         // #2462: gated like Update PCB.
         "compare_board_with_schematic" => Needs::PcbSync,
         "new_pcb_document" | "new_schematic_sheet" | "open_rules" => Needs::OpenProject,
+        // #2796: the diagram goes in the project's folder.
+        "new_block_diagram" => Needs::OpenProject,
         // #1282: the class dialog edits the project.
         "open_diff_pair_classes" => Needs::OpenProject,
         // #2908: a copy of the project in a new folder.
@@ -684,6 +686,7 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         "open_library_browser" => Needs::Library,
         "number_schematic_sheets" => Needs::ProjectSheet,
         "compile_project" => Needs::ProjectSheet,
+        "generate_block_diagram" | "regenerate_block_diagram" => Needs::ProjectSheet,
         "tile_windows_horizontally" | "tile_windows_vertically" => Needs::TileableWindows,
         "untile_documents" => Needs::Tiled,
         _ => return None,

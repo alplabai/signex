@@ -684,6 +684,7 @@ impl Signex {
                 project_writes: Vec::new(),
                 moved_project_dirs: Vec::new(),
                 deferred_git_commits: Vec::new(),
+                block_diagrams: Default::default(),
                 notebooks: std::collections::HashMap::new(),
                 generated_reports: std::collections::HashMap::new(),
             },
@@ -850,6 +851,7 @@ impl Signex {
                 netlist_incomplete_prompt: None,
                 bom_preview: None,
                 gerber_viewer: Default::default(),
+                block_diagrams: Default::default(),
             },
             interaction_state: InteractionState {
                 current_tool: Tool::Select,

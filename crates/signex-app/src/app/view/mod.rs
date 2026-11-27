@@ -453,6 +453,9 @@ impl Signex {
         if self.gerber_viewer_tab_in_window(is_main) {
             return self.view_gerber_viewer_tab();
         }
+        if let Some(path) = self.block_diagram_tab_in_window(is_main) {
+            return self.view_block_diagram_tab(path);
+        }
         if let Some(project_id) = self.project_tab_in_window(is_main) {
             return self.view_project_tab(project_id);
         }

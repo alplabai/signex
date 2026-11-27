@@ -95,4 +95,11 @@ pub struct DocumentViewState {
     /// The Gerber Viewer tab (mockup rows 193 and 193f): the package shown
     /// and the app-wide recent packages. Its slice owns it.
     pub gerber_viewer: crate::app::gerber_viewer::GerberViewerState,
+    /// What each open block diagram's tab shows (mockup rows 171 and 210):
+    /// selection, tool, camera, pane, popovers and the Re-sync review, by the
+    /// path `DocumentState::block_diagrams` holds the diagram under.
+    pub block_diagrams: std::collections::BTreeMap<
+        std::path::PathBuf,
+        crate::app::core::block_diagram_view::BlockDiagramViewState,
+    >,
 }

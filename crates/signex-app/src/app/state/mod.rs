@@ -614,6 +614,8 @@ pub struct DocumentState {
     /// Commits asked for while their project folder moved, run once the move
     /// has finished.
     pub deferred_git_commits: Vec<DeferredGitCommit>,
+    /// The open block diagrams (mockup row 171); their slice owns them.
+    pub block_diagrams: crate::app::core::block_diagram_editor::BlockDiagrams,
     /// Each project's Design Notebook (mockup row 195) as a document being
     /// edited, kept while the project is loaded so a closed tab keeps its
     /// unsaved text. The tab's view of it is `UiState::notebook_tabs`.
