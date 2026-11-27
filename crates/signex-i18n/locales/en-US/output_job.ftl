@@ -105,7 +105,7 @@ output-job-form-gerber-apertures-standard = Standard
 output-job-form-gerber-apertures-macros = Macros only
 output-job-form-drill-fixed = Excellon drill files, plated and non-plated apart, as File ▸ Fabrication Outputs writes them.
 output-job-form-bom-format = CSV, HTML or XLSX, by the file's extension.
-output-job-form-pages-fixed = Every page in print order, on the first page's paper, in the print colours.
+output-job-form-pages-fixed = Every page in print order, on the first page's paper, in the print colors.
 output-job-form-step-fixed = The board and its parts' models, as File ▸ Export ▸ STEP 3D Model makes it.
 output-job-form-remove = Remove output
 

@@ -113,7 +113,11 @@ View/---	separator	-	-	-	-	-	-
 View/Window	submenu	Window	-	-	-	-	-
 View/Window/Tile Horizontally	item	Tile Horizontally	-	-	TileHorizontally	00000100	cmd:tile_windows_horizontally
 View/Window/Tile Vertically	item	Tile Vertically	-	-	TileVertically	00000100	cmd:tile_windows_vertically
+View/Window/Tile Grid	item	Tile Grid	-	-	TileGrid	00000100	cmd:tile_windows_grid
 View/Window/Untile	item	Untile	-	-	UntileDocuments	00000100	cmd:untile_documents
+View/Window/Split Right	item	Split Right	-	-	SplitPaneRight	00000100	cmd:split_pane_right
+View/Window/Split Down	item	Split Down	-	-	SplitPaneDown	00000100	cmd:split_pane_down
+View/Window/Open Second View	item	Open Second View	-	-	OpenSecondView	01110010	cmd:open_second_view
 View/Window/---	separator	-	-	-	-	-	-
 View/Window/Layouts	submenu	Layouts	-	-	-	-	-
 View/Window/Layouts/BUILT-IN	header	BUILT-IN	-	-	-	00000000	never
@@ -135,6 +139,7 @@ Project/Design Notebook/Open Design Notebook	item	Open Design Notebook	-	-	OpenD
 Project/Design Notebook/Generate from Project…	item	Generate from Project…	-	-	GenerateDesignNotebook	01001001	cmd:generate_design_notebook
 Project/---	separator	-	-	-	-	-	-
 Project/Project Options...	item	Project Options...	-	-	OpenProjectOptions	01001001	project
+Project/Design Checklist	item	Design Checklist	-	-	OpenDesignChecklist	01001001	cmd:open_design_checklist
 Project/---	separator	-	-	-	-	-	-
 Project/Close Project	item	Close Project	-	-	CloseProject	01001001	project
 Place	menu	Place	-	-	-	-	-
