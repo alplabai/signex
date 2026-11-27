@@ -285,11 +285,13 @@ fn show_unsolvable(editor: &mut FootprintDocument) -> bool {
     let solved = signex_sketch::parameter::resolve(&sketch.parameters)
         .map_err(SketchError::Expr)
         .and_then(|params| {
-            editor
-                .state
-                .sketch_solver
-                .solve_deferring_redundancy(sketch, &params)
-                .map_err(SketchError::SolveFailed)
+            crate::library::editor::footprint::sketch_solve_task::timed_solve(|| {
+                editor
+                    .state
+                    .sketch_solver
+                    .solve_deferring_redundancy(sketch, &params)
+            })
+            .map_err(SketchError::SolveFailed)
         });
     let state = &mut editor.state;
     match solved {

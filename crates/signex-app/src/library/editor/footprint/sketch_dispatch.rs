@@ -600,10 +600,11 @@ pub(super) fn solve_and_bake(
     // (under-constrained) or 400 to 520 ms at n = 510 (fully constrained).
     // The redundancy pass is left out and runs off-thread (#1685). A
     // converged sketch is never refused for its size, so it still bakes.
-    match state
-        .sketch_solver
-        .solve_deferring_redundancy(sketch, &resolved)
-    {
+    match super::sketch_solve_task::timed_solve(|| {
+        state
+            .sketch_solver
+            .solve_deferring_redundancy(sketch, &resolved)
+    }) {
         Ok(out) => bake_solution(state, footprint, &resolved, out)?,
         Err(e) => return Err(discard_failed_solve(state, e)),
     }

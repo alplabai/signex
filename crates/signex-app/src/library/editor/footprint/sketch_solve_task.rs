@@ -103,13 +103,25 @@ fn solve_sketch(sketch: &SketchData, solver: &Solver) -> SolveOutcome {
     solve_resolved(sketch, |resolved| solver.solve(sketch, resolved))
 }
 
+/// Run `solve` and record its wall time in the result: the solver reads no
+/// clock, the host times it (#2431).
+pub(crate) fn timed_solve<E>(
+    solve: impl FnOnce() -> Result<FullSolveOutput, E>,
+) -> Result<FullSolveOutput, E> {
+    let started = std::time::Instant::now();
+    solve().map(|mut out| {
+        out.result.elapsed_ms = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
+        out
+    })
+}
+
 fn solve_resolved(
     sketch: &SketchData,
     solve: impl FnOnce(&HashMap<String, f64>) -> Result<FullSolveOutput, SolveError>,
 ) -> SolveOutcome {
     match parameter::resolve(&sketch.parameters) {
         Err(e) => SolveOutcome::ResolveFailed(e),
-        Ok(resolved) => match solve(&resolved) {
+        Ok(resolved) => match timed_solve(|| solve(&resolved)) {
             Ok(out) => SolveOutcome::Solved {
                 resolved,
                 out: Box::new(out),

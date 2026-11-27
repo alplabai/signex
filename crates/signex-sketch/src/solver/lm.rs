@@ -46,8 +46,6 @@
 //! `stalled` flag lets [`crate::solver::Solver`] retry it and decide
 //! whether a named conflict is the cause.
 
-use std::time::Instant;
-
 use crate::error::{SketchError, SolveError};
 use crate::sketch::SketchData;
 use crate::solver::jacobian::jacobian;
@@ -110,6 +108,8 @@ pub struct SolveResult {
     pub index: EntityIndex,
     pub iterations: usize,
     pub final_residual_norm: f64,
+    /// Wall time of the solve, set by the host that timed the call. The
+    /// solver reads no clock (#2431) and leaves it 0.
     pub elapsed_ms: u64,
 }
 
@@ -313,7 +313,6 @@ pub fn undo_retry_offset(
         };
         best = SolveResult {
             iterations: best.iterations + next.iterations,
-            elapsed_ms: best.elapsed_ms + next.elapsed_ms,
             ..next
         };
         polished = true;
@@ -379,7 +378,6 @@ fn run_lm(
     max_iters: usize,
     start: Start,
 ) -> Result<SolveResult, Box<LmFailure>> {
-    let started = Instant::now();
     let dangling = sketch.dangling_refs();
     if !dangling.is_empty() {
         // The caller reports the error; this stays at debug so a stuck
@@ -432,7 +430,7 @@ fn run_lm(
             index: packed.index,
             iterations,
             final_residual_norm,
-            elapsed_ms: started.elapsed().as_millis() as u64,
+            elapsed_ms: 0,
         }),
         Err(exit) => {
             let (error, stalled) = match exit {
