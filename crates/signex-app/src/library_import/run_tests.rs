@@ -20,7 +20,7 @@ pub(super) const FAST: RunLimits = RunLimits {
 };
 
 /// Finds `--output`'s value and sets `$out`.
-pub(super) const PREAMBLE: &str = r#"out=""; prev=""
+pub(crate) const PREAMBLE: &str = r#"out=""; prev=""
 for a in "$@"; do [ "$prev" = "--output" ] && out="$a"; prev="$a"; done
 "#;
 
@@ -46,7 +46,7 @@ pub(super) fn request(output: PathBuf, mode: RunMode) -> LibraryRunRequest {
 }
 
 /// A summary line for a library written to `$out`.
-pub(super) fn summary(exit: &str, ok: bool) -> String {
+pub(crate) fn summary(exit: &str, ok: bool) -> String {
     format!(
         r#"echo '{{"event":"summary","ok":{ok},"error":null,"exit":"{exit}","library":"'"$out"'","report":"'"$out"'/import-report.json","files":[],"counts":{{"parts":3}},"warnings":[]}}'"#
     )
@@ -54,7 +54,7 @@ pub(super) fn summary(exit: &str, ok: bool) -> String {
 
 const REPORT: &str = include_str!("../../../../docs/fixtures/library-converter/import-report.json");
 
-pub(super) fn write_report_line() -> String {
+pub(crate) fn write_report_line() -> String {
     format!("mkdir -p \"$out\" && cat > \"$out/import-report.json\" <<'EOF'\n{REPORT}\nEOF\n")
 }
 

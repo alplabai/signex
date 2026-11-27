@@ -30,7 +30,7 @@ pub mod stream;
 #[cfg(all(test, unix))]
 mod discovery_tests;
 #[cfg(all(test, unix))]
-mod run_tests;
+pub(crate) mod run_tests;
 #[cfg(all(test, unix))]
 mod snapshot_tests;
 
