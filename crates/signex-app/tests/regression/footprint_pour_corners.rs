@@ -4,6 +4,8 @@
 
 use signex_app::app::{FootprintDocument, Message, Signex, TabInfo, TabKind};
 use signex_app::dock::DockMessage;
+use signex_app::library::editor::footprint::sketch_dispatch::apply_sketch_edit;
+use signex_app::library::editor::footprint::sketch_mode::SketchEdit;
 use signex_app::panels::{FpSubformMsg, PanelMsg, pour_corner_size_buffer_key};
 use signex_library::{Footprint, FootprintFile};
 use signex_sketch::attr::{PourAttr, PourFillType, ThermalRelief};
@@ -16,8 +18,13 @@ use signex_types::zone_pour_shape::PourCorners;
 use std::path::PathBuf;
 
 fn open_editor(stem: &str, footprint: Footprint) -> (Signex, PathBuf) {
+    open_file(stem, FootprintFile::from_footprint(footprint))
+}
+
+/// An app with `file` open in a footprint editor tab.
+fn open_file(stem: &str, file: FootprintFile) -> (Signex, PathBuf) {
     let path = PathBuf::from(format!("{stem}.snxfpt"));
-    let editor = FootprintDocument::new(path.clone(), FootprintFile::from_footprint(footprint));
+    let editor = FootprintDocument::new(path.clone(), file);
     let (mut app, _initial_task) = Signex::new();
     app.document_state
         .footprint_editors
@@ -194,17 +201,30 @@ fn picking_the_corners_the_pour_has_records_no_step() {
 }
 
 /// A pour switched from Rounded back to Sharp drops its size too, so it
-/// writes what a pour that never had corners writes: no `corners` or
-/// `corner_size` key, and the lower token.
+/// leaves no trace of the corner edit: it writes the same bytes as the
+/// same file baked by a plain rebuild, with no `corners` or `corner_size`
+/// key and the lower token.
 #[test]
 fn switching_back_to_sharp_drops_the_size_and_writes_no_corner_keys() {
     let (footprint, id) = pour_footprint();
-    let (mut app, path) = open_editor("pour-sharp-again", footprint);
+    let file = FootprintFile::from_footprint(footprint);
+
+    let (mut app, path) = open_file("pour-sharp-again", file.clone());
     let corners = PourCorners::Rounded;
     subform(&mut app, FpSubformMsg::PourCornersPicked { id, corners });
     size(&mut app, id, "0.5");
     let corners = PourCorners::Sharp;
     subform(&mut app, FpSubformMsg::PourCornersPicked { id, corners });
+
+    // The control: the same file, baked by a rebuild with no corner edit.
+    let (mut control, control_path) = open_file("pour-sharp-again", file);
+    control
+        .document_state
+        .footprint_editors
+        .get_mut(&control_path)
+        .unwrap()
+        .with_parts(|state, fp| apply_sketch_edit(state, fp, SketchEdit::ForceRebuild))
+        .expect("the pour bakes");
 
     let attr = pour(&app, &path, id);
     assert_eq!((attr.corners, attr.corner_size), (PourCorners::Sharp, 0.0));
@@ -212,4 +232,14 @@ fn switching_back_to_sharp_drops_the_size_and_writes_no_corner_keys() {
     let after = editor(&app, &path).file.to_toml_string().unwrap();
     assert!(!after.contains("corner_size"), "{after}");
     assert!(!after.contains("corners"), "{after}");
+    assert_eq!(
+        baked_outline(&control, &control_path).len(),
+        4,
+        "the control bakes"
+    );
+    let baked = editor(&control, &control_path)
+        .file
+        .to_toml_string()
+        .unwrap();
+    assert_eq!(after, baked, "the same bytes as a bake with no corner edit");
 }
