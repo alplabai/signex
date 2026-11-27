@@ -16,6 +16,8 @@ pub(crate) mod part_swap_operands;
 pub(crate) mod part_swap_tests;
 mod swap;
 
+pub(crate) use swap::SwapRefusal;
+
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
@@ -84,7 +86,7 @@ impl Signex {
                 let state = &mut self.interaction_state.pcb_component;
                 state.illustration_hover.update(hover.clone());
                 let hover = state.illustration_hover.clone();
-                let shown = self.document_state.panel_ctx.pcb_board.as_mut();
+                let shown = self.document_view.panel_ctx.pcb_board.as_mut();
                 if let Some(facts) = shown.and_then(|b| b.component.as_mut()) {
                     facts.illustration_hover = hover;
                 }

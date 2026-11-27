@@ -9,13 +9,13 @@ fn update_assembles_no_hierarchy_the_task_does() {
     let mut f = fixture();
     open_tab(&mut f.app);
     assert!(
-        f.app.document_state.panel_ctx.navigator.hierarchy.is_none(),
+        f.app.document_view.panel_ctx.navigator.hierarchy.is_none(),
         "update must not read the project's sheets from disk"
     );
 
     f.app.settle_navigator();
 
-    let navigator = &f.app.document_state.panel_ctx.navigator;
+    let navigator = &f.app.document_view.panel_ctx.navigator;
     assert!(navigator.hierarchy.is_some(), "the assembly task delivered");
     assert!(!navigator.fingerprint.is_empty());
 }

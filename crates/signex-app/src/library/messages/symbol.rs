@@ -50,7 +50,7 @@ pub enum SymbolEditorMsg {
 
     /// The Place Arc gesture's third click swept >= 360° — rejected
     /// rather than committed (see `CanvasAction::ArcSweepRejected`'s
-    /// doc comment). Sets `SymbolDocument::status_message`; no
+    /// doc comment). Sets `SymbolEditorView::status_message`; no
     /// graphic is pushed and no undo snapshot is recorded.
     ArcSweepRejected,
 
@@ -84,7 +84,7 @@ pub enum SymbolEditorMsg {
     },
 
     /// One click of the four-click Bezier gesture (start, C1, C2, end),
-    /// collected in `SymbolDocument::polygon_vertices`. The fourth pushes
+    /// collected in `SymbolEditorView::polygon_vertices`. The fourth pushes
     /// the curve as one undo step; `PolygonCancel` drops the clicks.
     BezierClick { x: f64, y: f64 },
 
@@ -259,7 +259,7 @@ pub enum SymbolEditorMsg {
     /// the redo stack.
     Redo,
 
-    /// Drag committed — clears `mid_drag` so the next drag starts a
+    /// Drag committed — closes the draft's move run so the next drag starts a
     /// fresh undo snapshot group. Emitted on `ButtonReleased(Left)`
     /// when a move drag was in progress.
     DragCommit,

@@ -72,7 +72,7 @@ fn rename_remove_and_reveal_target_the_nested_file() {
 #[test]
 fn a_nested_row_survives_a_new_row_inserted_before_it() {
     let (mut app, key) = nested_app();
-    app.document_state.panel_ctx.project_tree[0].children[0]
+    app.document_view.panel_ctx.project_tree[0].children[0]
         .children
         .insert(
             0,

@@ -60,7 +60,7 @@ cp "$SCRIPT_DIR/signex-512.png" "$PKG_DIR/usr/share/icons/hicolor/512x512/apps/s
 # below.
 REPO_ROOT_FOR_ICONS="$(cd "$SCRIPT_DIR/../.." && pwd)"
 FILE_ICON_DIR="$REPO_ROOT_FOR_ICONS/crates/signex-app/assets/icons/files"
-for ext in snxprj snxsch snxpcb snxfpt snxsim snxlib snxsym snxpkg snxmat snxcfg snxmod; do
+for ext in snxprj snxsch snxpcb snxfpt snxsim snxlib snxsym snxblk snxpkg snxmat snxcfg snxmod; do
   src="$FILE_ICON_DIR/$ext.svg"
   if [[ -f "$src" ]]; then
     cp "$src" "$PKG_DIR/usr/share/icons/hicolor/scalable/mimetypes/application-vnd.alpcaner.signex.$ext.svg"
@@ -105,6 +105,11 @@ cat > "$PKG_DIR/usr/share/mime/packages/signex.xml" <<MIME_EOF
     <comment>Signex Symbol</comment>
     <glob pattern="*.snxsym"/>
     <icon name="application-vnd.alpcaner.signex.snxsym"/>
+  </mime-type>
+  <mime-type type="application/vnd.alpcaner.signex.snxblk">
+    <comment>Signex Block Diagram</comment>
+    <glob pattern="*.snxblk"/>
+    <icon name="application-vnd.alpcaner.signex.snxblk"/>
   </mime-type>
   <mime-type type="application/vnd.alpcaner.signex.snxpkg">
     <comment>Signex Package</comment>
@@ -165,7 +170,7 @@ Exec=/usr/bin/signex %F
 Icon=signex
 Terminal=false
 Categories=Development;Electronics;Engineering;
-MimeType=application/vnd.alpcaner.signex.snxprj;application/vnd.alpcaner.signex.snxsch;application/vnd.alpcaner.signex.snxpcb;application/vnd.alpcaner.signex.snxfpt;application/vnd.alpcaner.signex.snxsim;application/vnd.alpcaner.signex.snxlib;application/vnd.alpcaner.signex.snxsym;application/vnd.alpcaner.signex.snxpkg;application/vnd.alpcaner.signex.snxmat;application/vnd.alpcaner.signex.snxcfg;application/vnd.alpcaner.signex.snxmod;
+MimeType=application/vnd.alpcaner.signex.snxprj;application/vnd.alpcaner.signex.snxsch;application/vnd.alpcaner.signex.snxpcb;application/vnd.alpcaner.signex.snxfpt;application/vnd.alpcaner.signex.snxsim;application/vnd.alpcaner.signex.snxlib;application/vnd.alpcaner.signex.snxsym;application/vnd.alpcaner.signex.snxblk;application/vnd.alpcaner.signex.snxpkg;application/vnd.alpcaner.signex.snxmat;application/vnd.alpcaner.signex.snxcfg;application/vnd.alpcaner.signex.snxmod;
 StartupNotify=true
 DESKTOP_EOF
 

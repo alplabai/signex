@@ -19,7 +19,7 @@ impl Signex {
     /// `layer` open under its row, its hex field at the layer's colour: the
     /// board's one colour picker (#2363, mockup row 103).
     pub(crate) fn open_layer_colour(&mut self, layer: PcbLayer) -> Task<Message> {
-        let ctx = &mut self.document_state.panel_ctx;
+        let ctx = &mut self.document_view.panel_ctx;
         let ui = &mut ctx.pcb_layers_ui;
         ui.tab = LayersTab::LayersAndColors;
         ui.search.clear();
@@ -29,7 +29,7 @@ impl Signex {
     }
 
     pub(crate) fn handle_layers_panel(&mut self, msg: &LayersPanelMsg) -> Task<Message> {
-        let ctx = &mut self.document_state.panel_ctx;
+        let ctx = &mut self.document_view.panel_ctx;
         if ctx.pcb_layers_ui.apply(msg) {
             match msg {
                 // An opened card's hex field starts at the layer's colour.
@@ -51,7 +51,7 @@ impl Signex {
                 return Task::none();
             }
             LayersPanelMsg::SectionVisibilitySet { section, visible } => {
-                let ctx = &self.document_state.panel_ctx;
+                let ctx = &self.document_view.panel_ctx;
                 let layers = ctx.pcb_layers.section_layers(*section, &ctx.pcb_layers_ui);
                 for layer in layers {
                     let visible = *visible;
@@ -79,7 +79,7 @@ impl Signex {
             }),
             LayersPanelMsg::SetSaved => PcbMsg::LayerSet(LayerSetMsg::Saved {
                 window: None,
-                name: self.document_state.panel_ctx.pcb_layers_ui.set_name.clone(),
+                name: self.document_view.panel_ctx.pcb_layers_ui.set_name.clone(),
             }),
             LayersPanelMsg::SetDeleted(name) => {
                 PcbMsg::LayerSet(LayerSetMsg::Deleted(name.clone()))
@@ -98,7 +98,7 @@ impl Signex {
         self.refresh_panel_ctx();
         // The typed name and its row go once the view shows the set saved
         // under it.
-        let ctx = &mut self.document_state.panel_ctx;
+        let ctx = &mut self.document_view.panel_ctx;
         let saved = LayerSetId::Saved(ctx.pcb_layers_ui.set_name.trim().to_string());
         if matches!(msg, LayersPanelMsg::SetSaved) && ctx.pcb_layers.layer_set == Some(saved) {
             ctx.pcb_layers_ui.set_name.clear();
@@ -111,7 +111,7 @@ impl Signex {
     /// it at once, and the card stays open for the next keystroke. The
     /// colour is the board's: one undo step, saved with it (2026-11-20).
     fn apply_typed_layer_colour(&mut self) {
-        let ui = &self.document_state.panel_ctx.pcb_layers_ui;
+        let ui = &self.document_view.panel_ctx.pcb_layers_ui;
         let (Some(layer), Some(colour)) = (ui.picker, ui.hex_colour()) else {
             return;
         };

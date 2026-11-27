@@ -171,7 +171,7 @@ fn opening_a_symlink_to_an_open_sheet_shows_the_open_document() {
 // ---- #1826 -----------------------------------------------------------
 
 fn conflict_card_is_up(app: &Signex) -> bool {
-    app.document_state
+    app.document_view
         .error_notice
         .as_ref()
         .is_some_and(|notice| notice.action.is_some())
@@ -336,6 +336,7 @@ fn add_project(app: &mut Signex, dir: &Path) {
                 schematic_design: Default::default(),
                 fab_outputs: None,
                 router_tool_diameter: None,
+                bom_alternates: Vec::new(),
                 requirements: Default::default(),
                 parameters: Default::default(),
                 unknown: Default::default(),

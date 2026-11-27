@@ -63,7 +63,7 @@ pub(super) fn parent() -> SchematicSheet {
 }
 
 /// The child: `SIG` on a wire that also carries the `VCC` power port.
-pub(super) fn child() -> SchematicSheet {
+pub(crate) fn child() -> SchematicSheet {
     let mut sheet = SchematicSheet::default();
     sheet.wires.push(wire((0.0, 0.0), (10.16, 0.0)));
     sheet.labels.push(Label::new(
@@ -91,7 +91,7 @@ fn write(path: &Path, sheet: SchematicSheet) {
 
 /// An app with the project open and its parent sheet the edit target; the
 /// child sheet stays closed.
-pub(super) fn project_app(dir: &tempfile::TempDir) -> Signex {
+pub(crate) fn project_app(dir: &tempfile::TempDir) -> Signex {
     let _ = crate::diagnostics::init_logging();
     write(&dir.path().join("top.snxsch"), parent());
     write(&dir.path().join("child.snxsch"), child());

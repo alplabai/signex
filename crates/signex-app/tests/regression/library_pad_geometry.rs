@@ -278,7 +278,7 @@ fn properties_panel_shows_corner_radius_for_round_rect_pad() {
     }));
 
     let ctx = app
-        .document_state
+        .document_view
         .panel_ctx
         .footprint_editor
         .as_ref()

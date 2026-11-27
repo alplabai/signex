@@ -13,6 +13,7 @@ use super::super::super::*;
 use crate::panels::{HarnessField, HarnessMismatchRow, HarnessPanel, HarnessPanelMsg};
 use signex_types::schematic::{
     HarnessDefinition, HarnessDefinitionEntry, SelectedKind, harness_type_uses,
+    undefined_harness_types,
 };
 
 /// The ERC rule whose findings drive the mismatch banner.
@@ -31,12 +32,12 @@ impl Signex {
     /// the typed draft; refused text changes nothing, so it stays in its box.
     pub(crate) fn refresh_harness_panel(&mut self) {
         let key = self.harness_facts_key();
-        if self.document_state.panel_ctx.harness.built_from == Some(key) {
+        if self.document_view.panel_ctx.harness.built_from == Some(key) {
             return;
         }
         let mut facts = self.harness_panel_facts();
         facts.built_from = Some(key);
-        *self.document_state.panel_ctx.harness = facts;
+        *self.document_view.panel_ctx.harness = facts;
     }
 
     /// A stamp of everything [`Self::harness_panel_facts`] reads: the
@@ -46,6 +47,7 @@ impl Signex {
     fn harness_facts_key(&self) -> u64 {
         use std::hash::{Hash, Hasher};
         let docs = &self.document_state;
+        let document_view = &self.document_view;
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
         let project = self.project_in_view().and_then(|id| docs.project_by_id(id));
         if let Some(project) = project {
@@ -77,7 +79,11 @@ impl Signex {
             .map(signex_engine::Engine::revision)
             .hash(&mut hasher);
         docs.active_path.hash(&mut hasher);
-        (docs.panel_ctx.selected_uuid, docs.panel_ctx.selected_kind).hash(&mut hasher);
+        (
+            document_view.panel_ctx.selected_uuid,
+            document_view.panel_ctx.selected_kind,
+        )
+            .hash(&mut hasher);
         for v in &self.ui_state.erc_violations {
             if v.rule_id.as_str() == MISMATCH_RULE {
                 (v.primary, &v.tag).hash(&mut hasher);
@@ -91,7 +97,7 @@ impl Signex {
     fn harness_panel_facts(&self) -> HarnessPanel {
         #[cfg(test)]
         HARNESS_FACT_BUILDS.with(|n| n.set(n.get() + 1));
-        let old = &self.document_state.panel_ctx.harness;
+        let old = &self.document_view.panel_ctx.harness;
         let mut facts = HarnessPanel {
             definitions_open: old.definitions_open,
             selected_definition: old.selected_definition,
@@ -105,10 +111,13 @@ impl Signex {
         facts.are_definitions_locked =
             project.is_some_and(|p| p.data.has_unreadable_schematic_design());
         let engines = &self.document_state.engines;
+        let sheets = move || engines.values().map(|e| &e.document().harness);
+        facts.undefined_types = undefined_harness_types(&facts.definitions, sheets());
         facts.uses = facts
             .definitions
             .iter()
-            .map(|d| harness_type_uses(engines.values().map(|e| &e.document().harness), &d.name))
+            .chain(&facts.undefined_types)
+            .map(|d| harness_type_uses(sheets(), &d.name))
             .collect();
         let Some(engine) = self.document_state.active_engine() else {
             return facts;
@@ -122,8 +131,8 @@ impl Signex {
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_default();
         let (Some(id), Some(kind)) = (
-            self.document_state.panel_ctx.selected_uuid,
-            self.document_state.panel_ctx.selected_kind,
+            self.document_view.panel_ctx.selected_uuid,
+            self.document_view.panel_ctx.selected_kind,
         ) else {
             return facts;
         };
@@ -155,8 +164,7 @@ impl Signex {
         facts
     }
 
-    /// The far-side mismatches of `c` from the sheet's ERC findings: their
-    /// tag is `far:<sheet symbol>:<expected entry>`.
+    /// The far-side mismatches of `c` from the sheet's ERC findings.
     fn harness_mismatch_rows(
         &self,
         c: &signex_types::schematic::HarnessConnector,
@@ -164,14 +172,9 @@ impl Signex {
         self.ui_state
             .erc_violations
             .iter()
-            .filter(|v| v.rule_id.as_str() == MISMATCH_RULE)
             .filter_map(|v| {
-                let entry = v
-                    .primary
-                    .filter(|p| p.kind == SelectedKind::HarnessEntry)?
-                    .uuid;
+                let (entry, far, expects) = far_side_mismatch(v)?;
                 let index = c.entry_index(entry)?;
-                let (far, expects) = v.tag.as_deref()?.strip_prefix("far:")?.rsplit_once(':')?;
                 Some(HarnessMismatchRow {
                     entry,
                     has: c.entries[index].name.clone(),
@@ -180,6 +183,35 @@ impl Signex {
                 })
             })
             .collect()
+    }
+
+    /// The caption the canvas draws under the marker of a far-side mismatch
+    /// on a harness entry (mockup row 152): `expects CS_ADC`. `None` for any
+    /// other finding.
+    pub(crate) fn erc_marker_caption(&self, v: &signex_erc::Violation) -> Option<String> {
+        let (_, _, expects) = far_side_mismatch(v)?;
+        Some(self.ui_state.i18n.message_plain(
+            ids::PANELS_HARNESS_EXPECTS,
+            &[("expects", expects.to_string().into())],
+        ))
+    }
+
+    /// The harness entry the canvas tints for a far-side mismatch (mockup
+    /// row 152); `None` for any other finding.
+    pub(crate) fn erc_marker_harness_entry(v: &signex_erc::Violation) -> Option<uuid::Uuid> {
+        far_side_mismatch(v).map(|(entry, _, _)| entry)
+    }
+
+    /// The sheet entry the canvas badges for a harness mismatch with the far
+    /// side: the finding's peer, the entry the harness leaves through
+    /// (decision of 2026-11-25). `None` for any other finding.
+    pub(crate) fn erc_marker_sheet_entry(v: &signex_erc::Violation) -> Option<uuid::Uuid> {
+        if v.rule_id.as_str() != MISMATCH_RULE {
+            return None;
+        }
+        v.peer
+            .filter(|p| p.kind == SelectedKind::SheetPin)
+            .map(|p| p.uuid)
     }
 
     /// Handle an edit or click of the harness panels; `None` for any other
@@ -223,13 +255,13 @@ impl Signex {
                 }
             }
             HarnessPanelMsg::DefinitionsOpened => {
-                self.document_state.panel_ctx.harness.definitions_open = true;
+                self.document_view.panel_ctx.harness.definitions_open = true;
             }
             HarnessPanelMsg::DefinitionsClosed => {
-                self.document_state.panel_ctx.harness.definitions_open = false;
+                self.document_view.panel_ctx.harness.definitions_open = false;
             }
             HarnessPanelMsg::DefinitionPicked(index) => {
-                self.document_state.panel_ctx.harness.selected_definition = index;
+                self.document_view.panel_ctx.harness.selected_definition = index;
             }
             HarnessPanelMsg::DefinitionNameTyped { index, text } => {
                 self.rename_harness_type(index, text);
@@ -265,7 +297,7 @@ impl Signex {
                     });
                     count = defs.len();
                 });
-                self.document_state.panel_ctx.harness.selected_definition = count.saturating_sub(1);
+                self.document_view.panel_ctx.harness.selected_definition = count.saturating_sub(1);
             }
             HarnessPanelMsg::SheetEntryTypePicked { pin, harness_type } => {
                 self.set_harness_entry_type(pin, harness_type);
@@ -277,7 +309,7 @@ impl Signex {
         self.refresh_harness_panel();
         // A rebuild for an earlier change must not take the refused text.
         if refused_text.is_some() {
-            self.document_state.panel_ctx.harness.draft = refused_text;
+            self.document_view.panel_ctx.harness.draft = refused_text;
         }
         Some(task)
     }
@@ -312,7 +344,7 @@ impl Signex {
         let Some(value) = parsed.filter(|value| harness_field_holds(field, *value)) else {
             return Some((field, text));
         };
-        self.document_state.panel_ctx.harness.draft = None;
+        self.document_view.panel_ctx.harness.draft = None;
         let (mut c, stored_y) = self.document_state.edit_engine().and_then(|e| {
             let sheet = e.document();
             Some((sheet.harness.connector(id).cloned()?, sheet.page_y(value)))
@@ -442,6 +474,21 @@ impl Signex {
     }
 }
 
+/// A far-side mismatch finding located on a harness entry: the entry, the
+/// sheet symbol whose child expects another name, and that name. The rule
+/// tags it `far:<sheet symbol>:<expected entry>`.
+fn far_side_mismatch(v: &signex_erc::Violation) -> Option<(uuid::Uuid, &str, &str)> {
+    if v.rule_id.as_str() != MISMATCH_RULE {
+        return None;
+    }
+    let entry = v
+        .primary
+        .filter(|p| p.kind == SelectedKind::HarnessEntry)?
+        .uuid;
+    let (far, expects) = v.tag.as_deref()?.strip_prefix("far:")?.rsplit_once(':')?;
+    Some((entry, far, expects))
+}
+
 /// Whether `field` can hold the finite `value`: a size is above zero, as the
 /// engine requires of a connector; a position is any number.
 fn harness_field_holds(field: HarnessField, value: f64) -> bool {
@@ -471,4 +518,98 @@ fn entry_nets(
                 .unwrap_or_default()
         })
         .collect()
+}
+
+#[cfg(test)]
+mod marker_caption_tests {
+    use super::*;
+    use signex_erc::{RuleId, RuleKind, Severity, Violation};
+    use signex_types::schematic::{Point, SelectedItem};
+
+    fn finding(kind: RuleKind, tag: &str) -> Violation {
+        let mut v = Violation::new(
+            RuleId::builtin(kind),
+            kind,
+            Severity::Warning,
+            "finding",
+            Point::new(10.0, 20.0),
+        );
+        v.primary = Some(SelectedItem::new(
+            uuid::Uuid::from_u128(11),
+            SelectedKind::HarnessEntry,
+        ));
+        v.tag = Some(tag.to_string());
+        v
+    }
+
+    /// Mockup row 152, Entry mismatch: the marker of a far-side mismatch on
+    /// an entry carries `expects CS_ADC` to the canvas; an unpaired entry and
+    /// any other rule carry no caption.
+    #[test]
+    fn a_far_side_mismatch_marker_carries_what_the_far_side_expects() {
+        let (mut app, _boot) = Signex::new();
+        let path = std::path::PathBuf::from("mcu.snxsch");
+        let findings = vec![
+            finding(RuleKind::HarnessEntryMismatch, "far:sensor:CS_ADC"),
+            finding(RuleKind::HarnessEntryMismatch, "extra:sensor:CS2"),
+            finding(RuleKind::HarnessTypeConflict, "far:sensor:CS_ADC"),
+        ];
+        app.ui_state
+            .erc_violations_by_path
+            .insert(path.clone(), findings);
+        app.refresh_active_erc_from_cache(Some(&path));
+        let captions: Vec<Option<String>> = app
+            .interaction_state
+            .active_canvas()
+            .erc_markers
+            .iter()
+            .map(|m| m.caption.clone())
+            .collect();
+        let expects = app
+            .ui_state
+            .i18n
+            .message_plain(ids::PANELS_HARNESS_EXPECTS, &[("expects", "CS_ADC".into())]);
+        assert_eq!(expects, "expects CS_ADC");
+        assert_eq!(captions, [Some(expects), None, None]);
+        let tinted: Vec<Option<uuid::Uuid>> = app
+            .interaction_state
+            .active_canvas()
+            .erc_markers
+            .iter()
+            .map(|m| m.harness_entry)
+            .collect();
+        assert_eq!(tinted, [Some(uuid::Uuid::from_u128(11)), None, None]);
+    }
+
+    /// The sheet entry a far-side mismatch names as its peer is the one the
+    /// canvas badges (Caner, 2026-11-25); another rule's peer, or a mismatch
+    /// with no sheet entry, badges nothing.
+    #[test]
+    fn a_far_side_mismatch_marker_carries_its_sheet_entry() {
+        let (mut app, _boot) = Signex::new();
+        let path = std::path::PathBuf::from("mcu.snxsch");
+        let entry = SelectedItem::new(uuid::Uuid::from_u128(21), SelectedKind::SheetPin);
+        let through = |mut v: Violation| {
+            v.peer = Some(entry);
+            v
+        };
+        let findings = vec![
+            through(finding(RuleKind::HarnessEntryMismatch, "far:sensor:CS_ADC")),
+            through(finding(RuleKind::HarnessEntryMismatch, "extra:sensor:CS2")),
+            finding(RuleKind::HarnessEntryMismatch, "definition:CS_ADC"),
+            through(finding(RuleKind::HarnessTypeConflict, "far:sensor:CS_ADC")),
+        ];
+        app.ui_state
+            .erc_violations_by_path
+            .insert(path.clone(), findings);
+        app.refresh_active_erc_from_cache(Some(&path));
+        let badged: Vec<Option<uuid::Uuid>> = app
+            .interaction_state
+            .active_canvas()
+            .erc_markers
+            .iter()
+            .map(|m| m.sheet_entry)
+            .collect();
+        assert_eq!(badged, [Some(entry.uuid), Some(entry.uuid), None, None]);
+    }
 }

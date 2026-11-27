@@ -193,5 +193,10 @@ The panel (#2410) is `[board_options.panel]`, written only when the board has on
 
 The teardrop rule is `[board_options.teardrops]`, written only when it is not the default (`snxpcb/1.12`); `set_teardrop_rule` and `set_pad_teardrop` change it, each as one `SetBoardOptions` undo step. See [PCB_TOOLS.md](PCB_TOOLS.md), "Teardrop rule".
 
+The layout plan (#2942) is `[board_options.layout_plan]`, written only when it
+sets anything (the board then writes `snxpcb/1.12`); `layout_plan_set` changes
+it as one `SetBoardOptions` undo step, and the options edits here carry it
+unchanged. See [CLI.md](CLI.md), "Layout plan".
+
 A colour that is not `#rrggbb` or `#rrggbbaa` refuses the load; a length that
 is not finite refuses the save.

@@ -1,0 +1,18 @@
++++
+format = "snxnbk/1"
+
+[[references]]
+kind = "component"
+component = "U3"
+id = "0193a0c4-5b1e-7c3a-9f00-6f1c2d3e4003"
++++
+#import "@signex/notebook:0.1.0": *
+#show: report.with(doc: "DN-0042", rev: "B", title: [buck-3v3 Design Notebook])
+
+= Introduction
+
+This notebook records why the power stage around #component("U3") is built
+the way it is: the calculations behind each part value, the bench results
+and the decisions taken in review.
+
+#include "chapters/power.snxnbk"

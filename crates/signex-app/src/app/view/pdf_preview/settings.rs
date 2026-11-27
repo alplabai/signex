@@ -65,7 +65,7 @@ impl Signex {
         preview: &'a PreviewState,
     ) -> Element<'a, Message> {
         let i18n = self.ui_state.i18n.as_ref();
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let look = Look::of(tokens);
         let options = &preview.pdf_options;
         let (sheets_on, sheets_all) = sheets_summary(preview);
@@ -186,7 +186,7 @@ impl Signex {
     /// block, in one place.
     fn view_pdf_output<'a>(&'a self, preview: &'a PreviewState) -> Element<'a, Message> {
         let i18n = self.ui_state.i18n.as_ref();
-        let look = Look::of(&self.document_state.panel_ctx.tokens);
+        let look = Look::of(&self.document_view.panel_ctx.tokens);
         let options = &preview.pdf_options;
         let modes = || {
             [
@@ -245,7 +245,7 @@ impl Signex {
     /// Variant: one variant per PDF, a single select.
     fn view_pdf_variant<'a>(&'a self, preview: &'a PreviewState) -> Element<'a, Message> {
         let i18n = self.ui_state.i18n.as_ref();
-        let look = Look::of(&self.document_state.panel_ctx.tokens);
+        let look = Look::of(&self.document_view.panel_ctx.tokens);
         let (variant_options, variant_chosen) = variant_choices(
             &preview.variants,
             preview.pdf_options.variant.as_deref(),
@@ -272,7 +272,7 @@ impl Signex {
     /// Structure: Use Physical Structure, and the expanded names it gates.
     fn view_pdf_structure<'a>(&'a self, preview: &'a PreviewState) -> Element<'a, Message> {
         let i18n = self.ui_state.i18n.as_ref();
-        let look = Look::of(&self.document_state.panel_ctx.tokens);
+        let look = Look::of(&self.document_view.panel_ctx.tokens);
         let options = &preview.pdf_options;
         let names = column![
             caption(t!(i18n, ids::PDF_EXPANDED_NAMES), &look),

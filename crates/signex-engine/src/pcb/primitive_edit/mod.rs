@@ -33,8 +33,7 @@ pub use free::{
 pub use graphic::{GraphicEdit, apply_graphic_edit, graphic_edit_command};
 pub use pad::{PadEdit, pad_edit_command};
 pub use track::{TrackEdit, track_edit_command, track_location};
-pub(crate) use via::edit_vias;
-pub use via::{ViaEdit, via_edit_command};
+pub use via::{ViaEdit, edit_vias, via_edit_command};
 pub use zone::{
     ZoneEdit, apply_zone_edit, zone_edit_command, zone_edits_command, zone_layer_allowed,
 };

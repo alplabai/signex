@@ -91,12 +91,12 @@ impl Signex {
     pub(crate) fn handle_length_matching(&mut self, msg: LengthMatchingMsg) -> Task<Message> {
         use LengthMatchingMsg as M;
         let board = self
-            .document_state
+            .document_view
             .panel_ctx
             .length_matching
             .as_ref()
             .map(|facts| facts.board.clone());
-        let ui = &mut self.document_state.panel_ctx.length_matching_ui;
+        let ui = &mut self.document_view.panel_ctx.length_matching_ui;
         if let Some(board) = &board {
             ui.follow(board);
         }
@@ -145,7 +145,7 @@ impl Signex {
             }
             _ => Task::none(),
         };
-        self.document_state.panel_ctx.length_matching = self.length_matching_facts();
+        self.document_view.panel_ctx.length_matching = self.length_matching_facts();
         task
     }
 
@@ -167,7 +167,7 @@ impl Signex {
 
     /// The name of the group `uuid` as the views show it.
     fn length_group_name(&self, uuid: uuid::Uuid) -> Option<String> {
-        let facts = self.document_state.panel_ctx.length_matching.as_ref()?;
+        let facts = self.document_view.panel_ctx.length_matching.as_ref()?;
         facts.group(uuid).map(|g| g.name.clone())
     }
 
@@ -179,7 +179,7 @@ impl Signex {
         uuid: uuid::Uuid,
         fill: impl FnOnce(&mut GroupEdit, &[String]),
     ) {
-        let Some(facts) = self.document_state.panel_ctx.length_matching.as_ref() else {
+        let Some(facts) = self.document_view.panel_ctx.length_matching.as_ref() else {
             return;
         };
         let Some(group) = facts.group(uuid) else {
@@ -201,7 +201,7 @@ impl Signex {
         if !field.is_group_field() {
             return;
         }
-        let ui = &self.document_state.panel_ctx.length_matching_ui;
+        let ui = &self.document_view.panel_ctx.length_matching_ui;
         let (Some(text), Some(group)) = (ui.drafts.get(&field).cloned(), ui.current) else {
             return;
         };
@@ -228,7 +228,7 @@ impl Signex {
             LengthField::Target => edit.target_mm = value,
             _ => edit.tolerance_mm = value,
         });
-        self.document_state
+        self.document_view
             .panel_ctx
             .length_matching_ui
             .drop_drafts(&[field]);
@@ -236,7 +236,7 @@ impl Signex {
 
     /// Add Group: the New group row's name, target and tolerance.
     fn add_length_group(&mut self, board: &Path) {
-        let ui = &self.document_state.panel_ctx.length_matching_ui;
+        let ui = &self.document_view.panel_ctx.length_matching_ui;
         let typed = |field| ui.drafts.get(&field).cloned().unwrap_or_default();
         let (name, target, tolerance) = (
             typed(LengthField::NewName),
@@ -271,7 +271,7 @@ impl Signex {
                         .find(|g| g.name == name)
                         .map(|g| g.uuid)
                 });
-                let ui = &mut self.document_state.panel_ctx.length_matching_ui;
+                let ui = &mut self.document_view.panel_ctx.length_matching_ui;
                 ui.drop_drafts(&[
                     LengthField::NewName,
                     LengthField::NewTarget,
@@ -334,7 +334,7 @@ impl Signex {
         };
         self.execute_board_commands(path, vec![command], Some(step))
             .map_err(|error| error.to_string())?;
-        self.document_state.panel_ctx.length_matching = self.length_matching_facts();
+        self.document_view.panel_ctx.length_matching = self.length_matching_facts();
         Ok(())
     }
 }

@@ -72,7 +72,9 @@ fn every_kind_reads_with_its_parameters() {
     assert_eq!(
         known[3].kind,
         RequirementKind::PartsState {
-            states: vec!["released".to_string()]
+            states: vec!["released".to_string()],
+            variant: None,
+            fitted_only: true,
         }
     );
     assert_eq!(known[4].kind.name(), "net_class");
@@ -88,7 +90,7 @@ fn every_kind_reads_with_its_parameters() {
 
 #[test]
 fn an_unreadable_entry_is_kept_as_written_and_says_why() {
-    let unknown_kind = json!({"id": "rails", "kind": "rail_budget", "rail": "3V3"});
+    let unknown_kind = json!({"id": "rails", "kind": "no_such_kind", "rail": "3V3"});
     let missing_field = json!({"id": "size", "kind": "board_size", "max_width_mm": 100});
     let extra_key = json!({"id": "erc", "kind": "erc_clean", "allow_warning": true});
     let (path, _dir) = project_file(&file_with(json!([
@@ -105,7 +107,7 @@ fn an_unreadable_entry_is_kept_as_written_and_says_why() {
             RequirementEntry::Known { requirement, .. } => panic!("{} read", requirement.id),
         })
         .collect();
-    assert!(reasons[0].contains("rail_budget"), "{}", reasons[0]);
+    assert!(reasons[0].contains("no_such_kind"), "{}", reasons[0]);
     assert!(reasons[1].contains("max_height_mm"), "{}", reasons[1]);
     assert_eq!(reasons[2], "unknown field `allow_warning`");
     assert_eq!(data.requirements[0].id(), Some("rails"));

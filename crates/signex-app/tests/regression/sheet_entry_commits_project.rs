@@ -55,6 +55,7 @@ fn project_data(dir: &Path) -> ProjectData {
         schematic_design: Default::default(),
         fab_outputs: None,
         router_tool_diameter: None,
+        bom_alternates: Vec::new(),
         requirements: Default::default(),
         parameters: Default::default(),
         unknown: Default::default(),
@@ -294,7 +295,7 @@ fn rename_failure(app: &Signex) -> String {
         .as_ref()
         .and_then(|d| d.error.clone())
         .or_else(|| {
-            app.document_state
+            app.document_view
                 .error_notice
                 .as_ref()
                 .map(|n| n.detail.render_en_us())
@@ -346,7 +347,7 @@ fn add_new_schematic_in_a_newer_minor_project_leaves_no_sheet() {
     assert_eq!(memory.schematic_root.as_deref(), Some("Second.snxsch"));
     assert_eq!(logged_count(said), before + 1);
     assert_eq!(logged_count(kept), kept_before, "no sheet was written");
-    let notice = f.app.document_state.error_notice.as_ref().expect("card");
+    let notice = f.app.document_view.error_notice.as_ref().expect("card");
     assert!(
         notice.detail.render_en_us().contains("was not created"),
         "{notice:?}"
@@ -451,7 +452,7 @@ fn a_rename_whose_move_back_also_fails_tells_the_user_where_the_file_is() {
     }
     let notice = f
         .app
-        .document_state
+        .document_view
         .error_notice
         .as_ref()
         .expect("the stranded file raises a card");
@@ -513,7 +514,7 @@ fn add_existing_in_a_newer_minor_project_copies_nothing() {
     );
     assert!(!f.app.document_state.is_document_dirty(&f.prj));
     assert_eq!(logged_count(said), before + 1);
-    let notice = f.app.document_state.error_notice.as_ref().expect("card");
+    let notice = f.app.document_view.error_notice.as_ref().expect("card");
     let detail = notice.detail.render_en_us();
     assert!(
         detail.contains("OutsideNM.snxsch")
@@ -567,7 +568,7 @@ fn remove_and_delete_in_a_newer_minor_project_leave_every_file() {
         );
         assert!(f.app.ui_state.remove_dialog.is_none());
         assert_eq!(logged_count(&said), before + 1, "{action}");
-        let notice = f.app.document_state.error_notice.as_ref().expect("card");
+        let notice = f.app.document_view.error_notice.as_ref().expect("card");
         let detail = notice.detail.render_en_us();
         assert!(
             detail.contains("was not removed") && detail.contains("Nothing was moved or deleted"),

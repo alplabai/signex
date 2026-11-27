@@ -16,15 +16,12 @@ fn open_preview(dir: &str) -> Signex {
     let mut app = placed_app(dir, &["top.snxsch"], &[], Vec::new());
     let task = app.handle_print_preview_requested();
     settle(&mut app, task);
-    assert!(
-        app.document_state.preview.is_some(),
-        "fixture: preview open"
-    );
+    assert!(app.document_view.preview.is_some(), "fixture: preview open");
     app
 }
 
 fn source(app: &Signex) -> PathBuf {
-    app.document_state
+    app.document_view
         .preview
         .as_ref()
         .expect("preview")
@@ -44,7 +41,7 @@ fn outcome(path: &str, source: Option<PathBuf>, result: Result<(), String>) -> E
 }
 
 fn status(app: &Signex) -> Option<String> {
-    app.document_state
+    app.document_view
         .preview
         .as_ref()
         .and_then(|p| p.export_status.clone())
@@ -160,7 +157,7 @@ fn an_export_click_with_nothing_selected_does_not_keep_the_old_confirmation() {
     let mut app = open_preview(DIR);
     let src = source(&app);
     let _ = app.handle_export_written(outcome("/work/amp/amp.pdf", Some(src), Ok(())));
-    app.document_state
+    app.document_view
         .preview
         .as_mut()
         .unwrap()
@@ -190,7 +187,7 @@ fn a_finished_pdf_through_the_real_message_is_written_confirmed_and_logged() {
     let mut app = open_preview(DIR);
     let dir = tempfile::tempdir().unwrap();
     let out = dir.path().join("amp.pdf");
-    let preview = app.document_state.preview.as_ref().unwrap();
+    let preview = app.document_view.preview.as_ref().unwrap();
     let request = Box::new(crate::app::state::PdfExportRequest {
         source: preview.source.clone(),
         options: preview.pdf_options.clone(),

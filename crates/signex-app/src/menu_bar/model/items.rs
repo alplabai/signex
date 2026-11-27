@@ -136,6 +136,27 @@ fn command_state(cmd: Cmd, is_enabled: bool) -> ItemState {
     })
 }
 
+/// A row an extension added (#2495): its catalog label, the shortcut the
+/// active keymap binds to its command, and the command run through
+/// `dispatch_command`, greyed by the same gate as a built-in row.
+pub(super) fn extension_item(
+    ctx: &MenuContext,
+    row: &crate::extension::points::MenuRow,
+) -> MenuEntry {
+    let id = row.command.as_str();
+    let shortcut = shortcut_for(ctx, id, "").map(|text| Shortcut {
+        command_id: row.command.clone(),
+        text,
+    });
+    MenuEntry::Item(MenuItem {
+        label: text(ctx, row.label),
+        shortcut,
+        state: live(MenuMessage::Command(row.command.clone()), enabled(ctx, id)),
+        checked: None,
+        icon: None,
+    })
+}
+
 /// A keymap-backed row that is always enabled and runs its command.
 pub(super) fn cmd_item(ctx: &MenuContext, cmd: Cmd) -> MenuEntry {
     command_row(
@@ -166,7 +187,17 @@ pub(super) fn cmd_item_gated_as(ctx: &MenuContext, cmd: Cmd, label: String) -> M
 /// A keymap-backed toggle row, always enabled, with its check mark shown
 /// while `checked` (a mode the command switches).
 pub(super) fn cmd_toggle(ctx: &MenuContext, cmd: Cmd, checked: bool) -> MenuEntry {
-    match cmd_item(ctx, cmd) {
+    checked_entry(cmd_item(ctx, cmd), checked)
+}
+
+/// [`cmd_toggle`] enabled exactly when its command is, like
+/// [`cmd_item_gated`].
+pub(super) fn cmd_toggle_gated(ctx: &MenuContext, cmd: Cmd, checked: bool) -> MenuEntry {
+    checked_entry(cmd_item_gated(ctx, cmd), checked)
+}
+
+fn checked_entry(entry: MenuEntry, checked: bool) -> MenuEntry {
+    match entry {
         MenuEntry::Item(item) => MenuEntry::Item(MenuItem {
             checked: Some(checked),
             ..item

@@ -227,6 +227,9 @@ preferences-symbol-body-fill-help = When on, the closed rectangles, polygons and
 # Label of the swatch: the colour symbol bodies are filled with.
 preferences-symbol-body-fill-colour = Fill color
 preferences-symbol-body-fill-colour-help = A soft tint of the theme unless you pick a color. Reset to Default goes back to the theme's tint.
+# A part marked DNP, or not fitted in the active variant.
+preferences-cross-out-not-fitted = Cross out not-fitted parts
+preferences-cross-out-not-fitted-help = When on, a part marked DNP or not fitted in the active variant is drawn greyed with a cross over its body: on the canvas and in PDF, SVG and print, where the printed variant decides. Its designator and value stay as they are.
 
 # prefs-rules-library
 # Beside the On / Off control of the rule whose severity the pin connection
@@ -247,6 +250,25 @@ preferences-pcb-dim-others = Dim other nets
 preferences-pcb-dim-others-help = While a net is highlighted, or while you route, drag, move or place copper, the copper of every other net is drawn this much fainter; the nets you are working on stay at full brightness. 0% leaves the board as it is, 100% hides the other copper.
 # Beside the slider: the dim amount, 0 to 100.
 preferences-pcb-dim-others-value = { $percent }%
+
+## An installed extension's page (#2495). { $extension } is the extension's
+## name.
+preferences-group-extensions = Extensions
+preferences-group-extensions-heading = EXTENSIONS
+preferences-extension-page = { $extension }
+preferences-extension-intro = The preferences { $extension } added. Their values are kept in prefs.json, under the extension's own keys.
+preferences-extension-section = PREFERENCES
+# A preference's key, as the extension named it.
+preferences-extension-key = { $key }
+# A preference's stored value, as JSON.
+preferences-extension-value = { $value }
+# The kind of value a preference holds.
+preferences-extension-type-text = Text
+preferences-extension-type-number = Number
+preferences-extension-type-switch = On or off
+preferences-extension-type-list = List
+preferences-extension-type-group = Group
+preferences-extension-type-empty = Empty
 
 ## Default Component Classes
 preferences-classes-title = Default Component Classes
@@ -339,9 +361,10 @@ preferences-language-footer-note = The language changes when you press Apply or 
 # Footer note on the Rule Profiles page (mockup row 148).
 preferences-rule-profiles-footer-note = Rule profiles save to their files at once.
 
-# Second line of the preferences-file banner. $path is the file; $error says
-# what is wrong with it, in English.
-preferences-file-where = { $path }: { $error }
+# Third line of the preferences-file banner, under the file's path (mockup
+# row 143). $error says what is wrong with the file, in English, starting
+# with a verb: "is not valid JSON: …", "could not be read: …".
+preferences-file-reason = The file { $error }.
 # Banner button: shows the folder that holds the preferences file.
 preferences-file-open-folder = Open folder
 # Messages line when Open folder fails. $path is the folder; $why is the
@@ -529,6 +552,24 @@ preferences-keymap-no-shortcut = —
 preferences-keymap-no-rows-in-filter = No shortcuts in this context.
 # Recorder popover, while keys are being captured.
 preferences-keymap-recording-live = ● Recording
+## keymap_assign / keymap_clear refusals (#2495). Each ends "nothing was changed".
+# $command is the command id given, $operand the operand it lacks.
+preferences-keymap-cmd-needs = { $command } needs the operand { $operand }; nothing was changed.
+# $command is the id given.
+preferences-keymap-cmd-unknown-command = { $command } is not a command of the catalog or of an installed extension; nothing was changed.
+# $keys is the key sequence given, $error why it does not read.
+preferences-keymap-cmd-bad-keys = { $keys } is not a key sequence ({ $error }); nothing was changed.
+# $context is the context given, $contexts the comma-separated list of the
+# context names a profile file uses (global, pcb, board_3d, …).
+preferences-keymap-cmd-bad-context = { $context } is not a shortcut context ({ $contexts }); nothing was changed.
+# $profile is the profile id given.
+preferences-keymap-cmd-no-profile = No keyboard profile is called { $profile }; nothing was changed.
+preferences-keymap-cmd-built-in = { $profile } is a built-in keyboard profile and stays read-only; copy it to a custom profile first (Create). Nothing was changed.
+# $error is why the file could not be read.
+preferences-keymap-cmd-file-not-loaded = The keyboard shortcuts file could not be loaded ({ $error }), so it is not written over; repair it, or save it from Preferences ▸ Keyboard shortcuts, first. Nothing was changed.
+# $error is the write error.
+preferences-keymap-cmd-not-saved = The keyboard shortcuts file could not be written ({ $error }); nothing was changed.
+preferences-keymap-cmd-page-unsaved = Preferences ▸ Keyboard shortcuts has unsaved changes; save or discard the keyboard changes in Preferences first. Nothing was changed.
 
 ## Component Classes page (Library ▸ Component Classes)
 # Placeholder of the filter field above the table.

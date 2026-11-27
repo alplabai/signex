@@ -36,7 +36,7 @@ impl Signex {
     /// has changed. Never reads the disk.
     pub(super) fn next_navigator_model(&mut self, mut previous: NavigatorModel) -> NavigatorModel {
         let Some((root, pages, fold, project_name)) = self.navigator_project_scope() else {
-            self.document_state.navigator_job.want(None);
+            self.document_view.navigator_job.want(None);
             return NavigatorModel::default();
         };
 
@@ -54,7 +54,7 @@ impl Signex {
 
         let fingerprint = self.navigator_fingerprint(&root, &pages, fold, &project_name);
         let stale = previous.fingerprint != fingerprint || previous.hierarchy.is_none();
-        self.document_state
+        self.document_view
             .navigator_job
             .want(stale.then_some(NavigatorRequest {
                 fingerprint,
@@ -70,8 +70,8 @@ impl Signex {
     /// Start the sheet assembly `refresh_panel_ctx` asked for, unless the
     /// wanted one is on screen or already running.
     pub(crate) fn start_navigator_assembly(&mut self) -> Option<Task<Message>> {
-        let applied = self.document_state.panel_ctx.navigator.fingerprint.clone();
-        let (generation, request) = self.document_state.navigator_job.begin(&applied)?;
+        let applied = self.document_view.panel_ctx.navigator.fingerprint.clone();
+        let (generation, request) = self.document_view.navigator_job.begin(&applied)?;
         let open = open_sheets_snapshot(&self.document_state);
         Some(Task::perform(
             async move {
@@ -93,18 +93,18 @@ impl Signex {
     /// never calls it, so `update` stays free of disk reads.
     #[doc(hidden)]
     pub fn settle_navigator(&mut self) {
-        self.document_state.navigator_job.abandon_running();
+        self.document_view.navigator_job.abandon_running();
         self.settle_window_hierarchies();
         while let Some((generation, request)) = {
-            let applied = self.document_state.panel_ctx.navigator.fingerprint.clone();
-            self.document_state.navigator_job.begin(&applied)
+            let applied = self.document_view.panel_ctx.navigator.fingerprint.clone();
+            self.document_view.navigator_job.begin(&applied)
         } {
             let open = open_sheets_snapshot(&self.document_state);
             let assembly = assemble_navigator(&open, request);
             // A follow-up it started runs inline as the next loop turn instead.
             let follow_up = self.handle_navigator_assembled(generation, Ok(Box::new(assembly)));
             if follow_up.units() > 0 {
-                self.document_state.navigator_job.abandon_running();
+                self.document_view.navigator_job.abandon_running();
             }
         }
     }
@@ -114,9 +114,9 @@ impl Signex {
     /// project, so anything that WRITES on the strength of it ("this sheet is
     /// placed once") must treat the walk as incomplete.
     pub(crate) fn navigator_is_settled(&self) -> bool {
-        self.document_state
+        self.document_view
             .navigator_job
-            .is_settled(&self.document_state.panel_ctx.navigator.fingerprint)
+            .is_settled(&self.document_view.panel_ctx.navigator.fingerprint)
     }
 
     /// An assembly landed: swap it in if it is still what the Navigator
@@ -127,7 +127,7 @@ impl Signex {
         assembly: Result<Box<NavigatorAssembly>, String>,
     ) -> Task<Message> {
         let fingerprint = assembly.as_ref().ok().map(|a| a.fingerprint.clone());
-        let current = self.document_state.navigator_job.finish(
+        let current = self.document_view.navigator_job.finish(
             generation,
             fingerprint.as_deref(),
             assembly.is_ok(),
@@ -140,7 +140,7 @@ impl Signex {
                     "Navigator: the sheet hierarchy could not be built ({reason}); \
                      it keeps its previous state until it is retried"
                 ));
-                if self.document_state.navigator_job.is_exhausted() {
+                if self.document_view.navigator_job.is_exhausted() {
                     crate::diagnostics::log_warning(
                         "Navigator: giving up on rebuilding the sheet hierarchy after repeated \
                          failures; it stays as it was until the project changes",
@@ -168,18 +168,22 @@ impl Signex {
             .tabs
             .get(self.document_state.active_tab)
             .map(|tab| tab.path.clone());
-        let navigator = &mut self.document_state.panel_ctx.navigator;
+        let navigator = &mut self.document_view.panel_ctx.navigator;
         navigator.replace_hierarchy(assembly.hierarchy, active.as_deref(), &open);
         navigator.numbers = assembly.numbers;
         navigator.fingerprint = assembly.fingerprint;
-        // The canvas designators are a function of the hierarchy's placements.
+        // The canvas designators are a function of the hierarchy's placements,
+        // and so are its not-fitted parts and the variant values (the part a
+        // value is set on).
         self.refresh_canvas_designators();
+        self.refresh_canvas_not_fitted();
+        self.refresh_all_variant_values();
         Task::none()
     }
 
     /// The Navigator's filter and empty-state buttons (Graphite mockup #54).
     pub(crate) fn handle_navigator_message(&mut self, msg: NavigatorMsg) -> Task<Message> {
-        let navigator = &mut self.document_state.panel_ctx.navigator;
+        let navigator = &mut self.document_view.panel_ctx.navigator;
         match msg {
             NavigatorMsg::FilterChanged(filter) => navigator.filter = filter,
             NavigatorMsg::FilterCleared => navigator.filter.clear(),
@@ -363,6 +367,7 @@ mod tests {
                 schematic_design: Default::default(),
                 fab_outputs: None,
                 router_tool_diameter: None,
+                bom_alternates: Vec::new(),
                 requirements: Default::default(),
                 parameters: Default::default(),
                 unknown: Default::default(),
@@ -386,7 +391,7 @@ mod tests {
     }
 
     fn wanted(app: &Signex) -> String {
-        app.document_state
+        app.document_view
             .navigator_job
             .wanted_fingerprint()
             .expect("a project is in view")
@@ -411,7 +416,7 @@ mod tests {
         let mut app = app_with_project();
         app.refresh_panel_ctx();
         assert!(
-            app.document_state.panel_ctx.navigator.hierarchy.is_none(),
+            app.document_view.panel_ctx.navigator.hierarchy.is_none(),
             "the refresh itself assembles nothing"
         );
         assert!(!app.navigator_is_settled());
@@ -424,10 +429,10 @@ mod tests {
             "not requested twice"
         );
 
-        let generation = app.document_state.navigator_job.latest_generation();
+        let generation = app.document_view.navigator_job.latest_generation();
         let fp = wanted(&app);
         let _ = app.handle_navigator_assembled(generation, Ok(assembly(&fp)));
-        let navigator = &app.document_state.panel_ctx.navigator;
+        let navigator = &app.document_view.panel_ctx.navigator;
         assert!(navigator.hierarchy.is_some());
         assert_eq!(navigator.fingerprint, fp);
         assert!(app.navigator_is_settled());
@@ -441,7 +446,7 @@ mod tests {
         app.refresh_panel_ctx();
         assert!(app.start_navigator_assembly().is_some());
         let (stale, stale_fp) = (
-            app.document_state.navigator_job.latest_generation(),
+            app.document_view.navigator_job.latest_generation(),
             wanted(&app),
         );
         add_page(&mut app, "T.snxsch");
@@ -451,20 +456,17 @@ mod tests {
         let next = app.handle_navigator_assembled(stale, Ok(assembly(&stale_fp)));
         assert_eq!(next.units(), 1, "the latest request starts");
         assert!(
-            app.document_state.panel_ctx.navigator.hierarchy.is_none(),
+            app.document_view.panel_ctx.navigator.hierarchy.is_none(),
             "the stale answer must not land"
         );
         assert_eq!(
-            app.document_state.navigator_job.latest_generation(),
+            app.document_view.navigator_job.latest_generation(),
             stale + 1,
             "the latest request started when the stale one landed"
         );
         let latest_fp = wanted(&app);
         let _ = app.handle_navigator_assembled(stale + 1, Ok(assembly(&latest_fp)));
-        assert_eq!(
-            app.document_state.panel_ctx.navigator.fingerprint,
-            latest_fp
-        );
+        assert_eq!(app.document_view.panel_ctx.navigator.fingerprint, latest_fp);
     }
 
     /// The project returns to the state already on screen while an assembly
@@ -474,14 +476,14 @@ mod tests {
         let mut app = app_with_project();
         app.refresh_panel_ctx();
         app.settle_navigator();
-        let on_screen = app.document_state.panel_ctx.navigator.fingerprint.clone();
+        let on_screen = app.document_view.panel_ctx.navigator.fingerprint.clone();
         assert!(!on_screen.is_empty());
 
         add_page(&mut app, "T.snxsch");
         app.refresh_panel_ctx();
         assert!(app.start_navigator_assembly().is_some());
         let (generation, intermediate) = (
-            app.document_state.navigator_job.latest_generation(),
+            app.document_view.navigator_job.latest_generation(),
             wanted(&app),
         );
         app.document_state.projects[0].data.sheets.pop();
@@ -490,10 +492,7 @@ mod tests {
         assert!(app.navigator_is_settled());
 
         let _ = app.handle_navigator_assembled(generation, Ok(assembly(&intermediate)));
-        assert_eq!(
-            app.document_state.panel_ctx.navigator.fingerprint,
-            on_screen
-        );
+        assert_eq!(app.document_view.panel_ctx.navigator.fingerprint, on_screen);
     }
 
     /// The project closes while its assembly runs: nothing may be installed.
@@ -503,7 +502,7 @@ mod tests {
         app.refresh_panel_ctx();
         assert!(app.start_navigator_assembly().is_some());
         let (generation, fp) = (
-            app.document_state.navigator_job.latest_generation(),
+            app.document_view.navigator_job.latest_generation(),
             wanted(&app),
         );
         app.document_state.projects.clear();
@@ -512,7 +511,7 @@ mod tests {
         assert!(app.start_navigator_assembly().is_none());
 
         let _ = app.handle_navigator_assembled(generation, Ok(assembly(&fp)));
-        assert!(app.document_state.panel_ctx.navigator.hierarchy.is_none());
+        assert!(app.document_view.panel_ctx.navigator.hierarchy.is_none());
         assert!(app.navigator_is_settled());
     }
 

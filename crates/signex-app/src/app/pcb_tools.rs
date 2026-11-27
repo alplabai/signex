@@ -2,6 +2,7 @@
 //! #2505). One table, so the PCB Active Bar and the Place menu on a board run
 //! the same command for each tool.
 
+use signex_engine::pcb::area::AreaKind;
 use signex_i18n::{MessageId, ids};
 use signex_types::pcb_dimension_kind::DimensionKind;
 use signex_types::pcb_graphic::BoardGraphicKind;
@@ -234,6 +235,18 @@ impl BoardPlaceTool {
             Self::FullCircle => BoardGraphicKind::Circle,
             Self::Rectangle => BoardGraphicKind::Rectangle,
             Self::TextFrame => BoardGraphicKind::TextFrame,
+            _ => return None,
+        })
+    }
+
+    /// The area an area tool adds; `None` for another tool.
+    pub(crate) fn area_kind(self) -> Option<AreaKind> {
+        Some(match self {
+            Self::Fill => AreaKind::Fill,
+            Self::SolidRegion => AreaKind::SolidRegion,
+            Self::PolygonPour => AreaKind::PolygonPour,
+            Self::Keepout => AreaKind::Keepout,
+            Self::PourCutout => AreaKind::PourCutout,
             _ => return None,
         })
     }

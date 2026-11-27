@@ -148,6 +148,7 @@ define_ids! {
     PCB_BOARD_GRID_ORIGIN_Y = "pcb-board-grid-origin-y";
     PCB_BOARD_GRID_NEW_NAME = "pcb-board-grid-new-name";
     PCB_BOARD_OPTIONS_UNDO = "pcb-board-options-undo";
+    PCB_BOARD_LAYOUT_PLAN_UNDO = "pcb-board-layout-plan-undo";
     PCB_BOARD_OPTIONS_REFUSED = "pcb-board-options-refused";
     PCB_BOARD_TEARDROP_RULE_UNDO = "pcb-board-teardrop-rule-undo";
     PCB_BOARD_PAD_TEARDROP_UNDO = "pcb-board-pad-teardrop-undo";
@@ -174,4 +175,5 @@ define_ids! {
     PCB_BOARD_GUIDE_GLYPH_HORIZONTAL = "pcb-board-guide-glyph-horizontal";
     PCB_BOARD_GUIDE_GLYPH_PLUS45 = "pcb-board-guide-glyph-plus45";
     PCB_BOARD_GUIDE_GLYPH_MINUS45 = "pcb-board-guide-glyph-minus45";
+    PCB_BOARD_LAYOUT_PLAN_REFUSED = "pcb-board-layout-plan-refused";
 }

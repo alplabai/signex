@@ -106,7 +106,7 @@ impl Signex {
     /// repaints its own selection. This repaints only: it does not touch the
     /// tool or the placement in progress.
     fn after_board_change(&mut self, path: &Path) {
-        let polygons = &mut self.document_state.panel_ctx.pcb_panel.polygons;
+        let polygons = &mut self.document_view.panel_ctx.pcb_panel.polygons;
         polygons.drop_drafts_of(path);
         let active = self.active_tab_path().as_deref() == Some(path);
         if active {
@@ -117,16 +117,16 @@ impl Signex {
             canvas.clear_content_cache();
             self.sync_panel_ctx_from_visible_document();
             self.refresh_pcb_layers_panel();
-            self.document_state.panel_ctx.pcb_nets = self.pcb_nets_summary();
-            self.document_state.panel_ctx.layer_stack = self.layer_stack_facts();
+            self.document_view.panel_ctx.pcb_nets = self.pcb_nets_summary();
+            self.document_view.panel_ctx.layer_stack = self.layer_stack_facts();
             self.refresh_polygon_facts();
-            self.document_state.panel_ctx.length_matching = self.length_matching_facts();
+            self.document_view.panel_ctx.length_matching = self.length_matching_facts();
         } else {
             self.repaint_undocked_boards(path);
         }
         // The DRC panel says its results are stale as soon as the board
         // changes (#2399).
-        self.document_state.panel_ctx.pcb_drc = self.pcb_drc_panel();
+        self.document_view.panel_ctx.pcb_drc = self.pcb_drc_panel();
         // The undocked windows' selections follow the new geometry too (#2240).
         self.refresh_undocked_pcb_highlights(path);
         // So do the panels of a window showing this board (net table, Layer

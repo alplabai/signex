@@ -14,6 +14,9 @@ mod history_repo;
 mod label_class_pick;
 pub(super) mod navigator_ctx;
 pub(in crate::app) mod net_class_styles;
+mod not_fitted;
+#[cfg(test)]
+mod not_fitted_tests;
 mod panel_ctx;
 mod pin_focus;
 mod placed_ctx;
@@ -25,6 +28,9 @@ mod sheet_tree;
 pub(crate) mod sheet_tree_tests;
 mod symbol_ctx;
 mod value_evaluation;
+mod variant_values;
+#[cfg(test)]
+mod variant_values_tests;
 mod window_panel_ctx;
 pub(crate) use window_panel_ctx::WindowCtxKey;
 #[cfg(test)]
@@ -47,18 +53,18 @@ impl Signex {
     /// context. Runs on the idle-cursor DragMove path, so the recent list is
     /// compared first and cloned only when it changed.
     pub(in crate::app) fn sync_panel_ctx_mirrors(&mut self) {
-        self.document_state.panel_ctx.selection_filter.rename = self.filter_preset_rename();
-        self.document_state.panel_ctx.selection_filter.editing = self.edited_custom_filter();
+        self.document_view.panel_ctx.selection_filter.rename = self.filter_preset_rename();
+        self.document_view.panel_ctx.selection_filter.editing = self.edited_custom_filter();
         let recent = crate::start_screen::visible_recent(self.ui_state.recent_projects.entries());
-        if self.document_state.panel_ctx.recent_projects.as_slice() != recent {
-            self.document_state.panel_ctx.recent_projects = recent.to_vec();
+        if self.document_view.panel_ctx.recent_projects.as_slice() != recent {
+            self.document_view.panel_ctx.recent_projects = recent.to_vec();
         }
-        self.document_state.panel_ctx.unit = self.ui_state.unit;
-        self.document_state.panel_ctx.grid_visible = self.ui_state.grid_visible;
-        self.document_state.panel_ctx.snap_enabled = self.ui_state.snap_enabled;
-        self.document_state.panel_ctx.grid_size_mm = self.ui_state.grid_size_mm;
-        self.document_state.panel_ctx.visible_grid_mm = self.ui_state.visible_grid_mm;
-        self.document_state.panel_ctx.snap_hotspots = self.ui_state.snap_hotspots;
+        self.document_view.panel_ctx.unit = self.ui_state.unit;
+        self.document_view.panel_ctx.grid_visible = self.ui_state.grid_visible;
+        self.document_view.panel_ctx.snap_enabled = self.ui_state.snap_enabled;
+        self.document_view.panel_ctx.grid_size_mm = self.ui_state.grid_size_mm;
+        self.document_view.panel_ctx.visible_grid_mm = self.ui_state.visible_grid_mm;
+        self.document_view.panel_ctx.snap_hotspots = self.ui_state.snap_hotspots;
         let (visible, visible_grid_mm) = (
             self.ui_state.grid_visible,
             self.ui_state.visible_grid_mm as f64,
@@ -87,9 +93,9 @@ impl Signex {
             canvas.wheel_mode = wheel_mode;
         }
         for editor in self.document_state.symbol_editors.values_mut() {
-            editor.zoom_step = zoom_step;
-            editor.trackpad_pan = trackpad_pan;
-            editor.wheel_mode = wheel_mode;
+            editor.gui.zoom_step = zoom_step;
+            editor.gui.trackpad_pan = trackpad_pan;
+            editor.gui.wheel_mode = wheel_mode;
         }
         for editor in self.document_state.footprint_editors.values_mut() {
             editor.zoom_step = zoom_step;
@@ -180,12 +186,12 @@ impl Signex {
     /// emit is on screen in the same frame rather than whenever some
     /// unrelated later message happens to run `finish_update`.
     pub(in crate::app) fn sync_diagnostics_panel_ctx(&mut self) {
-        self.document_state.panel_ctx.diagnostics_level =
+        self.document_view.panel_ctx.diagnostics_level =
             crate::diagnostics::configured_level_label().to_string();
         // Ids are monotonic and eviction only happens on push, so an
         // unchanged newest id means the ring is unchanged: skip the clone.
         let held = self
-            .document_state
+            .document_view
             .panel_ctx
             .diagnostics
             .last()
@@ -193,14 +199,14 @@ impl Signex {
         if held.is_some() && held == crate::diagnostics::newest_entry_id() {
             return;
         }
-        self.document_state.panel_ctx.diagnostics = crate::diagnostics::recent_entries();
+        self.document_view.panel_ctx.diagnostics = crate::diagnostics::recent_entries();
     }
 
     pub(crate) fn sync_active_tab(&mut self) {
         // A tab switch ends every Project tab's typing run: what is typed
         // after coming back is its own undo step.
-        for tab in self.document_state.project_tabs.values_mut() {
-            tab.general_history.close_run();
+        for history in self.document_state.general_history.values_mut() {
+            history.close_run();
         }
         // Follow the focused tab into its project: the Projects-panel
         // accent and active_project-scoped handlers (ERC / annotate /
@@ -296,36 +302,36 @@ impl Signex {
         self.sync_placed_panel();
         self.refresh_directive_panel();
         self.sync_sheet_symbol_repeat_view();
-        self.document_state.panel_ctx.selection_form.kinds =
+        self.document_view.panel_ctx.selection_form.kinds =
             crate::panels::SelectionKinds::of(&self.interaction_state.active_canvas().selected);
         let selected = &self.interaction_state.active_canvas_mut().selected;
-        self.document_state.panel_ctx.selection_count = selected.len();
-        self.document_state.panel_ctx.selection_info.clear();
-        self.document_state.panel_ctx.symbol_choices.clear();
-        self.document_state.panel_ctx.footprint_choices.clear();
-        self.document_state.panel_ctx.footprint_card = None;
-        self.document_state.panel_ctx.selected_uuid = None;
-        self.document_state.panel_ctx.selected_kind = None;
-        self.document_state.panel_ctx.selected_drawing = None;
-        self.document_state.panel_ctx.selected_drawing_placement = Default::default();
-        self.document_state.panel_ctx.selected_child_sheet = None;
-        self.document_state.panel_ctx.selected_child_sheet_file = None;
-        self.document_state.panel_ctx.selected_wire_style = None;
-        self.document_state.panel_ctx.multi_draft = None;
-        self.document_state.panel_ctx.multi_groups = match self.document_state.active_engine() {
+        self.document_view.panel_ctx.selection_count = selected.len();
+        self.document_view.panel_ctx.selection_info.clear();
+        self.document_view.panel_ctx.symbol_choices.clear();
+        self.document_view.panel_ctx.footprint_choices.clear();
+        self.document_view.panel_ctx.footprint_card = None;
+        self.document_view.panel_ctx.selected_uuid = None;
+        self.document_view.panel_ctx.selected_kind = None;
+        self.document_view.panel_ctx.selected_drawing = None;
+        self.document_view.panel_ctx.selected_drawing_placement = Default::default();
+        self.document_view.panel_ctx.selected_child_sheet = None;
+        self.document_view.panel_ctx.selected_child_sheet_file = None;
+        self.document_view.panel_ctx.selected_wire_style = None;
+        self.document_view.panel_ctx.multi_draft = None;
+        self.document_view.panel_ctx.multi_groups = match self.document_state.active_engine() {
             Some(engine) if selected.len() > 1 => {
                 signex_engine::selection_groups(engine.document(), selected)
             }
             _ => Default::default(),
         };
         let selected_items = selected.clone();
-        self.document_state.panel_ctx.multi_footprint_choices =
+        self.document_view.panel_ctx.multi_footprint_choices =
             self.common_footprint_choices(&selected_items);
         let selected = &self.interaction_state.active_canvas_mut().selected;
 
         if selected.len() != 1 {
             if !selected.is_empty() {
-                self.document_state
+                self.document_view
                     .panel_ctx
                     .selection_info
                     .push(("Selected".into(), format!("{} items", selected.len())));
@@ -342,9 +348,9 @@ impl Signex {
             && let Some(engine) = self.document_state.engines.get(&path)
             && let Some(details) = engine.describe_single_selection(selected)
         {
-            self.document_state.panel_ctx.selected_uuid = Some(details.selected_uuid);
-            self.document_state.panel_ctx.selected_kind = Some(details.selected_kind);
-            self.document_state.panel_ctx.selection_info = details.info;
+            self.document_view.panel_ctx.selected_uuid = Some(details.selected_uuid);
+            self.document_view.panel_ctx.selected_kind = Some(details.selected_kind);
+            self.document_view.panel_ctx.selection_info = details.info;
             // An `=` value's result or error, under its row (#1986).
             let project = self
                 .document_state
@@ -357,16 +363,16 @@ impl Signex {
                 &project,
                 self.document_state.designator_standard_for(&path),
             );
-            self.document_state.panel_ctx.selection_info.extend(rows);
-            self.document_state.panel_ctx.selected_wire_style = run_style::of_selected(
+            self.document_view.panel_ctx.selection_info.extend(rows);
+            self.document_view.panel_ctx.selected_wire_style = run_style::of_selected(
                 engine.document(),
                 details.selected_kind,
                 details.selected_uuid,
             );
-            let pins = pin_focus::pin_keys(&self.document_state.panel_ctx.selection_info);
+            let pins = pin_focus::pin_keys(&self.document_view.panel_ctx.selection_info);
             let nets = self.pin_net_names(&path, details.selected_uuid, &pins);
             pin_focus::add_pin_rows(
-                &mut self.document_state.panel_ctx.selection_info,
+                &mut self.document_view.panel_ctx.selection_info,
                 details.selected_uuid,
                 clicked_pin,
                 nets,
@@ -381,7 +387,7 @@ impl Signex {
             {
                 let is_ref_field =
                     details.selected_kind == signex_types::schematic::SelectedKind::SymbolRefField;
-                for (key, value) in &mut self.document_state.panel_ctx.selection_info {
+                for (key, value) in &mut self.document_view.panel_ctx.selection_info {
                     use signex_engine::info_keys;
                     if key == info_keys::REFERENCE || (is_ref_field && key == info_keys::TEXT) {
                         value.clone_from(designator);
@@ -396,7 +402,7 @@ impl Signex {
                 .find(|s| s.uuid == details.selected_uuid)
                 .map(|s| self.symbol_choices_for(s))
                 .unwrap_or_default();
-            self.document_state.panel_ctx.symbol_choices = choices;
+            self.document_view.panel_ctx.symbol_choices = choices;
             // The footprints it can be built with (#1234).
             let footprints = engine
                 .document()
@@ -405,10 +411,10 @@ impl Signex {
                 .find(|s| s.uuid == details.selected_uuid)
                 .map(|s| self.footprint_choices_for(s))
                 .unwrap_or_default();
-            self.document_state.panel_ctx.footprint_choices = footprints;
+            self.document_view.panel_ctx.footprint_choices = footprints;
             // Library name + drift for a placed library symbol (#912).
             if let Some(lib_id) = self
-                .document_state
+                .document_view
                 .panel_ctx
                 .selection_info
                 .iter()
@@ -417,13 +423,13 @@ impl Signex {
             {
                 let drift = &self.library.drift;
                 if let Some(name) = drift.names.get(&lib_id) {
-                    self.document_state
+                    self.document_view
                         .panel_ctx
                         .selection_info
                         .push(("Library".into(), name.clone()));
                 }
                 if drift.is_drifted(&path, &lib_id) {
-                    self.document_state
+                    self.document_view
                         .panel_ctx
                         .selection_info
                         .push(("Library Drift".into(), "Yes".into()));
@@ -436,7 +442,7 @@ impl Signex {
                         .filter(|s| s.lib_id == lib_id && drift.is_stale_body(&path, s.body_key()))
                         .count();
                     if older > 0 {
-                        self.document_state
+                        self.document_view
                             .panel_ctx
                             .selection_info
                             .push(("Library Older Version".into(), older.to_string()));
@@ -452,7 +458,7 @@ impl Signex {
                                 .filter(|s| part.contains(&s.uuid))
                                 .all(|s| !drift.is_stale_body(&path, s.body_key()));
                         if this_current {
-                            self.document_state
+                            self.document_view
                                 .panel_ctx
                                 .selection_info
                                 .push(("Library This One Current".into(), "Yes".into()));
@@ -460,13 +466,13 @@ impl Signex {
                     }
                 }
                 if drift.is_missing(&path, &lib_id) {
-                    self.document_state
+                    self.document_view
                         .panel_ctx
                         .selection_info
                         .push(("Library Status".into(), "Symbol missing".into()));
                 }
             }
-            self.document_state
+            self.document_view
                 .panel_ctx
                 .selection_info
                 .extend(body_style_info::body_style_info(
@@ -491,7 +497,7 @@ impl Signex {
                 )
                 .into_iter()
                 .filter(|(_, value)| value != own);
-                self.document_state.panel_ctx.selection_info.extend(rows);
+                self.document_view.panel_ctx.selection_info.extend(rows);
             }
             // Cache the live SchDrawing for the Properties preview
             // widget — only when the single selection is a drawing.
@@ -499,9 +505,9 @@ impl Signex {
                 details.selected_kind,
                 signex_types::schematic::SelectedKind::Drawing
             ) {
-                self.document_state.panel_ctx.selected_drawing_placement =
+                self.document_view.panel_ctx.selected_drawing_placement =
                     engine.document().drawing_placement(details.selected_uuid);
-                self.document_state.panel_ctx.selected_drawing = engine
+                self.document_view.panel_ctx.selected_drawing = engine
                     .document()
                     .drawings
                     .iter()
@@ -518,13 +524,13 @@ impl Signex {
                     .iter()
                     .find(|cs| cs.uuid == details.selected_uuid)
                     .cloned();
-                self.document_state.panel_ctx.selected_child_sheet_file = sheet
+                self.document_view.panel_ctx.selected_child_sheet_file = sheet
                     .as_ref()
                     .and_then(|sheet| Self::child_sheet_file(&path, &sheet.filename));
-                self.document_state.panel_ctx.selected_child_sheet = sheet;
+                self.document_view.panel_ctx.selected_child_sheet = sheet;
             }
         }
-        self.document_state.panel_ctx.footprint_card = self.resolve_footprint_card();
+        self.document_view.panel_ctx.footprint_card = self.resolve_footprint_card();
         self.refresh_harness_panel();
     }
 
@@ -559,9 +565,9 @@ impl Signex {
     /// writes both fields, so tokens and icon tint cannot drift apart.
     pub(crate) fn sync_panel_theme(&mut self) {
         let (tokens, theme_id) = self.panel_theme();
-        self.document_state.panel_ctx.tokens = tokens;
-        self.document_state.panel_ctx.theme_id = theme_id;
-        self.document_state.panel_ctx.canvas_colors = self.canvas_colors_for(theme_id);
+        self.document_view.panel_ctx.tokens = tokens;
+        self.document_view.panel_ctx.theme_id = theme_id;
+        self.document_view.panel_ctx.canvas_colors = self.canvas_colors_for(theme_id);
     }
 
     /// The schematic's visible grid, for the symbol previews. Read from the
@@ -665,7 +671,7 @@ impl Signex {
                     .sheet_path_for_window(window, &self.ui_state)
                     .map(std::path::PathBuf::as_path),
             ),
-            annotation_flags: self.annotation_flag_view(
+            notebook_badges: self.notebook_badge_view(
                 self.document_state
                     .sheet_path_for_window(window, &self.ui_state)
                     .map(std::path::PathBuf::as_path),
@@ -692,7 +698,7 @@ impl Signex {
             canvas.clear_content_cache();
         }
         for editor in self.document_state.symbol_editors.values_mut() {
-            editor.canvas_cache.clear();
+            editor.gui.canvas_cache.clear();
         }
         for editor in self.document_state.footprint_editors.values_mut() {
             editor.canvas_cache.clear();
@@ -777,9 +783,9 @@ mod tests {
                 crate::render_config::to_iced(&want.paper)
             );
             // Chrome and panel context follow the theme too.
-            let tokens = &app.document_state.panel_ctx.tokens;
+            let tokens = &app.document_view.panel_ctx.tokens;
             assert_eq!(*tokens, theme_tokens(id), "{id:?}");
-            assert_eq!(app.document_state.panel_ctx.canvas_colors, want, "{id:?}");
+            assert_eq!(app.document_view.panel_ctx.canvas_colors, want, "{id:?}");
             // Board views: the dark board palette, whichever theme is on.
             let pcb = &app.interaction_state.pcb_canvas;
             assert_eq!(pcb.canvas_colors, board, "{id:?}");

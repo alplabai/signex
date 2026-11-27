@@ -51,7 +51,7 @@ impl Signex {
         };
 
         let (mut ctx, issues) =
-            match super::build_page_scope_for_source(&self.document_state, &source) {
+            match super::build_export_scope_for_source(&self.document_state, &source) {
                 Some(c) => c,
                 None => {
                     self.refuse_export(
@@ -70,6 +70,7 @@ impl Signex {
         options.net_class_styles =
             super::class_styles::export_class_styles(&self.document_state, &source, &ctx);
         options.schematic_defaults = self.document_state.schematic_defaults_for(&source);
+        options.draw_not_fitted = self.ui_state.cross_out_not_fitted;
         // Human-consumed deliverable: a partial PDF beats a refusal — the
         // user may well be printing or reviewing mid-refactor with a child
         // file genuinely absent from disk. So this degrades rather than
@@ -201,7 +202,7 @@ impl Signex {
             // the omitted-page warning then always describe the same project
             // state, even if the document changes while the prompt is up (#431
             // review).
-            self.document_state.netlist_incomplete_prompt =
+            self.document_view.netlist_incomplete_prompt =
                 Some(crate::app::state::NetlistIncompletePrompt {
                     save_path,
                     messages: issues.messages(),
@@ -246,7 +247,7 @@ impl Signex {
     /// one per line) in the Messages panel and the log, so a partial `.net`
     /// never reaches disk without the user having been told.
     pub(crate) fn handle_netlist_export_anyway(&mut self) -> Task<Message> {
-        let Some(prompt) = self.document_state.netlist_incomplete_prompt.take() else {
+        let Some(prompt) = self.document_view.netlist_incomplete_prompt.take() else {
             return Task::none();
         };
         let save_path = prompt.save_path;
@@ -299,7 +300,7 @@ impl Signex {
     /// #431 — "Cancel" on the netlist-incomplete prompt (or click-outside).
     /// Writes nothing; just clears the pending prompt.
     pub(crate) fn handle_netlist_cancel_incomplete(&mut self) {
-        self.document_state.netlist_incomplete_prompt = None;
+        self.document_view.netlist_incomplete_prompt = None;
     }
 }
 

@@ -1,0 +1,38 @@
+{
+  "active_variant": null,
+  "dir": "",
+  "enable_git": false,
+  "format": "snxprj/1",
+  "libraries": [],
+  "name": "net-class-directives",
+  "net_classes": [
+    {
+      "name": "POWER"
+    },
+    {
+      "name": "HS"
+    }
+  ],
+  "pcb_file": "net-class-directives.snxpcb",
+  "schematic_design": {
+    "diff_pair_classes": [
+      {
+        "gap_mm": 0.15,
+        "impedance_ohm": 90.0,
+        "name": "USB",
+        "width_mm": 0.2
+      }
+    ]
+  },
+  "schematic_root": "main.snxsch",
+  "sheets": [
+    {
+      "filename": "main.snxsch",
+      "labels_count": 0,
+      "name": "main.snxsch",
+      "symbols_count": 0,
+      "wires_count": 0
+    }
+  ],
+  "variant_definitions": []
+}

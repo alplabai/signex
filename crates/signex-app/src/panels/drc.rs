@@ -141,7 +141,13 @@ pub(crate) fn row_text(i18n: &I18n, row: &DrcRow) -> (Localized, Localized, Loca
         | ViolationKind::ViaInPad
         | ViolationKind::SilkToPad
         | ViolationKind::SilkToSilk
-        | ViolationKind::CourtyardOverlap => gap(),
+        | ViolationKind::CourtyardOverlap
+        | ViolationKind::BodyClearance => gap(),
+        // #2939: how tall the part is.
+        ViolationKind::ComponentHeight => t!(
+            i18n, ids::DRC_DETAIL_HEIGHT,
+            "measured" => row.measured_mm.clone(), "required" => row.required_mm.clone()
+        ),
         // #2457: how far past the room's margin.
         ViolationKind::PartOutsideRoom => t!(
             i18n, ids::ROOMS_DRC_DETAIL,
@@ -183,6 +189,8 @@ pub(super) fn kind_label(kind: ViolationKind) -> signex_i18n::MessageId {
         ViolationKind::PasteExpansion => ids::DRC_KIND_PASTE_EXPANSION,
         ViolationKind::CourtyardOverlap => ids::DRC_KIND_COURTYARD,
         ViolationKind::PartOutsideRoom => ids::ROOMS_DRC_KIND,
+        ViolationKind::ComponentHeight => ids::DRC_KIND_COMPONENT_HEIGHT,
+        ViolationKind::BodyClearance => ids::DRC_KIND_BODY_CLEARANCE,
     }
 }
 
@@ -194,7 +202,7 @@ mod tests {
 
     fn context(running: bool) -> PanelContext {
         let (app, _boot) = crate::app::Signex::new();
-        let mut ctx = app.document_state.panel_ctx.clone();
+        let mut ctx = app.document_view.panel_ctx.clone();
         ctx.pcb_drc = Some(DrcPanel {
             running,
             ..DrcPanel::default()

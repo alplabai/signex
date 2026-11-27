@@ -15,110 +15,10 @@ const OUTLINE_MM: f32 = signex_types::schematic::SCHEMATIC_NO_CONNECT_STROKE_MM 
 /// a click inside the region still reaches what it covers.
 const EDGE_HIT_MM: f64 = 0.5;
 
-/// Flag text height, line pitch, inner margin and stem, in mm.
-const FLAG_TEXT_MM: f64 = 1.27;
-const FLAG_LINE_MM: f64 = 1.9;
-const FLAG_PAD_MM: f64 = 0.7;
-const FLAG_STEM_MM: f64 = 3.81;
-/// The advance of one flag character, generous so the box always holds its
-/// text (both mockup flags were narrower than their text).
-const FLAG_CHAR_MM: f64 = FLAG_TEXT_MM * 0.66;
-/// How far below a Net Blanket its class flag sits, clear of the edge.
-const BLANKET_FLAG_GAP_MM: f64 = 2.54;
-
-/// A directive's flag: its box, the stem from the directive to it, and its
-/// lines. Fixed English, like every sheet output (DECISIONS 2026-11-07).
-#[derive(Debug, Clone, PartialEq)]
-pub(super) struct Flag {
-    pub rect: Aabb,
-    pub stem: Option<(Point, Point)>,
-    pub lines: Vec<String>,
-}
-
-/// `value` mm without trailing zeros.
-fn mm(value: f64) -> String {
-    let text = format!("{value:.3}");
-    text.trim_end_matches('0').trim_end_matches('.').to_string()
-}
-
-/// The lines a directive's flag shows; empty when it has no flag.
-pub(super) fn flag_lines(directive: &SchDirective) -> Vec<String> {
-    match directive {
-        SchDirective::NetParameters {
-            rules,
-            show_on_flag,
-            ..
-        } => {
-            let mut lines = vec![match directive.net_class() {
-                Some(class) => format!("Net Class = {class}"),
-                None => "Net Parameters".to_string(),
-            }];
-            if *show_on_flag {
-                let mut sizes = Vec::new();
-                if let Some(w) = rules.width_mm {
-                    sizes.push(format!("Width {} mm", mm(w)));
-                }
-                if let Some(c) = rules.clearance_mm {
-                    sizes.push(format!("Clr {} mm", mm(c)));
-                }
-                if !sizes.is_empty() {
-                    lines.push(sizes.join(" · "));
-                }
-                if let (Some(d), Some(h)) = (rules.via_diameter_mm, rules.via_hole_mm) {
-                    lines.push(format!("Via {} / {} mm", mm(d), mm(h)));
-                }
-                if let Some(pair) = directive.diff_pair_class() {
-                    lines.push(format!("Diff Pair · {pair}"));
-                }
-            }
-            lines
-        }
-        SchDirective::Blanket { .. } => directive
-            .net_class()
-            .map(|class| vec![format!("Net Class = {class}")])
-            .unwrap_or_default(),
-        SchDirective::DiffPair { .. } => directive
-            .diff_pair_class()
-            .map(|class| vec![format!("Diff Pair · {class}")])
-            .unwrap_or_default(),
-        SchDirective::CompileMask { .. } => Vec::new(),
-    }
-}
-
-/// The flag of `directive`, sized to its text; `None` when it has none.
-pub(super) fn flag(directive: &SchDirective) -> Option<Flag> {
-    let lines = flag_lines(directive);
-    let longest = lines.iter().map(|l| l.chars().count()).max()?;
-    let w = longest as f64 * FLAG_CHAR_MM + 2.0 * FLAG_PAD_MM;
-    let h = lines.len() as f64 * FLAG_LINE_MM + 2.0 * FLAG_PAD_MM;
-    let at = directive.anchor();
-    let (rect, stem) = match directive {
-        // Above the wire, on a stem.
-        SchDirective::NetParameters { .. } => {
-            let bottom = at.y - FLAG_STEM_MM;
-            (
-                Aabb::new(at.x, bottom - h, at.x + w, bottom),
-                Some((at, Point::new(at.x, bottom))),
-            )
-        }
-        // Below the pair, on a stem.
-        SchDirective::DiffPair { .. } => {
-            let top = at.y + FLAG_STEM_MM;
-            (
-                Aabb::new(at.x, top, at.x + w, top + h),
-                Some((at, Point::new(at.x, top))),
-            )
-        }
-        // Under the outline's right end, clear of its edge.
-        SchDirective::Blanket { .. } => {
-            let r = directive.region()?;
-            let top = r.max_y + BLANKET_FLAG_GAP_MM;
-            (Aabb::new(r.max_x - w, top, r.max_x, top + h), None)
-        }
-        SchDirective::CompileMask { .. } => return None,
-    };
-    Some(Flag { rect, stem, lines })
-}
+// The flag's lines and box are shared with the exports (`signex-types`,
+// `directive_flag`), so the canvas and the paper draw one flag.
+pub(super) use signex_types::schematic::directive_flag as flag;
+use signex_types::schematic::{DIRECTIVE_FLAG_TEXT_MM, directive_flag_line_origin};
 
 /// Append the strokes of every directive in view to `wires`, with the
 /// dash pattern of a region outline in `line_styles`.
@@ -196,14 +96,12 @@ pub(super) fn push_flag_texts(
             focus_set,
             directive.uuid(),
         ));
-        for (i, line) in flag.lines.into_iter().enumerate() {
+        for (i, line) in flag.lines.iter().enumerate() {
+            let at = directive_flag_line_origin(&flag, i);
             texts.push(TextInput {
-                content: line,
-                position: [
-                    (flag.rect.min_x + FLAG_PAD_MM) as f32,
-                    (flag.rect.min_y + FLAG_PAD_MM + i as f64 * FLAG_LINE_MM) as f32,
-                ],
-                size_mm: FLAG_TEXT_MM as f32,
+                content: line.clone(),
+                position: [at.x as f32, at.y as f32],
+                size_mm: DIRECTIVE_FLAG_TEXT_MM as f32,
                 color,
                 bold: i == 0,
                 italic: false,

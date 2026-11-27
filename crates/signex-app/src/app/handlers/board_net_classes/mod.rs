@@ -288,7 +288,7 @@ impl Signex {
     /// Show the panel state of `board` in the view of the board in view.
     fn mirror_board_net_class_state(&mut self, board: &Path) {
         let (draft, notice) = self.interaction_state.board_net_classes.of(board);
-        if let Some(view) = self.document_state.panel_ctx.net_classes.board.as_mut() {
+        if let Some(view) = self.document_view.panel_ctx.net_classes.board.as_mut() {
             view.draft = draft;
             view.notice = notice;
         }

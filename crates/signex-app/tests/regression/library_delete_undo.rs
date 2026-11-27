@@ -61,6 +61,7 @@ fn fp_names(app: &Signex, path: &Path) -> Vec<String> {
 fn sym_summary(app: &Signex, path: &Path) -> Vec<(String, usize)> {
     let editor = &app.document_state.symbol_editors[path];
     editor
+        .draft
         .file
         .symbols
         .iter()

@@ -70,7 +70,7 @@ fn the_dialog_names_the_symbols_and_messages_names_the_parents_left_dangling() {
 
     assert!(!tmp.path().join("child.snxsch").exists());
     let said = app
-        .document_state
+        .document_view
         .panel_ctx
         .diagnostics
         .iter()

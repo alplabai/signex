@@ -38,7 +38,8 @@ impl DateWindow {
 /// The filters of an annotation list. The default shows everything.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
 pub struct Filter {
-    /// Text the title, the snippet or a reference must contain, any case.
+    /// Text the title, the typed id, the snippet or a reference must
+    /// contain, any case.
     pub query: String,
     /// Kinds left out.
     pub hidden_kinds: BTreeSet<AnnotationKind>,
@@ -79,6 +80,10 @@ impl Filter {
         }
         let has = |text: &str| text.to_lowercase().contains(&needle);
         has(&annotation.title)
+            || annotation
+                .id
+                .as_ref()
+                .is_some_and(|id| has(&id.to_string()))
             || has(&annotation.snippet)
             || annotation.references.iter().any(|r| has(&r.name()))
     }

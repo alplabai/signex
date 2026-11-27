@@ -146,6 +146,7 @@ pub(crate) fn push_project(app: &mut Signex, dir: &Path, name: &str) {
             schematic_design: Default::default(),
             fab_outputs: None,
             router_tool_diameter: None,
+            bom_alternates: Vec::new(),
             requirements: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
@@ -252,7 +253,7 @@ fn quit_save_all_never_loses_a_row_it_cannot_save() {
         Message::Project(ProjectMsg::AppQuitConfirm(ProjectCloseChoice::SaveAll)),
     );
 
-    assert!(app.document_state.error_notice.is_some());
+    assert!(app.document_view.error_notice.is_some());
     assert!(app.library.editors.values().all(|s| s.dirty));
 }
 
@@ -290,7 +291,7 @@ fn project_close_save_all_keeps_the_project_when_a_row_cannot_be_saved() {
     );
 
     assert_eq!(app.document_state.projects.len(), 1, "project stays open");
-    assert!(app.document_state.error_notice.is_some());
+    assert!(app.document_view.error_notice.is_some());
     assert!(app.library.editors.values().all(|s| s.dirty));
 }
 

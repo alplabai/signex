@@ -491,12 +491,18 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         // #1667: the file rows place onto the sheet in view.
         | "place_design_block"
         | "import_graphics"
+        // #1283: a snippet is saved from, or placed onto, the sheet in view.
+        | "save_snippet"
+        | "place_snippet"
         // #1276: a sheet symbol lands on, or is synced from, the sheet in
         // view; with no sheet symbol selected the sync says what to select.
         | "create_sheet_symbol_from_sheet"
         | "sync_sheet_entries"
         // The table lists the active sheet's symbols.
         | "open_parameter_manager"
+        // #1295: the table's CSV, of and into the active sheet.
+        | "export_parameters"
+        | "import_parameters"
         // Lists the parts of the active schematic's project.
         | "assign_footprints"
         // Dots the bare pin touches of the sheet in view.
@@ -584,6 +590,10 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         "add_board_graphic" | "set_board_graphic" => Needs::Pcb,
         // #2368: a footprint text on the board `document` names.
         "set_footprint_text" => Needs::Pcb,
+        // #2936: a footprint placed by id on the board `document` names.
+        "set_footprint_position" | "set_footprint_rotation" | "set_footprint_side" => Needs::Pcb,
+        // #2937: a part's footprint on the sheet `document` names.
+        "assign_footprint" => Needs::Schematic,
         // #2389: length tuning of the selected tracks' nets.
         "tune_net_length" | "tune_diff_pair" => Needs::Pcb,
         // #2585, #2797: a pair's width and the board's length-matching groups.
@@ -617,12 +627,22 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         // #2462: gated like Update PCB.
         "compare_board_with_schematic" => Needs::PcbSync,
         "new_pcb_document" | "new_schematic_sheet" | "open_rules" => Needs::OpenProject,
+        // #2796: the diagram goes in the project's folder.
+        "new_block_diagram" => Needs::OpenProject,
         // #1282: the class dialog edits the project.
         "open_diff_pair_classes" => Needs::OpenProject,
         // #2908: a copy of the project in a new folder.
         "save_project_as" => Needs::OpenProject,
+        // The project's Design Notebook (mockup rows 195, 201, 202), and its
+        // badges on a sheet (row 197).
+        "open_design_notebook" | "generate_design_notebook" | "export_notebook_pdf" => {
+            Needs::OpenProject
+        }
+        "toggle_notebook_badges" => Needs::Schematic,
         // #2457: the dialog reads the sheets of the board's project.
         "create_rooms_from_sheets" => Needs::PcbInProject,
+        // #2457, #2941: they move parts of the board in view.
+        "arrange_in_room" | "auto_place" => Needs::EditablePcb,
         "annotate_schematic_quietly" | "force_annotate_all_schematics" => Needs::ActiveSheet,
         // Home View acts on the main window's sheet or board (mockup row 194).
         "zoom_in_at_cursor" | "zoom_out_at_cursor" | "home_view" => Needs::Canvas,
@@ -675,6 +695,7 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         "open_library_browser" => Needs::Library,
         "number_schematic_sheets" => Needs::ProjectSheet,
         "compile_project" => Needs::ProjectSheet,
+        "generate_block_diagram" | "regenerate_block_diagram" => Needs::ProjectSheet,
         "tile_windows_horizontally" | "tile_windows_vertically" => Needs::TileableWindows,
         "untile_documents" => Needs::Tiled,
         _ => return None,

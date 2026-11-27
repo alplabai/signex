@@ -112,9 +112,9 @@ fn selection_does_not_carry_to_another_schematic_tab() {
         SelectedKind::Symbol,
     )];
     // The panel mirror of that selection (what a Properties edit reads).
-    app.document_state.panel_ctx.selection_count = 1;
-    app.document_state.panel_ctx.selected_uuid = Some(uuid::Uuid::now_v7());
-    app.document_state.panel_ctx.selected_kind = Some(SelectedKind::Symbol);
+    app.document_view.panel_ctx.selection_count = 1;
+    app.document_view.panel_ctx.selected_uuid = Some(uuid::Uuid::now_v7());
+    app.document_view.panel_ctx.selected_kind = Some(SelectedKind::Symbol);
 
     let _ = app.update(Message::Tab {
         window_id: window,
@@ -126,7 +126,7 @@ fn selection_does_not_carry_to_another_schematic_tab() {
         app.interaction_state.active_canvas().selected.is_empty(),
         "a selection picked in tab A must not survive into tab B"
     );
-    let ctx = &app.document_state.panel_ctx;
+    let ctx = &app.document_view.panel_ctx;
     assert_eq!(ctx.selection_count, 0);
     assert!(ctx.selected_uuid.is_none() && ctx.selected_kind.is_none());
 }

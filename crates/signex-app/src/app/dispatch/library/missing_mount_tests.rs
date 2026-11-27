@@ -46,6 +46,7 @@ fn add_project(app: &mut Signex, libs: &[&std::path::Path]) -> crate::app::Proje
                 schematic_design: Default::default(),
                 fab_outputs: None,
                 router_tool_diameter: None,
+                bom_alternates: Vec::new(),
                 requirements: Default::default(),
                 parameters: Default::default(),
                 unknown: Default::default(),
@@ -199,7 +200,7 @@ fn a_browser_open_of_a_missing_file_raises_the_dialog_not_an_error_card() {
         app.library.recovery,
         Some(RecoveryDialog::LibraryMissing { .. })
     ));
-    assert!(app.document_state.error_notice.is_none());
+    assert!(app.document_view.error_notice.is_none());
 }
 
 fn two_missing(

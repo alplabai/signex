@@ -169,7 +169,7 @@ fn red_dot(app: &Signex, file: &str) -> bool {
                 .or_else(|| find(&row.children, file))
         })
     }
-    let rows = &app.document_state.panel_ctx.projects[0].sheets;
+    let rows = &app.document_view.panel_ctx.projects[0].sheets;
     find(rows, file).expect("the sheet's tree row").is_dirty
 }
 

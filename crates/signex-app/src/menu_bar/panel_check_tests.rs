@@ -50,7 +50,7 @@ fn run(app: &mut Signex, id: &str) {
 fn every_panel_row_is_a_check_row_that_follows_the_panel() {
     let (mut app, _task) = Signex::new();
     for (label, kind) in PANEL_ROWS {
-        app.document_state.dock.close_panel(kind);
+        app.document_view.dock.close_panel(kind);
         assert_eq!(
             view_row_checked(&context(&app), label),
             Some(false),
@@ -62,7 +62,7 @@ fn every_panel_row_is_a_check_row_that_follows_the_panel() {
             Some(true),
             "{label}"
         );
-        app.document_state.dock.close_panel(kind);
+        app.document_view.dock.close_panel(kind);
         assert_eq!(
             view_row_checked(&context(&app), label),
             Some(false),
@@ -74,8 +74,8 @@ fn every_panel_row_is_a_check_row_that_follows_the_panel() {
 #[test]
 fn the_shortcut_toggles_the_check_mark() {
     let (mut app, _task) = Signex::new();
-    app.document_state.dock.close_panel(PanelKind::Properties);
-    app.document_state.dock.close_panel(PanelKind::Messages);
+    app.document_view.dock.close_panel(PanelKind::Properties);
+    app.document_view.dock.close_panel(PanelKind::Messages);
 
     run(&mut app, "toggle_properties_panel");
     assert_eq!(view_row_checked(&context(&app), "Properties"), Some(true));
@@ -88,23 +88,38 @@ fn the_shortcut_toggles_the_check_mark() {
 #[test]
 fn a_panel_hidden_behind_another_tab_stays_checked() {
     let (mut app, _task) = Signex::new();
-    app.document_state.dock.close_panel(PanelKind::Properties);
+    app.document_view.dock.close_panel(PanelKind::Properties);
     let _ = app.show_panel(PanelKind::Properties);
     // Same home region as Properties; showing it takes the front.
-    app.document_state.dock.show_panel(PanelKind::Filter);
-    assert!(!app.document_state.dock.is_frontmost(PanelKind::Properties));
+    app.document_view.dock.show_panel(PanelKind::Filter);
+    assert!(!app.document_view.dock.is_frontmost(PanelKind::Properties));
 
     assert_eq!(view_row_checked(&context(&app), "Properties"), Some(true));
 }
+
+/// The View rows that are on/off toggles of their own, not panels: View ▸
+/// Notebook Badges shows or hides the badges on every sheet (mockup row
+/// 197, Caner 2026-11-25).
+const TOGGLE_ROWS: [&str; 1] = ["Notebook Badges"];
 
 #[test]
 fn other_view_rows_carry_no_check_mark() {
     let model = menu_bar_model(&MenuContext::default());
     let view = model.menus.iter().find(|m| m.title == "View").unwrap();
-    let checked = view
+    let mut checked: Vec<&str> = view
         .entries
         .iter()
-        .filter(|e| matches!(e, MenuEntry::Item(i) if i.checked.is_some()))
-        .count();
-    assert_eq!(checked, PANEL_ROWS.len());
+        .filter_map(|e| match e {
+            MenuEntry::Item(i) if i.checked.is_some() => Some(i.label.as_str()),
+            _ => None,
+        })
+        .collect();
+    checked.sort_unstable();
+    let mut expected: Vec<&str> = PANEL_ROWS
+        .iter()
+        .map(|(label, _)| *label)
+        .chain(TOGGLE_ROWS)
+        .collect();
+    expected.sort_unstable();
+    assert_eq!(checked, expected);
 }

@@ -133,7 +133,7 @@ impl Fixture {
         assert_eq!(state.row, self.before, "the draft row is unchanged");
         assert!(self.app.library.dirty_editors().is_empty());
         assert_eq!(self.app.document_state.dirty_document_count(), 0);
-        assert!(self.app.document_state.error_notice.is_none());
+        assert!(self.app.document_view.error_notice.is_none());
     }
 }
 

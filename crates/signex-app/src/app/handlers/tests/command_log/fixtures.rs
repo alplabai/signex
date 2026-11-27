@@ -184,7 +184,7 @@ pub(super) fn pick_pin(app: &mut Signex, path: &Path, index: usize) {
         .symbol_editors
         .get_mut(path)
         .expect("the editor");
-    editor.selected = Some(SymbolSelection::Pin(index));
+    editor.gui.selected = Some(SymbolSelection::Pin(index));
 }
 
 pub(super) fn board_with_two_parts() -> signex_types::pcb::PcbBoard {

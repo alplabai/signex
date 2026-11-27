@@ -44,6 +44,8 @@ fn dock_message_runs_in_window(message: &crate::dock::DockMessage) -> bool {
         | D::TabContextMenuRequested(..)
         | D::TabMenuDismissed
         | D::TabMenuActionPicked(..)
+        // An extension's own message: it acts on no sheet.
+        | D::Extension(..)
         | D::ScopedToWindow(..) => false,
     }
 }
@@ -81,6 +83,7 @@ fn command_edits_shown_sheet(message: &Message) -> bool {
                     crate::app::PlacementExtrasMsg::AutoplaceFieldsRequested
                         | crate::app::PlacementExtrasMsg::CopyAttributesRequested { .. }
                 )
+                | EditMsg::SheetSwap(_)
         ),
         Message::Selection(selection) => matches!(
             selection,
@@ -202,11 +205,12 @@ fn command_reads_shown_sheet(message: &Message) -> bool {
     }
 }
 
-/// The board menu's edits and net rows, on the board the window shows.
+/// The board menu's edits and net rows, on the board the window shows:
+/// every Tools row, Repour and Tune included (#2629).
 fn command_edits_shown_board(message: &Message) -> bool {
     use crate::app::{
         BoardNetMsg, BoardSketchMsg, BoardToolsMsg, FootprintSwapMsg, PartSwapMsg, PcbMsg,
-        ReuseBlockMsg,
+        ReuseBlockMsg, TuneMsg,
     };
     let Message::Pcb(pcb) = message else {
         return false;
@@ -214,7 +218,9 @@ fn command_edits_shown_board(message: &Message) -> bool {
     match pcb {
         PcbMsg::Tools(tool) => matches!(
             tool,
-            BoardToolsMsg::TeardropsAddRequested
+            BoardToolsMsg::StitchRequested
+                | BoardToolsMsg::TeardropsAddRequested
+                | BoardToolsMsg::TeardropsRemoveRequested
                 | BoardToolsMsg::GlossRequested
                 | BoardToolsMsg::BoardShapeRequested
                 | BoardToolsMsg::KeepoutRequested
@@ -224,9 +230,14 @@ fn command_edits_shown_board(message: &Message) -> bool {
             net,
             BoardNetMsg::SelectRequested(_) | BoardNetMsg::HighlightRequested(_)
         ),
+        PcbMsg::Tune(tune) => matches!(
+            tune,
+            TuneMsg::NetLengthRequested | TuneMsg::DiffPairRequested
+        ),
         PcbMsg::PlaceToolPicked(_)
         | PcbMsg::LockRequested { .. }
         | PcbMsg::UnfillRequested
+        | PcbMsg::RepourRequested { .. }
         | PcbMsg::FootprintSwap(FootprintSwapMsg::Requested)
         | PcbMsg::PartSwap(PartSwapMsg::Requested(_))
         | PcbMsg::ReuseBlock(ReuseBlockMsg::SaveRequested)

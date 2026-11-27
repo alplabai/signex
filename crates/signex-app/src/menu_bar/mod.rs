@@ -120,6 +120,9 @@ pub enum MenuMessage {
     OpenLayersPanel,
     /// View ▸ Unions: show the Unions panel (mockup row 158).
     OpenUnionsPanel,
+    /// View ▸ Extensions ▸ `<panel>`: show an installed extension's panel
+    /// (#2495).
+    OpenExtensionPanel(crate::extension::points::ExtensionPanelKind),
     /// Place ▸ Text — the text-note tool.
     PlaceText,
     // Project ▸ Annotation
@@ -203,6 +206,7 @@ impl MenuMessage {
                 | Self::OpenCommandLogPanel
                 | Self::OpenLayersPanel
                 | Self::OpenUnionsPanel
+                | Self::OpenExtensionPanel(_)
         )
     }
 }
@@ -233,12 +237,21 @@ pub struct MenuContext<'a> {
     /// Cross Select Mode is on: Tools ▸ Cross Select Mode shows a check
     /// mark (#1312). On by default, like the mode.
     pub cross_select: bool,
+    /// The Notebook badges are shown: View ▸ Notebook Badges shows a check
+    /// mark (mockup row 197). On by default, like the badges.
+    pub notebook_badges: bool,
     /// What Design ▸ Update PCB Document names: the board a schematic in
     /// view updates, or the project a board imports from (#1312).
     pub(crate) pcb_sync: Option<crate::app::update_pcb::PcbSyncLabel>,
     /// What View ▸ Window ▸ Layouts lists: the active layout, your layouts
     /// and the Reset row (mockup row 166).
     pub(crate) layouts: crate::workspace_layouts::LayoutsMenu,
+    /// The rows the installed extensions add, each at the end of its root
+    /// menu (#2495). Empty in the Community binary.
+    pub(crate) extension_rows: Vec<crate::extension::points::MenuRow>,
+    /// The installed extensions' panels, under View ▸ Extensions (#2495).
+    /// Empty in the Community binary, where the submenu is not drawn.
+    pub(crate) extension_panels: Vec<crate::extension::points::ExtensionPanelKind>,
 }
 
 impl Default for MenuContext<'_> {
@@ -251,9 +264,33 @@ impl Default for MenuContext<'_> {
             open_panels: Vec::new(),
             i18n: signex_i18n::I18n::en_us(),
             cross_select: true,
+            notebook_badges: true,
             pcb_sync: None,
             layouts: Default::default(),
+            extension_rows: Vec::new(),
+            extension_panels: Vec::new(),
         }
+    }
+}
+
+impl MenuContext<'_> {
+    /// This context with the extension rows `rows`, as the window builds it
+    /// from [`crate::extension::ExtensionHost::menu_rows`].
+    #[must_use]
+    pub fn with_extension_rows(mut self, rows: Vec<crate::extension::points::MenuRow>) -> Self {
+        self.extension_rows = rows;
+        self
+    }
+
+    /// This context with the extension panels `panels`, as the window builds
+    /// it from [`crate::extension::ExtensionHost::panels`].
+    #[must_use]
+    pub fn with_extension_panels(
+        mut self,
+        panels: Vec<crate::extension::points::ExtensionPanelKind>,
+    ) -> Self {
+        self.extension_panels = panels;
+        self
     }
 }
 

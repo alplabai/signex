@@ -53,7 +53,7 @@ impl Signex {
     /// card with them.
     pub(crate) fn refresh_pcb_layers_panel(&mut self) {
         let panel = self.pcb_layers_panel_state();
-        let ctx = &mut self.document_state.panel_ctx;
+        let ctx = &mut self.document_view.panel_ctx;
         ctx.pcb_layers_ui
             .follow_board(ctx.pcb_layers.board.as_deref(), &panel);
         ctx.pcb_layers = panel;
@@ -99,7 +99,7 @@ impl Signex {
             .unwrap_or(0);
         let key = (tab.path.clone(), revision);
         let stats = self
-            .document_state
+            .document_view
             .panel_ctx
             .pcb_board
             .as_ref()
@@ -165,6 +165,6 @@ impl Signex {
                 .pcb_primitive
                 .keep_only(board, target);
         }
-        self.document_state.panel_ctx.pcb_board = summary.map(Box::new);
+        self.document_view.panel_ctx.pcb_board = summary.map(Box::new);
     }
 }

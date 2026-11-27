@@ -117,9 +117,9 @@ fn generate_bom_opens_the_bom_dialog() {
     // The Design > Generate BOM row sends `ExportBom` (pinned by the
     // menu_bar planned_tests source check); this drives that message.
     let mut app = super::bom_validation::app_with_faulty_bom();
-    assert!(app.document_state.bom_preview.is_none());
+    assert!(app.document_view.bom_preview.is_none());
     let _ = app.update(Message::Menu(MenuMessage::ExportBom));
-    assert!(app.document_state.bom_preview.is_some());
+    assert!(app.document_view.bom_preview.is_some());
 }
 
 /// #1251 — the Place and View menu rows that used to be inert now send

@@ -10,8 +10,10 @@ pub use operands::{MAX_TARGETS, Operand, OperandKind};
 
 mod annotate;
 mod arrange;
+mod block_diagram;
 mod board;
 mod board_rule_operands;
+mod bom;
 mod categories;
 mod clipboard;
 mod closest;
@@ -19,21 +21,26 @@ mod documents;
 mod drawing;
 mod drc;
 mod erc;
+mod footprint_operands;
 mod grid;
 mod hierarchy;
 mod history;
 mod layers;
 mod library;
 mod nets;
+mod notebook;
 mod operands;
 mod pcb_sync;
 mod placement;
 mod properties;
 mod query;
+mod reuse;
+mod route_operands;
 mod search;
 mod selection;
 mod tool;
 mod transform;
+mod variant_operands;
 mod view;
 mod wiring;
 mod workspace;
@@ -238,6 +245,16 @@ pub struct CommandMetadata {
     /// pre-placement form and project defaults as for a click. Empty: the
     /// command has no operand form (#1934).
     pub operands: &'static [Operand],
+    /// It may reach the network or launch a program: a library server, a
+    /// distributor, a web page. A headless caller may only run one behind a
+    /// capability check for that (`signex-cli`'s
+    /// `no_network_command_is_runnable_headless`). Defaults to `false`.
+    pub needs_network: bool,
+    /// Run from operands without `document`, it picks its project itself
+    /// (the active project, or the one project open) and refuses with the
+    /// documents to name otherwise, instead of acting on the active tab
+    /// behind its enablement gate (#2470, #2987). Defaults to `false`.
+    pub picks_own_project: bool,
 }
 
 impl CommandMetadata {
@@ -263,6 +280,8 @@ impl CommandMetadata {
             hidden: false,
         },
         operands: &[],
+        needs_network: false,
+        picks_own_project: false,
     };
 
     /// How a headless caller may use this command, or `None` while nobody
@@ -315,6 +334,7 @@ const TABLES: &[&[CommandMetadata]] = &[
     arrange::ARRANGE,
     transform::TRANSFORM,
     placement::PLACEMENT,
+    reuse::REUSE,
     wiring::WIRING,
     drawing::DRAWING,
     tool::TOOL,
@@ -332,6 +352,9 @@ const TABLES: &[&[CommandMetadata]] = &[
     grid::GRID,
     library::LIBRARY,
     workspace::WORKSPACE,
+    block_diagram::BLOCK_DIAGRAM,
+    notebook::NOTEBOOK,
+    bom::BOM,
 ];
 
 /// Flattened iterator over every command's metadata, across all groups, in
@@ -447,12 +470,18 @@ const GLOBAL_COMMANDS: &[&str] = &[
     "open_erc_dialog",
     "number_schematic_sheets",
     "compile_project",
+    "generate_block_diagram",
+    "regenerate_block_diagram",
     "update_pcb_from_schematic",
     "compare_board_with_schematic",
     "back_annotate_schematics",
     "new_pcb_document",
     "new_schematic_sheet",
     "open_rules",
+    // The project's Design Notebook, from any tab (mockup rows 195, 201, 202).
+    "open_design_notebook",
+    "generate_design_notebook",
+    "export_notebook_pdf",
 ];
 
 /// The editor contexts in which `command` can act, or `None` when it is
@@ -692,6 +721,10 @@ mod tests {
             ("grid.rs", include_str!("grid.rs")),
             ("library.rs", include_str!("library.rs")),
             ("workspace.rs", include_str!("workspace.rs")),
+            ("block_diagram.rs", include_str!("block_diagram.rs")),
+            ("reuse.rs", include_str!("reuse.rs")),
+            ("notebook.rs", include_str!("notebook.rs")),
+            ("bom.rs", include_str!("bom.rs")),
         ];
 
         let mut missing: Vec<String> = Vec::new();

@@ -20,13 +20,13 @@ impl Signex {
         };
         match tree_msg {
             TreeMsg::Toggle(key) => {
-                let tree = &mut self.document_state.panel_ctx.navigator.tree;
+                let tree = &mut self.document_view.panel_ctx.navigator.tree;
                 if let Some(path) = resolve_path(tree, key) {
                     toggle(tree, &path);
                 }
             }
             TreeMsg::Select(key) => {
-                let tree = &self.document_state.panel_ctx.navigator.tree;
+                let tree = &self.document_view.panel_ctx.navigator.tree;
                 if let Some(path) = resolve_path(tree, key) {
                     return Some(self.navigator_row_clicked(&path));
                 }
@@ -45,7 +45,7 @@ impl Signex {
         if !self.navigator_is_settled() {
             return Task::none();
         }
-        let navigator = &mut self.document_state.panel_ctx.navigator;
+        let navigator = &mut self.document_view.panel_ctx.navigator;
         let Some(node) = navigator.node_at(path) else {
             return Task::none();
         };
@@ -135,9 +135,9 @@ impl Signex {
             return Task::none();
         }
         let step = {
-            let navigator = &self.document_state.panel_ctx.navigator;
+            let navigator = &self.document_view.panel_ctx.navigator;
             let Some(hierarchy) = navigator.hierarchy.as_ref() else {
-                let wording = if self.document_state.navigator_job.is_exhausted() {
+                let wording = if self.document_view.navigator_job.is_exhausted() {
                     "the project hierarchy could not be read"
                 } else {
                     "the project hierarchy has not been read yet"
@@ -149,7 +149,7 @@ impl Signex {
             // through, so it also names the parent, which then inherits the
             // placement one level up.
             let through = self
-                .document_state
+                .document_view
                 .tab_placements
                 .get(&active)
                 .and_then(|placement| hierarchy.parent_through(placement, &active));
@@ -227,7 +227,7 @@ mod tests {
     }
 
     fn labels(app: &Signex, path: &[usize]) -> Vec<String> {
-        let mut nodes = &app.document_state.panel_ctx.navigator.tree;
+        let mut nodes = &app.document_view.panel_ctx.navigator.tree;
         let mut out = Vec::new();
         for &i in path {
             let node = &nodes[i];
@@ -248,7 +248,7 @@ mod tests {
 
         assert_eq!(active_tab(&app), Some(leaf));
         assert_eq!(labels(&app, &[0, 0, 0]), ["root", "Mid", "Leaf"]);
-        let tree = &app.document_state.panel_ctx.navigator.tree;
+        let tree = &app.document_view.panel_ctx.navigator.tree;
         assert!(tree[0].children[0].children[0].is_active, "leaf is marked");
         assert!(!tree[0].is_active);
     }
@@ -281,7 +281,7 @@ mod tests {
             "one click opens nothing"
         );
         assert_eq!(
-            app.document_state.panel_ctx.navigator.selected,
+            app.document_view.panel_ctx.navigator.selected,
             Some(vec![0, 0])
         );
 
@@ -304,7 +304,7 @@ mod tests {
     }
 
     fn key_at(app: &Signex, path: &[usize]) -> signex_widgets::tree_view::TreeKey {
-        signex_widgets::tree_view::key_of(&app.document_state.panel_ctx.navigator.tree, path)
+        signex_widgets::tree_view::key_of(&app.document_view.panel_ctx.navigator.tree, path)
             .expect("row exists")
     }
 
@@ -320,7 +320,7 @@ mod tests {
         click(app, &select);
         // A future memo instant saturates `duration_since` to zero, so the
         // second click is inside the window however loaded the machine is.
-        app.document_state
+        app.document_view
             .panel_ctx
             .navigator
             .last_click
@@ -445,7 +445,7 @@ mod tests {
 
         double_click(&mut app, &[0, 1]);
 
-        let recorded = app.document_state.tab_placements.get(&child);
+        let recorded = app.document_view.tab_placements.get(&child);
         assert_eq!(
             recorded.map(ToString::to_string),
             Some(format!("/{replacement}"))

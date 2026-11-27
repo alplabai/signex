@@ -47,6 +47,12 @@ impl ComponentType {
         )
     }
 
+    /// Whether the part's pads may short their nets on purpose: a net tie
+    /// (#1277), listed in the BOM or not.
+    pub fn is_net_tie(self) -> bool {
+        matches!(self, Self::NetTie | Self::NetTieInBom)
+    }
+
     fn is_default(&self) -> bool {
         *self == Self::default()
     }
@@ -166,6 +172,15 @@ mod tests {
                 ComponentType::NetTie,
             ]
         );
+    }
+
+    #[test]
+    fn only_the_two_net_tie_types_may_short_their_pads() {
+        let ties: Vec<ComponentType> = ComponentType::ALL
+            .into_iter()
+            .filter(|t| t.is_net_tie())
+            .collect();
+        assert_eq!(ties, [ComponentType::NetTie, ComponentType::NetTieInBom]);
     }
 
     #[test]

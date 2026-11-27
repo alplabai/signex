@@ -594,7 +594,7 @@ mod tests {
 
     fn context_with_one_row() -> PanelContext {
         let (app, _boot) = crate::app::Signex::new();
-        let mut ctx = app.document_state.panel_ctx.clone();
+        let mut ctx = app.document_view.panel_ctx.clone();
         let log = &mut std::sync::Arc::make_mut(&mut ctx.command_log).log;
         let seq = log.record(LogRow {
             seq: 0,

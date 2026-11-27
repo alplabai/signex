@@ -25,8 +25,8 @@ const BOUNDS: Rectangle = Rectangle {
 fn editor_with(symbol: Symbol, selected: SymbolSelection) -> SymbolDocument {
     let mut editor =
         SymbolDocument::new(PathBuf::from("t.snxsym"), SymbolFile::from_symbol(symbol));
-    editor.pending_view = None;
-    editor.selected = Some(selected);
+    editor.gui.pending_view = None;
+    editor.gui.selected = Some(selected);
     editor
 }
 
@@ -51,12 +51,12 @@ fn press_space(editor: &mut SymbolDocument, shift: bool) {
     let mut cstate = CanvasState::default();
     let canvas = SymbolCanvas::new(
         editor.primitive(),
-        editor.selected.clone(),
-        editor.tool,
-        &editor.polygon_vertices,
+        editor.gui.selected.clone(),
+        editor.gui.tool,
+        &editor.gui.polygon_vertices,
         editor.view(),
         false,
-        &editor.camera,
+        &editor.gui.camera,
         1.27,
         true,
         crate::render_config::GridStyle::default(),

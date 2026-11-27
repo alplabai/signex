@@ -31,7 +31,7 @@ impl Signex {
         &'a self,
         preview: &'a PreviewState,
     ) -> Element<'a, Message> {
-        let look = form::Look::of(&self.document_state.panel_ctx.tokens);
+        let look = form::Look::of(&self.document_view.panel_ctx.tokens);
         row![
             self.view_pdf_rail(preview),
             form::rule(look.line_soft, true),

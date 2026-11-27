@@ -90,6 +90,7 @@ impl Signex {
             draft_pcb_dim_others_percent: ui.preferences_draft_pcb_dim_others_percent,
             body_fill_palette_open: ui.preferences_body_fill_palette_open,
             body_fill_picker_open: ui.preferences_body_fill_picker_open,
+            draft_cross_out_not_fitted: ui.preferences_draft_cross_out_not_fitted,
             draft_trackpad_pan: ui.preferences_draft_trackpad_pan,
             draft_wheel_mode: ui.preferences_draft_wheel_mode,
             draft_layer_switcher: ui.preferences_draft_layer_switcher,
@@ -129,7 +130,7 @@ impl Signex {
             machine_rules_issue: self.machine_rules_issue(),
             default_profile: ui.default_rule_profile.as_deref(),
             distributor_settings: &self.library.settings,
-            panel_tokens: &self.document_state.panel_ctx.tokens,
+            panel_tokens: &self.document_view.panel_ctx.tokens,
             draft_component_classes: &ui.preferences_draft_component_classes,
             keymap_editor: &ui.preferences_keymap_editor,
             keymap_status: &ui.preferences_keymap_status,
@@ -140,6 +141,8 @@ impl Signex {
             keymap_search: &ui.preferences_keymap_search,
             nav_search: &ui.preferences_nav_search,
             keymap_recorder: ui.preferences_keymap_recorder.as_ref(),
+            extensions: &self.extensions,
+            extension_commands: &ui.extension_commands,
         }
     }
 
@@ -157,12 +160,13 @@ impl Signex {
             ModalId::MoveSelection => self.view_move_selection_body(),
             ModalId::NetColorPalette => self.view_net_color_palette_body(),
             ModalId::ParameterManager => self.view_parameter_manager_body(),
+            ModalId::ParameterImport => self.view_parameter_import_body(),
             ModalId::PrintPreview => self.view_print_preview_body(),
             ModalId::BomPreview => self.view_bom_preview_body(),
             ModalId::Preferences => self.view_preferences_body(),
             ModalId::FindReplace => crate::find_replace::window_view(
                 &self.ui_state.find_replace,
-                &self.document_state.panel_ctx.tokens,
+                &self.document_view.panel_ctx.tokens,
                 &self.ui_state.i18n,
             )
             .map(Message::FindReplaceMsg)
@@ -175,12 +179,12 @@ impl Signex {
             ModalId::NewProject => self.view_new_project_window(),
             ModalId::About => crate::about_modal::window_view(
                 &self.ui_state.i18n,
-                &self.document_state.panel_ctx.tokens,
+                &self.document_view.panel_ctx.tokens,
             ),
             ModalId::KeyboardShortcuts => self.view_keyboard_shortcuts_window(),
             ModalId::PassiveCalculator => crate::passive_calculator_modal::window_view(
                 &self.ui_state.i18n,
-                &self.document_state.panel_ctx.tokens,
+                &self.document_view.panel_ctx.tokens,
                 &self.ui_state.passive_calculator,
             ),
             ModalId::CreateChildSheet => self.view_create_child_sheet_body(),
@@ -205,7 +209,7 @@ impl Signex {
                         .center_x(Length::Fill)
                         .center_y(Length::Fill)
                         .style(crate::styles::modal_card(
-                            &self.document_state.panel_ctx.tokens,
+                            &self.document_view.panel_ctx.tokens,
                         ))
                         .boxed(),
                     None => iced::widget::Space::new().boxed(),
@@ -228,7 +232,7 @@ impl Signex {
                 );
                 crate::first_run_tour::window_view(
                     &ui.i18n,
-                    &self.document_state.panel_ctx.tokens,
+                    &self.document_view.panel_ctx.tokens,
                     &facts,
                 )
             }
@@ -329,12 +333,13 @@ impl Signex {
         size: f32,
     ) -> Element<'_, Message> {
         let panel = self
-            .document_state
+            .document_view
             .dock
             .view_region(
                 pos,
                 self.panel_ctx_for(window_id),
                 &self.library,
+                &self.extensions,
                 self.sheet_grid(),
             )
             .map(move |msg| self.scope_dock_message(window_id, Message::Dock(msg)));
@@ -349,7 +354,7 @@ impl Signex {
             .width(width)
             .height(Length::Fill)
             .style(crate::styles::panel_region(
-                &self.document_state.panel_ctx.tokens,
+                &self.document_view.panel_ctx.tokens,
             ))
             .boxed()
     }
@@ -363,12 +368,13 @@ impl Signex {
         size: f32,
     ) -> Element<'_, Message> {
         let panel = self
-            .document_state
+            .document_view
             .dock
             .view_region(
                 pos,
                 self.panel_ctx_for(window_id),
                 &self.library,
+                &self.extensions,
                 self.sheet_grid(),
             )
             .map(move |msg| self.scope_dock_message(window_id, Message::Dock(msg)));
@@ -383,7 +389,7 @@ impl Signex {
             .width(Length::Fill)
             .height(height)
             .style(crate::styles::panel_region(
-                &self.document_state.panel_ctx.tokens,
+                &self.document_view.panel_ctx.tokens,
             ))
             .boxed()
     }
@@ -400,7 +406,7 @@ impl Signex {
                 .width(size)
                 .height(Length::Fill)
                 .style(crate::styles::resize_handle_edge(
-                    &self.document_state.panel_ctx.tokens,
+                    &self.document_view.panel_ctx.tokens,
                     true,
                 ))
         } else {
@@ -408,7 +414,7 @@ impl Signex {
                 .width(Length::Fill)
                 .height(size)
                 .style(crate::styles::resize_handle_edge(
-                    &self.document_state.panel_ctx.tokens,
+                    &self.document_view.panel_ctx.tokens,
                     false,
                 ))
         };
@@ -497,6 +503,43 @@ mod layout_tests {
         assert!(
             label.width + 0.5 >= one_line.width,
             "the button is narrower than its label: {label:?}, natural {one_line:?}"
+        );
+    }
+
+    /// #3040, mockup row 143: the broken-file banner keeps the path alone on
+    /// its own line, the loader's reason as plain text under it, and nothing
+    /// runs past the banner at the dialog's opening size.
+    #[test]
+    fn the_broken_file_banner_keeps_the_path_on_its_own_line() {
+        const ERROR: &str = "is not valid JSON: EOF while parsing a value at line 1 column 11";
+        let window = iced::Size::new(900.0, 620.0);
+        let (mut app, _task) = Signex::new();
+        app.ui_state.prefs_load_error = Some(ERROR.into());
+        let path = crate::fonts::prefs_file_path().display().to_string();
+        let reason = format!("The file {ERROR}.");
+
+        let texts: Vec<LaidOutText> = lay_out_texts(app.view_preferences_body(), window)
+            .into_iter()
+            .map(|t| LaidOutText {
+                text: t.text.replace(['\u{2068}', '\u{2069}'], ""),
+                bounds: t.bounds,
+            })
+            .collect();
+
+        let at_path = find(&texts, &path).bounds;
+        let at_reason = find(&texts, &reason).bounds;
+        assert!(
+            at_reason.y >= at_path.y + at_path.height - 0.5,
+            "{texts:#?}"
+        );
+        for shown in [at_path, at_reason] {
+            assert!(shown.x + shown.width <= window.width + 0.5, "{shown:?}");
+        }
+        assert!(
+            !texts
+                .iter()
+                .any(|t| t.text.contains(&path) && t.text.contains("JSON")),
+            "the path and the reason share a line: {texts:#?}"
         );
     }
 

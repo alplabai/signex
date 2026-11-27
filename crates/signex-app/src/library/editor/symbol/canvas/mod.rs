@@ -74,7 +74,7 @@ pub struct SymbolCanvas<'a> {
     pub selected: Option<SymbolSelection>,
     pub tool: SymbolTool,
     /// Click-collect vertex stash for the `PlacePolygon` tool —
-    /// owned by [`crate::app::SymbolDocument::polygon_vertices`],
+    /// owned by [`crate::app::SymbolEditorView::polygon_vertices`],
     /// not this Program's ephemeral `CanvasState`, so it can't survive
     /// a tab switch and mis-commit into a different document (see the
     /// commit that introduced this field for the cross-tab-corruption
@@ -87,14 +87,14 @@ pub struct SymbolCanvas<'a> {
     /// on both bodies; others render only on the exact part and body.
     pub view: state::PartView,
     /// Whether the right-click context menu is currently open (see
-    /// `SymbolDocument::context_menu`). The context menu and a pan
+    /// `SymbolEditorView::context_menu`). The context menu and a pan
     /// can't coexist — once an in-flight right-drag crosses the pan
     /// motion threshold while this is `true`, the pointer handler
     /// closes the menu instead of publishing that frame's pan (mirrors
     /// the footprint canvas's `pan_on_cursor_moved`).
     pub context_menu_open: bool,
     /// Pan/zoom state owned by the editor tab — see
-    /// [`crate::app::SymbolDocument::camera`].
+    /// [`crate::app::SymbolEditorView::camera`].
     pub camera: &'a crate::canvas::Camera,
     /// Visible grid spacing in mm — sourced from
     /// `panel_ctx.grid_size_mm` so the schematic + library editors
@@ -146,7 +146,7 @@ pub struct SymbolCanvas<'a> {
     /// Preferences "Zoom speed" as a per-notch factor, for the middle-button
     /// drag. Set with [`Self::with_zoom_step`].
     pub zoom_step: f32,
-    /// `SymbolDocument::tool_epoch`. Set with [`Self::with_tool_epoch`].
+    /// `SymbolEditorView::tool_epoch`. Set with [`Self::with_tool_epoch`].
     pub tool_epoch: u64,
     /// The editor's edge pan link (#2872). Set with [`Self::with_edge_pan`].
     pub edge_pan: Option<&'a crate::canvas::EdgePanLink>,

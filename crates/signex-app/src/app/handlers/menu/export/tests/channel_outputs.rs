@@ -237,7 +237,7 @@ fn an_unreadable_naming_refuses_the_netlist_file_and_writes_nothing() {
 
     let _ = app.handle_export_netlist_finished(source, Ok(target.clone()));
 
-    assert!(app.document_state.error_notice.is_some());
+    assert!(app.document_view.error_notice.is_some());
     assert!(!target.exists());
 }
 
@@ -248,8 +248,8 @@ fn an_unreadable_naming_refuses_the_bom_preview() {
 
     let _ = app.handle_bom_preview_open();
 
-    assert!(app.document_state.bom_preview.is_none());
-    assert!(app.document_state.error_notice.is_some());
+    assert!(app.document_view.bom_preview.is_none());
+    assert!(app.document_view.error_notice.is_some());
 }
 
 #[test]
@@ -259,6 +259,6 @@ fn an_unreadable_naming_refuses_the_print_preview() {
 
     let _ = app.handle_print_preview_requested();
 
-    assert!(app.document_state.preview.is_none());
-    assert!(app.document_state.error_notice.is_some());
+    assert!(app.document_view.preview.is_none());
+    assert!(app.document_view.error_notice.is_some());
 }

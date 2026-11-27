@@ -207,10 +207,10 @@ impl Signex {
     }
 
     pub(crate) fn view_rules_tab(&self, id: ProjectId) -> Element<'_, Message> {
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let i18n: &I18n = &self.ui_state.i18n;
         let state = self
-            .document_state
+            .document_view
             .project_tabs
             .get(&id)
             .map(|tab| &tab.rules);

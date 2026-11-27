@@ -169,9 +169,9 @@ fn a_failed_write_keeps_the_document_dirty_and_reaches_the_messages_panel() {
     complete(&mut app, task);
 
     assert!(is_dirty(&app, &path));
-    assert!(app.document_state.error_notice.is_some());
+    assert!(app.document_view.error_notice.is_some());
     assert!(
-        app.document_state
+        app.document_view
             .panel_ctx
             .diagnostics
             .iter()
@@ -323,7 +323,7 @@ fn a_failed_save_as_keeps_the_old_path_and_reports() {
     assert!(app.document_state.engines.contains_key(&path));
     assert!(!app.document_state.engines.contains_key(&target));
     assert!(is_dirty(&app, &path));
-    assert!(app.document_state.error_notice.is_some());
+    assert!(app.document_view.error_notice.is_some());
 }
 
 #[test]
@@ -345,7 +345,7 @@ fn save_as_does_not_rekey_when_the_tab_was_switched_mid_write() {
     assert_eq!(app.document_state.tabs[0].path, path);
     assert!(app.document_state.engines.contains_key(&path));
     assert!(!app.document_state.engines.contains_key(&target));
-    assert!(app.document_state.error_notice.is_some());
+    assert!(app.document_view.error_notice.is_some());
 }
 
 #[test]
@@ -371,7 +371,7 @@ fn a_superseded_save_as_neither_rekeys_nor_marks_clean() {
     assert_eq!(app.document_state.tabs[0].path, path);
     assert!(!app.document_state.engines.contains_key(&target));
     assert!(is_dirty(&app, &path));
-    assert!(app.document_state.error_notice.is_some());
+    assert!(app.document_view.error_notice.is_some());
 }
 
 #[test]
@@ -386,7 +386,7 @@ fn save_as_onto_a_file_with_a_write_in_flight_is_refused() {
     let second = save_as(&mut app, &path, &target);
     complete(&mut app, second);
     assert!(recorder.contents().is_empty(), "the refused Save As wrote");
-    assert!(app.document_state.error_notice.is_some());
+    assert!(app.document_view.error_notice.is_some());
     complete(&mut app, first);
     assert_eq!(recorder.contents().len(), 1);
 }

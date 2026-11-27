@@ -4,6 +4,8 @@
 
 mod annotations;
 mod assign_footprints;
+mod block_diagram;
+mod block_diagram_export;
 mod board_checks;
 mod board_output;
 mod board_panel;
@@ -27,10 +29,15 @@ mod fp_props;
 mod gerber_viewer;
 mod library;
 mod new_project;
+mod notebook_measurements;
+mod notebook_pdf;
+mod notebook_references;
+mod notebook_tab;
 mod notice;
 mod overlay;
 mod panel_body;
 mod panels;
+mod parameter_io;
 mod passive_calculator;
 mod pcb;
 mod pcb_board;
@@ -57,6 +64,8 @@ mod workspace_layouts;
 
 pub use annotations::*;
 pub use assign_footprints::*;
+pub use block_diagram::*;
+pub use block_diagram_export::*;
 pub use board_checks::*;
 pub use board_output::*;
 pub use board_panel::*;
@@ -80,10 +89,15 @@ pub use fp_props::*;
 pub use gerber_viewer::*;
 pub use library::*;
 pub use new_project::*;
+pub use notebook_measurements::*;
+pub use notebook_pdf::*;
+pub use notebook_references::*;
+pub use notebook_tab::*;
 pub use notice::*;
 pub use overlay::*;
 pub use panel_body::*;
 pub use panels::*;
+pub use parameter_io::*;
 pub use passive_calculator::*;
 pub use pcb::*;
 pub use pcb_board::*;
@@ -114,6 +128,8 @@ pub(crate) fn area_lists() -> Vec<crate::MessageId> {
     [
         annotations::ANNOTATIONS,
         assign_footprints::ASSIGN_FOOTPRINTS,
+        block_diagram::BLOCK_DIAGRAM,
+        block_diagram_export::BLOCK_DIAGRAM_EXPORT,
         board_checks::BOARD_CHECKS,
         board_output::BOARD_OUTPUT,
         board_panel::BOARD_PANEL,
@@ -136,10 +152,15 @@ pub(crate) fn area_lists() -> Vec<crate::MessageId> {
         fp_props::FP_PROPS,
         library::LIBRARY,
         new_project::NEW_PROJECT,
+        notebook_measurements::NOTEBOOK_MEASUREMENTS,
+        notebook_pdf::NOTEBOOK_PDF,
+        notebook_references::NOTEBOOK_REFERENCES,
+        notebook_tab::NOTEBOOK_TAB,
         notice::NOTICE,
         overlay::OVERLAY,
         panel_body::PANEL_BODY,
         panels::PANELS,
+        parameter_io::PARAMETER_IO,
         passive_calculator::PASSIVE_CALCULATOR,
         pcb::PCB,
         pcb_board::PCB_BOARD,

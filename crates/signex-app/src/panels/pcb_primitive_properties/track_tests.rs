@@ -20,7 +20,7 @@ const DOCK: iced::Size = iced::Size::new(300.0, 2000.0);
 
 fn context() -> PanelContext {
     let (app, _boot) = Signex::new();
-    app.document_state.panel_ctx.clone()
+    app.document_view.panel_ctx.clone()
 }
 
 /// `count` tracks; one track has its own ends, several share none.

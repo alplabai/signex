@@ -6,6 +6,9 @@
 //! here, the Project scope's sheets on a blocking thread (unopened sheets come
 //! from disk). Filtering, counting and the selection marks are rebuilt only
 //! when the rows, the picks or the selection change.
+//!
+//! Each undocked document window keeps rows of its own and lists the sheet it
+//! shows (#2630); names and values read as that sheet's canvas draws them.
 
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
@@ -17,9 +20,11 @@ use uuid::Uuid;
 use super::super::*;
 use crate::app::handlers::canvas::{AfterOpen, SheetOpen};
 use crate::app::project_sheets::{self, OpenSheets};
+use crate::app::state::WindowKind;
 use crate::app::state::net_nav::ProjectNetData;
 use crate::app::state::scope::CaseFold;
-use crate::panels::object_list::model::{self, ROW_PAGE};
+use crate::canvas::CanvasSlot;
+use crate::panels::object_list::model::{self, ROW_PAGE, SheetLook, SheetLooks};
 use crate::panels::{
     KindChip, ObjectListMsg, ObjectListStatus, ObjectListView, ObjectRef, ObjectRow, ObjectScope,
     PanelKind, PanelMsg,
@@ -33,6 +38,16 @@ struct ProjectRead {
     fold: CaseFold,
     active: Option<PathBuf>,
     nets: Option<Arc<ProjectNetData>>,
+    looks: SheetLooks,
+}
+
+/// Which Object List: the one in the main slots (the main window's, or the
+/// acting window's inside its swap) or an undocked window's, read in place
+/// outside any swap.
+#[derive(Debug, Clone, Copy)]
+enum ListSlot {
+    Main,
+    Window(iced::window::Id),
 }
 
 /// The net a wire or bus of the sheet at `path` is on, from the cached index.
@@ -42,6 +57,25 @@ fn wire_net_of(nets: Option<&ProjectNetData>, path: &Path, id: Uuid) -> Option<S
     let net = *data.index.nets_of(&key, id).first()?;
     let name = &data.index.net(net)?.name;
     (!name.is_empty()).then(|| name.clone())
+}
+
+/// Whether `a` and `b` differ at most in their document facts (the clock
+/// and the files' modified dates).
+fn same_but_document_facts(
+    a: &crate::canvas::SpecialStrings,
+    b: &crate::canvas::SpecialStrings,
+) -> bool {
+    let mut a = a.clone();
+    a.metadata.document_facts = b.metadata.document_facts.clone();
+    a == *b
+}
+
+/// Whether a text of `sheet` the Object List lists could resolve a token: a
+/// value or a note holding `${`, or an `=` expression.
+fn lists_a_token(sheet: &signex_types::schematic::SchematicSheet) -> bool {
+    let computed = |text: &str| text.contains("${") || text.trim_start().starts_with('=');
+    sheet.symbols.iter().any(|s| computed(&s.value))
+        || sheet.text_notes.iter().any(|t| computed(&t.text))
 }
 
 /// Every project sheet's rows, the sheet in view first and the rest by path.
@@ -65,7 +99,8 @@ fn read_project_rows(read: ProjectRead) -> Vec<ObjectRow> {
         let Some(sheet) = set.sheets.get(&path).or_else(|| read.open.get(&path)) else {
             continue;
         };
-        rows.extend(model::sheet_rows(sheet, &path, &|id: Uuid| {
+        let look = read.looks.of(&path);
+        rows.extend(model::sheet_rows(sheet, &path, look, &|id: Uuid| {
             wire_net_of(nets, &path, id)
         }));
     }
@@ -92,21 +127,31 @@ impl Signex {
             ObjectListMsg::MoreRowsShown => state.shown = state.row_limit() + ROW_PAGE,
             ObjectListMsg::RowClicked(target) => return self.go_to_object(&target, false),
             ObjectListMsg::RowDoubleClicked(target) => return self.go_to_object(&target, true),
-            ObjectListMsg::ProjectRowsRead { generation, rows } => {
-                if generation != state.source.generation {
+            ObjectListMsg::CellEdit(edit) => return self.handle_object_list_cell_edit(edit),
+            ObjectListMsg::ProjectRowsRead {
+                window,
+                generation,
+                rows,
+            } => {
+                // A window that has closed since has no rows to land in.
+                let source = match window {
+                    None => Some(&mut state.source),
+                    Some(window) => state.windows.get_mut(&window),
+                };
+                let Some(source) = source.filter(|s| s.generation == generation) else {
                     return Task::none();
-                }
-                state.source.reading = false;
+                };
+                source.reading = false;
                 match rows {
                     Ok(rows) => {
-                        state.source.rows = rows;
-                        state.source.failed = false;
+                        source.rows = rows;
+                        source.failed = false;
                     }
                     Err(why) => {
                         // The stamp stays: a read that fails every time is
                         // tried again when its source changes, not on every
                         // update.
-                        state.source.failed = true;
+                        source.failed = true;
                         crate::diagnostics::log_warning(why);
                     }
                 }
@@ -127,7 +172,7 @@ impl Signex {
             return Task::none();
         }
         let placement = self
-            .document_state
+            .document_view
             .panel_ctx
             .navigator
             .hierarchy
@@ -150,13 +195,125 @@ impl Signex {
         self.open_sheet(target.sheet.clone(), open)
     }
 
+    /// Whether a listed text of an open sheet `scope` reads from `active`
+    /// could resolve a token, so the clock or a modified date may change
+    /// it. A sheet with no open document is read with no special strings.
+    fn object_texts_use_tokens(&self, active: &Path, scope: ObjectScope) -> bool {
+        let engines = &self.document_state.engines;
+        match scope {
+            ObjectScope::ThisSheet => engines
+                .get(active)
+                .is_some_and(|engine| lists_a_token(engine.document())),
+            ObjectScope::Project => engines
+                .values()
+                .any(|engine| lists_a_token(engine.document())),
+        }
+    }
+
     /// The cached net index of the project that owns `path`, if one is built.
     fn object_list_nets(&self, path: &Path) -> Option<Arc<ProjectNetData>> {
         let project = self.document_state.document_project(path)?.id;
-        self.document_state.net_nav.index.latest(project)
+        self.document_view.net_nav.index.latest(project)
     }
 
-    /// Stamp of what the rows of `scope` are read from.
+    /// The window whose rows `slot` lists; `None` for the main window's.
+    fn list_owner(&self, slot: ListSlot) -> Option<iced::window::Id> {
+        match slot {
+            ListSlot::Main => self.interaction_state.acting_window,
+            ListSlot::Window(window) => Some(window),
+        }
+    }
+
+    /// The canvas the sheet of `slot` is drawn on.
+    fn list_canvas(&self, slot: ListSlot) -> Option<&CanvasSlot> {
+        match slot {
+            ListSlot::Main => Some(self.interaction_state.active_canvas()),
+            ListSlot::Window(window) => self.interaction_state.canvases.get(&window),
+        }
+    }
+
+    /// The schematic `slot` lists; `None` for a board or no document.
+    fn list_sheet(&self, slot: ListSlot) -> Option<PathBuf> {
+        match slot {
+            ListSlot::Main => self
+                .document_state
+                .active_path
+                .clone()
+                .filter(|_| self.has_active_schematic() && !self.has_active_pcb()),
+            ListSlot::Window(window) => match self.ui_state.windows.get(&window) {
+                Some(WindowKind::UndockedTab { path, .. })
+                    if self.document_state.engines.contains_key(path) =>
+                {
+                    Some(path.clone())
+                }
+                _ => None,
+            },
+        }
+    }
+
+    /// The panel view `slot` draws.
+    fn list_view_mut(&mut self, slot: ListSlot) -> Option<&mut ObjectListView> {
+        match slot {
+            ListSlot::Main => Some(&mut self.document_view.panel_ctx.object_list),
+            ListSlot::Window(window) => self
+                .document_view
+                .window_panel_ctx
+                .get_mut(&window)
+                .map(|ctx| &mut ctx.object_list),
+        }
+    }
+
+    /// How the canvas draws the sheet at `path`, with `special` as what its
+    /// `${TOKEN}`s resolve to and the active variant's values (#2948).
+    pub(crate) fn sheet_look(
+        &self,
+        path: &Path,
+        special: Option<crate::canvas::SpecialStrings>,
+    ) -> SheetLook {
+        let variant_values = self.variant_values_for_path(path);
+        SheetLook {
+            placement: self.shown_placement(path),
+            special,
+            standard: self.document_state.designator_standard_for(path),
+            variant_values: (!variant_values.is_empty()).then_some(variant_values),
+        }
+    }
+
+    /// The looks of a Project read of `active`'s project: every page, every
+    /// sheet its hierarchy places and `active` itself, whose `${TOKEN}`s are
+    /// its canvas's (`active_special`).
+    fn project_looks(
+        &self,
+        active: &Path,
+        pages: &[PathBuf],
+        active_special: Option<crate::canvas::SpecialStrings>,
+    ) -> SheetLooks {
+        let mut paths: Vec<PathBuf> = pages.to_vec();
+        if let Some((hierarchy, _)) = self.hierarchy_describing(active) {
+            paths.extend(hierarchy.node_paths().into_iter().map(Path::to_path_buf));
+        }
+        let mut by_path = std::collections::HashMap::new();
+        for path in paths {
+            if path == active || by_path.contains_key(&path) {
+                continue;
+            }
+            let special = self.special_strings_for_path(&path);
+            let look = self.sheet_look(&path, special);
+            by_path.insert(path, look);
+        }
+        let look = self.sheet_look(active, active_special);
+        by_path.insert(active.to_path_buf(), look);
+        SheetLooks {
+            by_path,
+            fallback: SheetLook {
+                standard: self.document_state.designator_standard_for(active),
+                ..SheetLook::default()
+            },
+        }
+    }
+
+    /// Stamp of what the rows of `scope` are read from, listed for the sheet
+    /// at `active`.
     fn object_rows_stamp(&self, active: &Path, scope: ObjectScope) -> u64 {
         let ds = &self.document_state;
         let mut h = std::collections::hash_map::DefaultHasher::new();
@@ -164,6 +321,24 @@ impl Signex {
         active.hash(&mut h);
         let nets = self.object_list_nets(active);
         nets.as_ref().map(|n| Arc::as_ptr(n) as usize).hash(&mut h);
+        // What the names and values are drawn with (#2630).
+        self.shown_placement(active).hash(&mut h);
+        ds.designator_standard_for(active).hash(&mut h);
+        let project = ds.document_project(active);
+        project.map(|p| &p.data.parameters).hash(&mut h);
+        // The active variant's own values (#2948).
+        if let Some(data) = project.map(|p| &p.data) {
+            data.active_variant_name().hash(&mut h);
+            for part in &data.variant_settings.parts {
+                (
+                    &part.variant,
+                    &part.designator,
+                    &part.part,
+                    &part.parameters,
+                )
+                    .hash(&mut h);
+            }
+        }
         let engine_stamp = |path: &Path, h: &mut std::collections::hash_map::DefaultHasher| {
             if let Some(engine) = ds.engines.get(path) {
                 (path, engine.instance_id(), engine.revision()).hash(h);
@@ -177,92 +352,155 @@ impl Signex {
                 for path in open {
                     engine_stamp(path, &mut h);
                 }
-                project_sheets::declared_pages(ds).hash(&mut h);
+                project_sheets::project_pages(project).hash(&mut h);
+                // The other sheets' placements come with their hierarchy.
+                let hierarchy = self.hierarchy_describing(active);
+                let placed = hierarchy.map(|(tree, settled)| (tree.node_paths(), settled));
+                placed.hash(&mut h);
             }
         }
         h.finish()
     }
 
-    /// Keep the panel's rows in step with the documents, and its view with
-    /// the rows, the picks and the canvas selection. Runs from every
-    /// `finish_update`; does nothing while the panel is closed or nothing it
-    /// reads changed.
+    /// Keep every Object List's rows in step with the documents, and its view
+    /// with the rows, the picks and its canvas's selection: the main slots'
+    /// list, then, outside a window's swap, each undocked window's. Runs from
+    /// every `finish_update`; does nothing while the panel is closed or
+    /// nothing a list reads changed.
     pub(crate) fn sync_object_list(&mut self) -> Task<Message> {
+        let main = self.sync_object_list_in(ListSlot::Main);
+        // Inside a window's swap the main slots hold that window's list.
+        if self.interaction_state.acting_window.is_some() {
+            return main;
+        }
+        let ui = &mut self.ui_state;
+        ui.object_list
+            .windows
+            .retain(|window, _| ui.windows.contains_key(window));
+        let windows: Vec<iced::window::Id> = self
+            .document_view
+            .window_panel_ctx
+            .keys()
+            .copied()
+            .filter(|window| self.is_document_window(*window))
+            .collect();
+        let mut tasks = vec![main];
+        for window in windows {
+            tasks.push(self.sync_object_list_in(ListSlot::Window(window)));
+        }
+        Task::batch(tasks)
+    }
+
+    /// [`Self::sync_object_list`] for the list of `slot`.
+    fn sync_object_list_in(&mut self, slot: ListSlot) -> Task<Message> {
+        let owner = self.list_owner(slot);
         if !self.is_panel_open(PanelKind::ObjectList) {
-            let source = &mut self.ui_state.object_list.source;
+            let source = self.ui_state.object_list.source_of_mut(owner);
             if source.stamp.is_some() {
-                *source = Default::default();
-                self.document_state.panel_ctx.object_list = ObjectListView::default();
+                source.reset();
+                if let Some(view) = self.list_view_mut(slot) {
+                    *view = ObjectListView::default();
+                }
             }
             return Task::none();
         }
-        let active = self
-            .document_state
-            .active_path
-            .clone()
-            .filter(|_| self.has_active_schematic() && !self.has_active_pcb());
-        let Some(active) = active else {
-            self.ui_state.object_list.source.stamp = None;
-            self.ui_state.object_list.source.view_stamp = None;
-            if self.document_state.panel_ctx.object_list.status != ObjectListStatus::NoSchematic {
-                self.document_state.panel_ctx.object_list = ObjectListView::default();
+        let Some(active) = self.list_sheet(slot) else {
+            let source = self.ui_state.object_list.source_of_mut(owner);
+            if source.stamp.is_some() {
+                source.reset();
+            }
+            if let Some(view) = self.list_view_mut(slot)
+                && view.status != ObjectListStatus::NoSchematic
+            {
+                *view = ObjectListView::default();
             }
             return Task::none();
         };
-        let task = self.refresh_object_rows(&active);
-        self.refresh_object_list_view(active);
+        let task = self.refresh_object_rows(slot, &active);
+        self.refresh_object_list_view(slot, active);
         task
     }
 
-    /// Read the rows again when their source changed: at once for the sheet
-    /// in view, on a blocking thread for the project.
-    fn refresh_object_rows(&mut self, active: &Path) -> Task<Message> {
+    /// Read the rows of `slot` again when their source changed: at once for
+    /// the sheet in view, on a blocking thread for the project.
+    fn refresh_object_rows(&mut self, slot: ListSlot, active: &Path) -> Task<Message> {
+        let owner = self.list_owner(slot);
+        let ds = &self.document_state;
         // A loose sheet has no project: Project lists the sheet itself.
-        let root = self
-            .document_state
-            .active_document_project()
-            .and_then(|_| project_sheets::resolve_netlist_root(&self.document_state));
+        let root = ds
+            .document_project(active)
+            .map(|_| project_sheets::resolve_netlist_root_for(ds, active));
         let scope = match root {
             Some(_) => self.ui_state.object_list.scope,
             None => ObjectScope::ThisSheet,
         };
         let stamp = self.object_rows_stamp(active, scope);
-        if self.ui_state.object_list.source.stamp == Some(stamp) {
+        let canvas_special = self
+            .list_canvas(slot)
+            .and_then(|canvas| canvas.special_strings.as_ref());
+        let source = self.ui_state.object_list.source_of(owner);
+        let read_from = source.filter(|s| s.stamp == Some(stamp));
+        if read_from.is_some_and(|s| s.special.as_ref() == canvas_special) {
             return Task::none();
         }
-        self.ui_state.object_list.source.stamp = Some(stamp);
+        let special = canvas_special.cloned();
+        // The clock ticks and every save moves a modified date: rows no
+        // listed text of which uses a token read the same (#2630).
+        // A first read before the canvas had its strings reads the same too.
+        if let Some(read) = read_from
+            && match (read.special.as_ref(), special.as_ref()) {
+                (Some(read), Some(now)) => same_but_document_facts(read, now),
+                (None, _) => true,
+                (Some(_), None) => false,
+            }
+            && !self.object_texts_use_tokens(active, scope)
+        {
+            self.ui_state.object_list.source_of_mut(owner).special = special;
+            return Task::none();
+        }
         let nets = self.object_list_nets(active);
+        // Wire rows name their net from the project index (#3039): build one
+        // when none is current; its landing moves the stamp and rereads.
+        let warm = self.warm_net_index_of(active);
         if scope == ObjectScope::ThisSheet {
-            let rows = match self.document_state.active_engine() {
-                Some(engine) => model::sheet_rows(engine.document(), active, &|id: Uuid| {
+            let look = self.sheet_look(active, special.clone());
+            let rows = match self.document_state.engines.get(active) {
+                Some(engine) => model::sheet_rows(engine.document(), active, &look, &|id: Uuid| {
                     wire_net_of(nets.as_deref(), active, id)
                 }),
                 None => Vec::new(),
             };
-            let source = &mut self.ui_state.object_list.source;
+            let source = self.ui_state.object_list.source_of_mut(owner);
+            source.stamp = Some(stamp);
+            source.special = special;
             source.generation += 1;
             source.rows = Arc::new(rows);
             source.reading = false;
             source.failed = false;
-            return Task::none();
+            return warm;
         }
         let Some(root) = root else {
-            return Task::none();
+            return warm;
         };
         let ds = &self.document_state;
+        let project = ds.document_project(active);
+        let pages = project_sheets::project_pages(project);
         let read = ProjectRead {
             open: project_sheets::open_sheets_snapshot(ds),
-            pages: project_sheets::declared_pages(ds),
+            looks: self.project_looks(active, &pages, special.clone()),
+            pages,
             root,
-            fold: crate::app::state::project_case::fold_of(ds.active_document_project()),
+            fold: crate::app::state::project_case::fold_of(project),
             active: Some(active.to_path_buf()),
             nets,
         };
-        let source = &mut self.ui_state.object_list.source;
+        let source = self.ui_state.object_list.source_of_mut(owner);
+        source.stamp = Some(stamp);
+        source.special = special;
         source.generation += 1;
         source.reading = true;
         let generation = source.generation;
-        Task::perform(
+        let read = Task::perform(
             async move {
                 tokio::task::spawn_blocking(move || read_project_rows(read))
                     .await
@@ -271,131 +509,51 @@ impl Signex {
             },
             move |rows| {
                 Message::Dock(crate::dock::DockMessage::Panel(PanelMsg::ObjectList(
-                    ObjectListMsg::ProjectRowsRead { generation, rows },
+                    ObjectListMsg::ProjectRowsRead {
+                        window: owner,
+                        generation,
+                        rows,
+                    },
                 )))
             },
-        )
+        );
+        Task::batch([warm, read])
     }
 
-    /// Build the panel's view again when the rows, the picks, the sheet in
-    /// view or the canvas selection changed.
-    fn refresh_object_list_view(&mut self, active: PathBuf) {
+    /// Build the view of `slot` again when its rows, the picks, the sheet in
+    /// view or its canvas's selection changed.
+    fn refresh_object_list_view(&mut self, slot: ListSlot, active: PathBuf) {
+        let owner = self.list_owner(slot);
         let state = &self.ui_state.object_list;
-        let selected = &self.interaction_state.active_canvas().selected;
+        let (Some(canvas), Some(source)) = (self.list_canvas(slot), state.source_of(owner)) else {
+            return;
+        };
+        let selected = &canvas.selected;
         let mut h = std::collections::hash_map::DefaultHasher::new();
         state.picks_stamp().hash(&mut h);
-        (
-            Arc::as_ptr(&state.source.rows) as usize,
-            state.source.reading,
-        )
-            .hash(&mut h);
+        (Arc::as_ptr(&source.rows) as usize, source.reading).hash(&mut h);
         active.hash(&mut h);
         // The filter folds by the language's rules.
         self.ui_state.i18n.locale().hash(&mut h);
         selected.hash(&mut h);
         let stamp = h.finish();
-        if state.source.view_stamp == Some(stamp) {
+        if source.view_stamp == Some(stamp) {
             return;
         }
-        let status = if state.source.reading && state.source.rows.is_empty() {
+        let status = if source.reading && source.rows.is_empty() {
             ObjectListStatus::Reading
         } else {
             ObjectListStatus::Ready
         };
         let i18n = &self.ui_state.i18n;
-        let view = ObjectListView::build(state, status, Some(active), selected, i18n);
-        self.ui_state.object_list.source.view_stamp = Some(stamp);
-        self.document_state.panel_ctx.object_list = view;
+        let view = ObjectListView::build(state, source, status, Some(active), selected, i18n);
+        self.ui_state.object_list.source_of_mut(owner).view_stamp = Some(stamp);
+        if let Some(slot_view) = self.list_view_mut(slot) {
+            *slot_view = view;
+        }
     }
 }
 
 #[cfg(test)]
-mod tests {
-    use signex_types::schematic::{Point, SchematicSheet, Symbol};
-
-    use super::*;
-
-    fn sheet(n: u128, reference: &str) -> SchematicSheet {
-        let mut s = SchematicSheet::default();
-        s.symbols.push(Symbol {
-            uuid: Uuid::from_u128(n),
-            reference: reference.into(),
-            value: "10k".into(),
-            position: Point::new(1.0, 1.0),
-            ..Symbol::default()
-        });
-        s
-    }
-
-    /// #1259: Project lists every page of the project, the sheet in view
-    /// first; This sheet lists only the sheet in view.
-    #[test]
-    fn the_project_scope_lists_every_sheet_with_the_sheet_in_view_first() {
-        let dir = tempfile::tempdir().expect("temp dir");
-        let (a, b) = (dir.path().join("a.snxsch"), dir.path().join("b.snxsch"));
-        for (path, s) in [(&a, sheet(1, "R1")), (&b, sheet(2, "R2"))] {
-            let text = signex_types::format::SnxSchematic::new(s)
-                .write_string()
-                .expect("encode");
-            std::fs::write(path, text).expect("write");
-        }
-        let open: OpenSheets = [(b.clone(), sheet(2, "R2"))].into_iter().collect();
-        let rows = read_project_rows(ProjectRead {
-            open,
-            pages: vec![a.clone(), b.clone()],
-            root: a.clone(),
-            fold: CaseFold::host_default(),
-            active: Some(b.clone()),
-            nets: None,
-        });
-        let sheets: Vec<&str> = rows.iter().map(|r| r.sheet.as_str()).collect();
-        assert_eq!(sheets, ["b", "a"], "the sheet in view first: {rows:?}");
-
-        let this_sheet = model::sheet_rows(&sheet(2, "R2"), &b, &|_: Uuid| None);
-        assert_eq!(this_sheet.len(), 1);
-        assert_eq!(this_sheet[0].sheet, "b");
-    }
-
-    fn with_engine(app: &mut Signex, path: &Path) {
-        let engine = signex_engine::Engine::new(SchematicSheet::default()).expect("engine");
-        app.document_state
-            .engines
-            .insert(path.to_path_buf(), engine);
-    }
-
-    /// A read that fails keeps its stamp and is marked failed, so a read
-    /// that fails every time is not started again on every update; it is
-    /// read again once its source changes.
-    #[test]
-    fn a_failed_read_is_tried_again_only_when_its_source_changes() {
-        let (mut app, _boot) = Signex::new();
-        let a = PathBuf::from("a.snxsch");
-        with_engine(&mut app, &a);
-        let stamp = app.object_rows_stamp(&a, ObjectScope::ThisSheet);
-        let source = &mut app.ui_state.object_list.source;
-        source.stamp = Some(stamp);
-        source.generation = 4;
-        source.reading = true;
-
-        let _ = app.handle_object_list_message(ObjectListMsg::ProjectRowsRead {
-            generation: 4,
-            rows: Err("the read panicked".to_string()),
-        });
-        let source = &app.ui_state.object_list.source;
-        assert_eq!(source.stamp, Some(stamp), "the stamp is kept");
-        assert!(source.failed && !source.reading);
-
-        let _ = app.refresh_object_rows(&a);
-        assert_eq!(
-            app.ui_state.object_list.source.generation, 4,
-            "nothing changed: no read again"
-        );
-
-        let b = PathBuf::from("b.snxsch");
-        with_engine(&mut app, &b);
-        let _ = app.refresh_object_rows(&b);
-        let source = &app.ui_state.object_list.source;
-        assert_eq!(source.generation, 5, "the source changed: read again");
-        assert!(!source.failed);
-    }
-}
+#[path = "object_list_tests.rs"]
+mod tests;

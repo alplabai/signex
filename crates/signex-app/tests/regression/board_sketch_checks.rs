@@ -21,7 +21,7 @@ fn sketch(f: &mut Fixture, event: BoardSketchMsg) {
 /// The Outline checks lines Properties shows for the board in view.
 fn check_lines(f: &Fixture) -> Vec<CheckLine> {
     f.app
-        .document_state
+        .document_view
         .panel_ctx
         .footprint_editor
         .as_ref()

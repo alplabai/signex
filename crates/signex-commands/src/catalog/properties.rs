@@ -85,6 +85,8 @@ pub(super) const PROPERTIES: &[CommandMetadata] = &[
         group: CommandGroup::General,
         enable: Enablement::RequiresSelection,
         flags: CommandFlags::GUI_ONLY,
+        // It opens the datasheet's address in the system browser.
+        needs_network: true,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -94,7 +96,11 @@ pub(super) const PROPERTIES: &[CommandMetadata] = &[
         menu_label: Some(command_ids::CMD_MENU_CHANGE_COMPONENT),
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresSelection,
-        flags: CommandFlags::GUI_MUTATES,
+        // Without operands it opens the dialog on the selected part; with
+        // them it swaps the part `id` names on the sheet `document` names, as
+        // the dialog's Change does (#1297, #2954, docs/CLI.md).
+        flags: CommandFlags::MUTATES,
+        operands: super::bom::CHANGE_COMPONENT,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -102,6 +108,28 @@ pub(super) const PROPERTIES: &[CommandMetadata] = &[
         category: "design",
         label: command_ids::CMD_OPEN_PARAMETER_MANAGER,
         menu_label: Some(command_ids::CMD_MENU_OPEN_PARAMETER_MANAGER),
+        group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
+    // #1295: the Parameter Manager footer's Export… and Import… (no key, no
+    // menu row). Import opens a preview; its Apply is the undo step.
+    CommandMetadata {
+        id: "export_parameters",
+        category: "design",
+        label: command_ids::CMD_EXPORT_PARAMETERS,
+        menu_label: None,
+        group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "import_parameters",
+        category: "design",
+        label: command_ids::CMD_IMPORT_PARAMETERS,
+        menu_label: None,
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresDocument(DocumentKind::Schematic),
         flags: CommandFlags::GUI_ONLY,
@@ -118,6 +146,19 @@ pub(super) const PROPERTIES: &[CommandMetadata] = &[
         operands: operands::SYMBOL_PARAMETER,
         ..CommandMetadata::DEFAULT
     },
+    // #2953: the Object List's inline edits run this, as Properties' rows
+    // run the same engine edit. No default key.
+    CommandMetadata {
+        id: "set_object_text",
+        category: "edit",
+        label: command_ids::CMD_SET_OBJECT_TEXT,
+        menu_label: None,
+        group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::MUTATES,
+        operands: operands::OBJECT_TEXT,
+        ..CommandMetadata::DEFAULT
+    },
     // A sheet variable `${NAME}` and expressions resolve; the Properties
     // panel's Sheet Variables rows run this too.
     CommandMetadata {
@@ -129,6 +170,20 @@ pub(super) const PROPERTIES: &[CommandMetadata] = &[
         enable: Enablement::RequiresDocument(DocumentKind::Schematic),
         flags: CommandFlags::MUTATES,
         operands: operands::SHEET_VARIABLE,
+        ..CommandMetadata::DEFAULT
+    },
+    // #1277: a part joins two named nets on purpose. No Properties row yet
+    // (no mockup row); the CLI, an agent and placement from a Net Tie
+    // library symbol set it.
+    CommandMetadata {
+        id: "set_net_tie",
+        category: "edit",
+        label: command_ids::CMD_SET_NET_TIE,
+        menu_label: None,
+        group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::MUTATES,
+        operands: operands::NET_TIE,
         ..CommandMetadata::DEFAULT
     },
     // #2407: lock or unlock the selected tracks and vias (the board menu's

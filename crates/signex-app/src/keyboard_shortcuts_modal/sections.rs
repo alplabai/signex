@@ -3,7 +3,9 @@
 
 use signex_i18n::I18n;
 
-use crate::keymap::{KeymapEditorModel, KeymapEditorRow, ShortcutProfileSet};
+use crate::keymap::{
+    ExtensionCommandNames, KeymapEditorModel, KeymapEditorRow, ShortcutProfileSet,
+};
 
 /// One category of the reference sheet: the category id and the rows
 /// listed under it, in profile order. A row is the keymap editor's row, so
@@ -20,10 +22,22 @@ pub struct ShortcutSection {
 /// `UiState` caches it and rebuilds on a keymap change instead of the view
 /// rebuilding it every frame (#1380).
 pub fn build_sections(i18n: &I18n, profiles: &ShortcutProfileSet) -> Vec<ShortcutSection> {
+    build_sections_with(i18n, profiles, &ExtensionCommandNames::default())
+}
+
+/// [`build_sections`] with the installed extensions' commands named by
+/// `extensions`. A binding to an extension command is listed whether or
+/// not an installed extension adds it; one that none adds reads as
+/// unavailable (`docs/DECISIONS.md`, 2026-11-25).
+pub fn build_sections_with(
+    i18n: &I18n,
+    profiles: &ShortcutProfileSet,
+    extensions: &ExtensionCommandNames,
+) -> Vec<ShortcutSection> {
     let editor = KeymapEditorModel::new(profiles.clone());
     let mut sections: Vec<ShortcutSection> = Vec::new();
     let mut index = std::collections::HashMap::<String, usize>::new();
-    for row in editor.rows_in(i18n) {
+    for row in editor.rows_in_with(i18n, extensions) {
         let slot = *index.entry(row.category.clone()).or_insert_with(|| {
             sections.push(ShortcutSection {
                 category: row.category.clone(),
@@ -43,13 +57,13 @@ pub fn build_sections(i18n: &I18n, profiles: &ShortcutProfileSet) -> Vec<Shortcu
 ///
 /// A catalog command with no dispatch arm consumes its key and does
 /// nothing (#103), so listing it would advertise a dead binding. Rows
-/// without a command id are kept as they were.
+/// without a command id are kept as they were. An extension command is
+/// listed: its label says when no installed extension adds it.
 fn is_listed(row: &KeymapEditorRow) -> bool {
     !row.unbound
-        && row
-            .command
-            .as_ref()
-            .is_none_or(crate::app::command::bridge::is_dispatchable)
+        && row.command.as_ref().is_none_or(|command| {
+            command.is_extension() || crate::app::command::bridge::is_dispatchable(command)
+        })
 }
 
 #[cfg(test)]

@@ -17,6 +17,7 @@ impl Signex {
         let net_hover = ui.net_hover_enabled;
         let edge_pan = ui.edge_pan;
         let body_fill = ui.symbol_body_fill;
+        let cross_out_not_fitted = ui.cross_out_not_fitted;
         let pcb_defaults = ui.pcb_dimension_defaults.clone();
         let pcb_dim_others = ui.pcb_dim_others_percent;
         let (trackpad_pan, remember_geometry) = (ui.trackpad_pan, ui.remember_window_geometry);
@@ -65,6 +66,9 @@ impl Signex {
             }),
             write(crate::symbol_fill_prefs::ENABLED_KEY, move || {
                 crate::fonts::write_symbol_body_fill_pref(body_fill)
+            }),
+            write(crate::fonts::CROSS_OUT_NOT_FITTED_KEY, move || {
+                crate::fonts::write_cross_out_not_fitted_pref(cross_out_not_fitted)
             }),
             write(crate::pcb_defaults_prefs::KEY, move || {
                 crate::fonts::write_pcb_dimension_defaults_pref(&pcb_defaults)

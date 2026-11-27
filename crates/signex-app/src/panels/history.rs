@@ -37,7 +37,7 @@ const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
 
 /// In-flight render state for the History panel. Owned by
-/// [`crate::app::DocumentState`] and projected into
+/// [`crate::app::DocumentViewState`] and projected into
 /// [`super::PanelContext`] each refresh.
 #[derive(Debug, Clone, Default)]
 pub struct HistoryPanelState {

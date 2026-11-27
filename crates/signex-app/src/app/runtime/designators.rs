@@ -36,12 +36,22 @@ impl Signex {
     /// active sheet. The engine revision moves on every document change.
     fn designators_key(&self) -> Option<crate::canvas::DesignatorsKey> {
         let path = self.document_state.active_path.as_deref()?;
+        Some(self.designators_key_for(path))
+    }
+
+    /// What the designators of any canvas showing the sheet at `path` are a
+    /// function of: the path, the engine `(instance, revision)` and the
+    /// shown placement.
+    pub(super) fn designators_key_for(
+        &self,
+        path: &std::path::Path,
+    ) -> crate::canvas::DesignatorsKey {
         let engine = self
             .document_state
             .engines
             .get(path)
             .map(|engine| (engine.instance_id(), engine.revision()));
-        Some((path.to_path_buf(), engine, self.shown_placement(path)))
+        (path.to_path_buf(), engine, self.shown_placement(path))
     }
 
     /// The placement whose designators the schematic at `path` shows and
@@ -58,7 +68,7 @@ impl Signex {
     /// project's sheet resolves through that project, not the focused one's
     /// (#2021).
     pub(crate) fn shown_placement(&self, path: &std::path::Path) -> Option<InstancePath> {
-        let recorded = self.document_state.tab_placements.get(path);
+        let recorded = self.document_view.tab_placements.get(path);
         let Some((hierarchy, _)) = self.hierarchy_describing(path) else {
             return recorded.cloned();
         };

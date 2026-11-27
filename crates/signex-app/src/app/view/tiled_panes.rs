@@ -85,7 +85,7 @@ impl Signex {
         focused: bool,
         tab: usize,
     ) -> Element<'a, Message> {
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let (color, width) = if focused {
             (crate::styles::ti(tokens.accent), FOCUS_RING)
         } else {
@@ -120,7 +120,7 @@ impl Signex {
         index: usize,
         window_id: iced::window::Id,
     ) -> Element<'_, Message> {
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let panes = &self.interaction_state.tile_panes;
         let tab = self.document_state.tabs.get(index);
         let content = match tab {
@@ -190,7 +190,7 @@ impl Signex {
             wire_tool_active: false,
             placement: None,
             unions: self.union_view(Some(path)),
-            annotation_flags: self.annotation_flag_view(Some(path)),
+            notebook_badges: self.notebook_badge_view(Some(path)),
             ..prefs
         };
         crate::canvas::SchematicSurface::new(crate::canvas::SchematicCanvas::new(slot, prefs))

@@ -44,6 +44,7 @@ pub(crate) mod modal_chrome;
 pub mod mount;
 pub mod panel;
 pub mod part_label;
+pub(crate) mod part_search;
 pub mod part_sync;
 pub mod picker;
 pub mod place;

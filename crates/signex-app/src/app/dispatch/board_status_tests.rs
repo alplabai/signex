@@ -750,7 +750,7 @@ fn save_from_the_layer_dropdown_opens_the_naming_card() {
         .as_ref()
         .expect("the layer set menu");
     assert!(matches!(&menu.card, crate::app::LayerSetCard::Naming(name) if name.is_empty()));
-    let tokens = &app.document_state.panel_ctx.tokens;
+    let tokens = &app.document_view.panel_ctx.tokens;
     let (_, height) = app.ui_state.size_of_window(main);
     assert!(menu.y < height - crate::status_bar::status_bar_height(tokens));
     assert_eq!(open_kind(&app), None);

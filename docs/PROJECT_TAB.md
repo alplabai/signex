@@ -112,16 +112,33 @@ message. The chrome catalog draws a sample of it.
   card. Under the list, Duplicate adds "<name> copy" (then "<name> copy 2",
   ...) carrying what the source changes and the fits its sheets give it, and
   opens its name; it waits for a parts read that holds. Set as default moves
-  the star. The top bar ends with Settings..., Compare variants... and Open
-  in BOM Studio, greyed with a "Not built yet" tooltip. The centre shows a
+  the star. The top bar ends with Settings..., greyed with a "Not built yet"
+  tooltip (the variant defaults are `project_set_default_variant`; the
+  surface waits for a mockup), Compare variants... and Open in BOM Studio
+  (#2949). Compare variants... shows two variants side by side in place of
+  the cards and the matrix (mockup row 59, view d): Base on the left, the
+  selected variant on the right (the first one while Base is selected), a
+  select per side with a swap button between them, one line per difference
+  (a part one side fits and the other does not; else each value, footprint
+  or field the two fitted sides give another value, the right side as a
+  pill), and a footer with the count of differences, the fitted parts on
+  each side and Close. It reads the parts read with the project's variant
+  settings over it (`VariantMatrix::compare`), as the matrix and the BOM
+  do, and changes nothing. Open in BOM Studio opens the BOM preview of the
+  project's sheets (its root sheet when open, else its first open sheet)
+  with the variant selected in the list picked; with no sheet of the
+  project open, Messages says so and nothing opens. The centre shows a
   card per variant
   (parts fitted, cost "—" while no prices are known, changes against Base)
   and the parts matrix: one row per part, a column per variant, Fitted or
-  Not fitted, only cells that differ from Base coloured; a cell with a value
-  of its own shows the value and what it replaces (value, footprint,
-  override). A click selects a cell and the right pane shows that part in
-  that variant: a Fitting switch (Fitted, Not fitted; Alternate is greyed,
-  not built yet; As on the sheets drops the cell's own fit; picking the fit
+  Not fitted, only cells that differ from Base coloured; a cell whose part
+  uses an alternate shows its part number on the info tint (mockup row
+  208), and a cell with a value of its own shows the value and what it
+  replaces (value, footprint, override); hovering either says what the
+  variant sets. A click selects a cell and the right pane shows that part in
+  that variant: a Fitting switch (Fitted, Not fitted; Alternate… opens the
+  canvas's Alternate part picker for the part, see "Alternate part and
+  variant value on the canvas"; As on the sheets drops the cell's own fit; picking the fit
   the sheets already give records nothing), the parameter overrides
   (Parameter, Base and variant columns: Value, Footprint and the part's
   fields with Base's value, the variant's value typed in place and stored on
@@ -133,7 +150,13 @@ message. The chrome catalog draws a sample of it.
   see `docs/architecture/snxprj-format.md`) on the placed part, so they stay
   on it through a re-annotation, and laid over the read as it is shown, so
   an edit shows without reading the sheets again; the BOM lists a variant
-  with the same settings. No sheet preview of the part yet. Its
+  with the same settings. A part on a repeated sheet is one row for every
+  channel's copy (fold chevron, its designator on the sheet, the number of
+  channels; per variant Fitted, Not fitted or "mixed · 1 of 3 not fitted")
+  that a click opens into one row per copy, each set on its own; the right
+  pane of a copy also sets every channel's copy at once, one undo step
+  (`docs/MULTI_CHANNEL.md`, "Per-channel variant state"). No sheet preview
+  of the part yet. Its
   parts are read off the UI thread from every sheet of
   the project, open ones with their unsaved edits, each child sheet once per
   placement as the BOM counts it, with the BOM's own fit rule
@@ -141,9 +164,11 @@ message. The chrome catalog draws a sample of it.
   evaluated on its sheet, #1986); after a sheet edit or a change of the
   project parameters the footer says so and the top bar offers Read again. Names are trimmed, at most 64 characters, no control
   characters, unique ignoring ASCII case, and never `Base`; a refused edit
-  shows its reason and changes nothing. Settings, Compare variants, Open in
-  BOM Studio, alternate parts, the cell menu and the sheet preview are not
-  built yet.
+  shows its reason and changes nothing. The schematic canvas, SVG, PDF and
+  print draw a part's value as the active variant (on paper, the printed
+  variant) gives it; Base, or a cleared value, draws the sheet's value
+  again (#2948). The Settings surface, alternate parts, the cell menu and
+  the sheet preview are not built yet.
 - **Libraries** — the project's libraries in list order, with the path as
   stored (cut from the start so the file name stays visible), the kind (in
   the project, shared, global) and the mount state read from the app as a
@@ -255,10 +280,20 @@ nothing and says nothing in Messages. Edits are General undo steps; a run is
 not an edit. An entry with no id takes its verdict from the run under its
 place in the list (`req::#1` for the first), the name the check gives it.
 
-Not built yet (follow-up issue "Requirements: variant and fitted parts for
-Part lifecycle, measured-from and a limit preview for Board size", #2686): Part lifecycle's Variant and Fitted parts only fields, Board size's
-Measured from, its preview with limit handles and the measured size on a
-passed card, and the net class note that edits are not checked yet.
+A Part lifecycle card (#2686, mockup row 38) has a Variant pick (the active
+variant, shown with its name and stored as no value; Base; then each of the
+project's variants; a stored name the project no longer has stays shown) and
+a Fitted parts only box, on by default. Both commit at once as one General
+step, as `project_set_requirement` with `field=variant` or
+`field=fitted_only` does; a variant the project does not have is refused. A
+failed card checking fitted parts only says "N of M fitted parts". A net
+class card that shows a verdict of the last run says "last run · edits not
+checked yet" beside its pill once its fields differ from the values that
+run checked, or hold a typed value or a refusal, until the next run.
+
+The Board size card's Measured from names the board outline, the one
+reference the check measures, and its preview is read-only: the limits are
+typed in their fields (DECISIONS 2026-11-24, #2815).
 
 ## Preferences and the project
 
@@ -266,16 +301,76 @@ The Preferences values seed a new project (its ERC rules and its Annotate
 undo choice) and are the default of a project that stores none. They never
 overwrite a value the project stores.
 
+## Alternate part and variant value on the canvas
+
+Right-click one placed part in a variant ▸ In variant ▸ Alternate… (mockup
+row 208) opens the Alternate part picker over the editor; Edit value for
+this variant… (mockup row 209) opens a popover where the menu opened. Both
+are greyed in Base, without one part selected and on a repeated sheet
+before a compile. Code: `crates/signex-app/src/app/variant_part_edit/`.
+
+- **Picker.** The Base part on top (MPN, manufacturer, value, footprint,
+  pins, and "Fitted in <variant>" or "Not fitted in <variant>": the
+  variant's own fit, else the sheets'). Candidates: the manufacturer alternates of the library row the part
+  was placed from, then a search over the project libraries for the typed
+  words (part numbers, manufacturer, description, value, internal number;
+  the part's own part number left out; the first 20 shown with the count).
+  The libraries are read off the update thread on open and on each change of
+  the search; a read the picker no longer waits for is dropped. A row shows
+  MPN, manufacturer, value, footprint (amber when it differs from Base),
+  stock from the cached prices ("—" when unknown), the library's status
+  (an alternate's approval, a row's lifecycle state) and "used in <variant>"
+  when another variant already uses that part number for the part. Same
+  footprint only hides the rest. The compare strip of the picked row: pins
+  (numbers and names), footprint, and what the variant gets: the part
+  number, and the value and footprint where they differ from the placed
+  part's. A difference warns and Apply stays live (DECISIONS 2026-11-26).
+  Pins that differ name the pin whose wiring changes: a wired pin the
+  candidate lacks ("pin 2 (K) loses its wire"), else a candidate pin no
+  wire reaches ("pin 3 (GND) has no wire"). The part's wired pins come from
+  its sheet's netlist (`signex_net::build_netlist`), worked out in the
+  picker's first candidates read, off the update thread.
+- **From the Variant Manager.** Alternate… in the right pane opens the same
+  picker for the selected cell's part in the cell's variant: the part's
+  first placed unit on the project's open sheets, and for a channel's copy
+  that channel's placement, shown as the channel tab with the scope.
+- **Popover.** Parameter (Value by default; the list holds the part's Base
+  parameters, an override already set shown in orange), Base read-only, the
+  variant's value, then Reset to base, Cancel and OK. An empty field is not a
+  value: OK is greyed and says so (DECISIONS 2026-11-26).
+- **Scope.** On a channel tab: This channel only or All channels, All
+  channels by default. On Editor the edit sets every channel's copy; on a
+  sheet that is not repeated, the part.
+- **Applying.** Apply, OK and Reset to base build the section command the
+  catalog commands `project_set_variant_alternate` and
+  `project_set_variant_override` build (`variant_parameters_command`): one
+  part is `SetVariantPartParameters` or `SetVariantPartParameter`, every
+  channel's copy `SetVariantPartsParameters`. Each is one step of the General
+  history. A refusal keeps the card open with its reason; Esc and a click
+  outside cancel.
+- **Canvas marks.** In the active variant a part with an alternate draws a
+  small `alt` tag by its designator, and a part with a value of its own a
+  `Δ` by its value; the value itself draws in the accent (the theme's
+  selection colour) in place of the sheet's, on the CPU replay and the GPU
+  path from the one content scene. Hovering a mark names the variant, what it sets and the Base
+  value. The marks are a layer of widgets over the canvas, placed through
+  the live camera; Base marks nothing.
+
+Not built: the toast with Undo after Apply, which waits for the shared
+toast surface of #3002 (Messages says what changed meanwhile), and the stock
+and lifecycle of a manufacturer alternate (the library keeps them per row).
+
 ## Commands
 
 `project_settings document=<project or any of its documents>` answers every
 section as one object: `sheets` (`page`, `name`, `file`, in page order),
-`variants` (`defined`, `active`; `Base` when none is), `libraries` (`name`,
+`variants` (`defined`, `active`, `default`; `Base` when none is), `libraries` (`name`,
 `path` as stored, `kind` `project_local` / `shared` / `global`, `state`
 `mounted` / `read_only` / `missing` / `not_mounted`), `annotation`
 (`annotate_undo` `project` / `per_sheet` / null for the Preferences
-default, `annotate_undo_effective`, `erc_rules` `project` / `preferences` /
-`unreadable`) and `version_control` (`commit_on_save`, `repository`
+default, `annotate_undo_effective`, `numbering` `continuous` /
+`page_hundreds` / `page_thousands` (#1292), `erc_rules` `project` /
+`preferences` / `unreadable`) and `version_control` (`commit_on_save`, `repository`
 `present` / `absent` / `unknown`, `pending_commits`) and the requirements:
 `requirements` (each entry as stored), `unreadable` (`index`, `reason` of
 each entry this build cannot read) and `list_unreadable`.
@@ -291,8 +386,10 @@ list):
 | `project_rename_variant` | `name`, `value` (the new name) |
 | `project_remove_variant` | `name` |
 | `project_set_active_variant` | `name`, optional; none or `Base` is Base |
+| `project_set_default_variant` | `name`, optional; none or `Base` is Base (Set as default, #2949) |
 | `project_move_library` | `library` (path as stored), `direction` |
 | `project_set_annotate_undo` | `value` `project` / `per_sheet`, optional; none follows Preferences |
+| `project_set_annotate_numbering` | `value` `continuous` / `page_hundreds` / `page_thousands`, optional; none is continuous (#1292) |
 | `project_set_version_control` | `on`; on is refused without a repository |
 | `project_add_requirement` | `kind`, `id` optional (the kind's name, made unique) |
 | `project_set_requirement` | `requirement` (its id), `field` (as the file names it), `value` as typed; empty clears an optional field |
@@ -304,6 +401,48 @@ does) plus `changed`; an id that names no entry, or more than one, is
 refused. `project_run_requirements` runs the tab's Run checks and answers at
 once; the results land in the tab. `check_requirements` is the query that
 answers with the report.
+
+The Variant Manager's top bar actions are queries (#2949); both need an
+open sheet of the project and change nothing.
+`compare_variants document=<…> from=<variant>? to=<variant>?` (`from`
+defaults to Base, `to` to the active variant, the first one while Base is
+active) answers `project`, `from`, `to` (names as defined; `Base`),
+`from_fitted`, `to_fitted` and `parts`: each part the two differ on, in
+designator order, with `designator`, `from` and `to` (`fitted`,
+`parameters` by name: `Value`, `Footprint`, fields) and `changes`
+(`{"kind": "fit"}` or `{"kind": "parameter", "parameter": <name>}`).
+`variant_bom document=<…> name=<variant>?` (none is the active variant,
+`Base` is Base) answers `project`, `variant`, `parts` (the fitted count)
+and `lines` (`designators`, `quantity`, `name`, `value`, `footprint`), the
+lines Open in BOM Studio opens on. A project with no variant besides Base,
+an unknown name or no open sheet is refused with the reason.
+
+The Variant Manager's part edits and Duplicate are commands too (#3038).
+A part is named by `designator` as the Variant Manager lists it (`CH2_R5`
+for a channel's copy of R5); the project's parts are read from its sheets
+as the tab reads them, so the setting lands on the placed part the matrix
+links. Each runs the same section command as the tab's click, one step of
+the General history, and answers with the Variants section, `changed` and
+`parts` (each part set: `designator`, `fitted` as the variant now sets it,
+null for as on the sheets, and its `parameters`):
+
+| Command | Operands |
+|---|---|
+| `project_set_variant_fit` | `variant`, `designator`, `fitted` optional (none is as on the sheets), `scope` `part` (default) or `channels` (every channel's copy of a part on a repeated sheet) |
+| `project_set_variant_alternate` | `variant`, `designator`, `mpn`, `value`, `footprint`, each optional; one left out is the part's own again, none is the part itself again; a value or footprint needs `mpn`; `scope` as for the fit |
+| `project_set_variant_override` | `variant`, `designator`, `field` (`Value`, `Footprint` or a field name), `value` optional; none is the Base value again; `scope` as for the fit |
+| `project_duplicate_variant` | `name` (the variant to copy, or `Base`), `value` optional (the copy's name; none is the first free "<name> copy") |
+
+Picking the fit the sheets already give a part that sets none records
+nothing (`changed` false), as the Fitting switch does. An alternate part is
+its part number (the `MPN` field), value and footprint set together as one
+step. On the canvas, In variant ▸ Alternate… and Edit value for this
+variant… make the same edits through the same section commands; see
+"Alternate part and variant value on the canvas" below.
+`project_duplicate_variant` answers `name`, the copy's name. Set as default
+is `project_set_default_variant`. A part the read does not list, a `scope`
+of `channels` on a part that is not on a repeated sheet, Base and an
+unknown variant are refused with the reason.
 
 A refused edit changes nothing and says why. The edits are on the agent
 channel and refused inside `apply_edits`: they write the project file, which

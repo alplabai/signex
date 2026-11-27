@@ -68,7 +68,7 @@ fn assert_pill_inside_canvas(app: &Signex, main: iced::window::Id, size: Size, c
 }
 
 fn assert_right_dock_open(app: &Signex) {
-    let dock = &app.document_state.dock;
+    let dock = &app.document_view.dock;
     assert!(dock.has_panels(PanelPosition::Right), "no right dock");
     assert!(
         !dock.is_collapsed(PanelPosition::Right),
@@ -149,13 +149,13 @@ fn the_pill_stays_inside_the_canvas_with_no_dock() {
         PanelPosition::Bottom,
     ];
     for pos in positions {
-        for kind in app.document_state.dock.panel_kinds(pos).to_vec() {
-            assert!(app.document_state.dock.close_panel(kind), "{kind:?}");
+        for kind in app.document_view.dock.panel_kinds(pos).to_vec() {
+            assert!(app.document_view.dock.close_panel(kind), "{kind:?}");
         }
     }
     for pos in positions {
         assert!(
-            !app.document_state.dock.has_panels(pos),
+            !app.document_view.dock.has_panels(pos),
             "{pos:?} still docked"
         );
     }

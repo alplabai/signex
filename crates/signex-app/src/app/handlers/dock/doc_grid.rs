@@ -36,7 +36,7 @@ impl Signex {
     }
 
     fn doc_grid_draft_mut(&mut self, field: DocGridField) -> &mut Option<String> {
-        let ctx = &mut self.document_state.panel_ctx;
+        let ctx = &mut self.document_view.panel_ctx;
         match field {
             DocGridField::Visible => &mut ctx.visible_grid_draft,
             DocGridField::Snap => &mut ctx.snap_grid_draft,

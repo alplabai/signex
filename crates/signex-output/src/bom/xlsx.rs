@@ -41,13 +41,15 @@ pub fn emit(table: &BomTable, columns: &[BomColumn]) -> Result<Vec<u8>, BomError
             BomColumn::Value => COL_WIDTH_VALUE,
             BomColumn::Footprint => COL_WIDTH_FOOTPRINT,
             BomColumn::Description => COL_WIDTH_DESC,
-            BomColumn::Custom(_) => COL_WIDTH_CUSTOM,
+            // A computed cell is text with its unit (`2.5mW`), #1988.
+            BomColumn::Custom(_) | BomColumn::Computed(_) => COL_WIDTH_CUSTOM,
             BomColumn::UnitPrice
             | BomColumn::BuyQty
             | BomColumn::ExtendedPrice
             | BomColumn::Stock => COL_WIDTH_NUMBER,
             BomColumn::Currency => COL_WIDTH_QTY + 4.0,
             BomColumn::Distributor | BomColumn::PriceAge => COL_WIDTH_VALUE,
+            BomColumn::Alternates => COL_WIDTH_DESC,
         };
 
         worksheet.write_string_with_format(0, col, header_text, &header_format)?;

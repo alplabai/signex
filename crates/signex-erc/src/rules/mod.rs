@@ -46,13 +46,17 @@ mod repeat_entry;
 pub(crate) use repeat_entry::repeat_entry_needs_bus;
 mod harness;
 pub(crate) use harness::{harness_entry_mismatch, harness_type_conflict};
+mod net_class_conflict;
+pub(crate) use net_class_conflict::{conflict_finding, conflict_net, net_class_conflict};
+mod diff_pair_partner;
+pub(crate) use diff_pair_partner::diff_pair_partner_missing;
 
 use std::collections::{HashMap, HashSet};
 
 use signex_net::{SegmentIndex, SheetConnectivity, pt_key, uf::Key};
 use signex_types::schematic::{
-    LabelType, PartKey, PinDirection, Point, SelectedKind, group_into_parts, normalize_port_name,
-    normalized_lib_id, repeated_entry_name,
+    LabelType, PartKey, PinDirection, Point, SelectedKind, entry_port_name, group_into_parts,
+    normalized_lib_id,
 };
 
 use crate::context::ErcContext;
@@ -581,11 +585,8 @@ pub(crate) fn bad_hier_sheet_pin(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
             .collect();
 
         // A `Repeat(<net>)` entry (#1279) is matched by the child's port `<net>`.
-        fn port_of(name: &str) -> Option<&str> {
-            normalize_port_name(name).map(|n| repeated_entry_name(n).unwrap_or(n))
-        }
         for pin in &child.pins {
-            let matched = port_of(&pin.name).is_some_and(|n| {
+            let matched = entry_port_name(&pin.name).is_some_and(|n| {
                 hier_text.contains(n) || bus_hier::has_bus_counterpart(n, hier_text.iter().copied())
             });
             if !matched {
@@ -603,8 +604,11 @@ pub(crate) fn bad_hier_sheet_pin(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
             }
         }
 
-        let parent_pins: HashSet<&str> =
-            child.pins.iter().filter_map(|p| port_of(&p.name)).collect();
+        let parent_pins: HashSet<&str> = child
+            .pins
+            .iter()
+            .filter_map(|p| entry_port_name(&p.name))
+            .collect();
         for lbl in child_ctx
             .labels
             .iter()

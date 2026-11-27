@@ -262,7 +262,7 @@ impl Signex {
         path: &std::path::Path,
         fold: crate::app::state::scope::CaseFold,
     ) -> Option<usize> {
-        let navigator = &self.document_state.panel_ctx.navigator;
+        let navigator = &self.document_view.panel_ctx.navigator;
         let shown_root = navigator.hierarchy.as_ref()?.root.as_ref()?;
         if !shown_root.is_at(root?, fold) {
             return None;
@@ -472,7 +472,7 @@ mod tests {
         };
         use signex_types::schematic::InstancePath;
         let fold = crate::app::state::project_case::fold_of(app.document_state.projects.first());
-        let navigator = &mut app.document_state.panel_ctx.navigator;
+        let navigator = &mut app.document_view.panel_ctx.navigator;
         navigator.hierarchy = Some(SheetHierarchy {
             fold,
             root: Some(SheetNode {
@@ -546,7 +546,8 @@ mod tests {
             crate::app::core::compiled_design::CompiledResult {
                 design: std::sync::Arc::new(signex_net::CompiledDesign::default()),
                 paths: Default::default(),
-                compiled_at: "12:41".to_string(),
+                compiled_at: chrono::DateTime::<chrono::Utc>::UNIX_EPOCH,
+                miniatures: Default::default(),
                 stale: Default::default(),
                 has_unread_sheets: false,
                 unread_paths: Vec::new(),

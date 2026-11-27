@@ -129,14 +129,19 @@ pub(super) fn push(
     }
 }
 
+/// Half the height of a harness-typed sheet entry's tab; the canvas's "!"
+/// badge on a mismatched entry sits just above it.
+pub(super) const SHEET_ENTRY_TAB_HALF_HEIGHT_MM: f64 = 0.6;
+
 /// The tab a harness-typed sheet entry is drawn with, centred on `p`.
 fn sheet_entry_tab(p: Point) -> Vec<Point> {
+    let h = SHEET_ENTRY_TAB_HALF_HEIGHT_MM;
     vec![
-        Point::new(p.x - 1.27, p.y - 0.6),
-        Point::new(p.x + 0.6, p.y - 0.6),
+        Point::new(p.x - 1.27, p.y - h),
+        Point::new(p.x + 0.6, p.y - h),
         Point::new(p.x + 1.27, p.y),
-        Point::new(p.x + 0.6, p.y + 0.6),
-        Point::new(p.x - 1.27, p.y + 0.6),
+        Point::new(p.x + 0.6, p.y + h),
+        Point::new(p.x - 1.27, p.y + h),
     ]
 }
 

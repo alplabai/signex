@@ -126,7 +126,7 @@ mod tests {
 
     fn graphite_app() -> Signex {
         let (mut app, _task) = Signex::new();
-        app.document_state.panel_ctx.tokens =
+        app.document_view.panel_ctx.tokens =
             signex_types::theme::theme_tokens(signex_types::theme::ThemeId::GraphiteLight);
         app
     }

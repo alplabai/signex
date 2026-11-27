@@ -114,3 +114,6 @@ compare-board-done = Compare Board with Schematic: { $pcb } changes to { $board 
 compare-board-library-not-opened = Compare Board with Schematic: library { $library } could not be opened ({ $why }); its parts have no footprint.
 compare-board-report-saved = Comparison report saved to { $path }.
 compare-board-report-failed = The comparison report could not be written: { $why }
+# A `check_board_against_schematic` or `apply_board_schematic_differences`
+# run that answered nothing; $why is the reason in words.
+compare-board-command-refused = Board against schematic did not run: { $why }

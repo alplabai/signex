@@ -25,7 +25,7 @@ impl Signex {
         preview: &'a PreviewState,
     ) -> Element<'a, Message> {
         let i18n = self.ui_state.i18n.as_ref();
-        let look = Look::of(&self.document_state.panel_ctx.tokens);
+        let look = Look::of(&self.document_view.panel_ctx.tokens);
         let options = &preview.pdf_options;
         let inputs = &preview.page_setup;
         let current_size = options.page_size;
@@ -205,7 +205,7 @@ impl Signex {
     ) -> Element<'static, Message> {
         match preview.page_setup.notice() {
             Some(message) => {
-                let tokens = &self.document_state.panel_ctx.tokens;
+                let tokens = &self.document_view.panel_ctx.tokens;
                 let colour = if preview.page_setup.notice_is_informational() {
                     tokens.warning
                 } else {

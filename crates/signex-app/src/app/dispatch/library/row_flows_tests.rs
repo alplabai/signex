@@ -92,7 +92,7 @@ fn select(app: &mut Signex, root: &Path, row_id: RowId) {
 }
 
 fn sheet_row(app: &Signex) -> Option<Uuid> {
-    let detail = app.document_state.panel_ctx.library_row_detail.as_ref();
+    let detail = app.document_view.panel_ctx.library_row_detail.as_ref();
     detail.map(|detail| detail.row_id)
 }
 
@@ -257,7 +257,7 @@ fn remove_row_on_a_read_only_library_is_refused_and_keeps_the_row() {
 
     assert!(app.library.recovery.is_none());
     assert_eq!(row_count(&app, &root), 1);
-    assert!(app.document_state.error_notice.is_some());
+    assert!(app.document_view.error_notice.is_some());
 }
 
 #[test]
@@ -271,5 +271,5 @@ fn rebind_on_a_read_only_library_opens_no_picker() {
     );
 
     assert!(app.library.primitive_picker.is_none());
-    assert!(app.document_state.error_notice.is_some());
+    assert!(app.document_view.error_notice.is_some());
 }

@@ -26,7 +26,13 @@ fn row(number: usize, position: usize, manual: bool, placed: bool) -> NumberingR
 
 /// The root, two placed pages, the second numbered 5 by hand.
 pub(crate) fn shown() -> SheetNumberingState {
-    let mut state = SheetNumberingState::reading(1, 0, Default::default(), "p".into());
+    let mut state = SheetNumberingState::reading(
+        1,
+        0,
+        Default::default(),
+        "p".into(),
+        PathBuf::from("/p/root.snxsch"),
+    );
     state.show(Arc::new(NumberingRead {
         rows: vec![
             row(1, 1, false, false),

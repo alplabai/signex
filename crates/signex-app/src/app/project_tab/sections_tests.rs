@@ -95,11 +95,7 @@ fn variants_are_added_renamed_picked_and_removed_through_the_tab() {
     );
     let data = &app.document_state.projects[0].data;
     assert_eq!(data.variant_definitions, ["Lite"]);
-    assert!(
-        app.document_state.project_tabs[&id]
-            .variant_rename
-            .is_none()
-    );
+    assert!(app.document_view.project_tabs[&id].variant_rename.is_none());
 
     send(
         &mut app,
@@ -165,7 +161,7 @@ fn a_refused_variant_name_shows_its_reason_and_changes_nothing() {
         &mut app,
         ProjectTabMsg::VariantRenameSubmitted { project_id: id },
     );
-    let tab = &app.document_state.project_tabs[&id];
+    let tab = &app.document_view.project_tabs[&id];
     assert_eq!(tab.variant_problem, Some(VariantProblem::Reserved));
     assert_eq!(
         tab.variant_rename.as_ref().map(|draft| draft.text.as_str()),

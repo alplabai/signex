@@ -35,6 +35,7 @@ fn open_symbol_editor(app: &mut Signex, path: &Path) {
 /// draft with no file behind it asks where to save instead.
 fn write_symbol_file(app: &Signex, path: &Path) {
     let text = app.document_state.symbol_editors[path]
+        .draft
         .file
         .to_toml_string()
         .expect("serialise");

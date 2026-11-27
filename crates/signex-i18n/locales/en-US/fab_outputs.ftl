@@ -116,3 +116,8 @@ fab-outputs-stale = { $count ->
     [one] One older file in the folder is not part of this set: { $files }. Remove it before sending the folder.
    *[other] { $count } older files in the folder are not part of this set: { $files }. Remove them before sending the folder.
 }
+# `fabrication_outputs` run from its operands (#2470): why it wrote nothing
+# before it started. $kind is the token as given, $kinds the tokens it takes.
+fab-outputs-command-no-path = Name the output folder with the operand `path`.
+fab-outputs-command-bad-kind = `{ $kind }` is not a kind of output (one of { $kinds }).
+fab-outputs-command-no-kind = `kinds` names no kind of output.

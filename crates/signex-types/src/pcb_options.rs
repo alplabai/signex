@@ -2,14 +2,15 @@
 //! polygon naming scheme and the designator display. Document data, saved
 //! in the `.snxpcb` `[board_options]` section and changed only through the
 //! board engine's `SetBoardOptions` command. The board's origin (#2384) and
-//! its waived design-rule findings (#2399) are kept here too, and the panel
-//! (#2410). See `docs/PCB_BOARD_OPTIONS.md`.
+//! its waived design-rule findings (#2399) are kept here too, the panel
+//! (#2410) and the layout plan (#2942). See `docs/PCB_BOARD_OPTIONS.md`.
 
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::pcb::Point;
 use crate::pcb_layer::PcbLayer;
+use crate::pcb_layout_plan::LayoutPlan;
 pub use crate::pcb_origin::BoardOrigin;
 use crate::pcb_teardrop_rule::TeardropRule;
 use crate::theme::Color;
@@ -77,6 +78,10 @@ pub struct BoardOptions {
     /// `[board_options.teardrops]` (`snxpcb/1.12`) when not the default.
     #[serde(default, skip_serializing_if = "TeardropRule::is_default")]
     pub teardrops: TeardropRule,
+    /// The settings of the layout stages (#2942). Saved as
+    /// `[board_options.layout_plan]` (`snxpcb/1.12`) when it sets anything.
+    #[serde(default, skip_serializing_if = "LayoutPlan::is_empty")]
+    pub layout_plan: LayoutPlan,
 }
 
 /// A colour the user gave one board layer: the canvas, the layer tabs and

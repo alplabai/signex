@@ -420,12 +420,12 @@ fn a_check_leaves_the_drc_state_and_the_panel_alone() {
     let (mut app, path) = board_app(&dir);
     open_board(&mut app, &path);
     let before = drc_state(&app);
-    let panels = crate::dock::DockLayoutSnapshot::capture(&app.document_state.dock);
+    let panels = crate::dock::DockLayoutSnapshot::capture(&app.document_view.dock);
     let checked = report(&mut app, &path, &[]);
     assert!(!findings(&checked).is_empty());
     assert_eq!(drc_state(&app), before);
     assert_eq!(
-        crate::dock::DockLayoutSnapshot::capture(&app.document_state.dock),
+        crate::dock::DockLayoutSnapshot::capture(&app.document_view.dock),
         panels
     );
     // Run DRC on the same board fills them.

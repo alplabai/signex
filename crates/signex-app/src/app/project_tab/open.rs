@@ -27,7 +27,7 @@ impl Signex {
                 // A page tab: "<project> — Project" (docs/PROJECT_TAB.md,
                 // "Page tabs").
                 let title = self.page_tab_title(&kind).unwrap_or_default();
-                self.document_state.project_tabs.entry(id).or_default();
+                self.document_view.project_tabs.entry(id).or_default();
                 self.document_state.tabs.push(TabInfo {
                     title,
                     path,

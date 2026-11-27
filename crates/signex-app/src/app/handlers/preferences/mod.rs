@@ -130,6 +130,7 @@ impl Signex {
         self.ui_state.preferences_draft_net_hover_enabled = self.ui_state.net_hover_enabled;
         self.ui_state.preferences_draft_edge_pan = self.ui_state.edge_pan;
         self.ui_state.preferences_draft_symbol_body_fill = self.ui_state.symbol_body_fill;
+        self.ui_state.preferences_draft_cross_out_not_fitted = self.ui_state.cross_out_not_fitted;
         self.ui_state.preferences_body_fill_palette_open = false;
         self.ui_state.preferences_body_fill_picker_open = false;
         *self.ui_state.preferences_pcb_defaults =
@@ -277,7 +278,7 @@ impl Signex {
         // one to push back. Grid size and pin selection reach the editor
         // through `LibraryDisplaySettings` when a library is opened, so
         // restoring their draft fields above is enough.
-        self.document_state.panel_ctx.symbol_grid_style = self.ui_state.symbol_grid_style;
+        self.document_view.panel_ctx.symbol_grid_style = self.ui_state.symbol_grid_style;
         // `sync_theme` re-derives the canvas colours from the saved
         // theme, clears BOTH content caches (schematic + PCB) and every
         // schematic and PCB bg cache — don't clear them again here.
@@ -346,6 +347,7 @@ impl Signex {
             | PrefMsg::DraftEdgePanEnabled(..)
             | PrefMsg::DraftEdgePanSpeed(..)
             | PrefMsg::SymbolBodyFill(..)
+            | PrefMsg::DraftCrossOutNotFitted(..)
             | PrefMsg::DraftTrackpadPan(..)
             | PrefMsg::DraftWheelMode(..)
             | PrefMsg::DraftLayerSwitcher(..)

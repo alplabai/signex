@@ -199,6 +199,7 @@ fn add_project(
             schematic_design: Default::default(),
             fab_outputs: None,
             router_tool_diameter: None,
+            bom_alternates: Vec::new(),
             requirements: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
@@ -604,7 +605,7 @@ fn a_parked_board_disables_execute_and_reopen_brings_it_back() {
     );
     assert!(f.app.document_state.tabs.is_empty(), "every tab closed");
     send(&mut f.app, Message::Ui(UiMsg::GridPickerSelect(1.0)));
-    let key = signex_widgets::tree_view::key_of(&f.app.document_state.panel_ctx.project_tree, &[0])
+    let key = signex_widgets::tree_view::key_of(&f.app.document_view.panel_ctx.project_tree, &[0])
         .expect("the project row");
     send(
         &mut f.app,
@@ -789,7 +790,7 @@ fn a_second_new_pcb_is_refused() {
     send(&mut f.app, menu_row("new_pcb_document"));
     crate::document_setup::create_if_asked(&mut f.app);
     assert_eq!(f.app.document_state.tabs.len(), tabs);
-    assert!(f.app.document_state.error_notice.is_some(), "it says why");
+    assert!(f.app.document_view.error_notice.is_some(), "it says why");
 }
 
 // ─── Entry points ────────────────────────────────────────────────────────
@@ -799,7 +800,7 @@ fn a_second_new_pcb_is_refused() {
 fn projects_add_new_pcb_makes_the_board() {
     let mut f = fixture();
     send(&mut f.app, Message::Ui(UiMsg::GridPickerSelect(1.0)));
-    let key = signex_widgets::tree_view::key_of(&f.app.document_state.panel_ctx.project_tree, &[0])
+    let key = signex_widgets::tree_view::key_of(&f.app.document_view.panel_ctx.project_tree, &[0])
         .expect("the project row");
     send(
         &mut f.app,

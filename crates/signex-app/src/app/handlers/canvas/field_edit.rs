@@ -162,11 +162,12 @@ impl Signex {
     /// Drop the symbol card and the net card: the pointer is no longer on
     /// the canvas.
     pub(crate) fn clear_canvas_hover(&mut self) {
-        self.document_state.net_nav.hover.card = None;
-        self.document_state.net_nav.hover.candidate = None;
+        self.document_view.net_nav.hover.card = None;
+        self.document_view.net_nav.hover.candidate = None;
         self.interaction_state.hover_symbol_uuid = None;
         self.interaction_state.hover_started_at = None;
         self.interaction_state.hover_screen_pos = None;
+        self.ui_state.annotations.hovered_badge = None;
     }
 
     /// The part the selection is, when it is one part (its body, its

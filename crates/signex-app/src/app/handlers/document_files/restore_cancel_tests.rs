@@ -293,7 +293,7 @@ fn a_restore_clicked_while_the_file_is_saving_is_refused_with_a_reason() {
         entry.message.len(),
         entry.message
     );
-    assert!(app.document_state.error_notice.is_some());
+    assert!(app.document_view.error_notice.is_some());
     assert_eq!(std::fs::read_to_string(&path).expect("read"), before);
     drop(job);
 }
@@ -379,14 +379,14 @@ fn a_restore_clicked_mid_save_is_refused_and_the_save_commit_holds_the_saved_byt
     assert_eq!(head_blob(dir.path(), &rel), saved);
 
     assert!(
-        app.document_state.error_notice.take().is_some(),
+        app.document_view.error_notice.take().is_some(),
         "the refusal is shown"
     );
     // The save is done, so the restore now goes ahead and lands; a
     // schematic restore leaves the tab dirty and commits nothing.
     let task = app.click_restore_on_listed_history(&sha);
     finish_restore(&mut app, collect_messages(task));
-    assert!(app.document_state.error_notice.is_none());
+    assert!(app.document_view.error_notice.is_none());
     assert_eq!(engine_uuid(&app, &path), restored, "restore applied");
     assert_eq!(head_subject(dir.path()), format!("Save {rel}"));
     assert_eq!(

@@ -284,7 +284,7 @@ fn a_copy_that_is_not_a_readable_primitive_is_refused_and_kept() {
         let mut app = fresh_run(&recovery, &doc);
         assert!(app.document_state.autosave.current_offer().is_some());
         answer(&mut app, RecoveryChoice::Restore);
-        assert!(app.document_state.error_notice.is_some());
+        assert!(app.document_view.error_notice.is_some());
         assert!(sidecar::sidecar_path(&recovery, &doc).exists());
         assert_eq!(name_in_editor(&app, kind, &doc), "Original");
     });
@@ -327,7 +327,7 @@ fn a_tick_during_an_in_flight_save_that_then_fails_keeps_the_sidecar() {
 
 fn file_id(app: &Signex, kind: Kind, doc: &Path) -> uuid::Uuid {
     match kind {
-        Kind::Symbol => app.document_state.symbol_editors[doc].file.file_uuid,
+        Kind::Symbol => app.document_state.symbol_editors[doc].draft.file.file_uuid,
         Kind::Footprint => app.document_state.footprint_editors[doc].file.file_uuid,
     }
 }
@@ -339,6 +339,7 @@ fn set_file_id(app: &mut Signex, kind: Kind, doc: &Path, id: uuid::Uuid) {
                 .symbol_editors
                 .get_mut(doc)
                 .expect("editor")
+                .draft
                 .file
                 .file_uuid = id
         }

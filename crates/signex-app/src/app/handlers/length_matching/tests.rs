@@ -81,7 +81,7 @@ fn add_ddr(app: &mut Signex) -> Uuid {
     type_in(app, LengthField::NewTarget, "28.5");
     type_in(app, LengthField::NewTolerance, "0.25");
     send(app, LengthMatchingMsg::GroupAdded);
-    app.document_state
+    app.document_view
         .panel_ctx
         .length_matching_ui
         .current
@@ -101,7 +101,7 @@ fn length_matching_opens_one_tab_after_the_board_and_focuses_it_again() {
     ));
     send(&mut app, LengthMatchingMsg::TabOpened);
     assert_eq!(tabs_of_kind(&app), 1, "a second open focuses it");
-    let facts = app.document_state.panel_ctx.length_matching.as_ref();
+    let facts = app.document_view.panel_ctx.length_matching.as_ref();
     assert!(facts.is_some_and(|f| f.groups.is_empty()), "{facts:?}");
 }
 
@@ -122,7 +122,7 @@ fn a_group_added_in_the_tab_reports_its_members_and_undoes_in_one_step() {
         );
     }
     let facts = app
-        .document_state
+        .document_view
         .panel_ctx
         .length_matching
         .clone()
@@ -133,7 +133,7 @@ fn a_group_added_in_the_tab_reports_its_members_and_undoes_in_one_step() {
     assert_eq!(nets, ["DDR_DQ0", "DDR_DQ6", "DDR_DQ7"]);
     assert_eq!(row.out_of_band(), 1, "DDR_DQ6 is 0.41 mm over");
     assert!(
-        app.document_state
+        app.document_view
             .panel_ctx
             .length_matching_ui
             .drafts
@@ -186,10 +186,7 @@ fn the_picked_groups_fields_edit_it_and_delete_removes_it() {
     send(&mut app, LengthMatchingMsg::GroupDeleted(group));
     assert!(board(&app, &path).options.length_groups.is_empty());
     assert_eq!(board(&app, &path).nets.len(), 4, "the nets stay");
-    assert_eq!(
-        app.document_state.panel_ctx.length_matching_ui.current,
-        None
-    );
+    assert_eq!(app.document_view.panel_ctx.length_matching_ui.current, None);
 }
 
 #[test]
@@ -205,7 +202,7 @@ fn the_dock_panel_folds_a_group_and_the_filter_hides_groups_in_band() {
         },
     );
     send(&mut app, LengthMatchingMsg::GroupToggled(group));
-    let ui = &app.document_state.panel_ctx.length_matching_ui;
+    let ui = &app.document_view.panel_ctx.length_matching_ui;
     assert!(ui.closed.contains(&group));
     assert!(ui.is_for(&path));
     send(
@@ -213,12 +210,12 @@ fn the_dock_panel_folds_a_group_and_the_filter_hides_groups_in_band() {
         LengthMatchingMsg::FilterPicked(crate::panels::length_matching::LengthFilter::OutOfBand),
     );
     let facts = app
-        .document_state
+        .document_view
         .panel_ctx
         .length_matching
         .clone()
         .expect("facts");
-    let filter = app.document_state.panel_ctx.length_matching_ui.filter;
+    let filter = app.document_view.panel_ctx.length_matching_ui.filter;
     assert!(!filter.shows(&facts.groups[0]), "DDR_DQ0 is in band");
 }
 

@@ -56,7 +56,7 @@ impl Signex {
         let overtaken = current && self.is_superseded_sheet_open(&path, generation);
         let kept_view = overtaken.then(|| self.active_tab_path()).flatten();
         if stepping || overtaken {
-            self.document_state.net_nav.history.hold(true);
+            self.document_view.net_nav.history.hold(true);
         }
         let task = self.finish_document_read(request, result);
         if let Some(kept) = kept_view
@@ -65,7 +65,7 @@ impl Signex {
             self.activate_tab_for_path(&kept);
         }
         if stepping || overtaken {
-            self.document_state.net_nav.history.hold(false);
+            self.document_view.net_nav.history.hold(false);
         }
         // A Create Sheet request from the Projects tree was waiting on it.
         self.resume_create_sheet(&path, true);
@@ -201,7 +201,7 @@ impl Signex {
                     "Failed to open primitive",
                     &anyhow::anyhow!(message.clone()),
                 );
-                self.document_state.error_notice = Some(crate::app::state::ErrorNotice::open(
+                self.document_view.error_notice = Some(crate::app::state::ErrorNotice::open(
                     crate::app::state::untranslated(message),
                 ));
             }
@@ -225,7 +225,7 @@ impl Signex {
             });
         let project_id = self.document_state.project_for_path(&path).map(|p| p.id);
         let mut state = crate::app::SymbolDocument::new(path.clone(), file);
-        state.history_generation = self.document_state.next_symbol_history_base();
+        state.draft.history_generation = self.document_state.next_symbol_history_base();
         self.document_state
             .symbol_editors
             .insert(path.clone(), state);

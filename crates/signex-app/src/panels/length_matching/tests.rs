@@ -46,7 +46,7 @@ fn facts() -> LengthMatchingFacts {
 
 fn context(facts: Option<LengthMatchingFacts>) -> PanelContext {
     let (app, _boot) = Signex::new();
-    let mut ctx = app.document_state.panel_ctx.clone();
+    let mut ctx = app.document_view.panel_ctx.clone();
     ctx.length_matching = facts;
     ctx
 }

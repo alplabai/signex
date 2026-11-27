@@ -170,6 +170,13 @@ geometry rows are left out. A value the selected tracks do not share reads
 drawn on the active copper layer like a Track run, but each leg keeps the
 clearance the design rules ask from other nets' copper (#2389).
 
+The routing tools and Via also run from operands on a named board, from
+the command line (#2470): the start, the corners and the end are given as
+points or pads, each one a click, and the whole route is one undo step. The
+same rules below apply; the board's defaults take the place of the tool's
+form, corner rule and mode. Operands and answer: `docs/CLI.md`, "Routing a
+board".
+
 - **Start.** The first click starts the route on the net of the copper under
   it (a pad or a track end), or no net over bare board, which then takes the
   net of the copper its next point lands on. Copper that does not reach the
@@ -483,6 +490,13 @@ says so and draws nothing.
   the same way.
 - A shape whose corners are on one line has no area (checked in integer nm)
   and is not added; the Messages panel says so.
+- **Without a window** (#2470): Fill, Solid Region, Polygon Pour, Keepout
+  and Pour Cutout take the board (`document`), the `layer`, the outline
+  (`start` and `end` for a Fill, `corners` for the others, from the board
+  origin with Y up) and, for copper, the `net`. The click and the operand
+  form build the zone in one place (`signex_engine::pcb::area`); the
+  operand form reads no Properties form. One undo step each, answered with
+  the area as JSON: [CLI.md](CLI.md), "Board areas".
 
 ## Keepout
 
@@ -1850,6 +1864,37 @@ then cross a pin or a wire end and join nets, gates that do not draw the same
 pins in the same places, a part whose gates are on more than one sheet, and
 for Swap Gates on two pads of one gate. Pads that already share their nets
 change nothing and say so.
+
+### Started on the schematic
+
+The same swaps can start on the sheet (#1261), by the part's same swap groups
+and the same sheet rewiring (`signex_engine::part_swap::swap_on_sheet`).
+Only the sheet changes, as one undo step of that sheet; the board is left as
+it is until Update PCB, whose change list then gives each pad the net its pin
+now has (Pad nets rows), like any other schematic edit. The footprint's Pin
+Swapping and Part Swapping switches are not read: they hold back swaps made
+on the board.
+
+- **Swap Pins** (`swap_schematic_pins`): on the sheet right-click menu, Part
+  Actions ▸ Swap Pins swaps the clicked pin of the selected part with the one
+  other pin of its pin swap group. A group of three or more asks which pin,
+  and the row stays greyed; name both with operands.
+- **Swap Gates** (`swap_schematic_gates`): Part Actions ▸ Swap Gates swaps
+  two selected units of one part, or one selected unit with the one other
+  gate of its gate swap group placed on the sheet.
+- With operands, `swap_schematic_pins document=<sheet> pins=<a>,<b>` and
+  `swap_schematic_gates document=<sheet> units=<a>,<b>` name the part by
+  `ids` (one placed unit's uuid) or `designator`, exactly one, and answer
+  `{document, designator, kind, swapped, pairs, changed}`: `pairs` lists each
+  pin with the pin it traded with, `changed` is `false` when nothing ends on
+  either pin. Both are on the agent channel; an edit list does not carry
+  them yet.
+
+Refused, with nothing changed and the reason in Messages: pins or gates
+outside one swap group, a locked unit of the part, a read-only sheet, a gate
+not placed on the sheet, gates not drawn alike, and anything the rewiring
+refuses (a pin tip in the middle of a wire or on another pin, a locked wire,
+a rewired wire that would join nets).
 
 ## Design reuse blocks
 

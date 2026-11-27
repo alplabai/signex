@@ -308,7 +308,7 @@ impl Signex {
         built: &BuiltScene,
     ) -> Element<'_, Message> {
         let i18n = &self.ui_state.i18n;
-        let look = Look::of(&self.document_state.panel_ctx.tokens);
+        let look = Look::of(&self.document_view.panel_ctx.tokens);
         let board = self.document_state.pcb_board(&session.board_path);
 
         let mut corner = column![].spacing(M.popover_gap * 2.0);

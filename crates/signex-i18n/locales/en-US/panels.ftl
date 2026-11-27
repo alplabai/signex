@@ -592,6 +592,9 @@ panels-status-bar-drag-with-wires = Dragging with wires ({ $key }: plain move)
 panels-status-bar-drag-wires-horizontal-first = Dragging with wires, horizontal first ({ $key }: plain move)
 panels-status-bar-drag-wires-vertical-first = Dragging with wires, vertical first ({ $key }: plain move)
 panels-status-bar-drag-wires-straight = Dragging with wires, straight ({ $key }: plain move)
+# The 45° modes: a 45° leg leaves the fixed end first, or reaches the pin last.
+panels-status-bar-drag-wires-45-start = Dragging with wires, 45° first ({ $key }: plain move)
+panels-status-bar-drag-wires-45-end = Dragging with wires, 45° last ({ $key }: plain move)
 # A drag in progress that leaves the wires. $key is the modifier key.
 panels-status-bar-move-without-wires = Moving without wires ({ $key }: drag with wires)
 # Measure tool prompts.
@@ -610,6 +613,9 @@ panels-list-group-inspect = Inspect
 panels-list-group-verify = Verify
 panels-list-group-library = Library
 panels-list-group-pcb = PCB
+# The installed extensions' panels, in the panel list and under View; not
+# shown when no extension is installed.
+panels-list-group-extensions = Extensions
 # Where an open panel is, at the right of its row in the panel list.
 panels-list-region-left = left
 panels-list-region-right = right
@@ -1141,6 +1147,13 @@ panels-channel-strip-count = { $count }
 panels-channel-card-caption = { $parts } parts · { $nets } nets
 # Shown in the compiled view before the project is compiled.
 panels-channel-view-not-compiled = Compile the project to fill the channels with their parts and nets.
+# A channel card's fit in the active variant (#2662). $variant is its name.
+# A click on it leaves every part of the channel out of the variant, or lets
+# the sheets decide again.
+panels-channel-card-fitted = { $variant }: Fitted
+panels-channel-card-not-fitted = { $variant }: Not fitted
+# Some of the channel's parts are not fitted; $count is how many.
+panels-channel-card-partly-fitted = { $variant }: { $count } not fitted
 # The Messages line when an edit is tried in a channel tab. $channel is CH1.
 panels-channel-read-only = Channel { $channel } is a compiled view; switch to Editor to edit
 # The compile result in Messages.
@@ -1173,6 +1186,8 @@ panels-harness-entries = Entries
 panels-harness-entry = Entry
 panels-harness-net = Net on this sheet
 panels-harness-expects-pill = { $far } expects { $expects }
+# By a mismatched harness entry, in the Properties drawing and on the sheet: the entry name the far side expects in its place.
+panels-harness-expects = expects { $expects }
 # $example is a compiled net name such as SPI_BUS.SCK.
 panels-harness-compiled = Compiled net names: { $example } … unless a net label names them.
 panels-harness-start = Start
@@ -1190,6 +1205,11 @@ panels-harness-defs-uses = { $entries } entries · { $uses ->
     [one] 1 use
    *[other] { $uses } uses
 }
+# A type placed objects use that the project does not define (#3043); $entries as above, taken from its first connector.
+panels-harness-defs-undefined-uses = { $entries } entries · { $uses ->
+    [one] 1 use
+   *[other] { $uses } uses
+} · not defined
 panels-harness-defs-name = Name
 panels-harness-defs-description = Description
 panels-harness-defs-kind = Kind
@@ -1332,6 +1352,11 @@ panels-harness-msg-entry-off-connector = Harness entry not placed: click on a ha
 panels-compiled-design-msg-no-project = Compile project: open a sheet of a project first; a sheet outside a project has no compiled design.
 # $why says why the project refused the edit.
 panels-compiled-design-naming-refused = Channel naming not changed: { $why }
+# A channel card's variant fit click was refused; $why says why.
+panels-compiled-design-fit-refused = Channel fit not changed: { $why }
+# The grey tag of a channel row the active variant leaves out entirely
+# (mockup row 154); $variant is the variant's name.
+panels-compiled-design-not-fitted = Not fitted ({ $variant })
 
 # sch-panels-tidy
 # The Canvas Font field (mockup row 40): $family is the font, $size its size in points.

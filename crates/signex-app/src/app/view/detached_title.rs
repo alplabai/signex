@@ -58,11 +58,12 @@ impl Signex {
             )),
             ModalId::BomPreview => Some(i18n.message_plain(ids::DIALOG_SUBTITLE_BOM, &[])),
             ModalId::ParameterManager => self.parameter_manager_subtitle(),
+            ModalId::ParameterImport => self.parameter_import_subtitle(),
             ModalId::MoveSelection => Some(self.move_selection_subtitle()),
             ModalId::NetColorPalette => Some(self.net_color_palette_subtitle()),
             ModalId::NetColorCustom => self.ui_state.net_color_custom.net.clone(),
             ModalId::PrintPreview => self
-                .document_state
+                .document_view
                 .preview
                 .as_ref()
                 .map(|preview| self.pdf_dialog_subtitle(preview)),
@@ -83,6 +84,7 @@ pub(crate) fn detached_modal_title(modal: ModalId) -> MessageId {
         ModalId::MoveSelection => ids::DIALOG_TITLE_MOVE_SELECTION,
         ModalId::NetColorPalette => ids::DIALOG_TITLE_NET_COLORS,
         ModalId::ParameterManager => ids::DIALOG_TITLE_PARAMETERS,
+        ModalId::ParameterImport => ids::PARAMETER_IO_IMPORT_TITLE,
         ModalId::Preferences => ids::DIALOG_TITLE_PREFERENCES,
         ModalId::FindReplace => ids::DIALOG_TITLE_FIND_REPLACE,
         ModalId::RenameDialog => ids::DIALOG_TITLE_RENAME,

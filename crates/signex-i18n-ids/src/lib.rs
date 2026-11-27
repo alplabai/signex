@@ -9,7 +9,7 @@ mod translatable;
 mod types;
 
 pub use translatable::{MessageRenderer, Translatable};
-pub use types::{Arg, ArgValue, LocalNumber, MessageId, UserText};
+pub use types::{Arg, ArgValue, EXTENSION_MESSAGE_PREFIX, LocalNumber, MessageId, UserText};
 
 /// Every message id, defined together with a list of them so a new id cannot
 /// be left out of the consistency tests. This is the only non-test place
@@ -369,6 +369,7 @@ define_ids! {
     BACK_ANNOTATE_FAILED_LINE = "back-annotate-failed-line";
     BACK_ANNOTATE_SHARED_WARNING = "back-annotate-shared-warning";
     BACK_ANNOTATE_STALE = "back-annotate-stale";
+    BACK_ANNOTATE_COMMAND_REFUSED = "back-annotate-command-refused";
     BACK_ANNOTATE_REFRESH = "back-annotate-refresh";
     BACK_ANNOTATE_VALID = "back-annotate-valid";
     BACK_ANNOTATE_CHECKING = "back-annotate-checking";
@@ -1008,7 +1009,11 @@ define_ids! {
     UPDATE_PCB_VALIDATE = "update-pcb-validate";
     UPDATE_PCB_EXECUTE = "update-pcb-execute";
     UPDATE_PCB_DONE = "update-pcb-done";
+    UPDATE_PCB_PADS_LOCKED = "update-pcb-pads-locked";
     UPDATE_PCB_REFUSED = "update-pcb-refused";
+    UPDATE_PCB_COMMAND_MODE = "update-pcb-command-mode";
+    UPDATE_PCB_BUSY = "update-pcb-busy";
+    UPDATE_PCB_WHICH_BOARD = "update-pcb-which-board";
     UPDATE_PCB_LIBRARY_NOT_OPENED = "update-pcb-library-not-opened";
     UPDATE_PCB_REPORT_SAVED = "update-pcb-report-saved";
     UPDATE_PCB_REPORT_FAILED = "update-pcb-report-failed";
@@ -1171,4 +1176,30 @@ pub fn all_ids() -> Vec<MessageId> {
         .copied()
         .chain(area_ids::area_lists())
         .collect()
+}
+
+#[cfg(test)]
+mod extension_id_tests {
+    use super::*;
+
+    /// #2495: the `ext-` namespace is the extensions' own, so an extension's
+    /// `.ftl` file can never shadow a built-in message.
+    #[test]
+    fn no_built_in_message_id_is_in_the_extension_namespace() {
+        for id in all_ids() {
+            assert!(!id.is_extension(), "{}", id.as_str());
+        }
+    }
+
+    #[test]
+    fn an_extension_message_id_is_ext_then_an_identifier() {
+        for id in ["ext-example-notes-title", "ext-a1-b_c"] {
+            let made = MessageId::extension(id).expect("an extension id");
+            assert_eq!(made.as_str(), id);
+            assert!(made.is_extension());
+        }
+        for id in ["", "ext-", "menu-file", "ext-Example", "ext-a.b", "ext a"] {
+            assert!(MessageId::extension(id).is_none(), "{id:?}");
+        }
+    }
 }

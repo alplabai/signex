@@ -106,7 +106,7 @@ fn messages_mention(needle: &str) -> bool {
 }
 
 fn card_title(app: &Signex) -> Option<String> {
-    let notice = app.document_state.error_notice.as_ref()?;
+    let notice = app.document_view.error_notice.as_ref()?;
     notice.action.is_some().then(|| notice.title.render_en_us())
 }
 
@@ -140,6 +140,7 @@ fn add_git_project(app: &mut Signex, dir: &Path) {
                 schematic_design: Default::default(),
                 fab_outputs: None,
                 router_tool_diameter: None,
+                bom_alternates: Vec::new(),
                 requirements: Default::default(),
                 parameters: Default::default(),
                 unknown: Default::default(),

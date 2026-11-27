@@ -644,7 +644,18 @@ impl DocumentState {
             if !associated {
                 continue;
             }
-            if (reached || is_project_file) && !reach.reached_by_other(closing, path) {
+            // The project's Design Notebook and its held design report are
+            // its own, though no sheet reaches them (#3019).
+            let notebook_of_it = self
+                .notebooks
+                .get(&project.id)
+                .is_some_and(|d| d.path == *path)
+                || self
+                    .generated_reports
+                    .get(&project.id)
+                    .is_some_and(|r| project.dir().join(&r.path) == *path);
+            let ours = (reached || is_project_file) && !reach.reached_by_other(closing, path);
+            if notebook_of_it || ours {
                 scan.mine.push(path.clone());
             } else {
                 scan.kept.push(path.clone());
@@ -1024,6 +1035,7 @@ mod tests {
                 schematic_design: Default::default(),
                 fab_outputs: None,
                 router_tool_diameter: None,
+                bom_alternates: Vec::new(),
                 requirements: Default::default(),
                 parameters: Default::default(),
                 unknown: Default::default(),

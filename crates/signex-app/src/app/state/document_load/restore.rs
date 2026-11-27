@@ -20,7 +20,7 @@ impl DocumentState {
             }
             RestoredDocument::Symbol(file) => {
                 if let Some(editor) = self.symbol_editors.get(path) {
-                    file.file_uuid = editor.file.file_uuid;
+                    file.file_uuid = editor.draft.file.file_uuid;
                 }
             }
             RestoredDocument::Footprint(file) => {

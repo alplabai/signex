@@ -352,6 +352,12 @@ pub struct ErcContext {
     pub key: Option<signex_net::SheetKey>,
     /// The sheet's signal harnesses (#1280).
     pub harness: ErcHarness,
+    /// Nets the sheet's directives give different classes (#2656), from the
+    /// one ranking the netlist uses (`signex_net::net_class_conflicts`).
+    pub class_conflicts: Vec<signex_net::NetClassConflict>,
+    /// Differential pair halves whose partner net is not on the sheet
+    /// (#2951), from `signex_net::lone_pair_members`.
+    pub lone_pairs: Vec<signex_net::LonePairMember>,
 }
 
 impl ErcContext {
@@ -547,8 +553,24 @@ impl ErcContext {
             children,
             key: None,
             harness: ErcHarness::from_sheet(snapshot),
+            class_conflicts: class_conflicts(snapshot),
+            lone_pairs: signex_net::lone_pair_members(snapshot),
         }
     }
+}
+
+/// The class conflicts of `sheet`'s directives; the netlist is built only
+/// when two directives set a class, the least a conflict needs.
+fn class_conflicts(sheet: &SchematicSheet) -> Vec<signex_net::NetClassConflict> {
+    let classing = sheet
+        .directives
+        .iter()
+        .filter(|d| d.net_class().is_some())
+        .count();
+    if classing < 2 {
+        return Vec::new();
+    }
+    signex_net::net_class_conflicts(sheet, &signex_net::build_netlist(sheet))
 }
 
 // ---------------------------------------------------------------------------

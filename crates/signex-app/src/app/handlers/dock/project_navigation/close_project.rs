@@ -15,11 +15,11 @@ impl Signex {
     /// reads which of them are unsaved (#2027).
     pub(crate) fn commit_drafts_of_project(&mut self, project_id: ProjectId) {
         let owned: Vec<std::path::PathBuf> = self
-            .document_state
+            .document_view
             .drafts
             .title_block_sheets()
             .into_iter()
-            .chain(self.document_state.drafts.sheet_variable_sheets())
+            .chain(self.document_view.drafts.sheet_variable_sheets())
             .chain(self.typed_note_sheets())
             .filter(|sheet| {
                 self.document_state
@@ -73,7 +73,7 @@ impl Signex {
         };
         if let Err(refusal) = self.refuse_project_while_delete_pending(project_id, "closed") {
             crate::diagnostics::log_warning(refusal.to_string());
-            self.document_state.error_notice = Some(crate::app::state::ErrorNotice::delete(
+            self.document_view.error_notice = Some(crate::app::state::ErrorNotice::delete(
                 crate::app::state::untranslated(refusal.to_string()),
             ));
             return Task::none();
@@ -251,7 +251,7 @@ impl Signex {
         let target_id = project_id;
         if let Err(refusal) = self.refuse_project_while_delete_pending(project_id, "closed") {
             crate::diagnostics::log_warning(refusal.to_string());
-            self.document_state.error_notice = Some(crate::app::state::ErrorNotice::delete(
+            self.document_view.error_notice = Some(crate::app::state::ErrorNotice::delete(
                 crate::app::state::untranslated(refusal.to_string()),
             ));
             self.refresh_panel_ctx();
@@ -351,10 +351,15 @@ impl Signex {
                 .into_iter()
                 .map(|(path, _)| path)
                 .collect();
+            let closed_dir = closed.dir().to_path_buf();
             self.document_state.forget_project_saved_state(&closed_path);
             self.document_state
                 .document_ids
                 .forget_headers_of(own.iter().map(|p| p.as_path()));
+            // The design report's last check results (#2945) go with it.
+            self.document_state
+                .check_runs
+                .forget_reports_of(&closed_path, &closed_dir);
         }
 
         // A pricing walk keeps running: closing a project does not unmount its
@@ -380,8 +385,10 @@ impl Signex {
                 .map(|p| p.id)
         });
         self.document_state.net_class_history.remove(&target_id);
-        self.document_state.project_tabs.remove(&target_id);
+        self.document_view.project_tabs.remove(&target_id);
+        self.forget_notebook(target_id);
         self.document_state.rules_history.remove(&target_id);
+        self.document_state.general_history.remove(&target_id);
         self.document_state.profile_drift_noted.remove(&target_id);
         self.document_state.active_project = self
             .document_state
@@ -603,6 +610,12 @@ impl Signex {
         {
             return self.save_primitive_tab_blocking(path);
         }
+        if self.notebook_at_path(path).is_some() {
+            return self.save_notebook_blocking(path);
+        }
+        if self.generated_report_at(path).is_some() {
+            return self.save_generated_report_blocking(path);
+        }
         anyhow::bail!("no open editor or engine backs this file — it can't be saved automatically")
     }
 
@@ -754,7 +767,9 @@ impl Signex {
         self.document_state.document_saves.forget_disk_records(path);
         self.document_state.remove_engine(path);
         self.document_state.clear_document_dirty(path);
-        self.discard_primitive_editor(path)
+        self.discard_generated_report_at(path);
+        let notebook = self.discard_notebook_at(path);
+        Task::batch([notebook, self.discard_primitive_editor(path)])
     }
 
     /// Drop the symbol/footprint editor behind `path`, and its tab, so a
@@ -885,7 +900,7 @@ impl Signex {
             let detail =
                 signex_i18n::Translatable::new(signex_i18n::ids::DIALOG_NEW_PROJECT_QUIT_HELD);
             crate::diagnostics::log_warning(detail.render_en_us());
-            self.document_state.error_notice =
+            self.document_view.error_notice =
                 Some(crate::app::state::ErrorNotice::quit_held(detail));
             return true;
         }
@@ -900,7 +915,7 @@ impl Signex {
             },
         );
         crate::diagnostics::log_warning(detail.render_en_us());
-        self.document_state.error_notice = Some(crate::app::state::ErrorNotice::quit_held(detail));
+        self.document_view.error_notice = Some(crate::app::state::ErrorNotice::quit_held(detail));
         true
     }
 
@@ -1173,6 +1188,7 @@ mod tests {
                 schematic_design: Default::default(),
                 fab_outputs: None,
                 router_tool_diameter: None,
+                bom_alternates: Vec::new(),
                 requirements: Default::default(),
                 parameters: Default::default(),
                 unknown: Default::default(),

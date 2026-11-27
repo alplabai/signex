@@ -29,8 +29,13 @@
 //!   wires and labels stay exactly where they are and a new orthogonal path
 //!   `K -> corner -> new tip` is added, so the old net keeps every member and
 //!   every name and the pin joins it at its new position.
-//! * **Free** - only the moved pin and unselected wire ends (plus movable
-//!   junction dots) sit on `K`. Each attached wire end follows the pin:
+//! * **Junction** - a pin with two or more wire ends on `K` (#2540): the
+//!   wires and dots stay as for an anchored tip, so a stub from `K` grows or
+//!   shrinks to the pin. Only when no stub fits do the wires follow, as for
+//!   a free tip.
+//! * **Free** - only the moved pin and unselected wire ends (one, for a
+//!   pin) plus movable junction dots sit on `K`. Each attached wire end
+//!   follows the pin:
 //!   - a wire between two moved pins that move alike translates whole;
 //!   - an orthogonal wire stays orthogonal: if its far joint is a plain
 //!     elbow (exactly two wire ends, nothing else) the elbow slides along
@@ -51,16 +56,21 @@
 //! the anchored path with both corners. If every candidate collides the pin is
 //! moved without rubber-banding, and a warning names it. A wire with a label
 //! or another wire's end on its interior is never shortened or translated;
-//! that makes the tip anchored instead.
+//! that makes the tip anchored instead. A pin's new path that meets the old
+//! tip of a pin not rerouted yet is laid after every other tip, so the
+//! part's own wires that follow that pin are out of its way (#2540).
 //!
 //! # Drag wiring mode
 //!
 //! `Policy::wiring` (the move command's `wiring` operand, #1669) overrides
-//! the corner choice above. `Auto` is the rule as described. `HorizontalFirst`
-//! and `VerticalFirst` skip the slide and leave the fixed end (free tip) or
-//! the old tip (anchored) in that direction first, the other L as fallback.
-//! `Straight` inserts no corner: one leg at any slope. Collisions and the
-//! guard apply as above. Rationale: `docs/DECISIONS.md`, 2026-11-18.
+//! the corner choice above. `Auto` is the rule as described. Every other
+//! mode skips the slide and bends by its drawing rule (`CornerRule::legs`)
+//! from the fixed end (free tip) or the old tip (anchored), its flip as the
+//! fallback: `HorizontalFirst` and `VerticalFirst` leave in that direction
+//! first, the other L as fallback; `Angle45Start` and `Angle45End` put a 45°
+//! leg first or last, the other one as fallback (#2516); `Straight` inserts
+//! no corner: one leg at any slope. Collisions and the guard apply as above.
+//! Rationale: `docs/DECISIONS.md`, 2026-11-18 and 2026-11-25.
 //!
 //! Which items drag wires: pins of moved symbols (power ports included,
 //! unit-filtered), pins of moved child sheets and individually moved sheet
@@ -381,16 +391,7 @@ pub fn follow_moved_pins(
         by_tip.entry(pt_key(&mv.old)).or_default().push(mv);
     }
 
-    let translated = env.translate_whole_wires(&by_tip, &mut out);
-    out.edited_tips.extend(translated);
-    for (key, group) in &by_tip {
-        let before = out.touched.len();
-        env.reroute_tip(*key, group, &mut out);
-        if out.touched.len() > before {
-            out.edited_tips.push(*key);
-        }
-    }
-    env.merge_overlaps(&mut out);
+    env.reroute_all(&by_tip, &mut out);
     env.write_back(document);
     out
 }

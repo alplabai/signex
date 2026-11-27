@@ -235,7 +235,7 @@ fn a_drc_pick_on_a_hidden_layer_selects_nothing_and_delete_deletes_nothing() {
         .any(|e| e.id > since && e.message.contains("hidden layer"));
     assert!(noticed, "the Messages panel says the items are hidden");
     assert_eq!(
-        app.document_state
+        app.document_view
             .panel_ctx
             .pcb_board
             .as_ref()
@@ -360,6 +360,7 @@ fn add_project(app: &mut Signex, dir: &Path) {
             schematic_design: Default::default(),
             fab_outputs: None,
             router_tool_diameter: None,
+            bom_alternates: Vec::new(),
             requirements: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
@@ -456,11 +457,11 @@ fn a_tab_switch_shows_the_other_boards_properties() {
     open(&mut app, &b);
     show(&mut app, &a);
     click(&mut app, None, 0.0, ClickMode::Replace);
-    let summary = app.document_state.panel_ctx.pcb_board.clone().expect("A");
+    let summary = app.document_view.panel_ctx.pcb_board.clone().expect("A");
     assert_eq!((summary.name, summary.selected), (title(&app, &a), 1));
 
     show(&mut app, &b);
-    let summary = app.document_state.panel_ctx.pcb_board.clone().expect("B");
+    let summary = app.document_view.panel_ctx.pcb_board.clone().expect("B");
     assert_eq!((summary.name, summary.selected), (title(&app, &b), 0));
 }
 
@@ -488,15 +489,10 @@ fn an_undocked_boards_selection_stays_out_of_the_main_properties() {
     let in_window = app.interaction_state.pcb_selections.get(&window);
     assert_eq!(in_window.map(|s| s.selection().len()), Some(1));
 
-    let main = app
-        .document_state
-        .panel_ctx
-        .pcb_board
-        .clone()
-        .expect("main");
+    let main = app.document_view.panel_ctx.pcb_board.clone().expect("main");
     assert_eq!((main.name, main.selected), (title(&app, &a), 2));
     let undocked = app
-        .document_state
+        .document_view
         .window_panel_ctx
         .get(&window)
         .and_then(|ctx| ctx.pcb_board.clone())

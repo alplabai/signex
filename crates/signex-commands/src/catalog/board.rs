@@ -6,7 +6,9 @@ use signex_i18n_ids::command_ids;
 
 pub(super) const BOARD: &[CommandMetadata] = &[
     // #2373: the board placement tools. Each arms its tool on the board in
-    // view; every click (or finished shape) is one undo step.
+    // view; every click (or finished shape) is one undo step. Via and Track
+    // also run from their operands on the board `document` names, the whole
+    // via or run one undo step (#2470).
     CommandMetadata {
         id: "place_board_via",
         category: "place",
@@ -14,7 +16,8 @@ pub(super) const BOARD: &[CommandMetadata] = &[
         menu_label: Some(command_ids::CMD_MENU_PLACE_BOARD_VIA),
         group: CommandGroup::Pcb,
         enable: Enablement::RequiresDocument(DocumentKind::Pcb),
-        flags: CommandFlags::GUI_MUTATES,
+        flags: CommandFlags::MUTATES,
+        operands: super::route_operands::BOARD_VIA,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -24,9 +27,13 @@ pub(super) const BOARD: &[CommandMetadata] = &[
         menu_label: Some(command_ids::CMD_MENU_PLACE_BOARD_TRACK),
         group: CommandGroup::Pcb,
         enable: Enablement::RequiresDocument(DocumentKind::Pcb),
-        flags: CommandFlags::GUI_MUTATES,
+        flags: CommandFlags::MUTATES,
+        operands: super::route_operands::BOARD_TRACK,
         ..CommandMetadata::DEFAULT
     },
+    // #2470: the area tools also run from their operands (the board, the
+    // layer, the outline and, for copper, the net) without a window: one
+    // undo step each, answered with the area as JSON.
     CommandMetadata {
         id: "place_board_fill",
         category: "place",
@@ -34,7 +41,8 @@ pub(super) const BOARD: &[CommandMetadata] = &[
         menu_label: Some(command_ids::CMD_MENU_PLACE_BOARD_FILL),
         group: CommandGroup::Pcb,
         enable: Enablement::RequiresDocument(DocumentKind::Pcb),
-        flags: CommandFlags::GUI_MUTATES,
+        flags: CommandFlags::MUTATES,
+        operands: operands::BOARD_FILL,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -44,7 +52,8 @@ pub(super) const BOARD: &[CommandMetadata] = &[
         menu_label: Some(command_ids::CMD_MENU_PLACE_BOARD_REGION),
         group: CommandGroup::Pcb,
         enable: Enablement::RequiresDocument(DocumentKind::Pcb),
-        flags: CommandFlags::GUI_MUTATES,
+        flags: CommandFlags::MUTATES,
+        operands: operands::BOARD_COPPER_AREA,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -54,7 +63,8 @@ pub(super) const BOARD: &[CommandMetadata] = &[
         menu_label: Some(command_ids::CMD_MENU_PLACE_BOARD_KEEPOUT),
         group: CommandGroup::Pcb,
         enable: Enablement::RequiresDocument(DocumentKind::Pcb),
-        flags: CommandFlags::GUI_MUTATES,
+        flags: CommandFlags::MUTATES,
+        operands: operands::BOARD_NETLESS_AREA,
         ..CommandMetadata::DEFAULT
     },
     // #2234: enter the board sketch of the board in view, or leave it
@@ -77,7 +87,8 @@ pub(super) const BOARD: &[CommandMetadata] = &[
         menu_label: Some(command_ids::CMD_MENU_PLACE_BOARD_POLYGON_POUR),
         group: CommandGroup::Pcb,
         enable: Enablement::RequiresDocument(DocumentKind::Pcb),
-        flags: CommandFlags::GUI_MUTATES,
+        flags: CommandFlags::MUTATES,
+        operands: operands::BOARD_COPPER_AREA,
         ..CommandMetadata::DEFAULT
     },
     // #2216: cut an area out of the pours on the active copper layer, or
@@ -89,7 +100,8 @@ pub(super) const BOARD: &[CommandMetadata] = &[
         menu_label: Some(command_ids::CMD_MENU_PLACE_BOARD_POUR_CUTOUT),
         group: CommandGroup::Pcb,
         enable: Enablement::RequiresDocument(DocumentKind::Pcb),
-        flags: CommandFlags::GUI_MUTATES,
+        flags: CommandFlags::MUTATES,
+        operands: operands::BOARD_NETLESS_AREA,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -235,7 +247,43 @@ pub(super) const BOARD: &[CommandMetadata] = &[
         operands: operands::DOCUMENT,
         ..CommandMetadata::DEFAULT
     },
-    // #2457: Place ▸ Room draws a room by two corners; one undo step.
+    // #2942: the board's layout plan, read, set one stage at a time (one
+    // undo step) and judged stage by stage. No menu row, no default keys.
+    CommandMetadata {
+        id: "layout_plan_get",
+        category: "pcb",
+        label: command_ids::CMD_LAYOUT_PLAN_GET,
+        menu_label: None,
+        group: CommandGroup::Pcb,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: operands::DOCUMENT,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "layout_plan_set",
+        category: "pcb",
+        label: command_ids::CMD_LAYOUT_PLAN_SET,
+        menu_label: None,
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::MUTATES,
+        operands: operands::LAYOUT_PLAN_SET,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "layout_plan_status",
+        category: "pcb",
+        label: command_ids::CMD_LAYOUT_PLAN_STATUS,
+        menu_label: None,
+        group: CommandGroup::Pcb,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: operands::DOCUMENT,
+        ..CommandMetadata::DEFAULT
+    },
+    // #2457: Place ▸ Room draws a room by two corners; one undo step. With
+    // operands (#2935) it places the room they describe.
     CommandMetadata {
         id: "place_board_room",
         category: "place",
@@ -243,11 +291,13 @@ pub(super) const BOARD: &[CommandMetadata] = &[
         menu_label: Some(command_ids::CMD_MENU_PLACE_BOARD_ROOM),
         group: CommandGroup::Pcb,
         enable: Enablement::RequiresDocument(DocumentKind::Pcb),
-        flags: CommandFlags::GUI_MUTATES,
+        flags: CommandFlags::MUTATES,
+        operands: operands::PLACE_ROOM,
         ..CommandMetadata::DEFAULT
     },
     // #2457: Design ▸ Rooms ▸ Create Rooms from Sheets opens its dialog;
-    // Create runs as one undo step. Greyed without a project.
+    // Create runs as one undo step. Greyed without a project. With operands
+    // (#2935) it makes every room with the options they give.
     CommandMetadata {
         id: "create_rooms_from_sheets",
         category: "design",
@@ -255,7 +305,33 @@ pub(super) const BOARD: &[CommandMetadata] = &[
         menu_label: Some(command_ids::CMD_MENU_CREATE_ROOMS_FROM_SHEETS),
         group: CommandGroup::Pcb,
         enable: Enablement::RequiresDocument(DocumentKind::Pcb),
-        flags: CommandFlags::GUI_ONLY,
+        flags: CommandFlags::MUTATES,
+        operands: operands::CREATE_ROOMS,
+        ..CommandMetadata::DEFAULT
+    },
+    // #2457: the room's parts packed inside it again; one undo step.
+    CommandMetadata {
+        id: "arrange_in_room",
+        category: "design",
+        label: command_ids::CMD_ARRANGE_IN_ROOM,
+        menu_label: Some(command_ids::CMD_MENU_ARRANGE_IN_ROOM),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::MUTATES,
+        operands: operands::ARRANGE_ROOM,
+        ..CommandMetadata::DEFAULT
+    },
+    // #2941: each room's parts placed inside it by weighted priorities;
+    // placement only, one undo step.
+    CommandMetadata {
+        id: "auto_place",
+        category: "design",
+        label: command_ids::CMD_AUTO_PLACE,
+        menu_label: Some(command_ids::CMD_MENU_AUTO_PLACE),
+        group: CommandGroup::Pcb,
+        enable: Enablement::RequiresDocument(DocumentKind::Pcb),
+        flags: CommandFlags::MUTATES,
+        operands: operands::AUTO_PLACE,
         ..CommandMetadata::DEFAULT
     },
 ];

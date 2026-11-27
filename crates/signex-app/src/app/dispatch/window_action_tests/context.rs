@@ -48,7 +48,7 @@ fn a_net_class_name_typed_in_a_window_shows_in_that_window() {
     let mut f = net_class_fixture();
     let typed = net_class_message(&f, NetClassMsg::Draft(NetClassField::Name, "POWER".into()));
     let _ = f.app.update(typed);
-    let window = &f.app.document_state.window_panel_ctx[&f.window].net_classes;
+    let window = &f.app.document_view.window_panel_ctx[&f.window].net_classes;
     assert_eq!(window.draft.name, "POWER");
     assert_eq!(window.selected, 1);
 }
@@ -56,7 +56,7 @@ fn a_net_class_name_typed_in_a_window_shows_in_that_window() {
 #[test]
 fn a_net_class_commit_from_a_window_edits_the_class_the_window_shows() {
     let mut f = net_class_fixture();
-    let shown = f.app.document_state.window_panel_ctx[&f.window]
+    let shown = f.app.document_view.window_panel_ctx[&f.window]
         .net_classes
         .selected;
     for message in [
@@ -73,7 +73,7 @@ fn a_net_class_commit_from_a_window_edits_the_class_the_window_shows() {
         .map(|c| c.name.clone())
         .collect();
     assert_eq!(names[shown], "Rail", "{names:?}");
-    let window = &f.app.document_state.window_panel_ctx[&f.window].net_classes;
+    let window = &f.app.document_view.window_panel_ctx[&f.window].net_classes;
     assert_eq!(window.classes[shown].name, "Rail");
     assert_eq!(window.draft.name, "Rail");
 }
@@ -231,7 +231,7 @@ fn a_validation_tile_chip_or_identity_change_reaches_an_undocked_window() {
     };
     let mut f = fixture();
     f.app.refresh_panel_ctx();
-    let before = f.app.document_state.window_panel_ctx[&f.window]
+    let before = f.app.document_view.window_panel_ctx[&f.window]
         .validation
         .clone();
     assert_eq!(before.erc.only, None);
@@ -251,11 +251,11 @@ fn a_validation_tile_chip_or_identity_change_reaches_an_undocked_window() {
         ],
     );
 
-    let window = &f.app.document_state.window_panel_ctx[&f.window].validation;
+    let window = &f.app.document_view.window_panel_ctx[&f.window].validation;
     assert_eq!(window.erc.only, Some(ErcSeverityLite::Error), "the tile");
     assert_eq!(window.messages.level, MessageLevel::Warning, "the chip");
     assert_eq!(window.identity, UserIdentity::Known("Ada".into()));
-    assert_eq!(window, &f.app.document_state.panel_ctx.validation);
+    assert_eq!(window, &f.app.document_view.panel_ctx.validation);
 }
 
 /// The selected ERC finding shows selected in an undocked window's ERC panel
@@ -265,14 +265,14 @@ fn the_selected_erc_finding_reaches_an_undocked_window() {
     let mut f = fixture();
     f.app.refresh_panel_ctx();
     assert_eq!(
-        f.app.document_state.window_panel_ctx[&f.window].erc_focus_index,
+        f.app.document_view.window_panel_ctx[&f.window].erc_focus_index,
         None
     );
     f.app.ui_state.erc_focus_global_index = Some(3);
     f.app.refresh_panel_ctx();
-    assert_eq!(f.app.document_state.panel_ctx.erc_focus_index, Some(3));
+    assert_eq!(f.app.document_view.panel_ctx.erc_focus_index, Some(3));
     assert_eq!(
-        f.app.document_state.window_panel_ctx[&f.window].erc_focus_index,
+        f.app.document_view.window_panel_ctx[&f.window].erc_focus_index,
         Some(3)
     );
 }

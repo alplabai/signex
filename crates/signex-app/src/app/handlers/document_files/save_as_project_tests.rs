@@ -321,7 +321,7 @@ fn a_patch_that_did_not_reach_disk_keeps_the_change_in_memory_for_a_save() {
         );
         assert!(fx.app.document_state.is_document_dirty(&fx.project));
         assert_eq!(std::fs::read(&fx.project).unwrap(), project_bytes);
-        assert_eq!(fx.app.document_state.error_notice.is_some(), failed);
+        assert_eq!(fx.app.document_view.error_notice.is_some(), failed);
     }
 }
 

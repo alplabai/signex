@@ -22,7 +22,7 @@ impl Signex {
     }
 
     pub(crate) fn view_length_matching_tab(&self) -> Element<'_, Message> {
-        crate::panels::length_matching::tab_view(&self.document_state.panel_ctx)
+        crate::panels::length_matching::tab_view(&self.document_view.panel_ctx)
             .map(|msg| Message::Dock(DockMessage::Panel(msg)))
             .boxed()
     }

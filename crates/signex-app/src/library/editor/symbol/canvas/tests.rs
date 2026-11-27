@@ -31,11 +31,11 @@ impl Rig {
             SymbolDocument::new(PathBuf::from("t.snxsym"), SymbolFile::from_symbol(symbol));
         // A settled camera: the tests are about hit-testing, not the
         // queued first-view placement.
-        editor.pending_view = None;
+        editor.gui.pending_view = None;
         // `new` now fits a symbol that has content; these tests pin the
         // un-fitted default camera (100%, origin at the viewport centre).
-        editor.camera = crate::canvas::Camera::default();
-        editor.camera.offset = Point::new(
+        editor.gui.camera = crate::canvas::Camera::default();
+        editor.gui.camera.offset = Point::new(
             SymbolDocument::DEFAULT_SYMBOL_VIEWPORT_WIDTH * 0.5,
             SymbolDocument::DEFAULT_SYMBOL_VIEWPORT_HEIGHT * 0.5,
         );
@@ -46,7 +46,7 @@ impl Rig {
     }
 
     fn screen(&self, x: f64, y: f64) -> Point {
-        let cam = &self.editor.camera;
+        let cam = &self.editor.gui.camera;
         Point::new(
             cam.offset.x + x as f32 * cam.scale,
             cam.offset.y - y as f32 * cam.scale,
@@ -62,12 +62,12 @@ impl Rig {
         let editor = &self.editor;
         let canvas = SymbolCanvas::new(
             editor.primitive(),
-            editor.selected.clone(),
-            editor.tool,
-            &editor.polygon_vertices,
+            editor.gui.selected.clone(),
+            editor.gui.tool,
+            &editor.gui.polygon_vertices,
             editor.view(),
             false,
-            &editor.camera,
+            &editor.gui.camera,
             1.27,
             true,
             crate::render_config::GridStyle::default(),
@@ -78,9 +78,9 @@ impl Rig {
             Color::BLACK,
             Color::BLACK,
         )
-        .with_selection_filter(editor.selection_filter)
-        .with_view_pending(editor.pending_view.is_some())
-        .with_tool_epoch(editor.tool_epoch);
+        .with_selection_filter(editor.gui.selection_filter)
+        .with_view_pending(editor.gui.pending_view.is_some())
+        .with_tool_epoch(editor.gui.tool_epoch);
         let action = canvas::Program::update(&canvas, &mut self.cstate, &event, BOUNDS, cursor);
         let claimed = action.is_some();
         if let Some((Some(published), _, _)) = action.map(canvas::Action::into_inner) {
@@ -216,7 +216,7 @@ fn pressing_an_unselected_rectangle_corner_selects_it_without_resizing() {
     // corner coordinate unreliable to hit from outside.
     rig.press((10.0, 5.0));
     assert_eq!(
-        rig.editor.selected,
+        rig.editor.gui.selected,
         Some(state::SymbolSelection::Graphic(0))
     );
     rig.release((10.0, 5.0));
@@ -244,7 +244,7 @@ fn nearest_pin_wins_at_the_snap_pitch() {
 
     rig.press((0.0, 2.54));
     assert_eq!(
-        rig.editor.selected,
+        rig.editor.gui.selected,
         Some(state::SymbolSelection::Pin(2)),
         "pressing PIN3's tip must pick PIN3, not the first pin in range"
     );
@@ -258,16 +258,19 @@ fn a_pin_can_be_dragged_by_its_body_line() {
     // 4x zoom: the screen-space tip zone shrinks to ~0.67 mm, so a press
     // 1.9 mm along the 2.54 mm line can only be a hit through the
     // tip-to-base segment, never the tip disc.
-    rig.editor.camera.scale *= 4.0;
-    rig.editor.camera.offset = Point::new(450.0, 300.0);
+    rig.editor.gui.camera.scale *= 4.0;
+    rig.editor.gui.camera.offset = Point::new(450.0, 300.0);
     assert!(
-        rig.editor.camera.scale > 8.0 / 0.67,
+        rig.editor.gui.camera.scale > 8.0 / 0.67,
         "premise: tolerance well under 1.9 mm"
     );
 
     rig.drag((1.9, 0.0), (1.9, 2.54));
 
-    assert_eq!(rig.editor.selected, Some(state::SymbolSelection::Pin(0)));
+    assert_eq!(
+        rig.editor.gui.selected,
+        Some(state::SymbolSelection::Pin(0))
+    );
     assert_eq!(rig.editor.primitive().pins[0].position[1], 2.54);
 }
 
@@ -294,7 +297,7 @@ fn a_line_touching_a_pin_base_is_still_clickable_at_default_zoom() {
     rig.press((0.45, -0.32));
 
     assert_eq!(
-        rig.editor.selected,
+        rig.editor.gui.selected,
         Some(state::SymbolSelection::Graphic(1))
     );
 }
@@ -309,7 +312,7 @@ fn a_press_inside_the_body_near_a_pinned_edge_selects_the_body() {
     rig.drag((1.5, 1.0), (4.0, 1.0));
 
     assert_eq!(
-        rig.editor.selected,
+        rig.editor.gui.selected,
         Some(state::SymbolSelection::Graphic(0))
     );
     assert_eq!(
@@ -329,7 +332,10 @@ fn a_pin_still_wins_over_the_body_edge_it_is_attached_to() {
 
     rig.press((-1.27, 0.0));
 
-    assert_eq!(rig.editor.selected, Some(state::SymbolSelection::Pin(0)));
+    assert_eq!(
+        rig.editor.gui.selected,
+        Some(state::SymbolSelection::Pin(0))
+    );
 }
 
 #[test]
@@ -337,7 +343,7 @@ fn a_pin_on_a_selected_rectangles_handle_is_still_dragged_not_the_handle() {
     let mut rig = Rig::new(pin_on_body_edge());
     // The rectangle is selected first, so its edge-midpoint handle (0, 0)
     // is drawn - and the pin tip sits exactly on it.
-    rig.editor.selected = Some(state::SymbolSelection::Graphic(0));
+    rig.editor.gui.selected = Some(state::SymbolSelection::Graphic(0));
     let before = rig.editor.primitive().graphics[0].kind.clone();
 
     rig.drag((0.0, 0.0), (0.0, 2.54));
@@ -349,16 +355,16 @@ fn a_pin_on_a_selected_rectangles_handle_is_still_dragged_not_the_handle() {
 #[test]
 fn the_hover_cursor_agrees_with_the_press_over_a_pin_on_a_handle() {
     let mut rig = Rig::new(pin_on_body_edge());
-    rig.editor.selected = Some(state::SymbolSelection::Graphic(0));
+    rig.editor.gui.selected = Some(state::SymbolSelection::Graphic(0));
     let editor = &rig.editor;
     let canvas = SymbolCanvas::new(
         editor.primitive(),
-        editor.selected.clone(),
-        editor.tool,
-        &editor.polygon_vertices,
+        editor.gui.selected.clone(),
+        editor.gui.tool,
+        &editor.gui.polygon_vertices,
         editor.view(),
         false,
-        &editor.camera,
+        &editor.gui.camera,
         1.27,
         true,
         crate::render_config::GridStyle::default(),
@@ -385,8 +391,8 @@ fn a_resize_handle_of_a_filtered_out_graphic_is_not_grabbable() {
     let mut s = Symbol::empty("T");
     s.graphics.push(rectangle([0.0, 0.0], [5.08, 5.08]));
     let mut rig = Rig::new(s);
-    rig.editor.selected = Some(state::SymbolSelection::Graphic(0));
-    rig.editor.selection_filter.drawings = false;
+    rig.editor.gui.selected = Some(state::SymbolSelection::Graphic(0));
+    rig.editor.gui.selection_filter.drawings = false;
     let before = rig.editor.primitive().graphics[0].kind.clone();
 
     rig.drag((5.08, 5.08), (8.0, 8.0));
@@ -402,14 +408,14 @@ fn a_box_over_everything_stays_multiple_under_a_restricted_filter() {
     let mut rig = Rig::new(s);
     // Texts are off but the symbol has none, so the box still picks every
     // item - which must not become `All` while a pill is off.
-    rig.editor.selection_filter.texts = false;
+    rig.editor.gui.selection_filter.texts = false;
 
     rig.press((-12.0, -2.0));
     rig.moved((8.0, 8.0));
     rig.release((8.0, 8.0));
 
     assert_eq!(
-        rig.editor.selected,
+        rig.editor.gui.selected,
         Some(state::SymbolSelection::Multiple {
             pin_indices: vec![0],
             graphic_indices: vec![0],
@@ -422,14 +428,18 @@ fn a_pin_drag_is_one_undo_step_and_marks_the_document_dirty() {
     let mut s = Symbol::empty("T");
     s.pins.push(pin("1", 0.0, 0.0, PinOrientation::Right));
     let mut rig = Rig::new(s);
-    assert!(!rig.editor.is_dirty() && !rig.editor.history.can_undo());
+    assert!(!rig.editor.is_dirty() && !rig.editor.draft.history.can_undo());
 
     rig.press((0.0, 0.0));
     rig.moved((0.0, 1.27));
     rig.moved((0.0, 2.54));
     rig.release((0.0, 2.54));
 
-    assert_eq!(rig.editor.history.undo_len(), 1, "one drag, one undo step");
+    assert_eq!(
+        rig.editor.draft.history.undo_len(),
+        1,
+        "one drag, one undo step"
+    );
     assert!(rig.editor.is_dirty());
 }
 
@@ -438,13 +448,13 @@ fn the_pin_grab_zone_is_screen_space_not_world_space() {
     let mut s = Symbol::empty("T");
     s.pins.push(pin("1", 0.0, 0.0, PinOrientation::Right));
     let mut rig = Rig::new(s);
-    rig.editor.camera.scale *= 4.0;
-    rig.editor.camera.offset = Point::new(450.0, 300.0);
+    rig.editor.gui.camera.scale *= 4.0;
+    rig.editor.gui.camera.offset = Point::new(450.0, 300.0);
 
     // 8 px at 4x zoom is well under 1.5 mm: 1.4 mm behind the tip is
     // a miss now (it was a hit under the fixed world radius).
     rig.press((-1.4, 0.0));
-    assert_eq!(rig.editor.selected, None);
+    assert_eq!(rig.editor.gui.selected, None);
 }
 
 #[test]
@@ -452,15 +462,18 @@ fn the_pins_filter_pill_gates_pin_picking() {
     let mut s = Symbol::empty("T");
     s.pins.push(pin("1", 0.0, 0.0, PinOrientation::Right));
     let mut rig = Rig::new(s);
-    rig.editor.selection_filter.pins = false;
+    rig.editor.gui.selection_filter.pins = false;
 
     rig.press((0.0, 0.0));
-    assert_eq!(rig.editor.selected, None, "filtered-out pins are inert");
+    assert_eq!(rig.editor.gui.selected, None, "filtered-out pins are inert");
 
-    rig.editor.selection_filter.pins = true;
+    rig.editor.gui.selection_filter.pins = true;
     rig.release((0.0, 0.0));
     rig.press((0.0, 0.0));
-    assert_eq!(rig.editor.selected, Some(state::SymbolSelection::Pin(0)));
+    assert_eq!(
+        rig.editor.gui.selected,
+        Some(state::SymbolSelection::Pin(0))
+    );
 }
 
 #[test]
@@ -469,10 +482,10 @@ fn the_drawings_filter_pill_gates_graphic_picking_and_box_select() {
     s.graphics.push(rectangle([0.0, 0.0], [5.08, 5.08]));
     s.pins.push(pin("1", -10.0, 0.0, PinOrientation::Right));
     let mut rig = Rig::new(s);
-    rig.editor.selection_filter.drawings = false;
+    rig.editor.gui.selection_filter.drawings = false;
 
     rig.press((2.54, 2.54));
-    assert_eq!(rig.editor.selected, None);
+    assert_eq!(rig.editor.gui.selected, None);
     rig.release((2.54, 2.54));
 
     // A window box over everything picks only what the filter allows.
@@ -480,7 +493,7 @@ fn the_drawings_filter_pill_gates_graphic_picking_and_box_select() {
     rig.moved((8.0, 8.0));
     rig.release((8.0, 8.0));
     assert_eq!(
-        rig.editor.selected,
+        rig.editor.gui.selected,
         Some(state::SymbolSelection::Multiple {
             pin_indices: vec![0],
             graphic_indices: vec![],
@@ -493,7 +506,7 @@ fn escape_with_nothing_in_flight_is_left_to_the_app_ladder() {
     let mut s = Symbol::empty("T");
     s.pins.push(pin("1", 0.0, 0.0, PinOrientation::Right));
     let mut rig = Rig::new(s);
-    rig.editor.tool = SymbolTool::AddPin;
+    rig.editor.gui.tool = SymbolTool::AddPin;
 
     let claimed = rig.escape();
 
@@ -501,17 +514,17 @@ fn escape_with_nothing_in_flight_is_left_to_the_app_ladder() {
         !claimed,
         "an unclaimed Esc lets modals and the context menu take it first"
     );
-    assert_eq!(rig.editor.tool, SymbolTool::AddPin);
+    assert_eq!(rig.editor.gui.tool, SymbolTool::AddPin);
 }
 
 #[test]
 fn escape_cancels_an_in_flight_rectangle_and_keeps_the_tool() {
     let mut rig = Rig::new(Symbol::empty("T"));
-    rig.editor.tool = SymbolTool::PlaceRectangle;
+    rig.editor.gui.tool = SymbolTool::PlaceRectangle;
 
     rig.press((0.0, 0.0));
     assert!(rig.escape(), "an in-flight gesture claims the key");
-    assert_eq!(rig.editor.tool, SymbolTool::PlaceRectangle);
+    assert_eq!(rig.editor.gui.tool, SymbolTool::PlaceRectangle);
     assert!(rig.cstate.rect_from.is_none());
 
     assert!(!rig.escape(), "the second Esc is the ladder's");
@@ -520,7 +533,7 @@ fn escape_cancels_an_in_flight_rectangle_and_keeps_the_tool() {
 #[test]
 fn right_click_backs_out_of_a_placement_tool_in_the_same_two_steps_as_escape() {
     let mut rig = Rig::new(Symbol::empty("T"));
-    rig.editor.tool = SymbolTool::PlaceRectangle;
+    rig.editor.gui.tool = SymbolTool::PlaceRectangle;
 
     rig.press((0.0, 0.0));
     rig.right_click((5.0, 5.0));
@@ -528,17 +541,17 @@ fn right_click_backs_out_of_a_placement_tool_in_the_same_two_steps_as_escape() {
         rig.cstate.rect_from.is_none(),
         "the first click cancels the gesture"
     );
-    assert_eq!(rig.editor.tool, SymbolTool::PlaceRectangle);
-    assert!(rig.editor.context_menu.is_none());
+    assert_eq!(rig.editor.gui.tool, SymbolTool::PlaceRectangle);
+    assert!(rig.editor.gui.context_menu.is_none());
 
     rig.right_click((5.0, 5.0));
     assert_eq!(
-        rig.editor.tool,
+        rig.editor.gui.tool,
         SymbolTool::Select,
         "the next click leaves the tool, like the second Esc"
     );
     assert!(
-        rig.editor.context_menu.is_none(),
+        rig.editor.gui.context_menu.is_none(),
         "leaving the tool opens no menu"
     );
 }
@@ -546,8 +559,8 @@ fn right_click_backs_out_of_a_placement_tool_in_the_same_two_steps_as_escape() {
 #[test]
 fn a_right_drag_in_a_placement_tool_pans_and_keeps_the_tool() {
     let mut rig = Rig::new(Symbol::empty("T"));
-    rig.editor.tool = SymbolTool::AddPin;
-    let before = rig.editor.camera.offset;
+    rig.editor.gui.tool = SymbolTool::AddPin;
+    let before = rig.editor.gui.camera.offset;
 
     rig.send(
         Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Right)),
@@ -559,8 +572,8 @@ fn a_right_drag_in_a_placement_tool_pans_and_keeps_the_tool() {
         Some((20.0, 0.0)),
     );
 
-    assert_ne!(rig.editor.camera.offset, before, "the drag panned");
-    assert_eq!(rig.editor.tool, SymbolTool::AddPin);
+    assert_ne!(rig.editor.gui.camera.offset, before, "the drag panned");
+    assert_eq!(rig.editor.gui.tool, SymbolTool::AddPin);
 }
 
 #[test]
@@ -569,14 +582,14 @@ fn a_right_click_in_the_select_tool_still_opens_the_context_menu() {
 
     rig.right_click((0.0, 0.0));
 
-    assert!(rig.editor.context_menu.is_some());
-    assert_eq!(rig.editor.tool, SymbolTool::Select);
+    assert!(rig.editor.gui.context_menu.is_some());
+    assert_eq!(rig.editor.gui.tool, SymbolTool::Select);
 }
 
 #[test]
 fn escape_drops_an_armed_add_pin_press_so_release_places_nothing() {
     let mut rig = Rig::new(Symbol::empty("T"));
-    rig.editor.tool = SymbolTool::AddPin;
+    rig.editor.gui.tool = SymbolTool::AddPin;
 
     rig.press((0.0, 0.0));
     assert!(rig.escape());
@@ -588,7 +601,7 @@ fn escape_drops_an_armed_add_pin_press_so_release_places_nothing() {
 #[test]
 fn add_pin_lands_where_the_button_is_released() {
     let mut rig = Rig::new(Symbol::empty("T"));
-    rig.editor.tool = SymbolTool::AddPin;
+    rig.editor.gui.tool = SymbolTool::AddPin;
 
     rig.press((0.0, 0.0));
     assert!(
@@ -601,7 +614,11 @@ fn add_pin_lands_where_the_button_is_released() {
     let pins = &rig.editor.primitive().pins;
     assert_eq!(pins.len(), 1, "one gesture places exactly one pin");
     assert_eq!(pins[0].position, [5.08, 2.54]);
-    assert_eq!(rig.editor.history.undo_len(), 1, "one placement, one undo");
+    assert_eq!(
+        rig.editor.draft.history.undo_len(),
+        1,
+        "one placement, one undo"
+    );
     assert!(rig.editor.is_dirty());
 }
 
@@ -614,7 +631,7 @@ fn fit_uses_the_real_canvas_size_not_a_hardcoded_viewport() {
     // The real path: the Home key publishes `Fit`, which only queues.
     rig.home();
     assert!(
-        rig.editor.pending_view.is_some(),
+        rig.editor.gui.pending_view.is_some(),
         "Home must queue a fit, not apply a guessed viewport"
     );
     // Any event tick lets the canvas report its measured size.
@@ -625,7 +642,7 @@ fn fit_uses_the_real_canvas_size_not_a_hardcoded_viewport() {
         None,
     );
 
-    assert_eq!(rig.editor.pending_view, None);
+    assert_eq!(rig.editor.gui.pending_view, None);
     let centre = rig.screen(0.0, 0.0);
     // The fit centres the symbol below the floating Active Bar, so the centre
     // sits half the top clearance below the canvas middle (deliberate, #114).
@@ -647,17 +664,17 @@ fn a_pending_fit_does_not_swallow_the_event_that_triggers_the_measurement() {
 
     rig.press((0.0, 0.0));
     rig.moved((0.0, 2.54));
-    assert!(rig.editor.mid_drag, "the drag is under way");
+    assert!(rig.editor.draft.is_moving(), "the drag is under way");
     rig.home();
-    assert!(rig.editor.pending_view.is_some());
+    assert!(rig.editor.gui.pending_view.is_some());
 
     // The release arrives while the fit is still queued: it must both
     // measure/apply the view and end the drag.
     rig.release((0.0, 2.54));
 
-    assert_eq!(rig.editor.pending_view, None, "the view was applied");
+    assert_eq!(rig.editor.gui.pending_view, None, "the view was applied");
     assert!(
-        !rig.editor.mid_drag,
+        !rig.editor.draft.is_moving(),
         "the release still committed the drag gesture"
     );
 }
@@ -680,7 +697,7 @@ fn pressing_the_designator_text_selects_the_reference_field() {
     rig.press((0.5, 7.0));
 
     assert_eq!(
-        rig.editor.selected,
+        rig.editor.gui.selected,
         Some(state::SymbolSelection::Field(state::FieldKey::Reference))
     );
 }
@@ -695,13 +712,13 @@ fn an_untouched_symbol_has_pressable_fields_at_the_default_placement() {
     // bottom-left (the text hangs down from its anchor).
     rig.press((0.5, 6.4));
     assert_eq!(
-        rig.editor.selected,
+        rig.editor.gui.selected,
         Some(state::SymbolSelection::Field(state::FieldKey::Reference))
     );
     rig.release((0.5, 6.4));
     rig.press((0.5, -5.6));
     assert_eq!(
-        rig.editor.selected,
+        rig.editor.gui.selected,
         Some(state::SymbolSelection::Field(state::FieldKey::Value))
     );
 }
@@ -719,7 +736,7 @@ fn dragging_the_designator_moves_it_by_the_snapped_delta_and_stores_the_position
         "expected [2.54, 7.62], got {pos:?}"
     );
     assert!(rig.editor.is_dirty());
-    assert_eq!(rig.editor.history.undo_len(), 1, "one drag, one undo");
+    assert_eq!(rig.editor.draft.history.undo_len(), 1, "one drag, one undo");
     assert_eq!(rig.editor.primitive().comment_pos, None, "value untouched");
 }
 
@@ -740,16 +757,19 @@ fn undo_restores_the_designator_position_before_the_drag() {
 #[test]
 fn the_designators_filter_pill_gates_picking_the_designator() {
     let mut rig = Rig::new(body_with_designator_at([0.0, 7.62]));
-    rig.editor.selection_filter.designators = false;
+    rig.editor.gui.selection_filter.designators = false;
 
-    rig.press((0.5, 7.0));
-    assert_eq!(rig.editor.selected, None, "filtered-out fields are inert");
-    rig.release((0.5, 7.0));
-
-    rig.editor.selection_filter.designators = true;
     rig.press((0.5, 7.0));
     assert_eq!(
-        rig.editor.selected,
+        rig.editor.gui.selected, None,
+        "filtered-out fields are inert"
+    );
+    rig.release((0.5, 7.0));
+
+    rig.editor.gui.selection_filter.designators = true;
+    rig.press((0.5, 7.0));
+    assert_eq!(
+        rig.editor.gui.selected,
         Some(state::SymbolSelection::Field(state::FieldKey::Reference))
     );
 }
@@ -763,7 +783,10 @@ fn a_pin_under_the_designator_wins_the_press() {
 
     rig.press((0.5, 7.0));
 
-    assert_eq!(rig.editor.selected, Some(state::SymbolSelection::Pin(0)));
+    assert_eq!(
+        rig.editor.gui.selected,
+        Some(state::SymbolSelection::Pin(0))
+    );
 }
 
 /// The renderer snapshot the canvas would draw for the rig's symbol.
@@ -771,12 +794,12 @@ fn snapshot_of(rig: &Rig) -> (SymbolCanvas<'_>, RendererSnapshot) {
     let editor = &rig.editor;
     let canvas = SymbolCanvas::new(
         editor.primitive(),
-        editor.selected.clone(),
-        editor.tool,
-        &editor.polygon_vertices,
+        editor.gui.selected.clone(),
+        editor.gui.tool,
+        &editor.gui.polygon_vertices,
         editor.view(),
         false,
-        &editor.camera,
+        &editor.gui.camera,
         1.27,
         true,
         crate::render_config::GridStyle::default(),
@@ -787,7 +810,7 @@ fn snapshot_of(rig: &Rig) -> (SymbolCanvas<'_>, RendererSnapshot) {
         Color::BLACK,
         Color::BLACK,
     );
-    let snapshot = canvas.build_symbol_renderer_snapshot(&editor.selected, 1.0);
+    let snapshot = canvas.build_symbol_renderer_snapshot(&editor.gui.selected, 1.0);
     (canvas, snapshot)
 }
 
@@ -818,7 +841,7 @@ fn the_snapshot_draws_both_fields_with_their_text_and_default_positions() {
 #[test]
 fn the_snapshot_highlights_a_selected_field_and_all() {
     let mut rig = Rig::new(body_only());
-    rig.editor.selected = Some(state::SymbolSelection::Field(state::FieldKey::Reference));
+    rig.editor.gui.selected = Some(state::SymbolSelection::Field(state::FieldKey::Reference));
     let (canvas, snap) = snapshot_of(&rig);
     let sel = to_rgba(canvas.selected_color);
     assert_eq!(snap.reference_value_texts[0].color, sel);
@@ -827,7 +850,7 @@ fn the_snapshot_highlights_a_selected_field_and_all() {
         "value stays plain"
     );
 
-    rig.editor.selected = Some(state::SymbolSelection::All);
+    rig.editor.gui.selected = Some(state::SymbolSelection::All);
     let (_, snap) = snapshot_of(&rig);
     assert!(snap.reference_value_texts.iter().all(|t| t.color == sel));
 }
@@ -842,12 +865,12 @@ fn a_click_that_does_not_move_a_default_field_changes_nothing() {
     rig.release((0.3, 6.4));
 
     assert_eq!(
-        rig.editor.selected,
+        rig.editor.gui.selected,
         Some(state::SymbolSelection::Field(state::FieldKey::Reference))
     );
     assert_eq!(rig.editor.primitive().designator_pos, None);
     assert!(!rig.editor.is_dirty(), "nothing moved, nothing to save");
-    assert!(!rig.editor.history.can_undo());
+    assert!(!rig.editor.draft.history.can_undo());
 }
 
 #[test]
@@ -859,7 +882,7 @@ fn a_designator_inside_the_body_wins_over_the_graphic_under_it() {
     rig.press((1.5, 2.4));
 
     assert_eq!(
-        rig.editor.selected,
+        rig.editor.gui.selected,
         Some(state::SymbolSelection::Field(state::FieldKey::Reference))
     );
 }
@@ -898,7 +921,7 @@ fn assert_whole_body_drag_moves_both_fields(rig: &mut Rig) {
 #[test]
 fn an_all_selection_drag_moves_stored_and_default_fields_together() {
     let mut rig = Rig::new(body_with_pin_and_fields());
-    rig.editor.selected = Some(state::SymbolSelection::All);
+    rig.editor.gui.selected = Some(state::SymbolSelection::All);
     assert_whole_body_drag_moves_both_fields(&mut rig);
 }
 
@@ -907,12 +930,12 @@ fn a_box_over_the_whole_body_moves_the_fields_with_it() {
     let mut rig = Rig::new(body_with_pin_and_fields());
     // With every pill on a full-body box collapses to `All`; a pill that
     // matches nothing here keeps it a `Multiple` covering the whole body.
-    rig.editor.selection_filter.texts = false;
+    rig.editor.gui.selection_filter.texts = false;
     rig.press((-6.0, -9.0));
     rig.moved((14.0, 6.0));
     rig.release((14.0, 6.0));
     assert!(matches!(
-        rig.editor.selected,
+        rig.editor.gui.selected,
         Some(state::SymbolSelection::Multiple { .. })
     ));
     assert_whole_body_drag_moves_both_fields(&mut rig);
@@ -944,12 +967,12 @@ fn two_unit_symbol_with_stored_designator() -> Symbol {
 #[test]
 fn moving_one_whole_unit_leaves_the_shared_stored_fields_alone() {
     let mut rig = Rig::new(two_unit_symbol_with_stored_designator());
-    rig.editor.active_part = 1;
+    rig.editor.draft.active_part = 1;
     rig.press((-6.0, -9.0));
     rig.moved((14.0, 6.0));
     rig.release((14.0, 6.0));
     assert_eq!(
-        rig.editor.selected,
+        rig.editor.gui.selected,
         Some(state::SymbolSelection::All),
         "a box over all of unit A resolves to All"
     );
@@ -969,8 +992,8 @@ fn moving_one_whole_unit_leaves_the_shared_stored_fields_alone() {
 #[test]
 fn undo_after_a_one_unit_move_restores_the_body_and_the_stored_fields() {
     let mut rig = Rig::new(two_unit_symbol_with_stored_designator());
-    rig.editor.active_part = 1;
-    rig.editor.selected = Some(state::SymbolSelection::All);
+    rig.editor.draft.active_part = 1;
+    rig.editor.gui.selected = Some(state::SymbolSelection::All);
     rig.drag((0.0, 0.0), (2.54, 0.0));
     assert_eq!(rig.editor.primitive().pins[0].position, [2.54, 0.0]);
 
@@ -996,8 +1019,8 @@ fn a_single_unit_symbol_whole_body_move_still_moves_stored_fields() {
     s.graphics.push(g);
     s.designator_pos = Some([0.0, 7.62]);
     let mut rig = Rig::new(s);
-    rig.editor.active_part = 1;
-    rig.editor.selected = Some(state::SymbolSelection::All);
+    rig.editor.draft.active_part = 1;
+    rig.editor.gui.selected = Some(state::SymbolSelection::All);
 
     rig.drag((0.0, 0.0), (2.54, 0.0));
 
@@ -1014,13 +1037,18 @@ fn a_right_click_on_a_field_over_the_body_is_not_the_graphic() {
 
     rig.right_click((1.5, 1.4));
 
-    let menu = rig.editor.context_menu.as_ref().expect("the menu opens");
+    let menu = rig
+        .editor
+        .gui
+        .context_menu
+        .as_ref()
+        .expect("the menu opens");
     assert_eq!(
         menu.target,
         state::SymbolContextTarget::Field(state::FieldKey::Reference)
     );
     assert_eq!(
-        rig.editor.selected,
+        rig.editor.gui.selected,
         Some(state::SymbolSelection::Field(state::FieldKey::Reference)),
         "right-click selects the field first, like the left press"
     );
@@ -1032,7 +1060,12 @@ fn a_right_click_on_a_pin_still_targets_the_pin() {
 
     rig.right_click((0.0, 0.0));
 
-    let menu = rig.editor.context_menu.as_ref().expect("the menu opens");
+    let menu = rig
+        .editor
+        .gui
+        .context_menu
+        .as_ref()
+        .expect("the menu opens");
     assert_eq!(menu.target, state::SymbolContextTarget::Pin(0));
 }
 

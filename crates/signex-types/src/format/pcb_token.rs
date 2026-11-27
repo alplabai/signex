@@ -65,18 +65,20 @@ pub const SNXPCB_FORMAT_V1_10: &str = "snxpcb/1.10";
 /// none keeps its token, byte for byte.
 pub const SNXPCB_FORMAT_V1_11: &str = "snxpcb/1.11";
 
-/// Written when the board has a length-matching group
-/// (`[[board_options.length_groups]]`, #2797), a teardrop rule other than
-/// the default (`[board_options.teardrops]`), or a pour with corners other
-/// than Sharp (#2578) or a hatched fill (#2579) (`Zone::has_pour_shape`). A
-/// build that knows only 1.11 would drop the groups and the teardrop rule
-/// on save, and would fill a shaped pour solid with sharp corners, so it
-/// opens 1.12 read-only. A board with none keeps its token, byte for byte.
+/// Written when the board has a layout plan (`[board_options.layout_plan]`,
+/// #2942), a length-matching group (`[[board_options.length_groups]]`,
+/// #2797), a teardrop rule other than the default
+/// (`[board_options.teardrops]`), or a pour with corners other than Sharp
+/// (#2578) or a hatched fill (#2579) (`Zone::has_pour_shape`). A build that
+/// knows only 1.11 would drop the plan, the groups and the teardrop rule on
+/// save, and would fill a shaped pour solid with sharp corners, so it opens
+/// 1.12 read-only. A board with none keeps its token, byte for byte.
 pub const SNXPCB_FORMAT_V1_12: &str = "snxpcb/1.12";
 
 /// The token a save of `board` writes, from its content, highest need
-/// first: a length-matching group, a teardrop rule or a shaped pour
-/// (corners or hatch) needs [`SNXPCB_FORMAT_V1_12`], a pour cutout, a
+/// first: a layout plan, a length-matching group, a teardrop rule or a
+/// shaped pour (corners or hatch) needs [`SNXPCB_FORMAT_V1_12`], a pour
+/// cutout, a
 /// dimension look, drawn copper or an unfilled pour
 /// [`SNXPCB_FORMAT_V1_11`],
 /// stack materials [`SNXPCB_FORMAT_V1_10`], a shelved pour
@@ -99,7 +101,11 @@ pub fn snxpcb_token(board: &PcbBoard) -> &'static str {
     let look = super::board_uses_dimension_style(board);
     let shaped = board.zones.iter().any(|zone| zone.has_pour_shape());
     let options = &board.options;
-    if shaped || !options.length_groups.is_empty() || !options.teardrops.is_default() {
+    if shaped
+        || !options.layout_plan.is_empty()
+        || !options.length_groups.is_empty()
+        || !options.teardrops.is_default()
+    {
         SNXPCB_FORMAT_V1_12
     } else if cutout || look || unfilled || super::board_has_drawn_copper(board) {
         SNXPCB_FORMAT_V1_11

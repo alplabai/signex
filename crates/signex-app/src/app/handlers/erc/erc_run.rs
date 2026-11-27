@@ -23,6 +23,21 @@ impl Signex {
     /// set falls back to this machine's preferences (the pre-#1085 behaviour)
     /// and says so once per project open in the Messages panel.
     fn erc_rule_settings(&mut self) -> (RuleOverrides, PinMatrixOverrides) {
+        self.say_erc_rule_settings();
+        self.active_erc_rule_settings()
+    }
+
+    /// [`Self::erc_rule_settings`] saying nothing, for a live check (#1288):
+    /// the active document's project's, as `check_erc` reads them.
+    pub(super) fn active_erc_rule_settings(&self) -> (RuleOverrides, PinMatrixOverrides) {
+        let project = self.document_state.active_document_project();
+        let (overrides, pin_matrix, _notes) = self.erc_rule_settings_quiet(project);
+        (overrides, pin_matrix)
+    }
+
+    /// What [`Self::erc_rule_settings`] says in the Messages panel about the
+    /// rule set it uses.
+    fn say_erc_rule_settings(&mut self) {
         let project = self.document_state.active_document_project();
         let Some(rules) = project.and_then(|p| p.data.rules.as_ref()) else {
             let unreadable = project.is_some_and(|p| p.data.has_unreadable_rules());
@@ -38,10 +53,7 @@ impl Signex {
                     );
                 }
             }
-            return (
-                self.ui_state.erc_severity_override.clone(),
-                self.ui_state.pin_matrix_overrides.clone(),
-            );
+            return;
         };
         let resolved = signex_erc::project_rules::resolve(&rules.erc);
         for entry in &resolved.unrecognised {
@@ -54,7 +66,6 @@ impl Signex {
                 names.join(", ")
             ));
         }
-        (resolved.severity, resolved.pin_matrix)
     }
 
     /// Record that `id` has been told about the preferences fallback; true
@@ -108,8 +119,28 @@ impl Signex {
     /// Capture the run's inputs from live state (memory only, no IO), claim a
     /// new generation and flag the run as in flight.
     pub(super) fn begin_erc_run(&mut self) -> (u64, super::erc_job::ErcRunInputs) {
+        let rules = self.erc_rule_settings();
+        let inputs = self.erc_run_inputs(rules);
+
+        // This run reads the sheets as they are now; an edit from here on
+        // leaves its results stale. The cached results keep their own epoch
+        // until this run's are applied.
+        self.ui_state.erc_run_epoch = self.document_state.sheet_edit_epoch;
+        self.ui_state.erc_run_generation += 1;
+        self.ui_state.erc_running = true;
+        // This run replaces every finding: a live check still out is dropped.
+        self.ui_state.live_erc.supersede();
+        self.refresh_panel_ctx();
+        (self.ui_state.erc_run_generation, inputs)
+    }
+
+    /// What an ERC run reads, from live state (memory only, no IO), with the
+    /// rule settings `rules`; Run ERC and a live check share it.
+    pub(super) fn erc_run_inputs(
+        &self,
+        (overrides, pin_matrix_overrides): (RuleOverrides, PinMatrixOverrides),
+    ) -> super::erc_job::ErcRunInputs {
         let rule_set = self.current_rule_set_identity();
-        let (overrides, pin_matrix_overrides) = self.erc_rule_settings();
         let ds = &self.document_state;
         let tab_paths = ds
             .tabs
@@ -127,7 +158,7 @@ impl Signex {
             .active_path
             .clone()
             .map(|active| crate::app::project_sheets::resolve_netlist_root(ds).unwrap_or(active));
-        let inputs = super::erc_job::ErcRunInputs {
+        super::erc_job::ErcRunInputs {
             open: crate::app::project_sheets::open_sheets_snapshot(ds),
             tab_paths,
             active,
@@ -157,16 +188,7 @@ impl Signex {
                 .map(|p| crate::app::saved_channel_naming::SavedChannelNaming::of(&p.data))
                 .unwrap_or_default(),
             fold: crate::app::state::project_case::fold_of(ds.active_document_project()),
-        };
-
-        // This run reads the sheets as they are now; an edit from here on
-        // leaves its results stale. The cached results keep their own epoch
-        // until this run's are applied.
-        self.ui_state.erc_run_epoch = self.document_state.sheet_edit_epoch;
-        self.ui_state.erc_run_generation += 1;
-        self.ui_state.erc_running = true;
-        self.refresh_panel_ctx();
-        (self.ui_state.erc_run_generation, inputs)
+        }
     }
 
     /// A finished ERC run: apply it, then surface the ERC panel.
@@ -267,7 +289,7 @@ impl Signex {
         // child-space or unplaced one would land on empty canvas (#956).
         // A net-level finding is drawn at its net's representative pin with the
         // distinct net marker; a No-ERC directive never reaches it.
-        self.interaction_state.active_canvas_mut().erc_markers = violations
+        let markers: Vec<crate::canvas::ErcMarker> = violations
             .iter()
             .filter(|v| {
                 matches!(
@@ -284,11 +306,14 @@ impl Signex {
                     signex_erc::Severity::Warning => crate::canvas::ErcMarkerSeverity::Warning,
                     _ => crate::canvas::ErcMarkerSeverity::Info,
                 },
+                caption: self.erc_marker_caption(v),
+                harness_entry: Self::erc_marker_harness_entry(v),
+                sheet_entry: Self::erc_marker_sheet_entry(v),
             })
             .collect();
-        self.interaction_state
-            .active_canvas_mut()
-            .clear_overlay_cache();
+        let canvas = self.interaction_state.active_canvas_mut();
+        canvas.erc_markers = markers;
+        canvas.clear_overlay_cache();
         self.ui_state.erc_violations = violations;
     }
 

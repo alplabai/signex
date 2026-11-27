@@ -34,11 +34,14 @@ pub(super) fn wiring(args: &CommandArgs) -> Result<DragWiringMode, String> {
         "horizontal_first" => Ok(DragWiringMode::HorizontalFirst),
         "vertical_first" => Ok(DragWiringMode::VerticalFirst),
         "straight" => Ok(DragWiringMode::Straight),
+        "angle45_start" => Ok(DragWiringMode::Angle45Start),
+        "angle45_end" => Ok(DragWiringMode::Angle45End),
         other => Err(format!("{WIRING_WORDS}, got `{other}`")),
     }
 }
 
-const WIRING_WORDS: &str = "`wiring` is auto, horizontal_first, vertical_first or straight";
+const WIRING_WORDS: &str = "`wiring` is auto, horizontal_first, vertical_first, straight, \
+                            angle45_start or angle45_end";
 
 impl Signex {
     /// Put `item`'s position at `at` (stored mm), its wires following when

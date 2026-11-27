@@ -70,6 +70,7 @@ fn fixture(dirty: bool) -> Fixture {
             schematic_design: Default::default(),
             fab_outputs: None,
             router_tool_diameter: None,
+            bom_alternates: Vec::new(),
             requirements: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
@@ -545,7 +546,7 @@ fn a_delete_the_os_refuses_keeps_the_file_and_reports_it() {
     std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o755)).unwrap();
 
     assert!(f.old.exists(), "a refused delete keeps the file");
-    assert!(f.app.document_state.error_notice.is_some());
+    assert!(f.app.document_view.error_notice.is_some());
     assert!(logged("Failed to delete project file"));
 }
 
@@ -585,7 +586,7 @@ fn a_failed_completion_message_for_a_closed_dialog_raises_the_card() {
     for message in messages {
         let _follow_up = f.app.update(message);
     }
-    assert!(f.app.document_state.error_notice.is_some());
+    assert!(f.app.document_view.error_notice.is_some());
 }
 
 /// The Exclude prompt's Save (#738) goes through the same refusal: a file a

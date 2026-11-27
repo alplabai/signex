@@ -16,6 +16,7 @@ is the newtype over `uuid::Uuid`; the nil uuid is never an id.
 | footprint container (`.snxfpt`) | `file_uuid` | none |
 | component row | the row id | none |
 | project (`.snxprj`) | `document_id` (new) | optional key, token stays `snxprj/1` |
+| block diagram (`.snxblk`) | `diagram_id` | new format, `snxblk/1` |
 
 `document_id` in a `.snxprj` is an additive optional key, like `description`:
 skipped when absent, read as absent when it is not an id, kept by older builds

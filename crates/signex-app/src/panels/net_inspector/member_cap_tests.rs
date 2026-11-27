@@ -91,7 +91,7 @@ fn menu_row(id: &str) -> Message {
 
 /// The members `VCC` lists and the count of its "+ N more" row.
 fn vcc_listing(app: &Signex) -> (usize, usize) {
-    let view = &app.document_state.panel_ctx.net_inspector;
+    let view = &app.document_view.panel_ctx.net_inspector;
     let vcc = view
         .nets
         .iter()

@@ -106,8 +106,8 @@ fn a_history_that_evicted_the_saved_state_stays_dirty() {
     let id = app.document_state.projects[0].id;
     for n in 0..=signex_engine::PROJECT_GENERAL_HISTORY_LIMIT {
         parameter(&mut app, "Rev", &n.to_string());
-        if let Some(tab) = app.document_state.project_tabs.get_mut(&id) {
-            tab.general_history.close_run();
+        if let Some(history) = app.document_state.general_history.get_mut(&id) {
+            history.close_run();
         }
     }
     while step(&mut app, true) {}
@@ -125,10 +125,9 @@ fn saving_then_undoing_to_the_saved_state_is_clean() {
     // A save ends the typing run (`plan_project_write`), so "b" is a new step.
     let id = app.document_state.projects[0].id;
     app.document_state
-        .project_tabs
+        .general_history
         .get_mut(&id)
         .unwrap()
-        .general_history
         .close_run();
     app.document_state.mark_document_clean(&path);
     describe(&mut app, "b");
@@ -169,8 +168,8 @@ fn finish_write(
 
 fn close_run(app: &mut Signex) {
     let id = app.document_state.projects[0].id;
-    if let Some(tab) = app.document_state.project_tabs.get_mut(&id) {
-        tab.general_history.close_run();
+    if let Some(history) = app.document_state.general_history.get_mut(&id) {
+        history.close_run();
     }
 }
 

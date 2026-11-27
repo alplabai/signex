@@ -32,9 +32,11 @@ mod fixtures;
 mod group;
 mod harness_snapshot;
 mod hierarchy;
+pub mod live;
 mod net_finding;
 mod overrides;
 pub mod pin_matrix;
+mod project_class_conflicts;
 mod project_names;
 pub mod project_rules;
 mod project_units;
@@ -49,6 +51,7 @@ pub use hierarchy::HierarchyMemo;
 pub use net_finding::{NetFinding, NetFindingPin};
 pub use overrides::apply_overrides;
 pub use pin_matrix::{ErcConfig, PinAxis, PinMatrix};
+pub use project_class_conflicts::{ProjectClassFindings, project_net_class_conflicts_named};
 pub use project_names::{
     ProjectNetNames, project_net_multiple_names, project_net_multiple_names_named,
 };
@@ -160,6 +163,12 @@ pub enum RuleKind {
     /// Connectors or sheet entries of two harness types share one harness
     /// (#1280).
     HarnessTypeConflict,
+    /// Two directives (Net Parameters, Net Blanket) give one net different
+    /// net classes; the net takes the class of the higher-ranked one (#2656).
+    NetClassConflict,
+    /// One half of a differential pair (`USB_D_P`, or a net a pair
+    /// directive marks) whose partner net is not on the sheet (#2951).
+    DiffPairPartnerMissing,
 }
 
 impl RuleKind {
@@ -203,6 +212,8 @@ impl RuleKind {
             RuleKind::RepeatEntryNeedsBus => "Repeat entry needs a bus",
             RuleKind::HarnessEntryMismatch => "Harness entry mismatch",
             RuleKind::HarnessTypeConflict => "Harness type conflict",
+            RuleKind::NetClassConflict => "Net class conflict",
+            RuleKind::DiffPairPartnerMissing => "Differential pair partner missing",
         }
     }
 
@@ -226,7 +237,7 @@ impl RuleKind {
     }
 
     /// Every built-in rule, in the order the ERC dialog lists them.
-    pub const ALL: [RuleKind; 37] = [
+    pub const ALL: [RuleKind; 39] = [
         RuleKind::UnusedPin,
         RuleKind::DuplicateRefDesignator,
         RuleKind::HierPortDisconnected,
@@ -264,6 +275,8 @@ impl RuleKind {
         RuleKind::RepeatEntryNeedsBus,
         RuleKind::HarnessEntryMismatch,
         RuleKind::HarnessTypeConflict,
+        RuleKind::NetClassConflict,
+        RuleKind::DiffPairPartnerMissing,
     ];
 
     /// The one source of truth for a rule's severity: [`Diagnostic::new`]
@@ -304,7 +317,9 @@ impl RuleKind {
             | RuleKind::SheetPinUnconnected
             | RuleKind::SheetPinDirectionConflict
             | RuleKind::HarnessEntryMismatch
-            | RuleKind::HarnessTypeConflict => Severity::Warning,
+            | RuleKind::HarnessTypeConflict
+            | RuleKind::NetClassConflict
+            | RuleKind::DiffPairPartnerMissing => Severity::Warning,
             RuleKind::NetMultipleNames => Severity::Info,
             RuleKind::MissingPowerFlag | RuleKind::SymbolOutsideSheet => Severity::Info,
             RuleKind::PartWithoutFootprint | RuleKind::PartWithoutValue | RuleKind::OffGrid => {

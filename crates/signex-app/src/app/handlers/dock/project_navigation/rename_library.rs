@@ -353,7 +353,7 @@ impl Signex {
                     "Library rename rollback failed",
                     &anyhow::anyhow!("{}", detail.render_en_us()),
                 );
-                self.document_state.error_notice = Some(ErrorNotice::rename_failed(detail));
+                self.document_view.error_notice = Some(ErrorNotice::rename_failed(detail));
             }
         }
     }
@@ -434,7 +434,7 @@ impl Signex {
             "Library rename failed",
             &anyhow::anyhow!("{reason} ({name})"),
         );
-        self.document_state.error_notice = Some(ErrorNotice::rename_failed(detail));
+        self.document_view.error_notice = Some(ErrorNotice::rename_failed(detail));
     }
 
     /// Re-point the mounted library, the project entry and every open

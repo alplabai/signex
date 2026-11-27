@@ -78,7 +78,7 @@ impl Signex {
                     table,
                     row_id,
                 } => {
-                    let tokens = &self.document_state.panel_ctx.tokens;
+                    let tokens = &self.document_view.panel_ctx.tokens;
                     let address = crate::library::state::EditorAddress::new(
                         library_path.clone(),
                         table.clone(),
@@ -89,7 +89,7 @@ impl Signex {
                             editor,
                             &self.library,
                             tokens,
-                            &self.document_state.panel_ctx.canvas_colors,
+                            &self.document_view.panel_ctx.canvas_colors,
                             self.sheet_grid(),
                             self.ui_state.device_px_per_logical_px(window_id),
                             address,
@@ -120,7 +120,7 @@ impl Signex {
         use iced::widget::{container, row};
         use signex_widgets::tab_pill::{AccentPosition, TabPill, TabPillStyle};
         use signex_widgets::text;
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let text_c = crate::styles::ti(tokens.text);
         let active_bg = crate::styles::ti(tokens.hover);
         let accent = crate::styles::ti(tokens.accent);
@@ -158,6 +158,7 @@ impl Signex {
     fn view_main_for(&self, window_id: iced::window::Id) -> Element<'_, Message> {
         let ui = &self.ui_state;
         let document = &self.document_state;
+        let document_view = &self.document_view;
         let interaction = &self.interaction_state;
         // Context-aware menu: rows keyed on a command id grey through
         // `command::is_enabled`, from this window's `CommandContext` —
@@ -170,14 +171,17 @@ impl Signex {
             open_panels: self.open_panels(),
             i18n: std::sync::Arc::clone(&ui.i18n),
             cross_select: interaction.cross_select.enabled,
+            notebook_badges: !ui.annotations.badges_hidden,
             pcb_sync: self.pcb_sync_label(Some(window_id)),
             layouts: self.layouts_menu(),
+            extension_rows: self.extensions.menu_rows(),
+            extension_panels: self.extensions.panels(),
         };
         let undocked = ui.main_window_id != Some(window_id);
         let menu_row = || {
             menu_bar::view(
-                &document.panel_ctx.tokens,
-                &document.panel_ctx.ui_font_name,
+                &document_view.panel_ctx.tokens,
+                &document_view.panel_ctx.ui_font_name,
                 menu_ctx,
             )
             .map(move |msg| match msg {
@@ -197,12 +201,12 @@ impl Signex {
         let bare_start = ui.main_window_id == Some(window_id)
             && document.tabs.is_empty()
             && document.active_project.is_none();
-        let left_has_panels = !bare_start && document.dock.has_panels(PanelPosition::Left);
-        let right_has_panels = !bare_start && document.dock.has_panels(PanelPosition::Right);
-        let bottom_has_panels = !bare_start && document.dock.has_panels(PanelPosition::Bottom);
-        let left_collapsed = document.dock.is_collapsed(PanelPosition::Left);
-        let right_collapsed = document.dock.is_collapsed(PanelPosition::Right);
-        let bottom_collapsed = document.dock.is_collapsed(PanelPosition::Bottom);
+        let left_has_panels = !bare_start && document_view.dock.has_panels(PanelPosition::Left);
+        let right_has_panels = !bare_start && document_view.dock.has_panels(PanelPosition::Right);
+        let bottom_has_panels = !bare_start && document_view.dock.has_panels(PanelPosition::Bottom);
+        let left_collapsed = document_view.dock.is_collapsed(PanelPosition::Left);
+        let right_collapsed = document_view.dock.is_collapsed(PanelPosition::Right);
+        let bottom_collapsed = document_view.dock.is_collapsed(PanelPosition::Bottom);
 
         let left = self.view_dock_panel(
             window_id,
@@ -271,9 +275,9 @@ impl Signex {
         let top_chrome: Element<'_, Message> = if is_main_window {
             // The system menu bar replaces the in-window row on macOS.
             let row = (!self.native_menu.hides_in_window_menu()).then(menu_row);
-            self.view_main_window_chrome(row, &document.panel_ctx.tokens)
+            self.view_main_window_chrome(row, &document_view.panel_ctx.tokens)
         } else {
-            menu_bar::wrap_plain(menu_row(), &document.panel_ctx.tokens)
+            menu_bar::wrap_plain(menu_row(), &document_view.panel_ctx.tokens)
         };
         // Native macOS decorations resize the window themselves.
         let has_resize_edges = is_main_window && !self.window_controls_layout().is_native();
@@ -303,7 +307,9 @@ impl Signex {
             container(iced::widget::Space::new())
                 .width(Length::Fill)
                 .height(1)
-                .style(crate::styles::chrome_separator(&document.panel_ctx.tokens))
+                .style(crate::styles::chrome_separator(
+                    &document_view.panel_ctx.tokens,
+                ))
                 .boxed(),
         );
         // A document page tab stays on the main strip while its owner is
@@ -336,7 +342,7 @@ impl Signex {
                     &visible_paths,
                     is_main_window,
                     &self.tab_strip_marks(window_id, &dirty_paths, &read_only_paths),
-                    &document.panel_ctx.tokens,
+                    &document_view.panel_ctx.tokens,
                 )
                 .map(move |msg| Message::Tab { window_id, msg })
                 .boxed(),
@@ -344,7 +350,7 @@ impl Signex {
         } else if !bare_start {
             // Same height as the tab strip (`tab_bar::TAB_STRIP_HEIGHT`), so
             // the chrome does not jump when the first tab opens.
-            main = main.push(tab_bar::placeholder(&document.panel_ctx.tokens));
+            main = main.push(tab_bar::placeholder(&document_view.panel_ctx.tokens));
         }
         let main = main.push(center_row).push(status);
 
@@ -414,7 +420,7 @@ impl Signex {
     /// Full-window layer that takes every pointer event while a detached
     /// confirm dialog locks the window; pressing it raises that dialog.
     fn locked_window_layer(&self) -> Element<'_, Message> {
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let hint = iced::widget::container(
             signex_widgets::text(signex_i18n::t!(
                 self.ui_state.i18n,
@@ -447,11 +453,17 @@ impl Signex {
         if self.gerber_viewer_tab_in_window(is_main) {
             return self.view_gerber_viewer_tab();
         }
+        if let Some(path) = self.block_diagram_tab_in_window(is_main) {
+            return self.view_block_diagram_tab(path);
+        }
         if let Some(project_id) = self.project_tab_in_window(is_main) {
             return self.view_project_tab(project_id);
         }
         if let Some(project_id) = self.rules_tab_in_window(is_main) {
             return self.view_rules_tab(project_id);
+        }
+        if let Some(project_id) = self.notebook_tab_in_window(is_main) {
+            return self.view_notebook_tab(project_id);
         }
         if let Some(project_id) = self.variant_manager_tab_in_window(is_main) {
             return self.view_variant_manager_tab(project_id);
@@ -524,18 +536,20 @@ impl Signex {
                 .document_state
                 .engine_for_window(window_id, &self.ui_state)
                 .is_some_and(|engine| engine.document().is_read_only());
-            // Always a two-layer stack, so the widget tree keeps its shape
-            // when a tab switch changes the read-only state.
+            // Always a three-layer stack, so the widget tree keeps its shape
+            // when a tab switch changes the read-only state. The top layer
+            // marks the parts the active variant changes (mockup rows 208, 209).
             let badge: Element<'_, Message> = if read_only {
                 overlays::read_only_badge::read_only_badge(
-                    &self.document_state.panel_ctx.tokens,
+                    &self.document_view.panel_ctx.tokens,
                     &self.ui_state.i18n,
                 )
             } else {
                 iced::widget::Space::new().boxed()
             };
             // A repeated sheet gets its channel tabs under the canvas (#1279).
-            self.with_channel_strip(is_main, stack![base, badge].boxed())
+            let marks = self.variant_marks_layer(window_id);
+            self.with_channel_strip(is_main, stack![base, badge, marks].boxed())
         } else if let Some(sketch) = self.board_sketch_view(window_id) {
             // The board in sketch mode: the sketch over the board (#2234).
             sketch
@@ -579,7 +593,7 @@ impl Signex {
                             .is_some_and(|m| self.overlay_belongs_to(m.window, window_id)),
                     },
                     &self.ui_state.i18n,
-                    &self.document_state.panel_ctx.tokens,
+                    &self.document_view.panel_ctx.tokens,
                 )
             });
             // Selection, hover and marquee paint above the board and take no input.
@@ -631,7 +645,7 @@ impl Signex {
             // "Nothing loaded" gets the actionable start screen; "project
             // loaded, no document picked" keeps its own quieter hint.
             use crate::start_screen::{self, HintFacts, StartScreenData, Surface};
-            let tokens = &self.document_state.panel_ctx.tokens;
+            let tokens = &self.document_view.panel_ctx.tokens;
             let i18n = &self.ui_state.i18n;
             match Surface::select(self.document_state.active_project.is_some()) {
                 Surface::ProjectHint => start_screen::hint_view(
@@ -653,6 +667,7 @@ impl Signex {
                         state: &self.ui_state.start_screen,
                         // `update` stamps it whenever the screen shows.
                         now: self.ui_state.start_screen.now.unwrap_or_default(),
+                        extensions: &self.extensions,
                     },
                 ),
             }

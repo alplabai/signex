@@ -407,12 +407,12 @@ impl SchematicCanvas<'_> {
         // ERC markers live on this layer too, so it must draw whenever there
         // is a marker, not only while something is selected (#1333).
         // Locked objects carry a padlock, so they need the layer too (#1250, #1573),
-        // and so do the annotation flags (mockup row 165).
+        // and so do the Notebook badges (mockup row 197).
         if let Some(snapshot) = effective_snapshot
             && (self.selection_layer_needed()
                 || crate::schematic_runtime::lock_indicator::has_locked_item(snapshot)
                 || crate::schematic_runtime::unions::has_unions(snapshot)
-                || self.prefs.annotation_flags.has_flags())
+                || self.prefs.notebook_badges.has_badges())
         {
             // During a drag we can't rely on overlay_cache — it must redraw
             // with the shifted positions every frame.
@@ -513,10 +513,10 @@ impl SchematicCanvas<'_> {
             &self.designators,
             self.wire_widths(),
         );
-        crate::schematic_runtime::annotation_flags::draw_annotation_flags(
+        crate::schematic_runtime::notebook_badges::draw_notebook_badges(
             frame,
             snapshot,
-            &self.prefs.annotation_flags,
+            &self.prefs.notebook_badges,
             transform,
             &self.prefs.canvas_colors,
             &self.designators,
@@ -539,9 +539,64 @@ impl SchematicCanvas<'_> {
                 },
             })
             .collect();
+        use crate::schematic_runtime::overlay::{BadgedSheetEntry, MismatchedEntry};
+        let mismatched: Vec<MismatchedEntry> = self
+            .erc_markers
+            .iter()
+            .zip(&erc_overlay)
+            .filter_map(|(marker, drawn)| {
+                MismatchedEntry::on(snapshot, marker.harness_entry?, drawn.severity)
+            })
+            .collect();
+        crate::schematic_runtime::overlay::draw_mismatched_entries(
+            frame,
+            &mismatched,
+            transform,
+            &self.prefs.canvas_colors,
+            &self.prefs.graphite,
+        );
+        let mut badges: Vec<BadgedSheetEntry> = Vec::new();
+        for (marker, drawn) in self.erc_markers.iter().zip(&erc_overlay) {
+            let Some(pin) = marker.sheet_entry else {
+                continue;
+            };
+            // One badge per entry, in the ink of its first finding.
+            if let Some(badge) = BadgedSheetEntry::on(snapshot, pin, drawn.severity)
+                && !badges.iter().any(|b| b.at == badge.at)
+            {
+                badges.push(badge);
+            }
+        }
+        crate::schematic_runtime::overlay::draw_sheet_entry_badges(
+            frame,
+            &badges,
+            transform,
+            &self.prefs.canvas_colors,
+            &self.prefs.graphite,
+        );
         crate::schematic_runtime::overlay::draw_erc_markers(
             frame,
             &erc_overlay,
+            transform,
+            &self.prefs.canvas_colors,
+            &self.prefs.graphite,
+        );
+        let captions: Vec<crate::schematic_runtime::overlay::ErcCaption<'_>> = self
+            .erc_markers
+            .iter()
+            .zip(&erc_overlay)
+            .filter(|(_, drawn)| !drawn.net_level)
+            .filter_map(|(marker, drawn)| {
+                let text = marker.caption.as_deref()?;
+                Some(crate::schematic_runtime::overlay::ErcCaption {
+                    marker: *drawn,
+                    text,
+                })
+            })
+            .collect();
+        crate::schematic_runtime::overlay::draw_erc_captions(
+            frame,
+            &captions,
             transform,
             &self.prefs.canvas_colors,
             &self.prefs.graphite,

@@ -239,7 +239,7 @@ fn a_refused_cell_commit_reaches_the_messages_panel() {
     // parameter, what was typed and what was kept. A silent refusal
     // would look like a dead Enter key. The panel compacts records to
     // 160 characters, so all three have to survive that budget.
-    let panel = &app.document_state.panel_ctx.diagnostics;
+    let panel = &app.document_view.panel_ctx.diagnostics;
     assert!(
         panel.iter().any(|entry| {
             entry.message.contains("browser cell commit refused")
@@ -732,7 +732,7 @@ fn an_inline_commit_to_a_slot_cell_without_a_measurement_is_refused() {
             .and_then(|b| b.cell_edit.get(&(row_id, "parameters.value".to_string())))
             .map(String::as_str);
         assert_eq!(kept, Some("10"), "{stored:?}");
-        let panel = &app.document_state.panel_ctx.diagnostics;
+        let panel = &app.document_view.panel_ctx.diagnostics;
         assert!(
             panel
                 .iter()

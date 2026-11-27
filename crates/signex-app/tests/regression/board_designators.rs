@@ -275,7 +275,7 @@ fn one_selected_footprint_shows_its_designator_and_value_in_properties() {
     select(&mut f.app, 10.0);
     let facts = f
         .app
-        .document_state
+        .document_view
         .panel_ctx
         .pcb_board
         .as_ref()
@@ -312,7 +312,7 @@ fn a_typed_designator_is_a_draft_until_enter_then_one_undo_step() {
     );
     let draft = f
         .app
-        .document_state
+        .document_view
         .panel_ctx
         .pcb_board
         .as_ref()
@@ -368,7 +368,7 @@ fn a_designator_another_footprint_has_is_applied_and_warned_about() {
     );
     let facts = f
         .app
-        .document_state
+        .document_view
         .panel_ctx
         .pcb_board
         .as_ref()
@@ -383,7 +383,7 @@ fn a_locked_footprint_and_an_empty_designator_refuse_with_a_notice() {
     select(&mut f.app, 40.0);
     let facts = f
         .app
-        .document_state
+        .document_view
         .panel_ctx
         .pcb_board
         .as_ref()
@@ -407,10 +407,10 @@ fn a_locked_footprint_and_an_empty_designator_refuse_with_a_notice() {
 fn the_board_menu_properties_row_runs_on_a_board_selection() {
     let mut f = open_board();
     select(&mut f.app, 10.0);
-    f.app.document_state.dock.close_panel(PanelKind::Properties);
+    f.app.document_view.dock.close_panel(PanelKind::Properties);
     assert!(
         f.app
-            .document_state
+            .document_view
             .dock
             .locate(PanelKind::Properties)
             .is_none()
@@ -424,7 +424,7 @@ fn the_board_menu_properties_row_runs_on_a_board_selection() {
     );
     assert!(
         f.app
-            .document_state
+            .document_view
             .dock
             .locate(PanelKind::Properties)
             .is_some(),
@@ -589,7 +589,7 @@ fn re_annotate_does_nothing_without_a_board() {
 }
 
 fn facts(app: &Signex) -> signex_app::panels::PcbFootprintFacts {
-    app.document_state
+    app.document_view
         .panel_ctx
         .pcb_board
         .as_ref()

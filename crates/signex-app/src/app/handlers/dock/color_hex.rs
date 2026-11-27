@@ -20,7 +20,7 @@ impl Signex {
 
     /// Update the draft; returns the pick to apply, if any.
     fn settle_color_hex(&mut self, msg: ColorHexMsg) -> Option<PanelMsg> {
-        let ctx = &mut self.document_state.panel_ctx;
+        let ctx = &mut self.document_view.panel_ctx;
         // The filter `refresh_panel_ctx` keeps a draft by.
         let (selected, has_tab_form) = (ctx.selected_uuid, ctx.pre_placement.is_some());
         let draft = &mut ctx.color_hex_draft;

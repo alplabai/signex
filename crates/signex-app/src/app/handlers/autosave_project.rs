@@ -43,16 +43,18 @@ impl Signex {
     /// real file; the project is marked modified so a save writes the copy.
     pub(super) fn restore_project_copy(&mut self, path: &Path, data: ProjectData) -> bool {
         let document = &mut self.document_state;
+        let document_view = &mut self.document_view;
         let Some(project) = document.projects.iter_mut().find(|p| p.path == path) else {
             return false;
         };
         let id = project.id;
         project.data = data;
         // The undo steps were recorded against the data just replaced.
-        document.project_tabs.entry(id).and_modify(|tab| {
-            tab.general_history = Default::default();
-            tab.default_drafts.clear();
-        });
+        document_view
+            .project_tabs
+            .entry(id)
+            .and_modify(|tab| tab.default_drafts.clear());
+        document.general_history.remove(&id);
         document.rules_history.remove(&id);
         document
             .net_class_history

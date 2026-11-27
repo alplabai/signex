@@ -40,6 +40,9 @@ impl PanelMsg {
             | Self::NetInspector { .. }
             | Self::CompiledDesign { .. }
             | Self::Annotations { .. }
+            // The project's Design Notebook references and badges (mockup
+            // rows 196 and 197).
+            | Self::NotebookReferences { .. }
             | Self::CommandLog { .. }
             | Self::MessagesView { .. }
             | Self::MessageLinkPressed { .. }

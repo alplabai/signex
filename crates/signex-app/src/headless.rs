@@ -11,8 +11,9 @@
 //!    run the returned task;
 //! 4. per command, [`crate::io_ports::HeadlessAnswers::replace_all`] on
 //!    [`Signex::headless_answers`] with that command's dialog answers (none
-//!    when it has none), then [`Signex::dispatch_command_headless`], driving
-//!    each task;
+//!    when it has none), then [`Signex::run_command_request`] with
+//!    [`RequestSurface::Headless`] (or [`Signex::dispatch_command_headless`],
+//!    the runner behind it), driving each task;
 //! 5. [`Signex::end_headless_session`] to flush and exit.
 
 use std::path::PathBuf;
@@ -28,8 +29,9 @@ pub use crate::app::agent::{
 };
 pub use crate::app::command::queries::is_query;
 pub use crate::app::command::{
-    CommandArgs, CommandOutcome, EditSpec, MAX_EDITS, OperandError, OperandValue, edit_list_text,
-    edit_refusal, operand_text, parse_documents, parse_edit_list, parse_expect_revisions,
+    CommandArgs, CommandOutcome, CommandRequest, EditSpec, MAX_EDITS, OperandError, OperandValue,
+    RefusalCause, RequestOutcome, RequestSurface, edit_list_text, edit_refusal, operand_text,
+    parse_documents, parse_edit_list, parse_expect_revisions,
 };
 pub use crate::app::document_ids::DocumentTarget;
 use crate::app::{Message, Signex};
@@ -121,6 +123,8 @@ impl Signex {
         // A headless run never listens, whatever the config root says.
         app.ui_state.agent_connections_enabled = false;
         app.ui_state.preferences_draft_agent_connections_enabled = false;
+        // No window to mark: `check_erc` is a headless run's check (#1288).
+        app.ui_state.live_erc.runs_here = false;
         // And lists no project: the run holds its own (`agent_client::hold`).
         app.agent.lists_projects = false;
         let rules_applied = app.handle_user_default_loaded(&Ok(Some(rules.clone())));
@@ -214,6 +218,14 @@ impl Signex {
 
     /// The dialog answers of an app from [`Self::boot_headless`]; `None`
     /// for an app with native dialogs.
+    /// Let `keymap_assign` and `keymap_clear` read and write the user's own
+    /// shortcuts file at `path` (from `keymap::user_config_path`) in this
+    /// headless run, past its throwaway config root: the one carve-out,
+    /// `docs/CLI.md` (#2495). Nothing else reads it.
+    pub fn edit_user_shortcuts_at(&mut self, path: std::path::PathBuf) {
+        self.ui_state.keymap_command_file = Some(Box::new(path));
+    }
+
     pub fn headless_answers(&self) -> Option<&HeadlessAnswers> {
         match &self.ui_state.io.picker {
             Picker::Headless(answers) => Some(answers),
@@ -259,9 +271,11 @@ impl Signex {
         args: CommandArgs,
     ) -> (CommandOutcome, Task<Message>) {
         // A command whose whole effect is window UI is refused, never `Ran`
-        // (#2170). The GUI dispatch never reads this.
-        if let Some(reason) =
-            crate::keymap::metadata_for(command).and_then(|meta| meta.headless_refusal())
+        // (#2170), an installed extension's as well (#2495). The GUI dispatch
+        // never reads this.
+        if let Some(reason) = self
+            .command_metadata(command)
+            .and_then(|meta| meta.headless_refusal())
         {
             return (CommandOutcome::disabled(reason), Task::none());
         }

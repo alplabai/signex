@@ -118,6 +118,70 @@ The planner is pure (`plan_rooms_from_sheets`):
   one takes its colour.
 - With Move parts on, members outside their room are packed into it.
 
+Create runs the command's operand handler (below) on the sheets the dialog
+read, with the dialog's options and the ticked rooms by name.
+
+## Arrange in room
+
+`arrange_in_room` (#2457), from the palette on the room Properties shows,
+packs every unlocked member of the room inside it again
+(`signex_engine::pcb::rooms::arrange_room`): Arrange in Box's packer, order,
+gap and grid, into the outline shrunk by the margin, clear of the locked
+members and of the other parts whose extent meets the room. What does not fit
+goes in rows below the room, as Pull parts into room puts it. One undo step;
+Messages says how many parts moved and how many did not fit. With no room
+selected it says to select one.
+
+## Auto place
+
+`auto_place` (#2941), from the palette on the board in view, places the
+unlocked members of every room (or the rooms named) inside the room, one at
+a time, at the place of the lowest weighted score
+(`signex_engine::pcb::rooms::auto_place`). Placement only: nothing is
+routed, and no part turns or changes side.
+
+- **Places tried:** origins on the components grid, at least 0.5 mm apart,
+  whose body stays inside the outline shrunk by the margin and keeps the
+  0.5 mm arrange gap from every part already settled on the same side
+  (locked parts, parts of no room or of a room not placed, parts placed
+  before it) and out of every keepout that forbids components. At most
+  4096 places per part: the pitch doubles until they fit. Among equal
+  scores the first in rows from the top-left wins.
+- **Order:** the parts that share the most nets first, then the largest,
+  then by designator and uuid.
+- **A part's room** is the deepest room that holds it.
+- **Priorities**, each in mm, lower is better:
+  - *connection*: shared nets times the distance between the parts'
+    centres, against every settled part;
+  - *thermal*: how far a part marked `hot` comes inside the thermal gap
+    (5 mm) of another hot part or one marked `heat_sensitive`;
+  - *separation*: how far a part marked `noisy` comes inside the separation
+    gap (10 mm) of one marked `sensitive`;
+  - *edges*: how far a connector is from the nearest edge of the board's
+    box.
+- **Marks:** the words of the footprint's `Placement` property (comma or
+  space separated, any case): `hot`, `heat_sensitive`, `noisy`, `sensitive`,
+  `connector`. A part with designator J, P or CN and a number is a
+  connector too.
+- **Weights:** each 1 by default; `weights=connection:3,edges:5` sets some,
+  0 turns one off.
+- A part with no free place, or whose body does not convert, stays where it
+  is and is named in the answer. The answer has the score per priority
+  before and after, over the parts placed.
+
+The run is one undo step; `dry_run=true` only reports. The same board,
+rooms and weights give the same placement. Reading the weights from a layout
+plan stored with the board is #2942.
+
+## From the command line
+
+Every rooms command runs headless from operands on the board `document`
+names (#2935): `place_board_room`, `create_rooms_from_sheets`,
+`arrange_in_room` and `auto_place`, each answered with JSON. Place ▸ Room's
+second click, the dialog's Create, Arrange in Room and Auto Place in Rooms
+run the same handlers. Operands and answers: `docs/CLI.md`, "Rooms and
+placement".
+
 ## Design rule
 
 `builtin::part_outside_room` ("Part outside its room"), error by default and

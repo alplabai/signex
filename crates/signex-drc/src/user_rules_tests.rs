@@ -642,6 +642,8 @@ fn position(kind: ViolationKind) -> usize {
         ViolationKind::PasteExpansion => 16,
         ViolationKind::CourtyardOverlap => 17,
         ViolationKind::PartOutsideRoom => 18,
+        ViolationKind::ComponentHeight => 19,
+        ViolationKind::BodyClearance => 20,
     }
 }
 
@@ -667,6 +669,8 @@ fn all_lists_every_kind_in_declaration_order() {
         ViolationKind::PasteExpansion,
         ViolationKind::CourtyardOverlap,
         ViolationKind::PartOutsideRoom,
+        ViolationKind::ComponentHeight,
+        ViolationKind::BodyClearance,
     ];
     assert_eq!(ViolationKind::ALL.len(), every.len());
     for (i, kind) in every.into_iter().enumerate() {

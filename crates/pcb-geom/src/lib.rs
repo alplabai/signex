@@ -34,6 +34,7 @@ mod obstacle;
 pub mod panel;
 mod pick_filter;
 mod pour_edit;
+mod progress;
 mod ratsnest;
 mod rect;
 mod region;
@@ -61,7 +62,7 @@ mod units;
 mod zone_fill;
 
 pub use arrange::{arrange_in_box, pack_in_box, placed_extent};
-pub use body::{checked_body, courtyard_outline, footprint_body, is_courtyard};
+pub use body::{checked_body, courtyard_outline, footprint_body, is_courtyard, placed_box};
 pub use closed_path::{PathRefusal, closed_path};
 pub use connections::{ConnectionCounts, NetUnrouted, PadName, connection_counts};
 pub use copper::{
@@ -93,6 +94,7 @@ pub use net_length::{
 pub use net_report::{NetReport, net_named, net_reports};
 pub use pick_filter::{PickFilter, PickKind};
 pub use pour_edit::{AreaShape, cut_area, slice_area};
+pub use progress::{off_board_footprints, total_routed_length_mm};
 pub use ratsnest::{RatLine, ratsnest, ratsnest_with_fills};
 pub use rect::RectNm;
 pub use region::{
@@ -105,6 +107,7 @@ pub use selection::{
 };
 pub use shape::Shape;
 pub use shape_gap::Separation;
+pub use shape_polygon::ccw_ring;
 pub use staging::{Staging, footprint_extent, stage, stage_up};
 pub use stats::BoardStats;
 pub use stitch::{StitchSpec, stitch_points, stitch_spec_mm};

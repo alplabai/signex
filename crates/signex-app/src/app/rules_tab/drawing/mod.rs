@@ -11,6 +11,7 @@
 //! and the label ink are the board palette's in both chrome themes.
 
 mod clearance;
+mod component;
 mod courtyard;
 mod edge;
 mod header;
@@ -137,6 +138,7 @@ fn scene_of(target: &PreviewTarget, ink: BoardInk) -> Scene {
                 RuleKind::Mask => mask::scene(&values, ink),
                 RuleKind::Paste => mask::paste_scene(&values, ink),
                 RuleKind::Courtyard => courtyard::scene(&values, ink),
+                RuleKind::Component => component::scene(&values, ink),
             }
         }
         PreviewTarget::ClassPair { a, b, gap_mm } => pair::class_pair(a, b, *gap_mm, ink),

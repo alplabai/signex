@@ -42,7 +42,7 @@ impl Signex {
     /// silently.
     pub(crate) fn tree_path_to_file_path(&self, tree_path: &[usize]) -> Option<std::path::PathBuf> {
         let node = signex_widgets::tree_view::get_node(
-            self.document_state.panel_ctx.project_tree.as_slice(),
+            self.document_view.panel_ctx.project_tree.as_slice(),
             tree_path,
         )?;
         let project_idx = *tree_path.first()?;
@@ -125,7 +125,7 @@ impl Signex {
             // By the row's key (the library's resolved path), so two
             // libraries sharing a file name stay distinct (#742).
             let key = signex_widgets::tree_view::get_node(
-                self.document_state.panel_ctx.project_tree.as_slice(),
+                self.document_view.panel_ctx.project_tree.as_slice(),
                 tree_path,
             )
             .map(|node| node.key.as_str());
@@ -197,6 +197,10 @@ impl Signex {
                 return Ok(Task::none());
             }
             return Ok(self.begin_document_read(file_path, ReadJob::TreePcb { title }));
+        }
+
+        if crate::app::block_diagram::is_block_diagram_path(&file_path) {
+            return Ok(self.open_block_diagram_file(file_path));
         }
 
         // Standalone primitive editor tabs — `.snxsym` / `.snxfpt`
@@ -457,7 +461,7 @@ mod tests {
             false
         }
         let mut row = Vec::new();
-        let tree = &app.document_state.panel_ctx.project_tree;
+        let tree = &app.document_view.panel_ctx.project_tree;
         assert!(find(tree, "Top.snxsch", &mut row), "the sheet has a row");
         let key = key_of(tree, &row).expect("row");
 

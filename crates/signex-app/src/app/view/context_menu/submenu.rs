@@ -365,22 +365,18 @@ pub(super) fn arrange_entries(
 
 /// Part Actions submenu (#2419) — the placed part's library actions, then
 /// Autoplace Fields and Copy Attributes (#1667), live when one placed part is
-/// selected and the command's own rule allows it.
+/// selected and the command's own rule allows it. Swap Pins and Swap Gates
+/// (#1261) follow, live when the clicked pin or the selected units name a
+/// swap the part allows.
 pub(super) fn part_actions_entries(
     i18n: &I18n,
     selection: CanvasSelection,
     hint: &dyn Fn(&str) -> String,
 ) -> Vec<DropdownEntry<Message>> {
-    let row = |id: &'static str| {
-        dd_ruled(
-            i18n,
-            None,
-            id,
-            &hint(id),
-            &selection.commands,
-            selection.placed_part_selected,
-        )
+    let ruled = |id: &'static str, applies: bool| {
+        dd_ruled(i18n, None, id, &hint(id), &selection.commands, applies)
     };
+    let row = |id: &'static str| ruled(id, selection.placed_part_selected);
     vec![
         row("open_datasheet"),
         row("edit_selected_symbol_in_symbol_editor"),
@@ -388,22 +384,29 @@ pub(super) fn part_actions_entries(
         DropdownEntry::Separator,
         row("autoplace_fields"),
         row("copy_attributes_or_add_vertex"),
+        DropdownEntry::Separator,
+        ruled("swap_schematic_pins", selection.swap.pins),
+        ruled("swap_schematic_gates", selection.swap.gates),
     ]
 }
 
 /// In variant submenu (mockup row 62, the rows of mockup row 59 b): headed
-/// "<part> in <variant>" for one selected part. Changing a part's fit, part
-/// or value in one variant is not built, so those rows are greyed with what
-/// they will do; Show in Variant Manager and New variant… open the
-/// project's Variant Manager.
+/// "<part> in <variant>" for one selected part. On a repeated sheet
+/// (`copies`) Fitted and Not fitted set this channel's copy or every
+/// channel's (`variant_fit`, #2662); elsewhere they are greyed with what
+/// they will do. Alternate… and Edit value for this variant… open the
+/// picker and the popover of mockup rows 208 and 209. Show in Variant
+/// Manager and New variant… open the project's Variant Manager.
 pub(super) fn in_variant_entries(
     i18n: &I18n,
     variant: &super::menus::MenuVariant,
     part: Option<&str>,
+    copies: Option<&crate::panels::compiled_design::ChannelCopies>,
 ) -> Vec<DropdownEntry<Message>> {
     let planned =
         |label| dd_planned_because(i18n, None, label, menu_ids::CTX_IN_VARIANT_PLANNED, false);
-    let mut v = Vec::with_capacity(8);
+    let is_base = signex_types::project::is_base_variant(&variant.name);
+    let mut v = Vec::with_capacity(10);
     if let Some(part) = part {
         v.push(DropdownEntry::Header(i18n.message_plain(
             menu_ids::CTX_IN_VARIANT_PART,
@@ -413,11 +416,22 @@ pub(super) fn in_variant_entries(
             ],
         )));
     }
+    match copies {
+        Some(copies) => {
+            v.extend(super::variant_fit::channel_fit_rows(i18n, copies, is_base));
+        }
+        None => v.extend([
+            planned(signex_i18n::ids::PROJECT_VARIANTS_FITTED),
+            planned(signex_i18n::ids::PROJECT_VARIANTS_NOT_FITTED),
+        ]),
+    }
+    v.extend(super::variant_fit::part_edit_rows(
+        i18n,
+        is_base,
+        part.is_some(),
+        copies,
+    ));
     v.extend([
-        planned(signex_i18n::ids::PROJECT_VARIANTS_FITTED),
-        planned(signex_i18n::ids::PROJECT_VARIANTS_NOT_FITTED),
-        planned(menu_ids::CTX_IN_VARIANT_ALTERNATE_PART),
-        planned(menu_ids::CTX_IN_VARIANT_EDIT_VALUE),
         DropdownEntry::Separator,
         dd_kb(
             None,
@@ -474,9 +488,10 @@ pub(super) fn sheet_actions_entries(
 
 /// Add New to Project submenu — the "Add New" picker for the right-clicked
 /// project (resolved as `target`), grouped as in the tree menu (mockup row 20): the
-/// design documents (Schematic, PCB), the libraries, then the project files
-/// whose tabs are not built yet (Design Notebook, Export Job) as planned rows.
-/// The live rows' glyphs take their file kind's `inks`.
+/// design documents (Schematic, PCB), the libraries, then the project files:
+/// the Design Notebook (mockup row 195), then Export Job, whose tab is not
+/// built yet, as a planned row. The design documents' and libraries' glyphs
+/// take their file kind's `inks`.
 pub(super) fn add_new_entries(
     i18n: &I18n,
     tid: ThemeId,
@@ -527,6 +542,13 @@ pub(super) fn add_new_entries(
         menu_ids::CTX_ADD_SYMBOL_LIBRARY,
         tree(P::AddProjectSymbolLibrary(target.clone())),
     ));
+    // The project's notebook, written only on Save (mockup row 195).
+    let notebook = dd_msg(
+        Some(ic::icon_menu_notebook(tid)),
+        &text(i18n, menu_ids::CTX_ADD_DESIGN_NOTEBOOK),
+        "",
+        tree(P::AddNewDesignNotebook(target.clone())),
+    );
     // Hidden while the footprint editor is gated off for release.
     if crate::feature_flags::FOOTPRINT_EDITOR_ENABLED {
         v.push(library(
@@ -534,20 +556,17 @@ pub(super) fn add_new_entries(
             tree(P::AddProjectFootprintLibrary(target)),
         ));
     }
+    v.push(DropdownEntry::Separator);
+    v.push(notebook);
     v.extend(add_new_planned_entries(i18n, tid));
     v
 }
 
-/// The planned tail of Add New to Project: Design Notebook and Export Job,
-/// then Constraint File and VHDL File, each greyed with the pill.
-fn add_new_planned_entries(i18n: &I18n, tid: ThemeId) -> [DropdownEntry<Message>; 6] {
+/// The planned tail of Add New to Project: Export Job, then Constraint File
+/// and VHDL File, each greyed with the pill.
+fn add_new_planned_entries(i18n: &I18n, tid: ThemeId) -> [DropdownEntry<Message>; 4] {
     let planned = |icon, label| dd_planned_pill(i18n, Some(icon), &text(i18n, label));
     [
-        DropdownEntry::Separator,
-        planned(
-            ic::icon_menu_notebook(tid),
-            menu_ids::CTX_ADD_DESIGN_NOTEBOOK,
-        ),
         planned(ic::icon_menu_export(tid), menu_ids::CTX_ADD_OUTPUT_JOB),
         DropdownEntry::Separator,
         planned(ic::icon_menu_file(tid), menu_ids::CTX_ADD_CONSTRAINT_FILE),
@@ -569,7 +588,7 @@ impl Signex {
         window_id: iced::window::Id,
     ) -> Element<'_, Message> {
         let tid = self.ui_state.effective_theme_id();
-        let tokens = &self.document_state.panel_ctx.tokens;
+        let tokens = &self.document_view.panel_ctx.tokens;
         let i18n = &self.ui_state.i18n;
         let hint = |id: &str| self.keymap_shortcut_label(id);
         let entries = match kind {
@@ -624,12 +643,13 @@ impl Signex {
                         } => Some(reference),
                         _ => None,
                     };
-                    in_variant_entries(i18n, &variant, part.as_deref())
+                    let copies = self.canvas_menu_channel_copies(window_id);
+                    in_variant_entries(i18n, &variant, part.as_deref(), copies.as_ref())
                 }
                 None => Vec::new(),
             },
         };
-        super::placement::menu_card(entries, tokens, &self.document_state.panel_ctx.ui_font_name)
+        super::placement::menu_card(entries, tokens, &self.document_view.panel_ctx.ui_font_name)
             .element
     }
 
@@ -656,7 +676,7 @@ impl Signex {
             }
             _ => board_place_entries(i18n, &context, &hint),
         };
-        let panel_ctx = &self.document_state.panel_ctx;
+        let panel_ctx = &self.document_view.panel_ctx;
         super::placement::menu_card(entries, &panel_ctx.tokens, &panel_ctx.ui_font_name).element
     }
 }
@@ -860,7 +880,7 @@ mod tests {
         else {
             panic!("R9 is selected in the undocked window");
         };
-        let rows = in_variant_entries(I18n::en_us_ref(), &variant, Some(&reference));
+        let rows = in_variant_entries(I18n::en_us_ref(), &variant, Some(&reference), None);
         assert_eq!(layout(&rows)[0], "# R9 in Pro");
 
         // New variant… from B's window adds to B, not to the active A.
@@ -965,40 +985,46 @@ mod tests {
         else {
             panic!("one part is selected");
         };
-        let rows = in_variant_entries(I18n::en_us_ref(), &lite(&app), Some(&reference));
+        let rows = in_variant_entries(I18n::en_us_ref(), &lite(&app), Some(&reference), None);
         assert_eq!(
             layout(&rows),
             [
                 "# R5 in Lite",
                 "Fitted",
                 "Not fitted",
-                "Alternate part…",
+                "Alternate…",
                 "Edit value for this variant…",
                 "---",
                 "Show in Variant Manager",
                 "New variant…",
             ]
         );
-        for label in [
-            "Fitted",
-            "Not fitted",
-            "Alternate part…",
-            "Edit value for this variant…",
-        ] {
+        for label in ["Fitted", "Not fitted"] {
             let row = item(&rows, label);
             assert!(row.disabled && row.on_press.is_none(), "{label}");
             assert_eq!(
                 row.tooltip.as_deref(),
                 Some(
-                    "Planned: change a part's fit, part or value in one variant. \
-                     The Variant Manager lists each part's fit today."
+                    "Planned: change a part's fit in one variant on a sheet that is \
+                     not repeated. The Variant Manager sets it today."
                 ),
                 "{label}"
             );
         }
-        // A multi-selection names no single part.
-        let rows = in_variant_entries(I18n::en_us_ref(), &lite(&app), None);
+        // Mockup rows 208 and 209: the part and value rows are live.
+        for label in ["Alternate…", "Edit value for this variant…"] {
+            let row = item(&rows, label);
+            assert!(!row.disabled && row.on_press.is_some(), "{label}");
+        }
+        // A multi-selection names no single part: the edits say to pick one.
+        let rows = in_variant_entries(I18n::en_us_ref(), &lite(&app), None, None);
         assert_eq!(layout(&rows)[0], "Fitted");
+        let row = item(&rows, "Alternate…");
+        assert!(row.disabled && row.on_press.is_none());
+        assert_eq!(
+            row.tooltip.as_deref(),
+            Some("Select one part to change it in this variant.")
+        );
     }
 
     #[test]
@@ -1008,9 +1034,10 @@ mod tests {
             x: 0.0,
             y: 0.0,
             world: None,
+            hit_object: false,
             window: None,
         });
-        let rows = in_variant_entries(I18n::en_us_ref(), &lite(&app), None);
+        let rows = in_variant_entries(I18n::en_us_ref(), &lite(&app), None, None);
         let press = item(&rows, "Show in Variant Manager")
             .on_press
             .clone()
@@ -1039,7 +1066,7 @@ mod tests {
     #[test]
     fn new_variant_adds_one_from_base_in_the_variant_manager() {
         let (mut app, id, _dir) = app_with(&["Lite"], Some("Lite"));
-        let rows = in_variant_entries(I18n::en_us_ref(), &lite(&app), None);
+        let rows = in_variant_entries(I18n::en_us_ref(), &lite(&app), None, None);
         let press = item(&rows, "New variant…")
             .on_press
             .clone()
@@ -1062,7 +1089,7 @@ mod tests {
                 .all(|tab| tab.kind.as_project().is_none()),
             "no Project tab opens on the way"
         );
-        let state = &app.document_state.project_tabs[&id];
+        let state = &app.document_view.project_tabs[&id];
         assert_eq!(state.variant_selected.as_deref(), Some("Variant 1"));
         assert!(
             state.variant_rename.is_some(),
@@ -1073,7 +1100,7 @@ mod tests {
     #[test]
     fn a_pick_for_a_closed_project_is_dropped() {
         let (mut app, id, _dir) = app_with(&["Lite"], Some("Lite"));
-        let rows = in_variant_entries(I18n::en_us_ref(), &lite(&app), None);
+        let rows = in_variant_entries(I18n::en_us_ref(), &lite(&app), None, None);
         let press = item(&rows, "New variant…")
             .on_press
             .clone()
@@ -1082,6 +1109,6 @@ mod tests {
         app.document_state.projects.clear();
         let _ = app.update(press);
         assert_eq!(app.document_state.tabs.len(), tabs, "no tab opens");
-        assert!(!app.document_state.project_tabs.contains_key(&id));
+        assert!(!app.document_view.project_tabs.contains_key(&id));
     }
 }

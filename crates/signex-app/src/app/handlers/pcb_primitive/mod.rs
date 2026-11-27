@@ -302,7 +302,7 @@ impl Signex {
             M::IllustrationHovered(hover) => {
                 panel.hover.update(hover.clone());
                 let hover = panel.hover.clone();
-                let shown = self.document_state.panel_ctx.pcb_board.as_mut();
+                let shown = self.document_view.panel_ctx.pcb_board.as_mut();
                 if let Some(facts) = shown.and_then(|b| b.primitive.as_mut()) {
                     facts.common_mut().hover = hover;
                 }

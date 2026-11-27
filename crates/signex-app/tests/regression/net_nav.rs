@@ -25,13 +25,13 @@ fn the_net_hover_preference_defaults_on_and_round_trips_through_prefs_json() {
 fn a_new_session_has_the_hover_on_and_no_highlight_and_clearing_changes_nothing() {
     let (mut app, _boot) = Signex::new();
     assert!(app.ui_state.net_hover_enabled);
-    assert!(app.document_state.net_nav.highlight.is_none());
+    assert!(app.document_view.net_nav.highlight.is_none());
 
     let _ = app.update(Message::Ui(UiMsg::NetNav(
         NetNavMsg::HighlightClearRequested,
     )));
 
-    assert!(app.document_state.net_nav.highlight.is_none());
+    assert!(app.document_view.net_nav.highlight.is_none());
 }
 
 // ── update-level flows over real sheets ──────────────────────────────
@@ -125,6 +125,7 @@ pub(crate) mod flows {
                 schematic_design: Default::default(),
                 fab_outputs: None,
                 router_tool_diameter: None,
+                bom_alternates: Vec::new(),
                 requirements: Default::default(),
                 parameters: Default::default(),
                 unknown: Default::default(),
@@ -391,7 +392,7 @@ pub(crate) mod flows {
         let (mut app, _a, _b) = open_project(tmp.path());
         app.observe_net_hover(Some(item(LABEL_A)), (0.0, 0.0));
         let candidate = app
-            .document_state
+            .document_view
             .net_nav
             .hover
             .candidate
@@ -402,7 +403,7 @@ pub(crate) mod flows {
         nav(&mut app, NetNavMsg::HoverDwellTicked);
 
         let card = app
-            .document_state
+            .document_view
             .net_nav
             .hover
             .card

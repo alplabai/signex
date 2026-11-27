@@ -78,4 +78,5 @@ define_ids! {
     BOARD_STATUS_KIND_OTHER = "board-status-kind-other";
     BOARD_STATUS_DRAG_WITH_TRACKS = "board-status-drag-with-tracks";
     BOARD_STATUS_DRAG_WITHOUT_TRACKS = "board-status-drag-without-tracks";
+    BOARD_STATUS_COMMAND_REFUSED = "board-status-command-refused";
 }

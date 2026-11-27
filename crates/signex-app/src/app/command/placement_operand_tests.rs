@@ -146,12 +146,12 @@ fn clicked(case: &Case) -> Signex {
     arm(&mut app, case.id);
     if let Some((text, rotation)) = case.form {
         let pre = defaults_form(&app, text, rotation);
-        app.document_state.panel_ctx.pre_placement = Some(pre);
+        app.document_view.panel_ctx.pre_placement = Some(pre);
     } else if matches!(
         case.id,
         "draw_line" | "draw_graphic_line" | "draw_rectangle"
     ) {
-        app.document_state.panel_ctx.pre_placement = Some(defaults_form(&app, "", 0.0));
+        app.document_view.panel_ctx.pre_placement = Some(defaults_form(&app, "", 0.0));
     }
     if let Some((net, lib)) = case.power {
         app.interaction_state.pending_power = Some((net.into(), lib.into()));
@@ -168,7 +168,7 @@ fn clicked(case: &Case) -> Signex {
 /// operands, and the defaults for the rest, over the form (#2326).
 fn operand_app(_case: &Case) -> Signex {
     let mut app = app_with_tool(crate::app::Tool::Select);
-    app.document_state.panel_ctx.pre_placement = Some(
+    app.document_view.panel_ctx.pre_placement = Some(
         super::placement_defaults_tests::persons_form(PrePlacementKind::Other),
     );
     app
@@ -232,7 +232,7 @@ fn ui_state(app: &Signex) -> String {
         i.shape_anchor.is_some(),
         i.pending_port,
         i.pending_power,
-        app.document_state
+        app.document_view
             .panel_ctx
             .pre_placement
             .as_ref()
@@ -275,7 +275,7 @@ fn a_zero_length_segment_is_refused_and_changes_nothing() {
     let (start, end) = (format!("start={at}"), format!("end={at}"));
     for id in ["place_wire", "place_bus", "draw_line", "draw_rectangle"] {
         let mut app = app_with_tool(crate::app::Tool::Select);
-        app.document_state.panel_ctx.pre_placement = Some(form(PrePlacementKind::Other, "", 0.0));
+        app.document_view.panel_ctx.pre_placement = Some(form(PrePlacementKind::Other, "", 0.0));
         let before = sheet_shape(&app);
         let outcome = run(&mut app, id, &[&start, &end]);
         assert!(
@@ -303,7 +303,7 @@ fn an_off_grid_point_is_refused_and_changes_nothing() {
     ];
     for (id, operands) in cases {
         let mut app = app_with_tool(crate::app::Tool::Select);
-        app.document_state.panel_ctx.pre_placement = Some(form(PrePlacementKind::Other, "", 0.0));
+        app.document_view.panel_ctx.pre_placement = Some(form(PrePlacementKind::Other, "", 0.0));
         let before = sheet_shape(&app);
         let operands: Vec<&str> = operands.iter().map(String::as_str).collect();
         let outcome = run(&mut app, id, &operands);

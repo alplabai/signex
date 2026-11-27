@@ -145,7 +145,7 @@ fn a_board_without_an_outline_is_not_panelized() {
 /// The Properties texts of the board in view, isolation marks removed.
 fn properties_texts(app: &mut Signex) -> Vec<String> {
     app.refresh_panel_ctx();
-    let ctx = &app.document_state.panel_ctx;
+    let ctx = &app.document_view.panel_ctx;
     let view = crate::panels::view_panel(crate::panels::PanelKind::Properties, ctx);
     crate::layout_probe::lay_out_texts(view, iced::Size::new(360.0, 6000.0))
         .into_iter()
@@ -155,7 +155,7 @@ fn properties_texts(app: &mut Signex) -> Vec<String> {
 
 fn panel_section_open(app: &Signex) -> bool {
     let open = crate::panels::pcb_board_properties::panel_section_open_key();
-    app.document_state
+    app.document_view
         .panel_ctx
         .collapsed_sections
         .contains(&open)
@@ -183,7 +183,7 @@ fn panelizing_opens_the_panel_section_under_the_managers() {
 
     // Closed again by the user, a second Panelize Board (which keeps the
     // panel) leaves it closed.
-    app.document_state
+    app.document_view
         .panel_ctx
         .collapsed_sections
         .remove(&crate::panels::pcb_board_properties::panel_section_open_key());
