@@ -25,6 +25,9 @@ const fn px(at_default_base: f32) -> f32 {
 
 /// Width of the control column of a setting row (232 px).
 pub(in crate::preferences) const CONTROL_COLUMN_W: f32 = px(232.0);
+/// Width of the control column of a wide setting row (the mock's
+/// `.srow.wide`, 300 px), for a control whose value is a phrase.
+pub(in crate::preferences) const CONTROL_COLUMN_WIDE_W: f32 = px(300.0);
 /// Page padding: 18 px on top, 24 px at the sides and the bottom.
 const PAGE_PAD_TOP: f32 = px(18.0);
 const PAGE_PAD: f32 = px(24.0);
@@ -176,6 +179,22 @@ pub(in crate::preferences) fn setting_row<'a>(
     row_data: SettingRow<'a>,
     t: &ThemeTokens,
 ) -> Element<'a, PrefMsg> {
+    row_with_control_column(row_data, CONTROL_COLUMN_W, t)
+}
+
+/// A [`setting_row`] whose control column is [`CONTROL_COLUMN_WIDE_W`].
+pub(in crate::preferences) fn wide_setting_row<'a>(
+    row_data: SettingRow<'a>,
+    t: &ThemeTokens,
+) -> Element<'a, PrefMsg> {
+    row_with_control_column(row_data, CONTROL_COLUMN_WIDE_W, t)
+}
+
+fn row_with_control_column<'a>(
+    row_data: SettingRow<'a>,
+    control_w: f32,
+    t: &ThemeTokens,
+) -> Element<'a, PrefMsg> {
     let SettingRow {
         label,
         pills,
@@ -207,7 +226,7 @@ pub(in crate::preferences) fn setting_row<'a>(
         );
     }
     let control = container(control)
-        .width(Length::Fixed(CONTROL_COLUMN_W))
+        .width(Length::Fixed(control_w))
         .align_x(iced::alignment::Horizontal::Right)
         .padding(Padding {
             top: 1.0,
@@ -411,6 +430,7 @@ mod tests {
     fn the_grid_matches_the_mock_at_the_default_base() {
         for (got, mock) in [
             (CONTROL_COLUMN_W, 232.0),
+            (CONTROL_COLUMN_WIDE_W, 300.0),
             (PAGE_PAD_TOP, 18.0),
             (PAGE_PAD, 24.0),
             (ROW_GAP, 24.0),
@@ -419,5 +439,31 @@ mod tests {
         ] {
             assert!((got - mock).abs() < 1e-3, "{got} != {mock}");
         }
+    }
+
+    /// #3004, mockup row 146: a bold run in help draws in the bold face of
+    /// the UI family, not in another family's bold.
+    #[test]
+    fn a_bold_help_run_resolves_to_the_bundled_inter_bold_face() {
+        let run = bold();
+        assert_eq!(run.weight, font::Weight::Bold);
+        let font::Family::Name(family) = run.family else {
+            panic!("a help run names the UI family: {run:?}");
+        };
+        let mut db = fontdb::Database::new();
+        for face in crate::fonts::bundled::BUNDLED_FONTS {
+            db.load_font_data(face.to_vec());
+        }
+        let id = db
+            .query(&fontdb::Query {
+                families: &[fontdb::Family::Name(family)],
+                weight: fontdb::Weight::BOLD,
+                stretch: fontdb::Stretch::Normal,
+                style: fontdb::Style::Normal,
+            })
+            .expect("a bundled face for the UI family");
+        let face = db.face(id).expect("the queried face");
+        assert_eq!(face.post_script_name, "Inter-Bold");
+        assert_eq!(face.weight, fontdb::Weight::BOLD);
     }
 }

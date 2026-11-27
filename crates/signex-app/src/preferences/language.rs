@@ -6,6 +6,7 @@
 use iced::widget::{Row, column, container, pick_list, row};
 use iced::{Alignment, Background, Border, Element, Length, Padding, Theme, Widget as _};
 use signex_i18n::{Arg, I18n, LanguagePref, MessageId, ids, menu_ids, t};
+use signex_types::theme::ThemeTokens;
 use signex_widgets::dropdown_style::GraphiteDropdown as _;
 use signex_widgets::text;
 
@@ -43,17 +44,6 @@ const CAPTION: MessageId = ids::PANELS_ERC_STALE_BANNER;
 /// The Language page.
 pub(super) fn content_language<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
     let (i18n, t) = (v.i18n, v.panel_tokens);
-    let choices = language_choices(i18n, v.draft_language, v.system_language_name);
-    let picker = pick_list(
-        chosen(&choices, v.draft_language),
-        choices,
-        |c: &Choice<LanguagePref>| c.label.clone(),
-    )
-    .graphite()
-    .on_select(|c: Choice<LanguagePref>| PrefMsg::DraftLanguage(c.value))
-    .padding([SP.s, SP.m])
-    .width(Length::Fill);
-
     let mut items: Vec<Element<'a, PrefMsg>> = vec![
         setting_row::page_heading(
             t!(i18n, ids::PREFERENCES_LANGUAGE_HEADING),
@@ -65,19 +55,7 @@ pub(super) fn content_language<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
             None,
             t,
         ),
-        setting_row::setting_row(
-            SettingRow {
-                label: t!(i18n, ids::PREFERENCES_LANGUAGE_INTERFACE),
-                pills: Vec::new(),
-                help: Some(setting_row::help_text(
-                    t!(i18n, ids::PREFERENCES_LANGUAGE_INTERFACE_HELP),
-                    t,
-                )),
-                control: picker.boxed(),
-                error: None,
-            },
-            t,
-        ),
+        interface_language_row(i18n, v.draft_language, v.system_language_name, t),
         preview(&v),
     ];
     if v.draft_language.is_pseudo_locale() {
@@ -100,6 +78,40 @@ pub(super) fn content_language<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
         );
     }
     setting_row::page(items)
+}
+
+/// The Interface language row. It is a wide row (mockup row 144a, #3003):
+/// the value names the language "Follow the system" resolves to, and the
+/// standard control column cuts that name off.
+fn interface_language_row<'a>(
+    i18n: &I18n,
+    draft: &LanguagePref,
+    system_language_name: &str,
+    t: &ThemeTokens,
+) -> Element<'a, PrefMsg> {
+    let choices = language_choices(i18n, draft, system_language_name);
+    let picker = pick_list(
+        chosen(&choices, draft),
+        choices,
+        |c: &Choice<LanguagePref>| c.label.clone(),
+    )
+    .graphite()
+    .on_select(|c: Choice<LanguagePref>| PrefMsg::DraftLanguage(c.value))
+    .padding([SP.s, SP.m])
+    .width(Length::Fill);
+    setting_row::wide_setting_row(
+        SettingRow {
+            label: t!(i18n, ids::PREFERENCES_LANGUAGE_INTERFACE),
+            pills: Vec::new(),
+            help: Some(setting_row::help_text(
+                t!(i18n, ids::PREFERENCES_LANGUAGE_INTERFACE_HELP),
+                t,
+            )),
+            control: picker.boxed(),
+            error: None,
+        },
+        t,
+    )
 }
 
 /// The rows of the language list, labelled in the UI language: Follow the
@@ -252,6 +264,48 @@ mod tests {
         let draft = LanguagePref::Locale("tr-TR".to_owned());
         let choices = language_choices(&en, &draft, "English (United States)");
         assert!(chosen(&choices, &draft).is_some());
+    }
+
+    /// The width the dropdown asks for to show `label` whole beside its
+    /// handle: the same dropdown, sized to its value.
+    fn natural_dropdown_width(label: &str) -> f32 {
+        let dropdown = pick_list(
+            Some(label.to_owned()),
+            vec![label.to_owned()],
+            |s: &String| s.clone(),
+        )
+        .graphite()
+        .padding([SP.s, SP.m])
+        .width(Length::Shrink);
+        crate::layout_probe::natural::<()>(dropdown.boxed(), label).width
+    }
+
+    /// #3003, mockup row 144a: with Follow the system drafted, the dropdown
+    /// is wide enough to show the whole language it resolves to.
+    #[test]
+    fn the_follow_the_system_value_fits_the_language_dropdown() {
+        let en = I18n::en_us();
+        let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::GraphiteLight);
+        let row = interface_language_row(
+            &en,
+            &LanguagePref::System,
+            "English (United States)",
+            &tokens,
+        );
+        let label = "Follow the system: English (United States)";
+
+        let texts = crate::layout_probe::lay_out_texts(row, iced::Size::new(900.0, 300.0));
+
+        let field = crate::layout_probe::find(&texts, label).bounds;
+        let needed = natural_dropdown_width(label);
+        assert!(
+            needed <= field.width + 0.5,
+            "the value is cut off: it needs {needed} px, the field is {field:?}"
+        );
+        assert!(
+            (field.width - setting_row::CONTROL_COLUMN_WIDE_W).abs() < 0.5,
+            "the dropdown fills the wide control column: {field:?}"
+        );
     }
 
     /// The preview names the real root menus, in menu-bar order.
