@@ -4,8 +4,8 @@
 //! and the Courtyard & Silkscreen section, whose generated silkscreen and
 //! assembly rows are in `generated_sections`.
 
-use iced::widget::{Column, container, stack};
-use iced::{Element, Length, Padding, Widget as _};
+use iced::widget::{Column, container};
+use iced::{Element, Length, Widget as _};
 use signex_i18n::{ids, t};
 use signex_types::coord::Unit;
 use signex_widgets::enable_section::EnableSection;
@@ -15,11 +15,10 @@ use super::header::{is_open, section, segment};
 use super::{Ctx, fields};
 use crate::panels::PanelMsg;
 use crate::panels::enable_section::enable_section_style;
+use crate::styles::TypeScale;
 use crate::styles::tokens::resolve;
-use crate::styles::{Spacing, TypeScale};
 
 const TS: TypeScale = TypeScale::DEFAULT;
-const SP: Spacing = Spacing::DEFAULT;
 
 const FOOTPRINT_KEY: &str = "fp_footprint";
 const COURTYARD_KEY: &str = "fp_courtyard";
@@ -205,27 +204,23 @@ fn courtyard_section<'a>(
         hover,
         tokens,
     ));
-    let courtyard = EnableSection::new(
+    let mut courtyard = EnableSection::new(
         t!(i18n, ids::EDITORS_FP_PROPS_COURTYARD),
         fp.auto_fit_courtyard,
     )
-    .on_toggle(|_| PanelMsg::FpEditorToggleAutoFitCourtyard)
-    .view(enable_section_style(tokens), body.boxed());
+    .on_toggle(|_| PanelMsg::FpEditorToggleAutoFitCourtyard);
+    if let Some(extent) = fp.courtyard_extent_mm {
+        courtyard = courtyard.trailing(courtyard_size(extent, cx));
+    }
+    let header = courtyard.view(enable_section_style(tokens), body.boxed());
     // The line width strokes a hand-drawn courtyard too, so it stays live
     // under the switch (maintainer decision 2026-11-24).
-    let header = match fp.courtyard_extent_mm {
-        Some(extent) => courtyard_with_size(courtyard, extent, cx),
-        None => courtyard,
-    };
     col.push(header).push(courtyard_line_width_row(cx))
 }
 
-/// The courtyard section with its size on the header line.
-fn courtyard_with_size<'a>(
-    courtyard: Element<'a, PanelMsg>,
-    [x0, y0, x1, y1]: [f64; 4],
-    cx: Ctx<'a, '_>,
-) -> Element<'a, PanelMsg> {
+/// The courtyard size for the header line, right-aligned in the room the
+/// header label leaves.
+fn courtyard_size<'a>([x0, y0, x1, y1]: [f64; 4], cx: Ctx<'a, '_>) -> Element<'a, PanelMsg> {
     use super::super::illustration::linked_field;
     let Ctx {
         fp, tokens, i18n, ..
@@ -237,17 +232,10 @@ fn courtyard_with_size<'a>(
         "width" => format!("{:.2}", x1 - x0),
         "height" => format!("{:.2}", y1 - y0)
     );
-    // The size sits on the header line, right-aligned over the section.
     let size = text(size).size(TS.caption).color(resolve(tokens).ink4);
     let size = linked_field(size.boxed(), fields::COURTYARD, hover, tokens);
-    let size = container(size)
-        .padding(Padding {
-            top: SP.m,
-            right: SP.l,
-            bottom: 0.0,
-            left: 0.0,
-        })
+    container(size)
         .width(Length::Fill)
-        .align_x(iced::alignment::Horizontal::Right);
-    stack![courtyard, size].width(Length::Fill).boxed()
+        .align_x(iced::alignment::Horizontal::Right)
+        .boxed()
 }

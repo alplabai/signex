@@ -245,7 +245,14 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
   Schematic Apply for the rows named by id, one board undo step and one
   schematic undo group, answered once its reads land), and
   `project_set_rail` (#2943; one undo step of the project's history,
-  [CLI.md](CLI.md), "Rail budgets"). A test
+  [CLI.md](CLI.md), "Rail budgets"), and
+  the footprint editor's `footprint_move_pads` and `footprint_align_pads`
+  (#3013; one undo step of the named footprint, answered with its named
+  pads as JSON; [CLI.md](CLI.md), "Footprint pads"), and
+  `apply_library_updates` (#3013; the Library Updates dialog's Update
+  Selected Components for the named sheet; [CLI.md](CLI.md), "Library
+  dialogs"). The other library dialog commands take a file path or name no
+  document, so they stay off the channel. A test
   pins this set, so a catalog row that joins or leaves it is a visible
   decision.
   The window-layout commands `tile_windows_horizontally`,

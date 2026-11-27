@@ -245,6 +245,8 @@ pub(super) const WRITES: &[(&[&str], Surface, Writes)] = &[
             "stop_output_job",
             "view_output_job_run",
             "read_output_job",
+            // #3013: a library's Document Options, in memory for the session.
+            "set_library_document_options",
             // #2795: the notebook tab's view, side panel and cursor.
             "notebook_view",
             // #1114, mockup row 203: the rich note editor's session, the
@@ -660,6 +662,7 @@ const OPERAND_DOCUMENT: &[&str] = &[
     "annotate_schematic_quietly",
     "apply_board_schematic_differences",
     "apply_edits",
+    "apply_library_updates",
     // #1114: the note's text, the typed or the given source.
     "apply_rich_note_edit",
     "arrange_in_box",
@@ -698,6 +701,7 @@ const OPERAND_DOCUMENT: &[&str] = &[
     "clear_all_net_colors",
     "close_active_document",
     "color_net",
+    "copy_stock_to_library",
     "create_rooms_from_sheets",
     "create_sheet_symbol_from_sheet",
     "delete_net_class",
@@ -725,6 +729,8 @@ const OPERAND_DOCUMENT: &[&str] = &[
     "fabrication_outputs",
     "fix_drc",
     "fix_drc_violation",
+    "footprint_align_pads",
+    "footprint_move_pads",
     "force_annotate_all_schematics",
     "generate_block_diagram",
     // #2945: the design report, written into the project with `save`.
@@ -740,6 +746,7 @@ const OPERAND_DOCUMENT: &[&str] = &[
     "mark_notebook_attachment_valid",
     "new_block_diagram",
     "new_document",
+    "new_library",
     "new_output_job",
     "new_pcb_document",
     "new_project_with_profile",
@@ -820,6 +827,7 @@ const OPERAND_DOCUMENT: &[&str] = &[
     "project_set_version_control",
     "project_start_checklist",
     "reannotate_board",
+    "recover_library",
     "redo",
     "regenerate_block_diagram",
     "relink_image",

@@ -19,6 +19,7 @@ apply_layout_board	-	f2929686b07ef725
 apply_layout_notebook	-	f2929686b07ef725
 apply_layout_review	-	f2929686b07ef725
 apply_layout_schematic	-	f2929686b07ef725
+apply_library_updates	-	f2929686b07ef725
 apply_selection_filter_preset	-	f2929686b07ef725
 arrange_in_box	SwapFootprints	839120ff5cdc4bd4
 arrange_in_room	EditablePcb	bd0dadc1f2af5e61
@@ -82,6 +83,7 @@ compile_project	ProjectSheet	b9cf07c7e6ca1a9f
 copy	CopyTarget	817202b19c108dea
 copy_attributes_or_add_vertex	-	f2929686b07ef725
 copy_board_3d_screenshot	Board3dView	67f23fb7bfc76e84
+copy_stock_to_library	-	f2929686b07ef725
 create_rooms_from_sheets	PcbInProject	4d7499203ef7b0fd
 create_sheet_from_sheet_symbol	-	f2929686b07ef725
 create_sheet_symbol_from_sheet	Schematic	f8bd7a5cb84e915b
@@ -160,9 +162,11 @@ flip_board_view	Pcb	119d310e454dd5e4
 flip_selected_x	Turn	50ba39b5e679cbc7
 flip_selected_y	Turn	50ba39b5e679cbc7
 flip_selection	PcbPlacement	317d1529bafe486d
+footprint_align_pads	-	f2929686b07ef725
 footprint_mode_pads	-	f2929686b07ef725
 footprint_mode_sketch	-	f2929686b07ef725
 footprint_mode_view_3d	-	f2929686b07ef725
+footprint_move_pads	-	f2929686b07ef725
 footprint_recompute_courtyard_outline	-	f2929686b07ef725
 force_annotate_all_schematics	ActiveSheet	cff87b9cc03394bf
 generate_block_diagram	ProjectSheet	b9cf07c7e6ca1a9f
@@ -209,6 +213,7 @@ move_to_front	-	f2929686b07ef725
 navigate_up_hierarchy	ParentSheet	1a0f94b7a1b59195
 new_block_diagram	OpenProject	ee0317ecaf5bfb5b
 new_document	-	f2929686b07ef725
+new_library	-	f2929686b07ef725
 new_pcb_document	OpenProject	ee0317ecaf5bfb5b
 new_project_with_profile	-	f2929686b07ef725
 new_schematic_sheet	OpenProject	ee0317ecaf5bfb5b
@@ -364,6 +369,7 @@ query_power_tree	-	f2929686b07ef725
 query_rail_budget	-	f2929686b07ef725
 read_document	-	f2929686b07ef725
 reannotate_board	Pcb	119d310e454dd5e4
+recover_library	-	f2929686b07ef725
 redo	Redo	dc8e63570800fd62
 refresh_view	FitTarget	dbeabf1fa64a7b1d
 regenerate_block_diagram	ProjectSheet	b9cf07c7e6ca1a9f
@@ -443,6 +449,7 @@ set_layer_stack	Pcb	119d310e454dd5e4
 set_layer_tab_names	Pcb	119d310e454dd5e4
 set_layer_visible	Pcb	119d310e454dd5e4
 set_length_group	Pcb	119d310e454dd5e4
+set_library_document_options	-	f2929686b07ef725
 set_net_class_rules	-	f2929686b07ef725
 set_net_tie	-	f2929686b07ef725
 set_object_position	-	f2929686b07ef725

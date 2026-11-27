@@ -25,10 +25,14 @@ use super::directive_operands as directive;
 use super::document_operands as doc;
 use super::file_operands as file;
 use super::footprint_assign_operands as fp_assign;
+use super::footprint_pad_operands as fp_pads;
 use super::footprint_place_operands as fp_place;
 use super::footprint_text_operands as fp_text;
 use super::hierarchy_operands as hierarchy;
 use super::layer_strip_operands as strip;
+use super::library_dialog_operands as lib_dialog;
+use super::library_recovery_operands as lib_recovery;
+use super::library_update_operands as lib_updates;
 use super::live_erc_operands as live_erc;
 use super::part_height_operands as part_heights;
 use super::part_operands as part;
@@ -349,6 +353,18 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
         "set_dock_panel",
         crate::app::handlers::dock::panel_command::set_dock_panel,
     ),
+    // #3013: Move Selection By and Align Selection on named footprint pads.
+    ("footprint_move_pads", fp_pads::footprint_move_pads),
+    ("footprint_align_pads", fp_pads::footprint_align_pads),
+    // #3013: the library dialogs' actions (mockup rows 132-138).
+    (
+        "set_library_document_options",
+        lib_dialog::set_library_document_options,
+    ),
+    ("apply_library_updates", lib_updates::apply_library_updates),
+    ("copy_stock_to_library", lib_dialog::copy_stock_to_library),
+    ("recover_library", lib_recovery::recover_library),
+    ("new_library", lib_dialog::new_library),
     ("set_selection_filters", filter::set_selection_filters),
     (
         "apply_selection_filter_preset",

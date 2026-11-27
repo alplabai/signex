@@ -259,6 +259,22 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     // #2836: a dimension's decimals and arrow style.
     ("precision", OperandKind::Text),
     ("arrows", OperandKind::Text),
+    // #3013: footprint pads by number (`pad_numbers`; `pads` is the teardrop
+    // rule's switch above), an offset, and an alignment per axis.
+    ("pad_numbers", OperandKind::Text),
+    ("by", OperandKind::Point),
+    ("horizontal", OperandKind::Text),
+    ("vertical", OperandKind::Text),
+    // #3013: the library dialogs' fields (`designators` is declared with
+    // #2665 above).
+    ("sheet_color", OperandKind::Text),
+    ("grid", OperandKind::Bool),
+    ("grid_spacing", OperandKind::Length),
+    ("use_library", OperandKind::Text),
+    ("action", OperandKind::Text),
+    ("located", OperandKind::Path),
+    ("git", OperandKind::Bool),
+    ("lfs", OperandKind::Bool),
     // #2796: a block diagram's blocks, ports, connections and groups.
     ("function", OperandKind::Text),
     ("note", OperandKind::Text),

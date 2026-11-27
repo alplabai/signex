@@ -39,8 +39,11 @@ define_ids! {
     SKETCH_CANVAS_MENU_CONVERT_REFERENCE = "sketch-canvas-menu-convert-reference";
     SKETCH_CANVAS_MENU_SUPPRESS = "sketch-canvas-menu-suppress";
     SKETCH_CANVAS_MENU_SUPPRESS_WHY = "sketch-canvas-menu-suppress-why";
+    SKETCH_CANVAS_MENU_SUPPRESS_HINT = "sketch-canvas-menu-suppress-hint";
     SKETCH_CANVAS_MENU_SELECT_ENTITIES = "sketch-canvas-menu-select-entities";
     SKETCH_CANVAS_MENU_SHOW_CONFLICTS = "sketch-canvas-menu-show-conflicts";
+    SKETCH_CANVAS_MENU_SHOW_CONFLICTS_NONE = "sketch-canvas-menu-show-conflicts-none";
+    SKETCH_CANVAS_MENU_SHOW_CONFLICTS_NONE_WHY = "sketch-canvas-menu-show-conflicts-none-why";
     SKETCH_CANVAS_MENU_DELETE = "sketch-canvas-menu-delete";
     SKETCH_CANVAS_KIND_COINCIDENT = "sketch-canvas-kind-coincident";
     SKETCH_CANVAS_KIND_POINT_ON_LINE = "sketch-canvas-kind-point-on-line";

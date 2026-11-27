@@ -122,6 +122,10 @@ const SAVES: &[&str] = &[
     // Writes the design checklist as a template into the user's config
     // folder (#1291, mockup row 206).
     "project_save_checklist_template",
+    // Writes the copy of a stock primitive into a library (#3013).
+    "copy_stock_to_library",
+    // May re-create a library's Git history on disk (#3013).
+    "recover_library",
     // Write the project's block diagram file (#2968); a regenerate without
     // `apply` lists its changes and writes nothing.
     "generate_block_diagram",
@@ -268,6 +272,18 @@ mod tests {
         assert_eq!(cap("repour_all"), Capability::Edit);
     }
 
+    /// #3013: a library dialog's command that writes a file needs `save`; one
+    /// that changes a project or a sheet in memory needs `edit`; Document
+    /// Options, a view setting held for the session, needs `read`.
+    #[test]
+    fn the_library_dialog_commands_need_their_capability() {
+        assert_eq!(cap("copy_stock_to_library"), Capability::Save);
+        assert_eq!(cap("recover_library"), Capability::Save);
+        assert_eq!(cap("new_library"), Capability::Edit);
+        assert_eq!(cap("apply_library_updates"), Capability::Edit);
+        assert_eq!(cap("set_library_document_options"), Capability::Read);
+    }
+
     /// #2470: New PCB opens the board unsaved and the numbering commands
     /// change documents in memory: none writes a file, so none needs `save`.
     #[test]
@@ -367,6 +383,8 @@ mod tests {
             (Capability::Save, "save_layer_set"),
             (Capability::Save, "save_workspace_layout"),
             (Capability::Save, "project_save_checklist_template"),
+            (Capability::Save, "copy_stock_to_library"),
+            (Capability::Save, "recover_library"),
             (Capability::Save, "generate_block_diagram"),
             (Capability::Save, "regenerate_block_diagram"),
             (Capability::Save, "mark_notebook_attachment_valid"),

@@ -22,6 +22,7 @@ apply_layout_board
 apply_layout_notebook
 apply_layout_review
 apply_layout_schematic
+apply_library_updates
 apply_rich_note_edit
 apply_selection_filter_preset
 arrange_in_box
@@ -89,6 +90,7 @@ compile_rich_note
 copy
 copy_attributes_or_add_vertex
 copy_board_3d_screenshot
+copy_stock_to_library
 create_rooms_from_sheets
 create_sheet_from_sheet_symbol
 create_sheet_symbol_from_sheet
@@ -173,9 +175,11 @@ flip_gerber_view
 flip_selected_x
 flip_selected_y
 flip_selection
+footprint_align_pads
 footprint_mode_pads
 footprint_mode_sketch
 footprint_mode_view_3d
+footprint_move_pads
 footprint_recompute_courtyard_outline
 force_annotate_all_schematics
 generate_block_diagram
@@ -225,6 +229,7 @@ move_to_front
 navigate_up_hierarchy
 new_block_diagram
 new_document
+new_library
 new_output_job
 new_pcb_document
 new_project_with_profile
@@ -405,6 +410,7 @@ query_rail_budget
 read_document
 read_output_job
 reannotate_board
+recover_library
 redo
 refresh_view
 regenerate_block_diagram
@@ -496,6 +502,7 @@ set_layer_stack
 set_layer_tab_names
 set_layer_visible
 set_length_group
+set_library_document_options
 set_net_class_rules
 set_net_tie
 set_object_position

@@ -964,6 +964,96 @@ set_pad_thermal_relief document=<board> ids=<pad uuids> [air_gap=rule|<mm>] [spo
   "spoke_width", "spokes"}`, a number or `"rule"`. A library footprint's pads
   are set in the footprint editor's pad Properties; placing it carries them.
 
+### Footprint pads
+
+Move Selection By and Align Selection in the footprint editor (mockup row
+140) make these edits on the selection; with operands they make them on the
+pads `pad_numbers` names on the open footprint `document` names (#3013). Each is
+one undo step of that footprint; nothing is written until the footprint is
+saved, and the selection is not touched.
+
+```text
+footprint_move_pads document=<footprint> pad_numbers=<numbers> by=dx,dy
+footprint_align_pads document=<footprint> pad_numbers=<numbers> [horizontal=left|center|right|space|none] [vertical=top|center|bottom|space|none]
+```
+
+- `pad_numbers` is pad numbers, comma separated. A number no pad has, or that more
+  than one pad has, refuses the command with nothing moved.
+- `by` is the offset in mm, as the dialog's X and Y.
+- `horizontal` and `vertical` are the dialog's two rows; a left-out axis is
+  `none`, and both `none` is refused. `space` keeps the outer pads and
+  makes the gaps between the centres equal. An axis the pads are too few
+  for (2 to align, 3 to space) is skipped and named in `skipped`, as the
+  dialog skips it; with no axis left the command is refused.
+- The answer is `{"document", "pads", "changed"}` (and `skipped` for an
+  align), each pad `{"number", "x", "y"}` after the edit.
+- `undo document=<footprint>` is not available for a footprint yet; Undo in
+  the footprint editor steps the edit back.
+
+These footprint editor actions stay in the window, each for its reason:
+
+- Rectangular Pattern… arms the sketch's pattern tool, which takes its
+  objects and its count from clicks on the canvas.
+- Edit Sketch is `footprint_mode_sketch`, a switch of the editor's mode.
+- Grid Properties… sets how the editor's grid is drawn and snapped, which a
+  run with no window has no use for; the pad commands take exact mm.
+
+A footprint file opens without a window: `open_document path=<x>.snxfpt`
+answers `{"id", "path", "kind": "footprint"}`, and the pad commands then name
+it by that path or id.
+
+### Library dialogs
+
+The actions of the library dialogs (mockup rows 132-138, #3013). Each
+command fills the dialog a person would see and presses its button, so it
+has the dialog's behaviour, refusals included. A dialog the person has open
+is never taken over: the command is refused until it is closed.
+
+```text
+set_library_document_options library=<id or .snxlib> [sheet_color=black|white|dark_gray|light_gray|cream] [grid=true|false] [grid_spacing=<mm>] [unit=mm|mil|inch|um]
+apply_library_updates document=<sheet> [designators=<list>|all] [use_library=<designator>:<field>,...]
+copy_stock_to_library name=<stock primitive> kind=symbol|footprint path=<.snxlib>
+recover_library path=<.snxlib> action=locate|remove|skip|reinit|read_only [located=<.snxlib>]
+new_library document=<project> path=<.snxlib> [git=true|false] [lfs=true|false]
+```
+
+- `set_library_document_options` is Document Options' Apply (row 132). A
+  setting left out keeps its value. The settings live in memory for the
+  session, as the dialog's do; it needs the `read` capability. The answer
+  is the library's settings after it.
+- `apply_library_updates` is Library Updates' Update Selected Components
+  (row 135) for the updates waiting for the sheet. `designators` ticks the
+  parts named (a part ticks the parts that share its embedded symbol, as
+  the checkbox does); left out, the dialog's own ticks stand: patch and
+  minor bumps ticked, major ones not. `use_library` answers a conflict with
+  the library's value; the field is `footprint`, `manufacturer` or `mpn`.
+  The answer lists the parts `updating` and those `kept`. The library
+  symbols are read off the UI thread; each updated symbol is one undo step
+  of the sheet when they land, before the next command of a headless run.
+  It needs `edit`.
+- `copy_stock_to_library` is Copy to Library's "Copy to <library>" (row
+  134). The stock primitive is named as the stock library lists it; `path`
+  is an open, writable library. The copy is written off the UI thread and
+  opens in its editor, as from the dialog. It needs `save`.
+- `recover_library` answers the recovery open for the library (row 138):
+  Library Missing's Locate… (`locate`, with `located`), Remove from project
+  (`remove`) and Skip for now (`skip`); Git Repository Missing's Re-init
+  (`reinit`) and Skip for now (`read_only`, the library opened read only).
+  A Library Missing recovery the person skipped is raised again first, as
+  the status bar chip raises it. It needs `save`, as Re-init writes the
+  library's Git history.
+- `new_library` is the New Library dialog's Create Library (row 133). The
+  library is registered with the project and written when the project is
+  saved; the answer is `{"project", "library", "library_id", "name", "git",
+  "lfs", "pending": true}`. It needs `edit`.
+
+These library dialog actions are not commands here, each for its reason:
+
+- Broken Binding's Re-bind… (row 138) picks a symbol or footprint file in
+  the primitive picker, a window.
+- Broken Binding's Remove row deletes a library row: a library row write,
+  #2944's `library_remove_row`.
+
 ## Curve drawings
 
 `draw_ellipse center=x,y radius_x=.. radius_y=..`,

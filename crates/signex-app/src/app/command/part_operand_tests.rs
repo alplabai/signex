@@ -9,7 +9,7 @@ use signex_i18n::RenderTranslatable;
 use serde_json::{Value, json};
 use signex_library::adapters::local_git::{LibraryInitOptions, LocalGitAdapter};
 use signex_library::library_file::{FORMAT_TOKEN, LibrarySection, SnxlibManifest};
-use signex_library::manifest::{LibraryMode, UsersConfig, WorkflowConfig};
+use signex_library::manifest::{LibraryMode, UsersConfig, WorkflowConfig, WorkflowMode};
 use signex_library::primitive::{
     Symbol as LibrarySymbol, SymbolFile, SymbolGraphic, SymbolGraphicKind, SymbolPin,
 };
@@ -32,6 +32,9 @@ pub(super) struct Library {
     pub(super) snxlib: PathBuf,
     pub(super) id: Uuid,
     row: Uuid,
+    /// The symbol both rows bind, as written to `symbol_file`.
+    pub(super) symbol: LibrarySymbol,
+    pub(super) symbol_file: PathBuf,
 }
 
 fn two_unit_symbol() -> LibrarySymbol {
@@ -60,6 +63,22 @@ fn two_unit_symbol() -> LibrarySymbol {
 }
 
 pub(super) fn library() -> Library {
+    build(WorkflowConfig::default(), None)
+}
+
+/// [`library`] running the Team workflow, its rows at version 1.2.3, so a
+/// part placed from it and stamped older is offered in Library Updates.
+pub(super) fn team_library() -> Library {
+    let workflow = WorkflowConfig {
+        mode: WorkflowMode::Team,
+        ..WorkflowConfig::default()
+    };
+    build(workflow, Some("1.2.3"))
+}
+
+/// The library of [`library`] under `workflow`; `version` overrides the
+/// rows' version.
+fn build(workflow: WorkflowConfig, version: Option<&str>) -> Library {
     signex_library::git_identity::test_identity::install();
     let dir = tempfile::tempdir().expect("tempdir");
     let snxlib = dir.path().join("lib").join("lib.snxlib");
@@ -72,7 +91,7 @@ pub(super) fn library() -> Library {
             ..Default::default()
         },
         mode: LibraryMode::default(),
-        workflow: WorkflowConfig::default(),
+        workflow,
         users: UsersConfig::default(),
         classes: Vec::new(),
     };
@@ -86,16 +105,20 @@ pub(super) fn library() -> Library {
     let symbol_ref = PrimitiveRef::new(id, symbol.uuid);
     let symbols = snxlib.parent().expect("folder").join("symbols");
     std::fs::create_dir_all(&symbols).expect("symbols dir");
-    let text = SymbolFile::from_symbol(symbol)
+    let symbol_file = symbols.join("two.snxsym");
+    let text = SymbolFile::from_symbol(symbol.clone())
         .to_toml_string()
         .expect("emit");
-    std::fs::write(symbols.join("two.snxsym"), text).expect("write symbol");
+    std::fs::write(&symbol_file, text).expect("write symbol");
     let mut rows = Vec::new();
     for pn in ["SNX-TWO", "SNX-TWO-B"] {
         let mut row = crate::library::component_preview::test_row();
         row.internal_pn = InternalPn::new(pn);
         row.primary_mpn = ManufacturerPart::draft("Acme", "TWO-1");
         row.symbol_ref = symbol_ref;
+        if let Some(version) = version {
+            row.version = version.into();
+        }
         rows.push(row.row_id);
         adapter.insert_row("ICs", row, "seed").expect("insert row");
     }
@@ -106,6 +129,8 @@ pub(super) fn library() -> Library {
         snxlib,
         id,
         row: rows[0],
+        symbol,
+        symbol_file,
     }
 }
 
@@ -126,7 +151,7 @@ fn app_on(lib: &Library, sheet: SchematicSheet) -> Signex {
     app
 }
 
-fn app(lib: &Library) -> Signex {
+pub(super) fn app(lib: &Library) -> Signex {
     app_on(lib, SchematicSheet::default())
 }
 
@@ -142,7 +167,7 @@ fn run(app: &mut Signex, id: &str, operands: &[String]) -> CommandOutcome {
 }
 
 /// `place_component` of `lib`'s first row at `at`, plus `extra`.
-fn place(app: &mut Signex, lib: &Library, at: Point, extra: &[&str]) -> CommandOutcome {
+pub(super) fn place(app: &mut Signex, lib: &Library, at: Point, extra: &[&str]) -> CommandOutcome {
     let mut operands = vec![
         format!("library={}", lib.id),
         "part=SNX-TWO".to_string(),

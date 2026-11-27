@@ -833,6 +833,13 @@ cmd-symbol-draw-bezier = Draw a Bezier curve on a symbol
 cmd-symbol-draw-round-rectangle = Draw a round rectangle on a symbol
 cmd-symbol-draw-pie = Draw a pie chart on a symbol
 cmd-edit-symbol-pins = Set a symbol's pins by number, or paste pin rows
+cmd-footprint-move-pads = Move footprint pads by an offset
+cmd-footprint-align-pads = Align footprint pads
+cmd-set-library-document-options = Set the document options of a library
+cmd-apply-library-updates = Apply the library updates waiting for a sheet
+cmd-copy-stock-to-library = Copy a stock symbol or footprint to a library
+cmd-recover-library = Recover a library that is missing or has lost its history
+cmd-new-library = Create a library for a project
 
 cmd-category-edit = Edit
 cmd-category-modify = Modify

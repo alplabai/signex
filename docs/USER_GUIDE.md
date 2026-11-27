@@ -406,7 +406,7 @@ Select All, Deselect All, Fit to Window and **Delete**.
 (both axes, in mm), the **Multiplier** (1, 2, 5 or 10; the coarse spacing shows
 beside it), and how the fine and the coarse grid draw (**Lines**, **Dots** or
 **Hidden**). The preview at the top draws the grids as you set them, with a pad
-for scale; click the step or the coarse label on it to type a new value and
+for scale, on the board colours in the light theme as in the dark one; click the step or the coarse label on it to type a new value and
 press `Enter` or click elsewhere, or `Esc` to leave it. Text that is not a
 length is outlined red and the preview says why; `Enter` and **OK** wait until
 it is fixed or `Esc` closes the label. Typing in the **Step** field or picking

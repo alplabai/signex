@@ -207,6 +207,32 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
             "`assign_footprint` needs the operands `document`, `id` and `footprint` — \
              use Tools ▸ Assign Footprints",
         ),
+        // #3013: a person uses the two dialogs on the footprint's selection.
+        "footprint_move_pads" | "footprint_align_pads" => Some(
+            "this command needs the operands `document` and `pad_numbers` — \
+             select the pads and use Move Selection By or Align Selection",
+        ),
+        // #3013: a person answers the library dialogs themselves.
+        "set_library_document_options" => Some(
+            "`set_library_document_options` needs the operand `library` — \
+             use Tools ▸ Document Options in a library editor",
+        ),
+        "apply_library_updates" => Some(
+            "`apply_library_updates` needs the operand `document` — \
+             use the Library Updates dialog the sheet opens with",
+        ),
+        "copy_stock_to_library" => Some(
+            "`copy_stock_to_library` needs the operands `name`, `kind` and `path` — \
+             open the stock symbol or footprint and use Copy to Library",
+        ),
+        "recover_library" => Some(
+            "`recover_library` needs the operands `path` and `action` — \
+             use the recovery dialog the library raises",
+        ),
+        "new_library" => Some(
+            "`new_library` needs the operands `document` and `path` — \
+             use Add New to Project ▸ Component Library in the project tree",
+        ),
         "rules_add" | "rules_set" | "rules_remove" | "rules_enable" | "rules_matrix_set"
         | "rules_set_create" | "rules_set_edit" | "rules_set_apply" | "rules_preset_apply" => Some(
             "the `rules_*` edits need their operands — \

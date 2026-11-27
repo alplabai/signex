@@ -592,6 +592,13 @@ signex_standard	hint	-	-	symbol_draw_elliptical_arc
 signex_standard	hint	-	-	symbol_draw_bezier
 signex_standard	hint	-	-	symbol_draw_round_rectangle
 signex_standard	hint	-	-	symbol_draw_pie
+signex_standard	hint	-	-	footprint_move_pads
+signex_standard	hint	-	-	footprint_align_pads
+signex_standard	hint	-	-	set_library_document_options
+signex_standard	hint	-	-	apply_library_updates
+signex_standard	hint	-	-	copy_stock_to_library
+signex_standard	hint	-	-	recover_library
+signex_standard	hint	-	-	new_library
 signex_standard	hint	-	Ctrl+Shift+P	open_command_palette
 signex_standard	hint	-	Ctrl+,	open_preferences
 signex_standard	hint	-	T P	open_schematic_preferences
@@ -1247,6 +1254,13 @@ classic	hint	-	-	symbol_draw_elliptical_arc
 classic	hint	-	-	symbol_draw_bezier
 classic	hint	-	-	symbol_draw_round_rectangle
 classic	hint	-	-	symbol_draw_pie
+classic	hint	-	-	footprint_move_pads
+classic	hint	-	-	footprint_align_pads
+classic	hint	-	-	set_library_document_options
+classic	hint	-	-	apply_library_updates
+classic	hint	-	-	copy_stock_to_library
+classic	hint	-	-	recover_library
+classic	hint	-	-	new_library
 classic	hint	-	Ctrl+Shift+P	open_command_palette
 classic	hint	-	Ctrl+,	open_preferences
 classic	hint	-	-	open_schematic_preferences

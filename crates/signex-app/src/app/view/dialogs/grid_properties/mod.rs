@@ -93,7 +93,7 @@ impl Signex {
         container(
             column![
                 header,
-                grid_preview(st, size, i18n, tokens),
+                grid_preview(st, size, i18n),
                 container(grid_form(st, i18n, tokens)).padding(SP.l),
                 footer,
             ]
@@ -121,13 +121,16 @@ pub(crate) fn footer_buttons() -> [(MessageId, DialogButtonKind, GridPropertiesM
     ]
 }
 
-/// The preview: the drawing, its editable labels and the expand button.
+/// The preview: the drawing, its editable labels and the expand button, on
+/// the board ground with the board inks in both chrome themes.
 fn grid_preview<'a>(
     st: &'a GridPropertiesState,
     size: PreviewSize,
     i18n: &'a I18n,
-    tokens: &ThemeTokens,
 ) -> Element<'a, Message> {
+    let board = preview::board_tokens();
+    let tokens = &board;
+    let ground = preview::ground();
     let drawing = property_illustration(
         preview::illustration(st, size, i18n),
         &IllustrationHover::default(),
@@ -142,7 +145,7 @@ fn grid_preview<'a>(
     let r = crate::styles::tokens::resolve(tokens);
     let style = DimensionLabelStyle {
         ink: r.accent_text,
-        fill: ti(tokens.panel_bg),
+        fill: ground,
         field: r.field,
         selection: crate::styles::tokens::selection_tint(tokens),
         handle: ti(tokens.accent),
@@ -170,7 +173,11 @@ fn grid_preview<'a>(
         .align_x(iced::alignment::Horizontal::Right);
     let frame = container(stack![drawing, overlay, corner.boxed()])
         .width(Length::Fixed(size.width))
-        .height(Length::Fixed(size.height));
+        .height(Length::Fixed(size.height))
+        .style(move |_: &iced::Theme| container::Style {
+            background: Some(iced::Background::Color(ground)),
+            ..container::Style::default()
+        });
     container(frame).center_x(Length::Fill).boxed()
 }
 

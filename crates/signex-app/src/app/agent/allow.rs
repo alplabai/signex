@@ -163,6 +163,8 @@ mod tests {
                 // #2462: Compare Board with Schematic's Apply, by row id.
                 "apply_board_schematic_differences",
                 "apply_edits",
+                // #3013: Library Updates' Update Selected on the named sheet.
+                "apply_library_updates",
                 "arrange_in_box",
                 // #2457, #2941: the rooms commands, on the named board.
                 "arrange_in_room",
@@ -239,6 +241,10 @@ mod tests {
                 // #2940: the DRC fixes, on the named board.
                 "fix_drc",
                 "fix_drc_violation",
+                // #3013: Move Selection By and Align Selection on the named
+                // footprint's pads.
+                "footprint_align_pads",
+                "footprint_move_pads",
                 // #2945: the design report of the named project.
                 "generate_design_notebook",
                 "gloss_selected_routes",

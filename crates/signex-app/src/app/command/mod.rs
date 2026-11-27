@@ -58,6 +58,9 @@ mod file_operands;
 mod footprint_assign_operand_tests;
 mod footprint_assign_operands;
 #[cfg(test)]
+mod footprint_pad_operand_tests;
+mod footprint_pad_operands;
+#[cfg(test)]
 mod footprint_place_operand_tests;
 mod footprint_place_operands;
 #[cfg(test)]
@@ -75,6 +78,15 @@ pub(in crate::app) mod interaction_snapshot_tests;
 mod keymap_operand_tests;
 mod keymap_operands;
 mod layer_strip_operands;
+#[cfg(test)]
+mod library_dialog_operand_tests;
+mod library_dialog_operands;
+#[cfg(test)]
+mod library_recovery_operand_tests;
+mod library_recovery_operands;
+#[cfg(test)]
+mod library_update_operand_tests;
+mod library_update_operands;
 #[cfg(test)]
 mod live_erc_operand_tests;
 mod live_erc_operands;

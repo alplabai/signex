@@ -347,6 +347,30 @@ define_ids! {
     LIBRARY_CHANGE_COMPONENT_WARN_REFUSED = "library-change-component-warn-refused";
     // range-filter-chip glyph
     LIBRARY_RANGE_FILTER_REMOVE = "library-range-filter-remove";
+    // #3013: why a library dialog's command did nothing.
+    LIBRARY_COMMAND_NEEDS = "library-command-needs";
+    LIBRARY_COMMAND_LIBRARY_UNKNOWN = "library-command-library-unknown";
+    LIBRARY_COMMAND_OPTIONS_OPEN = "library-command-options-open";
+    LIBRARY_COMMAND_SHEET_COLOR = "library-command-sheet-color";
+    LIBRARY_COMMAND_UNIT = "library-command-unit";
+    LIBRARY_COMMAND_UPDATES_NONE = "library-command-updates-none";
+    LIBRARY_COMMAND_UPDATES_DESIGNATOR = "library-command-updates-designator";
+    LIBRARY_COMMAND_UPDATES_FIELD = "library-command-updates-field";
+    LIBRARY_COMMAND_UPDATES_NO_CONFLICT = "library-command-updates-no-conflict";
+    LIBRARY_COMMAND_STOCK_NOT_OPEN = "library-command-stock-not-open";
+    LIBRARY_COMMAND_STOCK_KIND = "library-command-stock-kind";
+    LIBRARY_COMMAND_STOCK_UNKNOWN = "library-command-stock-unknown";
+    LIBRARY_COMMAND_STOCK_MANY = "library-command-stock-many";
+    LIBRARY_COMMAND_STOCK_BUSY = "library-command-stock-busy";
+    LIBRARY_COMMAND_STOCK_RUNNING = "library-command-stock-running";
+    LIBRARY_COMMAND_RECOVERY_ACTION = "library-command-recovery-action";
+    LIBRARY_COMMAND_RECOVERY_LOCATED = "library-command-recovery-located";
+    LIBRARY_COMMAND_RECOVERY_NOT_MISSING = "library-command-recovery-not-missing";
+    LIBRARY_COMMAND_RECOVERY_OTHER = "library-command-recovery-other";
+    LIBRARY_COMMAND_RECOVERY_NO_GIT = "library-command-recovery-no-git";
+    LIBRARY_COMMAND_NEW_OPEN = "library-command-new-open";
+    LIBRARY_COMMAND_NEW_LFS = "library-command-new-lfs";
+    LIBRARY_COMMAND_NEW_NOT_REGISTERED = "library-command-new-not-registered";
     // library import (#3113, #3114)
     LIBRARY_IMPORT_NOT_INSTALLED = "library-import-not-installed";
     LIBRARY_IMPORT_OVERRIDE_NOT_A_FILE = "library-import-override-not-a-file";

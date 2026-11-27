@@ -806,6 +806,13 @@ define_ids! {
         CMD_SYMBOL_DRAW_ROUND_RECTANGLE = "cmd-symbol-draw-round-rectangle";
         CMD_SYMBOL_DRAW_PIE = "cmd-symbol-draw-pie";
         CMD_EDIT_SYMBOL_PINS = "cmd-edit-symbol-pins";
+        CMD_FOOTPRINT_MOVE_PADS = "cmd-footprint-move-pads";
+        CMD_FOOTPRINT_ALIGN_PADS = "cmd-footprint-align-pads";
+        CMD_SET_LIBRARY_DOCUMENT_OPTIONS = "cmd-set-library-document-options";
+        CMD_APPLY_LIBRARY_UPDATES = "cmd-apply-library-updates";
+        CMD_COPY_STOCK_TO_LIBRARY = "cmd-copy-stock-to-library";
+        CMD_RECOVER_LIBRARY = "cmd-recover-library";
+        CMD_NEW_LIBRARY = "cmd-new-library";
         CMD_CATEGORY_EDIT = "cmd-category-edit";
         CMD_CATEGORY_MODIFY = "cmd-category-modify";
         CMD_CATEGORY_INTERACTIVE = "cmd-category-interactive";

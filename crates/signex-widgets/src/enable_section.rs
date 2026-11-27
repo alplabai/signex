@@ -9,7 +9,7 @@
 //! module only draws it. The caller passes its form look in
 //! [`EnableSectionStyle`].
 
-use iced::widget::{Column, container};
+use iced::widget::{Column, Row, container};
 use iced::{Color, Element, Font, Length, Padding, Theme, Widget as _};
 
 use crate::inert::Inert;
@@ -59,6 +59,7 @@ pub struct EnableSection<'a, M> {
     tip: Option<Label<'a>>,
     is_live_while_off: bool,
     wrap_header: Option<HeaderWrap<'a, M>>,
+    trailing: Option<Element<'a, M>>,
 }
 
 /// A wrapper put around the header row.
@@ -75,7 +76,16 @@ impl<'a, M: 'a> EnableSection<'a, M> {
             tip: None,
             is_live_while_off: false,
             wrap_header: None,
+            trailing: None,
         }
+    }
+
+    /// `trailing` on the header line right of the label, such as a size
+    /// or a reason. It takes only the room the label leaves, so a long
+    /// one wraps there and never runs into the label.
+    pub fn trailing(mut self, trailing: impl Into<Element<'a, M>>) -> Self {
+        self.trailing = Some(trailing.into());
+        self
     }
 
     /// The message the header sends when it is ticked or cleared.
@@ -122,6 +132,7 @@ impl<'a, M: 'a> EnableSection<'a, M> {
             self.label,
             self.is_enabled,
             self.on_toggle,
+            self.trailing,
             font,
             move |theme: &Theme, status| {
                 header_style(
@@ -179,11 +190,13 @@ fn gate_dependents<'a, M: 'a, T: 'a, R: iced::advanced::Renderer + 'a>(
     }
 }
 
-/// The header row: the enable checkbox, labelled with the subsection name.
+/// The header row: the enable checkbox, labelled with the subsection name,
+/// then `trailing` in the room the label leaves.
 fn header<'a, M: 'a>(
     label: Label<'a>,
     is_enabled: bool,
     on_toggle: Option<Box<dyn Fn(bool) -> M + 'a>>,
+    trailing: Option<Element<'a, M>>,
     font: Font,
     look: impl Fn(&Theme, checkbox::Status) -> checkbox::Style + 'a,
 ) -> Element<'a, M> {
@@ -200,7 +213,16 @@ fn header<'a, M: 'a>(
     if let Some(on_toggle) = on_toggle {
         check = check.on_toggle(on_toggle);
     }
-    container(check)
+    let line: Element<'a, M> = match trailing {
+        Some(trailing) => Row::new()
+            .push_boxed(check)
+            .push(trailing)
+            .spacing(SP.s)
+            .align_y(iced::Alignment::Center)
+            .boxed(),
+        None => check.boxed(),
+    };
+    container(line)
         .padding(Padding {
             top: SP.m,
             right: SP.l,

@@ -341,6 +341,15 @@ const PROJECT_WIDE: &[(&str, &str)] = &[
     ("create_rooms_from_sheets", BOARD_EDIT),
     ("arrange_in_room", BOARD_EDIT),
     ("auto_place", BOARD_EDIT),
+    // #3013: a footprint's pads, on the footprint's own undo stack.
+    ("footprint_move_pads", FOOTPRINT_EDIT),
+    ("footprint_align_pads", FOOTPRINT_EDIT),
+    // #3013: the update lands when the library symbols are read, one step
+    // per updated symbol.
+    (
+        "apply_library_updates",
+        "it reads the libraries off the UI thread and lands later, one step per symbol; run it as its own command",
+    ),
     // #2389: length tuning lands on the named board's own undo stack.
     (
         "tune_net_length",
@@ -520,6 +529,9 @@ const BOARD_EDIT: &str =
 
 const SYMBOL_EDIT: &str =
     "it edits a symbol, which no sheet's undo step covers; run it as its own command";
+
+const FOOTPRINT_EDIT: &str =
+    "it edits a footprint, which no sheet's undo step covers; run it as its own command";
 
 /// Commands an agent runs as their own labelled step but an edit list does
 /// not carry yet: whether a list may carry them is not decided (#2326 slice

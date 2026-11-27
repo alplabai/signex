@@ -133,6 +133,67 @@ fn reload_is_at_the_footer_left_without_a_stale_save() {
     assert!(reload_requested(&clicked), "{clicked:?}");
 }
 
+/// How far the pixels of `area` reach from its top-left pixel towards
+/// `ink` (0 = none, 1 = the ink itself). Panics on a pixel off that line,
+/// so a label in another colour (the accent, the danger red) fails.
+fn reach_towards(pixels: &[u8], window: Size, area: iced::Rectangle, ink: iced::Color) -> f32 {
+    let stride = window.width as usize * 4;
+    let (left, right) = (area.x as usize, (area.x + area.width) as usize);
+    let (top, bottom) = (area.y as usize, (area.y + area.height) as usize);
+    let channels = |p: &[u8]| [f32::from(p[0]), f32::from(p[1]), f32::from(p[2])];
+    let back = channels(&pixels[top * stride + left * 4..]);
+    let target = channels(&ink.into_rgba8());
+    let to_ink = [0, 1, 2].map(|i| target[i] - back[i]);
+    let length: f32 = to_ink.iter().map(|d| d * d).sum();
+    let mut reach = 0.0_f32;
+    for y in top..bottom {
+        for x in left..right {
+            let pixel = channels(&pixels[y * stride + x * 4..]);
+            let delta = [0, 1, 2].map(|i| pixel[i] - back[i]);
+            let t = (0..3).map(|i| delta[i] * to_ink[i]).sum::<f32>() / length;
+            assert!(
+                (0..3).all(|i| (delta[i] - t * to_ink[i]).abs() <= 16.0) && t > -0.1,
+                "pixel ({x}, {y}) is {pixel:?}, not between {back:?} and {target:?}"
+            );
+            reach = reach.max(t);
+        }
+    }
+    reach
+}
+
+/// Mockup row 130 (#3011): Reload saved version is the quiet `.btn.quiet`,
+/// its label drawn in the secondary ink, not the accent or danger red, in
+/// both Graphite themes.
+#[test]
+fn reload_is_drawn_in_the_quiet_secondary_ink() {
+    let (path, edit) = modal();
+    let i18n = signex_i18n::I18n::en_us_ref();
+    let symbol = summary(PrimitiveKind::Symbol, "resistor.snxsym", "R");
+    let footprint = summary(PrimitiveKind::Footprint, "chip-passives.snxfpt", "R");
+    for theme in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
+        let tokens = theme_tokens(theme);
+        let build = || {
+            view(
+                &path,
+                &edit,
+                &tokens,
+                i18n,
+                false,
+                context(&symbol, &footprint, false),
+            )
+        };
+        let label = lay_out_texts(build(), CARD)
+            .into_iter()
+            .find(|t| t.text.replace(['\u{2068}', '\u{2069}'], "") == RELOAD)
+            .unwrap_or_else(|| panic!("{theme:?}: no {RELOAD:?}"))
+            .bounds;
+        let pixels = crate::layout_probe::draw_pixels(build(), CARD);
+        let ink = crate::styles::ti(tokens.text_secondary);
+        let reach = reach_towards(&pixels, CARD, label, ink);
+        assert!(reach >= 0.5, "{theme:?}: the label reaches {reach}");
+    }
+}
+
 /// Mockup row 130 (conflict): Reload stays at the footer's left beside the
 /// problem summary while Save waits.
 #[test]

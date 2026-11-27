@@ -23,7 +23,7 @@ const PATH: &str = "body-tests.snxfpt";
 const DOCK: iced::Size = iced::Size::new(300.0, 4000.0);
 
 /// An app with a footprint editor tab open on eight pads, nothing selected.
-fn app_with_eight_pads() -> Signex {
+pub(super) fn app_with_eight_pads() -> Signex {
     let path = PathBuf::from(PATH);
     let mut footprint = Footprint::empty("SOIC-8");
     footprint.pads = (1..=8)
@@ -53,7 +53,7 @@ fn app_with_eight_pads() -> Signex {
     app
 }
 
-fn panel_ctx(app: &Signex) -> FootprintEditorPanelContext {
+pub(super) fn panel_ctx(app: &Signex) -> FootprintEditorPanelContext {
     app.document_view
         .panel_ctx
         .footprint_editor
@@ -78,7 +78,7 @@ fn body<'a>(app: &'a Signex, fp: &'a FootprintEditorPanelContext) -> iced::Eleme
 }
 
 /// The laid-out texts of `fp`'s body, without Fluent's isolation marks.
-fn texts(app: &Signex, fp: &FootprintEditorPanelContext) -> Vec<LaidOutText> {
+pub(super) fn texts(app: &Signex, fp: &FootprintEditorPanelContext) -> Vec<LaidOutText> {
     lay_out_texts(body(app, fp), DOCK)
         .into_iter()
         .map(|mut t| {

@@ -84,6 +84,11 @@ impl Signex {
                 .is_some_and(|dialog| dialog.rename.is_some()),
             library_picker_open: self.library.picker.is_some()
                 && !modal_detached(crate::app::state::ModalId::LibraryPicker),
+            library_picker_comparing: self
+                .library
+                .picker
+                .as_ref()
+                .is_some_and(|picker| picker.mode.is_comparing()),
             library_document_options_open: self.library.document_options.is_some()
                 && !modal_detached(crate::app::state::ModalId::LibraryDocumentOptions),
             library_stock_copy_open: self.library.stock_copy.is_some()

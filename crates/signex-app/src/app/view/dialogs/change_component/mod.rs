@@ -1,18 +1,20 @@
-//! Change Component, one dialog (mockup row 155, DECISIONS 2026-11-19):
+//! Change Component in two steps (mockup row 129, #3018):
 //!
 //! ```text
 //! ┌─[Change Component   R5 · buck_channel.snxsch ─────────────────── X]─┐
-//! │ [⌕ Search parts       ] │ [Placed now] › [Replace with]             │
-//! │ (Same symbol)(Same value│ PARAMETERS  Parameter Now  After  Keep now│
-//! │ RC0603FR-0731K6L  same  │ Kept: Designator R5 · …                   │
-//! │ YC164-FR-…  4 pins, not │ Apply to: (•) Only R5  ( ) Every …        │
-//! ├─────────────────────────┴───────────────────────────────────────────┤
-//! │ One undo step. …                    [ Cancel ] [ Change 1 part ]    │
+//! │ [⌕ Search parts                           ] │ [SYMBOL             ] │
+//! │ (Same symbol)(Same value)(In stock)         │                       │
+//! │ RC0603FR-0731K6L                same pins   │ [FOOTPRINT          ] │
+//! │ YC164-FR-0731K6L           4 pins, not 2    │                       │
+//! ├─────────────────────────────────────────────┴───────────────────────┤
+//! │ Pick a part in the list to compare it …      [ Cancel ] [ Next ]    │
 //! └─────────────────────────────────────────────────────────────────────┘
 //! ```
 //!
-//! Pure: the session, the comparison and the hidden rows are built in
-//! `update` (`app::handlers::placed_part`).
+//! Next leads to the comparison: Placed now › Replace with, the Now /
+//! After table, what is kept and Apply to, with Back, Cancel and
+//! "Change N parts". Pure: the session, the comparison, the step and the
+//! hidden rows are built in `update` (`app::handlers::placed_part`).
 
 mod compare;
 mod list;
@@ -24,15 +26,16 @@ use signex_types::theme::ThemeTokens;
 use signex_widgets::text;
 
 use crate::library::PickerState;
+use crate::library::browser::PreviewLook;
 use crate::library::messages::{LibraryMessage, PlacedPartMsg};
 use crate::library::modal_chrome::{
-    cancel_btn, footer_strip, header_with_note_closing, primary_btn_if,
+    cancel_btn, footer_strip, header_with_note_closing, primary_btn_if, secondary_btn,
 };
-use crate::library::state::{ChangePreview, ChangeSession, PickerMode};
+use crate::library::state::{ChangePreview, ChangeSession, ChangeStep, PickerMode};
 
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
 
-/// The card as mockup row 155 draws it.
+/// The card as mockup row 129 draws it, the same size on both steps.
 const CARD_W: f32 = 880.0;
 const CARD_H: f32 = 600.0;
 
@@ -45,15 +48,18 @@ fn stage(mode: &PickerMode) -> Option<(&ChangeSession, Option<&ChangePreview>)> 
     }
 }
 
-/// Whether Change applies: a comparison is shown, its pin mapping can be
-/// followed, and the list still shows and picks the part it compares.
+/// Whether Next acts: a comparison is read and the list still shows and
+/// picks the part it compares. A mapping the sheet cannot follow still
+/// leads on, since the pins are remapped on the compare step.
+fn can_compare(picker: &PickerState, change: Option<&ChangePreview>) -> bool {
+    let shown = picker.shown_selection().map(|(_, summary)| summary.row_id);
+    change.is_some_and(|change| change.compares_shown(shown))
+}
+
+/// Whether Change applies: Next would act and the comparison's pin mapping
+/// can be followed.
 fn can_apply(picker: &PickerState, change: Option<&ChangePreview>) -> bool {
-    let Some(change) = change.filter(|c| c.preview.refused.is_none()) else {
-        return false;
-    };
-    picker.shown_selection().is_some_and(|(_, summary)| {
-        summary.row_id == change.resolved.row_id && !change.session.hidden.contains(&summary.row_id)
-    })
+    can_compare(picker, change) && change.is_some_and(|c| c.preview.refused.is_none())
 }
 
 /// The dialog; `None` outside the Change Component stages.
@@ -62,6 +68,7 @@ pub(crate) fn view<'a>(
     tokens: &'a ThemeTokens,
     i18n: &'a I18n,
     windowed: bool,
+    look: PreviewLook,
 ) -> Option<Element<'a, LibraryMessage>> {
     let (session, change) = stage(&picker.mode)?;
     let note = t!(
@@ -78,20 +85,18 @@ pub(crate) fn view<'a>(
         windowed,
         tokens,
     );
-    let r = crate::styles::tokens::resolve(tokens);
-    let rule = r.line_soft;
-    let left = container(list::view(picker, session, tokens, i18n))
-        .width(Length::FillPortion(3))
-        .height(Length::Fill)
-        .style(move |_: &Theme| container::Style {
-            border: Border::default().right(iced::border::Side::default().width(1.0).color(rule)),
-            ..container::Style::default()
-        });
-    let right = container(compare::view(session, change, tokens, i18n))
-        .width(Length::FillPortion(5))
-        .height(Length::Fill);
-    let body = row![left, right].height(Length::Fill);
-    let footer = footer(picker, change, tokens, i18n);
+    let compared = change.filter(|c| c.step == ChangeStep::Compare);
+    let (body, footer) = match compared {
+        Some(change) => (
+            compare::view(change, tokens, i18n),
+            compare_footer(picker, change, tokens, i18n),
+        ),
+        None => (
+            pick_body(picker, session, look, tokens, i18n),
+            pick_footer(picker, session, change, tokens, i18n),
+        ),
+    };
+    let body = container(body).width(Length::Fill).height(Length::Fill);
     Some(
         container(
             column![header, body, footer]
@@ -104,30 +109,43 @@ pub(crate) fn view<'a>(
     )
 }
 
-/// The caption, Cancel and "Change N parts" (with "anyway" when the change
-/// loses connections).
-fn footer<'a>(
+/// Step 1: the list, a hairline, and the picked row's Symbol and Footprint
+/// tiles (the Place Component preview column).
+fn pick_body<'a>(
+    picker: &'a PickerState,
+    session: &'a ChangeSession,
+    look: PreviewLook,
+    tokens: &'a ThemeTokens,
+    i18n: &'a I18n,
+) -> Element<'a, LibraryMessage> {
+    let rule = crate::styles::tokens::resolve(tokens).line_soft;
+    let left = container(list::view(picker, session, tokens, i18n))
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .style(move |_: &Theme| container::Style {
+            border: Border::default().right(iced::border::Side::default().width(1.0).color(rule)),
+            ..container::Style::default()
+        });
+    let tiles = crate::library::picker::preview_column(picker, look, tokens, i18n);
+    row![left, tiles].height(Length::Fill).boxed()
+}
+
+/// Step 1's footer: the pick prompt, Cancel and Next, enabled once the
+/// picked row is read.
+fn pick_footer<'a>(
     picker: &PickerState,
+    session: &ChangeSession,
     change: Option<&ChangePreview>,
     tokens: &ThemeTokens,
     i18n: &I18n,
 ) -> Element<'a, LibraryMessage> {
     let r = crate::styles::tokens::resolve(tokens);
-    let caption = text(t!(i18n, ids::LIBRARY_CHANGE_COMPONENT_FOOTER))
-        .size(TS.caption)
-        .color(r.ink4)
-        .boxed();
-    let count = change.map_or(1, ChangePreview::part_count);
-    let clean = change.is_none_or(|c| c.preview.is_clean());
-    let label = t!(
+    let prompt = t!(
         i18n,
-        if clean {
-            ids::LIBRARY_CHANGE_COMPONENT_APPLY
-        } else {
-            ids::LIBRARY_CHANGE_COMPONENT_APPLY_ANYWAY
-        },
-        "count" => count
+        ids::LIBRARY_CHANGE_COMPONENT_PICK_PROMPT,
+        "reference" => session.reference.as_str()
     );
+    let caption = text(prompt).size(TS.caption).color(r.ink4).boxed();
     footer_strip(
         vec![caption],
         vec![
@@ -137,9 +155,55 @@ fn footer<'a>(
                 tokens,
             ),
             primary_btn_if(
+                t!(i18n, ids::LIBRARY_PICKER_NEXT),
+                LibraryMessage::PlacedPart(PlacedPartMsg::ChangeNextPressed),
+                can_compare(picker, change),
+                tokens,
+            ),
+        ],
+        tokens,
+    )
+}
+
+/// Step 2's footer: the caption, Back, Cancel and "Change N parts" (with
+/// "anyway" when the change loses connections).
+fn compare_footer<'a>(
+    picker: &PickerState,
+    change: &ChangePreview,
+    tokens: &ThemeTokens,
+    i18n: &I18n,
+) -> Element<'a, LibraryMessage> {
+    let r = crate::styles::tokens::resolve(tokens);
+    let caption = text(t!(i18n, ids::LIBRARY_CHANGE_COMPONENT_FOOTER))
+        .size(TS.caption)
+        .color(r.ink4)
+        .boxed();
+    let label = t!(
+        i18n,
+        if change.preview.is_clean() {
+            ids::LIBRARY_CHANGE_COMPONENT_APPLY
+        } else {
+            ids::LIBRARY_CHANGE_COMPONENT_APPLY_ANYWAY
+        },
+        "count" => change.part_count()
+    );
+    footer_strip(
+        vec![caption],
+        vec![
+            secondary_btn(
+                t!(i18n, ids::DIALOG_BUTTON_BACK),
+                LibraryMessage::PlacedPart(PlacedPartMsg::ChangeBackPressed),
+                tokens,
+            ),
+            cancel_btn(
+                t!(i18n, ids::DIALOG_BUTTON_CANCEL),
+                LibraryMessage::ClosePicker,
+                tokens,
+            ),
+            primary_btn_if(
                 label,
                 LibraryMessage::PlacedPart(PlacedPartMsg::ChangeConfirmed),
-                can_apply(picker, change),
+                can_apply(picker, Some(change)),
                 tokens,
             ),
         ],

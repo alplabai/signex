@@ -1,6 +1,6 @@
-//! Change Component as one dialog (mockup row 155): the filter chips, the
-//! pin tags, the Now / After rows, Keep now and Apply to, through the pure
-//! helpers and through `Signex::update`.
+//! Change Component (mockup rows 155 and 129): the filter chips, the pin
+//! tags, the Now / After rows, Keep now, Apply to and the pick / compare
+//! steps, through the pure helpers and through `Signex::update`.
 
 use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
@@ -23,7 +23,7 @@ use crate::library::messages::{
     LibraryMessage, PlacedPartMsg, PlacedPartTarget, ResolvedPlacement,
 };
 use crate::library::state::{
-    ChangeFilter, ChangeFilters, ChangeScope, ChangeSession, CompareField, CompareKind,
+    ChangeFilter, ChangeFilters, ChangeScope, ChangeSession, ChangeStep, CompareField, CompareKind,
     OpenLibrary, PickerMode, PinMatch, PlacedNow,
 };
 
@@ -585,6 +585,102 @@ fn apply_to_stays_on_this_part_with_another_part_of_the_same_row_on_the_sheet() 
     let change = preview_of(&app);
     assert_eq!(change.scope, ChangeScope::ThisPart);
     assert_eq!(change.part_count(), 1, "R6 is not reached");
+}
+
+/// [`app_changing_r5`] with the new part's row listed in an open library,
+/// so the list shows it and a click can pick it.
+fn app_listing_the_new_row() -> (Signex, PlacedPartTarget) {
+    let (mut app, target) = app_changing_r5();
+    let picker = app.library.picker.as_mut().unwrap();
+    let mut lib = library(vec![row(
+        NEW_ROW,
+        PrimitiveRef::new(LIB, Uuid::from_u128(0x32)),
+    )]);
+    lib.cached_components
+        .extend(picker.selected.take().map(|(_, summary)| summary));
+    app.library.open_libraries = vec![lib];
+    app.library.touch_data();
+    app.library.sync_view_caches_in(&app.ui_state.i18n);
+    (app, target)
+}
+
+fn step_of(app: &Signex) -> ChangeStep {
+    preview_of(app).step
+}
+
+/// Mockup row 129 through `Signex::update`: a row click picks and reads the
+/// part onto the pick step; Next shows the comparison, Back returns to the
+/// pick with the row and its read kept, and Change from the comparison
+/// applies the same edit as the one-step dialog did, in one undo step.
+#[test]
+fn pick_next_back_then_change_applies_the_reviewed_part() {
+    let (mut app, target) = app_listing_the_new_row();
+    send(&mut app, PlacedPartMsg::ChangeRowClicked(NEW_ROW));
+    read_new_part(&mut app, &target);
+    assert_eq!(step_of(&app), ChangeStep::Pick, "a read lands on the pick");
+
+    send(&mut app, PlacedPartMsg::ChangeNextPressed);
+    assert_eq!(step_of(&app), ChangeStep::Compare);
+
+    send(&mut app, PlacedPartMsg::ChangeBackPressed);
+    assert_eq!(step_of(&app), ChangeStep::Pick);
+    let picker = app.library.picker.as_ref().expect("Back keeps the dialog");
+    assert_eq!(
+        picker.shown_selection().map(|(_, s)| s.row_id),
+        Some(NEW_ROW),
+        "Back keeps the picked row"
+    );
+    assert_eq!(preview_of(&app).resolved.row_id, NEW_ROW, "and its read");
+
+    send(&mut app, PlacedPartMsg::ChangeNextPressed);
+    assert_eq!(step_of(&app), ChangeStep::Compare);
+    send(&mut app, PlacedPartMsg::ChangeConfirmed);
+
+    let doc = app.document_state.engines[&PathBuf::from(SHEET)].document();
+    let r5 = &doc.symbols[0];
+    assert_eq!(r5.footprint, "R_0603", "R5 changed");
+    assert_eq!(r5.row_id, Some(NEW_ROW));
+    assert_eq!(
+        r5.fields.get("Note").map(String::as_str),
+        Some("FB divider")
+    );
+    assert_eq!(doc.symbols[1].footprint, "R_0402", "R6 stays");
+    assert!(app.library.picker.is_none(), "the dialog closes");
+    let _ = app.update(Message::Edit(EditMsg::Undo));
+    let doc = app.document_state.engines[&PathBuf::from(SHEET)].document();
+    assert!(
+        doc.symbols.iter().all(|s| s.footprint == "R_0402"),
+        "one undo restores the part"
+    );
+}
+
+/// Next before the picked row is read does nothing, and Esc on the compare
+/// step goes Back while Esc on the pick step closes the dialog.
+#[test]
+fn next_waits_for_the_read_and_esc_steps_back_before_closing() {
+    let (mut app, target) = app_listing_the_new_row();
+    send(&mut app, PlacedPartMsg::ChangeRowClicked(NEW_ROW));
+    send(&mut app, PlacedPartMsg::ChangeNextPressed);
+    assert!(matches!(
+        app.library.picker.as_ref().unwrap().mode,
+        PickerMode::ChangeComponent(_)
+    ));
+
+    read_new_part(&mut app, &target);
+    send(&mut app, PlacedPartMsg::ChangeNextPressed);
+    assert!(matches!(
+        app.escape_overlay_message(),
+        Some(Message::Library(LibraryMessage::PlacedPart(
+            PlacedPartMsg::ChangeBackPressed
+        )))
+    ));
+    let esc = app.escape_overlay_message().expect("Esc has a rung");
+    let _ = app.update(esc);
+    assert_eq!(step_of(&app), ChangeStep::Pick);
+    assert!(matches!(
+        app.escape_overlay_message(),
+        Some(Message::Library(LibraryMessage::ClosePicker))
+    ));
 }
 
 // Pin mapping (#2954): `PlacedPartMsg::ChangePinRemapped` through `update`
