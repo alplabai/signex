@@ -21,7 +21,8 @@
 
 use std::collections::HashMap;
 use std::path::Path;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
+use std::time::{Duration, Instant};
 
 use iced::Task;
 use signex_expr::ExprError;
@@ -103,16 +104,11 @@ fn solve_sketch(sketch: &SketchData, solver: &Solver) -> SolveOutcome {
     solve_resolved(sketch, |resolved| solver.solve(sketch, resolved))
 }
 
-/// Run `solve` and record its wall time in the result: the solver reads no
-/// clock, the host times it (#2431).
-pub(crate) fn timed_solve<E>(
-    solve: impl FnOnce() -> Result<FullSolveOutput, E>,
-) -> Result<FullSolveOutput, E> {
-    let started = std::time::Instant::now();
-    solve().map(|mut out| {
-        out.result.elapsed_ms = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
-        out
-    })
+/// The desktop clock the editor's solver reads its LM time from: the solver
+/// reads no clock itself (#2431). Monotonic, since the first call.
+pub(crate) fn host_clock() -> Duration {
+    static EPOCH: OnceLock<Instant> = OnceLock::new();
+    EPOCH.get_or_init(Instant::now).elapsed()
 }
 
 fn solve_resolved(
@@ -121,7 +117,7 @@ fn solve_resolved(
 ) -> SolveOutcome {
     match parameter::resolve(&sketch.parameters) {
         Err(e) => SolveOutcome::ResolveFailed(e),
-        Ok(resolved) => match timed_solve(|| solve(&resolved)) {
+        Ok(resolved) => match solve(&resolved) {
             Ok(out) => SolveOutcome::Solved {
                 resolved,
                 out: Box::new(out),
