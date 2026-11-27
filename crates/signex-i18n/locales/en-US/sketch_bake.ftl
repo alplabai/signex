@@ -75,6 +75,10 @@ sketch-bake-legend-paste = Paste
 sketch-bake-legend-mask = Mask
 sketch-bake-legend-silk = Silk
 sketch-bake-legend-courtyard = Courtyard
+sketch-bake-legend-bottom-paste = Bottom paste
+sketch-bake-legend-bottom-mask = Bottom mask
+sketch-bake-legend-bottom-silk = Bottom silk
+sketch-bake-legend-bottom-courtyard = Bottom courtyard
 # mockup row 190
 # The Pads ↔ Sketch section after Bake (mockup row 190): what the links are,
 # and the line shown until a pad is clicked.

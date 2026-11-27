@@ -1,7 +1,8 @@
 //! The layer colour legend over a footprint's bake preview (mockup row 190):
 //! a swatch and name for each layer the preview draws, in the colours the
 //! canvas draws them. Only the layers the bake has something on are listed,
-//! Bottom among them when the bake uses it (Caner 2026-11-27). Empty while
+//! the bottom ones among them when the bake uses them (Caner 2026-11-27).
+//! Empty while
 //! the preview is closed or draws none of them.
 
 use iced::alignment::Horizontal;
@@ -25,9 +26,9 @@ const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 /// A swatch's height, as a part of the caption size.
 const SWATCH_HEIGHT: f32 = 0.25;
 
-/// The layers the legend can list, in the mockup's order, Bottom beside
-/// Top.
-const LAYERS: [(MessageId, PcbLayer); 6] = [
+/// The layers the legend can list, in the mockup's order, each bottom
+/// layer after its top counterpart.
+const LAYERS: [(MessageId, PcbLayer); 10] = [
     (
         ids::SKETCH_BAKE_LEGEND_TOP,
         PcbLayer::Copper(CopperLayer::Top),
@@ -41,16 +42,32 @@ const LAYERS: [(MessageId, PcbLayer); 6] = [
         PcbLayer::Technical(TechnicalLayer::PasteTop),
     ),
     (
+        ids::SKETCH_BAKE_LEGEND_BOTTOM_PASTE,
+        PcbLayer::Technical(TechnicalLayer::PasteBottom),
+    ),
+    (
         ids::SKETCH_BAKE_LEGEND_MASK,
         PcbLayer::Technical(TechnicalLayer::SolderMaskTop),
+    ),
+    (
+        ids::SKETCH_BAKE_LEGEND_BOTTOM_MASK,
+        PcbLayer::Technical(TechnicalLayer::SolderMaskBottom),
     ),
     (
         ids::SKETCH_BAKE_LEGEND_SILK,
         PcbLayer::Technical(TechnicalLayer::SilkscreenTop),
     ),
     (
+        ids::SKETCH_BAKE_LEGEND_BOTTOM_SILK,
+        PcbLayer::Technical(TechnicalLayer::SilkscreenBottom),
+    ),
+    (
         ids::SKETCH_BAKE_LEGEND_COURTYARD,
         PcbLayer::Technical(TechnicalLayer::CourtyardTop),
+    ),
+    (
+        ids::SKETCH_BAKE_LEGEND_BOTTOM_COURTYARD,
+        PcbLayer::Technical(TechnicalLayer::CourtyardBottom),
     ),
 ];
 
@@ -215,6 +232,74 @@ mod tests {
                 PcbLayer::Technical(T::SilkscreenTop),
             ]
         );
+    }
+
+    /// Caner 2026-11-27: each bottom layer has its own entry, after its
+    /// top counterpart, listed only when drawn.
+    #[test]
+    fn bottom_layers_follow_their_top_counterparts_when_drawn() {
+        use TechnicalLayer as T;
+        let i18n = signex_i18n::I18n::en_us();
+        let names = |drawn: &[PcbLayer]| -> Vec<String> {
+            entries(drawn)
+                .map(|(id, _)| i18n.message_plain(id, &[]))
+                .collect()
+        };
+        let drawn = [
+            PcbLayer::Technical(T::CourtyardBottom),
+            PcbLayer::Technical(T::SilkscreenBottom),
+            PcbLayer::Technical(T::SolderMaskBottom),
+            PcbLayer::Technical(T::PasteBottom),
+            PcbLayer::Technical(T::CourtyardTop),
+            PcbLayer::Technical(T::SilkscreenTop),
+            PcbLayer::Technical(T::SolderMaskTop),
+            PcbLayer::Technical(T::PasteTop),
+            PcbLayer::Copper(CopperLayer::Bottom),
+            PcbLayer::Copper(CopperLayer::Top),
+        ];
+        assert_eq!(
+            names(&drawn),
+            [
+                "Top",
+                "Bottom",
+                "Paste",
+                "Bottom paste",
+                "Mask",
+                "Bottom mask",
+                "Silk",
+                "Bottom silk",
+                "Courtyard",
+                "Bottom courtyard",
+            ]
+        );
+        let only_bottom = [
+            PcbLayer::Technical(T::PasteBottom),
+            PcbLayer::Technical(T::SilkscreenBottom),
+        ];
+        assert_eq!(names(&only_bottom), ["Bottom paste", "Bottom silk"]);
+    }
+
+    /// Back silk the preview draws (its layer shown) is listed as Bottom
+    /// silk; hidden, it is not drawn and not listed.
+    #[test]
+    fn drawn_back_silk_is_listed_as_bottom_silk() {
+        use signex_library::primitive::footprint::{FpGraphic, FpGraphicKind};
+        let mut editor = editor();
+        editor.primitive_mut().silk_b.push(FpGraphic {
+            kind: FpGraphicKind::Line {
+                from: [0.0, 0.0],
+                to: [1.0, 0.0],
+            },
+            stroke_width: 0.15,
+            filled: false,
+            sketch_entity: None,
+        });
+        assert!(
+            legend_texts(&mut editor, true).is_empty(),
+            "hidden by default"
+        );
+        editor.state.layer_visibility.show_all();
+        assert_eq!(legend_texts(&mut editor, true), ["Bottom silk"]);
     }
 
     #[test]

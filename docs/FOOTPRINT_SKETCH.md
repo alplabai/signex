@@ -248,8 +248,10 @@ control stays in reach:
   other fields are baked from the same solve when the canvas redraws
   (`canvas/draw/sketch/bake_overlay.rs`). A legend at the canvas's top
   right names the layers the preview draws on, with their colours: Top,
-  Bottom, Paste, Mask, Silk and Courtyard, each only when something is
-  drawn on it (Caner, 2026-11-27, mockup row 190). The card is in Properties, not
+  Bottom, Paste, Bottom paste, Mask, Bottom mask, Silk, Bottom silk,
+  Courtyard and Bottom courtyard, each only when something is drawn on it,
+  so a layer hidden in the layer visibility is not listed (Caner,
+  2026-11-27, mockup row 190). The card is in Properties, not
   over the canvas: while the preview is open Properties shows the Bake
   panel, whatever is selected: the Roles section, the card, then Back to
   sketch and Bake (mockup row 190). The card also lists the last

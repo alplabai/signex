@@ -38,6 +38,10 @@ define_ids! {
     SKETCH_BAKE_LEGEND_MASK = "sketch-bake-legend-mask";
     SKETCH_BAKE_LEGEND_SILK = "sketch-bake-legend-silk";
     SKETCH_BAKE_LEGEND_COURTYARD = "sketch-bake-legend-courtyard";
+    SKETCH_BAKE_LEGEND_BOTTOM_PASTE = "sketch-bake-legend-bottom-paste";
+    SKETCH_BAKE_LEGEND_BOTTOM_MASK = "sketch-bake-legend-bottom-mask";
+    SKETCH_BAKE_LEGEND_BOTTOM_SILK = "sketch-bake-legend-bottom-silk";
+    SKETCH_BAKE_LEGEND_BOTTOM_COURTYARD = "sketch-bake-legend-bottom-courtyard";
     // mockup row 190
     SKETCH_BAKE_OUTCOME_LINK_CAPTION = "sketch-bake-outcome-link-caption";
     SKETCH_BAKE_OUTCOME_LINK_EMPTY = "sketch-bake-outcome-link-empty";
