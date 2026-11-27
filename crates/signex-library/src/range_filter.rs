@@ -91,12 +91,12 @@ pub enum FilterBound {
     Base(Quantity),
     /// "Any prefix": the number a value displays, in whatever prefix it
     /// displays in, so `100` takes 100 pF, 100 nF and 100 µF
-    /// (components-cx decision 6).
+    /// (mockup row 52).
     Displayed(f64),
 }
 
-/// Which part of a min-to-max value a filter tests (components-cx decision
-/// 8). A plain measurement is always judged on its value.
+/// Which part of a min-to-max value a filter tests (mockup row 52).
+/// A plain measurement is always judged on its value.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum RangeOn {
     /// The whole range: `between` needs both ends inside, `≥` tests the
@@ -446,7 +446,7 @@ mod tests {
         .unwrap()
     }
 
-    /// components-cx decision 6: on Any prefix, 100 finds 100 pF, 100 nF
+    /// mockup row 52: on Any prefix, 100 finds 100 pF, 100 nF
     /// and 100 µF.
     #[test]
     fn any_prefix_compares_the_displayed_number() {
@@ -492,7 +492,7 @@ mod tests {
         assert_eq!(mixed.low(), &FilterBound::Displayed(5.0));
     }
 
-    /// components-cx decision 8: Supply voltage filters on Covers, for
+    /// mockup row 52: Supply voltage filters on Covers, for
     /// example parts that run at 3.3 V.
     #[test]
     fn covers_keeps_ranges_that_contain_the_bound() {

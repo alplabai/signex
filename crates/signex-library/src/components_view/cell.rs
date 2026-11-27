@@ -8,8 +8,7 @@ use crate::range_filter::{RangeFilter, RangeOn, RangeVerdict};
 use crate::templates::{ColumnKey, ParameterTemplate};
 
 /// One cell. A measurement keeps its base value, so sort, group, range
-/// filter and search read the same number the cell shows (components-cx
-/// decision 2).
+/// filter and search read the same number the cell shows (mockup row 52).
 #[derive(Clone, Debug, PartialEq)]
 pub enum CellValue {
     /// No value: an absent parameter, empty text, a non-finite number, or a
@@ -90,7 +89,7 @@ impl CellValue {
     }
 
     /// Every measurement the cell holds (both ends of a range), for
-    /// value-aware search (components-cx decision 9).
+    /// value-aware search (mockup row 52).
     pub fn quantities(&self) -> Vec<&Quantity> {
         match self {
             CellValue::Quantity { value, .. } => vec![value],

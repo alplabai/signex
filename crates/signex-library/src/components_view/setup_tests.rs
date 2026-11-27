@@ -46,7 +46,7 @@ fn column_keys_are_written_as_strings() {
     );
 }
 
-/// components-cx decision 3: a category's configuration, edited with the
+/// mockup row 52: a category's configuration, edited with the
 /// class template, sets its default columns, sort and grouping.
 #[test]
 fn the_template_view_parses_and_round_trips() {
@@ -188,7 +188,7 @@ fn a_new_setup_is_the_category_default() {
     );
 }
 
-/// components-cx decisions 1 and 3: changes are the user's; Reset to
+/// mockup row 52: changes are the user's; Reset to
 /// category default returns to the configuration.
 #[test]
 fn any_change_leaves_the_category_default() {
@@ -247,7 +247,7 @@ fn columns_move_by_drag_and_among_their_peers() {
     assert_eq!(at(&col("tolerance")), 7);
 }
 
-/// Header clicks as components-cx draws them: a click sorts by that
+/// Header clicks as mockup row 52 draws them: a click sorts by that
 /// column alone, again descending, again off; Shift+click adds nested
 /// keys the same way.
 #[test]

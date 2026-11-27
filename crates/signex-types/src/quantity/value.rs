@@ -55,7 +55,7 @@ impl Quantity {
 
     /// The number the default display shows, without prefix and unit:
     /// `4.7` for 4.7 kΩ, `100` for 100 nF. "Any prefix" comparisons read
-    /// this (components-cx decision 6).
+    /// this (mockup row 52).
     pub fn displayed_number(&self) -> f64 {
         // The mantissa text is a valid number by construction (see
         // `eng_parts`); the fallback is unreachable in practice.

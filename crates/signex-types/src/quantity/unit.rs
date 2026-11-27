@@ -22,9 +22,9 @@ pub enum Unit {
     PpmPerKelvin,
     VoltPerMicrosecond,
     Awg,
-    /// Data rate, bits per second (`20 kbps`; components-cx decision 7).
+    /// Data rate, bits per second (`20 kbps`; mockup row 52).
     BitsPerSecond,
-    /// Temperature in degrees Celsius (components-cx decision 8). Takes
+    /// Temperature in degrees Celsius (mockup row 52). Takes
     /// no prefix and may be negative.
     DegreeCelsius,
     /// A unit string this build does not know; kept as written, no prefix.

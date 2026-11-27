@@ -1,5 +1,5 @@
 //! A class template's Components panel configuration: the columns, sort
-//! and grouping a category opens with (components-cx decision 3), and the
+//! and grouping a category opens with (mockup row 52), and the
 //! min-to-max parameters it pairs from two stored measurements (decision
 //! 8). The template sets the first view; a user's saved setup
 //! ([`crate::components_view::ViewSetup`]) overrides it.

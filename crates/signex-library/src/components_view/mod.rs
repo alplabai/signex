@@ -1,5 +1,5 @@
 //! The Components panel's table, as pure functions over library rows
-//! (mockup row 52, components-cx decisions 1 to 9). No UI: the panel
+//! (mockup row 52). No UI: the panel
 //! calls these and draws the result.
 //!
 //! - [`column_value`]: a row's value in a column ([`CellValue`]), from its

@@ -34,7 +34,7 @@ unit = "V"
 name = "package"
 kind = "text"
 
-# Supply voltage shows as one min-to-max cell (components-cx decision 8).
+# Supply voltage shows as one min-to-max cell (mockup row 52).
 [[ranges]]
 name = "supply"
 min = "supply_min"

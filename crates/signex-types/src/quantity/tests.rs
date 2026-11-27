@@ -418,7 +418,7 @@ fn an_exponent_that_does_not_fit_is_refused_not_dropped() {
     assert!(quantity_from_parts("1e2147483647", SiPrefix::Kilo, Unit::Ohm).is_err());
 }
 
-/// components-cx decision 7: data rate is a real unit with k, M and G.
+/// mockup row 52: data rate is a real unit with k, M and G.
 #[test]
 fn a_data_rate_is_entered_in_a_prefix_and_stored_as_bits_per_second() {
     let rate = parts("20", SiPrefix::Kilo, Unit::BitsPerSecond);
@@ -433,7 +433,7 @@ fn a_data_rate_is_entered_in_a_prefix_and_stored_as_bits_per_second() {
     );
 }
 
-/// components-cx decision 8: °C is a unit, takes no prefix, may be
+/// mockup row 52: °C is a unit, takes no prefix, may be
 /// negative.
 #[test]
 fn celsius_takes_no_prefix_and_reads_its_spellings() {

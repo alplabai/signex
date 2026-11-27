@@ -68,7 +68,7 @@ fn ranges_sort_by_their_slot_end() {
     );
 }
 
-/// components-cx: Shift+click adds a nested sort; the second key orders
+/// mockup row 52: Shift+click adds a nested sort; the second key orders
 /// rows the first one ties.
 #[test]
 fn a_nested_sort_breaks_ties_with_the_next_key() {

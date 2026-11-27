@@ -1,5 +1,4 @@
-//! A min-to-max value: two measurements in one unit (components-cx
-//! decision 8). Rows store the two ends as two ordinary measurement
+//! A min-to-max value: two measurements in one unit (mockup row 52). Rows store the two ends as two ordinary measurement
 //! parameters; this type only pairs them for display, sorting and
 //! filtering.
 

@@ -19,7 +19,7 @@ fn shown(value: &CellValue) -> CellText {
     value.display(ValueStyle::Engineering)
 }
 
-/// components-cx decision 8: a min-to-max value is two stored
+/// mockup row 52: a min-to-max value is two stored
 /// measurements shown as one cell.
 #[test]
 fn a_range_column_pairs_its_two_parameters() {
@@ -59,7 +59,7 @@ fn a_range_column_pairs_its_two_parameters() {
     ));
 }
 
-/// components-cx decisions 2 and 7: a measurement cell shows its stored
+/// mockup row 52: a measurement cell shows its stored
 /// base value in its display prefix; 20 kbps shows as 20 kbps.
 #[test]
 fn measurement_cells_show_the_stored_value_in_its_prefix() {
@@ -152,7 +152,7 @@ fn empty_and_unreadable_values_are_not_set() {
     );
 }
 
-/// components-cx decision 9: search reads every measurement, both ends
+/// mockup row 52: search reads every measurement, both ends
 /// of a range included.
 #[test]
 fn quantities_lists_every_measurement_of_a_cell() {

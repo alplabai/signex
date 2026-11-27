@@ -1,5 +1,5 @@
 //! A user's saved column, sort and group setup for one category
-//! (components-cx decisions 1 and 3). It starts from the category's
+//! (mockup row 52). It starts from the category's
 //! configuration ([`CategoryView`]), every change is saved per user, and
 //! Reset to category default returns to the configuration.
 
