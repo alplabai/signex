@@ -946,6 +946,8 @@ library-import-staging-exists = Something is already at { $path }, where the pre
 library-import-target-changed = { $path } was created or changed after the preview, so the library was not moved there. The preview is kept: empty or remove that folder and press Import again, or go back and choose another folder.
 # $path is the library folder, $error the system's reason.
 library-import-move-failed = The previewed library could not be moved to { $path }: { $error }
+# $target is the library folder, $staging the folder the rest was kept in, $error the system's reason.
+library-import-library-split = Moving the library into { $target } failed ({ $error }) and what had moved could not all be moved back, so the library is split between { $target } and { $staging }. Neither folder is complete; both are kept and nothing will be removed. Move the files of { $staging } into { $target } by hand, or remove both and import again.
 # Import Library dialog (mockup row 211, #3117–#3120).
 # $step is 1, 2 or 3, $name the step's name.
 library-import-dialog-step-note = Step { $step } of 3 · { $name }

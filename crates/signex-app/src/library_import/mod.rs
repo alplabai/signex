@@ -30,6 +30,7 @@ mod job;
 #[cfg(all(test, windows))]
 mod job_tests;
 pub mod output;
+mod place;
 mod process;
 pub mod report;
 pub mod run;

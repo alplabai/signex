@@ -223,7 +223,12 @@ identity recorded when it was made and without following a link
 was asked for is discarded instead of shown. Going back to step 1 removes
 it, so changed options always preview again; Import also compares the
 dialog's request with the previewed one and previews again when they
-differ.
+differ. Staging folders a crash left are swept on a worker when the dialog
+opens (the default library folder) and on Next (the chosen folder's
+parent): only folders named with the staging mark, last changed before the
+session started and at least an hour ago (so another running Signex's
+preview stays), emptied through their identity and never through a link
+(`staging::sweep_stale`).
 
 **Import** checks the folder again. For a staged preview the job adopts it
 (`ImportJob::adopt`) instead of running the converter: just before the move
@@ -231,11 +236,23 @@ it checks the target is still absent or the same empty folder (not a link
 or other reparse point). An absent target is the staging folder renamed; an
 empty one is kept as it is, with its permissions, and each staged entry is
 renamed into it, then the emptied staging folder removed (either way a copy
-then a removal across file systems). A move that fails half way moves what
-it moved back into the staging folder, as far as it can, and keeps the
-preview. The library is then committed and mounted as an import is. A
-target that was created or changed meanwhile is refused at either check;
-the dialog stays on step 2 with the reason (`move_problem`) and the preview, for another try. Step 3
+then a synced copy and a removal across file systems; a whole copy counts
+as moved even when its source cannot be removed). No rename replaces what
+is at its destination (`library_import::place`: `renameat2` with
+`RENAME_NOREPLACE` on Linux, `renameatx_np` with `RENAME_EXCL` on macOS,
+`MoveFileExW` without `MOVEFILE_REPLACE_EXISTING` on Windows; elsewhere a
+check right before the rename), and the entries move relative to the held
+target (opened without following a link on Unix, held without sharing
+delete on Windows), so a link swapped in at its path is never written
+through. Renamed and copied entries and their folders are synced before the
+staging folder goes. A move that fails half way moves what it moved back
+and keeps the preview; when the move back fails too, the library is split:
+the dialog does not offer another try, the error names both folders, and
+the staging folder is kept, renamed to `.<name>.signex-split-<id>` (or
+marked with `.signex-split`) so no sweep removes it. The library is then
+committed and mounted as an import is. A target that was created or
+changed meanwhile is refused at either check; the dialog stays on step 2
+with the reason (`move_problem`) and the preview, for another try. Step 3
 reads "Moving the previewed library into place…" while it runs. An update
 runs over its folder under the library's write lock. A run that writes a new
 folder takes it through `library_import::output::claim_output`: it creates

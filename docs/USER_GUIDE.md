@@ -606,7 +606,12 @@ chose until **Import**, which moves the previewed library there without
 converting again. When that folder was created or changed after the preview,
 Import refuses, says why and keeps the preview: empty or remove the folder
 and press Import again, or go back. **Back**, **Cancel**, closing the dialog
-and quitting Signex remove the hidden folder; going back and changing the
+and quitting Signex remove the hidden folder, and one a crash left is
+removed the next time the dialog opens. If the move into your folder fails
+half way and cannot be undone, the dialog says the library is split
+between your folder and a `.<name>.signex-split-…` folder beside it and
+removes neither: move the files together by hand, or remove both and import
+again. Going back and changing the
 name, folder, models or database means the next **Next** previews again.
 The preview of an update only reads the source and lists the report items.
 During the conversion **Cancel** stops after the current item and removes

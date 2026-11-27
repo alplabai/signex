@@ -21,6 +21,7 @@ use crate::library::import_dialog::{
 };
 use crate::library_import::run_state::{ImportFinished, MountTarget};
 use crate::library_import::snapshot::default_libraries_root;
+use crate::library_import::staging::stale_cutoff;
 use crate::library_import::{MountScope, ProgressEvent, RunMode};
 
 mod report;
@@ -206,7 +207,22 @@ impl Signex {
             state.mount_for_all = false;
         }
         self.library.import_dialog = Some(Box::new(state));
-        self.discover_converters()
+        Task::batch([self.discover_converters(), self.sweep_stale_previews()])
+    }
+
+    /// Remove, on a worker, the staging folders a crash left (#3171) in the
+    /// default library folder; Next sweeps the chosen folder's parent.
+    fn sweep_stale_previews(&self) -> Task<Message> {
+        let roots: Vec<PathBuf> = default_libraries_root().into_iter().collect();
+        let started = stale_cutoff(self.library.import.session_started.0);
+        Task::future(async move {
+            tokio::task::spawn_blocking(move || {
+                crate::library_import::staging::sweep_stale(&roots, started)
+            })
+            .await
+            .ignore("the sweep logs what it removes or keeps");
+        })
+        .discard()
     }
 
     /// The converter search on a worker, answered from the session's cache
@@ -296,10 +312,20 @@ impl Signex {
         d.checking_target = true;
         d.pending_run = Some(mode);
         let location = d.location_path();
+        // Next also sweeps the chosen folder's parent for staging folders a
+        // crash left (#3171), before the new preview is staged there.
+        let sweep: Vec<PathBuf> = match mode {
+            RunMode::Preview => location.parent().map(PathBuf::from).into_iter().collect(),
+            _ => Vec::new(),
+        };
+        let started = stale_cutoff(self.library.import.session_started.0);
         Task::perform(
             async move {
                 let checked = location.clone();
-                let check = tokio::task::spawn_blocking(move || check_target(&checked))
+                let check = tokio::task::spawn_blocking(move || {
+                    crate::library_import::staging::sweep_stale(&sweep, started);
+                    check_target(&checked)
+                })
                     .await
                     .unwrap_or_else(|e| {
                         TargetCheck::Refused(

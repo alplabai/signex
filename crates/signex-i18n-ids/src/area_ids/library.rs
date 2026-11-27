@@ -381,6 +381,7 @@ define_ids! {
     LIBRARY_IMPORT_STAGING_EXISTS = "library-import-staging-exists";
     LIBRARY_IMPORT_TARGET_CHANGED = "library-import-target-changed";
     LIBRARY_IMPORT_MOVE_FAILED = "library-import-move-failed";
+    LIBRARY_IMPORT_LIBRARY_SPLIT = "library-import-library-split";
     // Import Library dialog (mockup row 211, #3117–#3120)
     LIBRARY_IMPORT_DIALOG_STEP_NOTE = "library-import-dialog-step-note";
     LIBRARY_IMPORT_DIALOG_STEP_SOURCE = "library-import-dialog-step-source";

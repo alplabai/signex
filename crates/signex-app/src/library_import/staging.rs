@@ -9,20 +9,32 @@
 //! run creates it (an existing one is refused, never adopted) and it is
 //! removed without following a link ([`StagedLibrary::discard`]). An empty
 //! target folder the user chose is kept, with its permissions; the staged
-//! entries are moved into it.
+//! entries are moved into it. Staging folders a crash left are swept when
+//! the dialog opens ([`sweep_stale`]).
 
+use std::ffi::{OsStr, OsString};
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
+use std::time::SystemTime;
 
-#[cfg(windows)]
-use super::empty_dir::FolderHold;
-use super::empty_dir::{FolderId, folder_id_at, is_link};
+use super::empty_dir::{FolderId, empty_folder, folder_id_at, is_link};
 use super::error::ImportError;
 use super::output::ClaimedOutput;
+use super::place::{
+    HeldDir, copy_across, copy_tree, remove_source, rename_entry, rename_no_replace, sync_dir,
+};
 use super::run::{LibraryRunRequest, RunOutcome};
 
 /// What a staging folder's name holds after the library's name.
 pub const STAGING_MARK: &str = ".signex-preview-";
+
+/// What a split library's kept staging folder is renamed to hold instead,
+/// so no sweep takes it for a stale preview.
+pub const SPLIT_MARK: &str = ".signex-split-";
+
+/// The file that marks a split library's staging folder when it could not
+/// be renamed.
+pub const SPLIT_MARKER: &str = ".signex-split";
 
 /// The staging folder for `target`: `.<name>.signex-preview-<id>` in the
 /// target's parent. `None` when the target has no parent or no name.
@@ -132,38 +144,25 @@ impl StagedLibrary {
 
     /// Move the staged library to the target: refused, with the preview
     /// kept, unless the target is still as it was when the preview was
-    /// staged. An absent target is the staging folder renamed (a copy then
-    /// a removal across file systems); an empty one is kept as it is, with
-    /// its permissions, and the staged entries are moved into it.
+    /// staged. An absent target is the staging folder renamed (a synced
+    /// copy then a removal across file systems); an empty one is kept as
+    /// it is, with its permissions, and the staged entries are moved into
+    /// it. Nothing at the target is ever replaced ([`super::place`]).
     pub fn move_into_place(&self) -> Result<(), MoveFailure> {
         self.move_into_place_with(&mut move_entry)
     }
 
-    /// [`Self::move_into_place`], moving each entry into an empty target
-    /// with `move_one` (tests make it fail half way).
-    pub(super) fn move_into_place_with(
-        &self,
-        move_one: &mut dyn FnMut(&Path, &Path) -> std::io::Result<()>,
-    ) -> Result<(), MoveFailure> {
+    /// [`Self::move_into_place`], moving each entry between the held
+    /// staging and target folders with `move_one`, both ways (tests make it
+    /// fail).
+    pub(super) fn move_into_place_with(&self, move_one: MoveOne<'_>) -> Result<(), MoveFailure> {
         // The folder check again, just before anything moves.
         if !self.target_before.unchanged(&self.target) {
             return Err(kept(self.changed()));
         }
         match self.target_before {
             TargetBefore::Absent => self.rename_whole(),
-            TargetBefore::Empty(id) => {
-                // Windows: the target is held, so it cannot be renamed or
-                // swapped while the entries move, and its held identity is
-                // checked once more.
-                #[cfg(windows)]
-                let _hold = match FolderHold::open(&self.target) {
-                    Ok(hold) if hold.id() == id => hold,
-                    _ => return Err(kept(self.changed())),
-                };
-                #[cfg(not(windows))]
-                let _ = id;
-                self.move_contents(move_one)
-            }
+            TargetBefore::Empty(id) => self.move_contents(id, move_one),
         }
     }
 
@@ -173,10 +172,14 @@ impl StagedLibrary {
         }
     }
 
-    /// An absent target: the staging folder becomes it.
+    /// An absent target: the staging folder becomes it, and the parent is
+    /// synced so the rename survives a crash.
     fn rename_whole(&self) -> Result<(), MoveFailure> {
-        match std::fs::rename(self.dir(), &self.target) {
-            Ok(()) => Ok(()),
+        match rename_no_replace(self.dir(), &self.target) {
+            Ok(()) => {
+                self.sync_parent();
+                Ok(())
+            }
             Err(e) if crosses_devices(&e) => self.copy_into_place(),
             Err(e)
                 if matches!(
@@ -193,37 +196,64 @@ impl StagedLibrary {
         }
     }
 
-    /// An empty target the user chose, just checked again to be the same
-    /// empty folder (not a link or other reparse point): each staged entry is moved into it and the
+    fn sync_parent(&self) {
+        if let Some(parent) = self.target.parent()
+            && let Err(e) = sync_dir(parent)
+        {
+            log::warn!("library import: {} not synced: {e}", parent.display());
+        }
+    }
+
+    /// An empty target the user chose: held (without following a link on
+    /// Unix, without sharing delete on Windows) and checked to be the folder
+    /// the preview found, then each staged entry is moved into it and the
     /// empty staging folder removed. A move that fails half way moves what
-    /// it moved back, as far as it can, and keeps the preview.
-    fn move_contents(
-        &self,
-        move_one: &mut dyn FnMut(&Path, &Path) -> std::io::Result<()>,
-    ) -> Result<(), MoveFailure> {
+    /// it moved back and keeps the preview; when that cannot be done either,
+    /// the library is split and both folders are kept ([`Self::split`]).
+    fn move_contents(&self, id: FolderId, move_one: MoveOne<'_>) -> Result<(), MoveFailure> {
+        let target = match HeldDir::open(&self.target) {
+            Ok(held) if held.id().ok() == Some(id) => held,
+            _ => return Err(kept(self.changed())),
+        };
         let unreadable = |e: std::io::Error| {
             kept(ImportError::MoveFailed {
                 path: self.dir().to_path_buf(),
                 detail: e.to_string(),
             })
         };
-        let names: Vec<std::ffi::OsString> = std::fs::read_dir(self.dir())
+        let staging = HeldDir::open(self.dir()).map_err(unreadable)?;
+        let names: Vec<OsString> = std::fs::read_dir(self.dir())
             .map_err(unreadable)?
             .map(|entry| entry.map(|e| e.file_name()))
             .collect::<Result<_, _>>()
             .map_err(unreadable)?;
-        let mut moved: Vec<&std::ffi::OsString> = Vec::new();
+        let mut moved: Vec<&OsString> = Vec::new();
         for name in &names {
-            let (from, to) = (self.dir().join(name), self.target.join(name));
-            if let Err(e) = move_one(&from, &to) {
-                self.move_back(&moved);
-                return Err(kept(ImportError::MoveFailed {
-                    path: to,
-                    detail: e.to_string(),
-                }));
+            let Err(e) = move_one(&staging, &target, name) else {
+                moved.push(name);
+                continue;
+            };
+            let back = move_back(&staging, &target, &moved, move_one);
+            // The holds go first: a held folder cannot be renamed (Windows).
+            drop((staging, target));
+            if !back {
+                return Err(self.split(e.to_string()));
             }
-            moved.push(name);
+            return Err(kept(if e.kind() == ErrorKind::AlreadyExists {
+                self.changed()
+            } else {
+                ImportError::MoveFailed {
+                    path: self.target.join(name),
+                    detail: e.to_string(),
+                }
+            }));
         }
+        for held in [&target, &staging] {
+            if let Err(e) = held.sync() {
+                log::warn!("library import: {} not synced: {e}", held.path().display());
+            }
+        }
+        drop((staging, target));
         if let Err(e) = std::fs::remove_dir(self.dir()) {
             log::warn!(
                 "library import: the emptied preview {} was left behind: {e}",
@@ -233,23 +263,53 @@ impl StagedLibrary {
         Ok(())
     }
 
-    /// Best effort after a failed move: the entries already moved go back
-    /// into the staging folder, so the target is empty again.
-    fn move_back(&self, moved: &[&std::ffi::OsString]) {
-        for name in moved.iter().rev() {
-            let (from, to) = (self.target.join(name), self.dir().join(name));
-            if let Err(e) = move_entry(&from, &to) {
-                log::error!(
-                    "library import: {} not moved back into the preview: {e}",
-                    from.display()
-                );
-            }
+    /// The library is split between the target and the staging folder and
+    /// could not be put back together. The staging folder is kept, never
+    /// discarded: it is renamed out of the staging pattern (or marked, when
+    /// that fails) so no sweep removes it, and the error names both folders.
+    fn split(&self, detail: String) -> MoveFailure {
+        let staging = self.keep_split();
+        log::error!(
+            "library import: the library is split between {} and {}: {detail}",
+            self.target.display(),
+            staging.display()
+        );
+        MoveFailure {
+            error: ImportError::LibrarySplit {
+                target: self.target.clone(),
+                staging,
+                detail,
+            },
+            preview_kept: false,
         }
     }
 
+    /// Where the split staging folder is kept: renamed to
+    /// `.<name>.signex-split-<id>`, else marked with [`SPLIT_MARKER`].
+    fn keep_split(&self) -> PathBuf {
+        let renamed = self.dir().file_name().and_then(|n| n.to_str()).map(|n| {
+            self.dir()
+                .with_file_name(n.replacen(STAGING_MARK, SPLIT_MARK, 1))
+        });
+        if let Some(renamed) = renamed
+            && rename_no_replace(self.dir(), &renamed).is_ok()
+        {
+            return renamed;
+        }
+        let marker = self.dir().join(SPLIT_MARKER);
+        if let Err(e) = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&marker)
+        {
+            log::error!("library import: {} not marked: {e}", self.dir().display());
+        }
+        self.dir().to_path_buf()
+    }
+
     /// The fallback across file systems: copy into a target this creates,
-    /// then discard the staging folder. A copy that fails removes what it
-    /// wrote and keeps the preview.
+    /// each file and folder synced, then discard the staging folder. A copy
+    /// that fails removes what it wrote and keeps the preview.
     fn copy_into_place(&self) -> Result<(), MoveFailure> {
         let failed = |e: std::io::Error| ImportError::MoveFailed {
             path: self.target.clone(),
@@ -272,6 +332,7 @@ impl StagedLibrary {
             }
             return Err(kept(failed(e)));
         }
+        self.sync_parent();
         if !self.discard() {
             log::warn!(
                 "library import: the copied preview {} was left behind",
@@ -310,6 +371,9 @@ impl StagedLibrary {
     }
 }
 
+/// One entry move from the first held folder into the second.
+pub(super) type MoveOne<'a> = &'a mut dyn FnMut(&HeldDir, &HeldDir, &OsStr) -> std::io::Result<()>;
+
 /// A refusal that keeps the preview.
 fn kept(error: ImportError) -> MoveFailure {
     MoveFailure {
@@ -324,67 +388,109 @@ fn crosses_devices(e: &std::io::Error) -> bool {
     e.kind() == ErrorKind::CrossesDevices
 }
 
-/// Move one entry from `from` to `to`, which must not exist: a rename, or
-/// a copy then a removal across file systems. A partial copy is removed.
-fn move_entry(from: &Path, to: &Path) -> std::io::Result<()> {
-    match std::fs::rename(from, to) {
+/// Best effort after a failed move: the entries already moved go back
+/// into the staging folder. True when every one did.
+fn move_back(
+    staging: &HeldDir,
+    target: &HeldDir,
+    moved: &[&OsString],
+    move_one: MoveOne<'_>,
+) -> bool {
+    let mut all = true;
+    for name in moved.iter().rev() {
+        if let Err(e) = move_one(target, staging, name) {
+            log::error!(
+                "library import: {} not moved back into the preview: {e}",
+                target.path().join(name).display()
+            );
+            all = false;
+        }
+    }
+    all
+}
+
+/// Move the entry `name` from `from` into `to`, never replacing anything
+/// there: a rename relative to the held folders, or across file systems a
+/// synced copy then a removal, after checking `to`'s path still names the
+/// held folder (the copy goes by path, so a narrow race remains there).
+pub(super) fn move_entry(from: &HeldDir, to: &HeldDir, name: &OsStr) -> std::io::Result<()> {
+    match rename_entry(from, to, name) {
         Err(e) if crosses_devices(&e) => {}
         done => return done,
     }
-    let meta = std::fs::symlink_metadata(from)?;
-    if is_link(&meta) {
+    if folder_id_at(to.path()).ok() != to.id().ok() {
         return Err(std::io::Error::other(format!(
-            "{} is a link",
-            from.display()
+            "{} is no longer the folder the import holds",
+            to.path().display()
         )));
     }
-    let copied = if meta.is_dir() {
-        std::fs::create_dir(to).and_then(|()| copy_tree(from, to))
-    } else {
-        std::fs::copy(from, to).map(|_| ())
-    };
-    if let Err(e) = copied {
-        let undone = if meta.is_dir() {
-            std::fs::remove_dir_all(to)
-        } else {
-            std::fs::remove_file(to)
-        };
-        if let Err(why) = undone
-            && why.kind() != ErrorKind::NotFound
-        {
-            log::error!(
-                "library import: the partial copy {} stays: {why}",
-                to.display()
-            );
-        }
-        return Err(e);
-    }
-    if meta.is_dir() {
-        std::fs::remove_dir_all(from)
-    } else {
-        std::fs::remove_file(from)
-    }
+    copy_across(
+        &from.path().join(name),
+        &to.path().join(name),
+        &mut remove_source,
+    )
 }
 
-/// Copy the folder `from` into the existing empty folder `to`. A link is
-/// refused, never followed: a converter writes plain files.
-fn copy_tree(from: &Path, to: &Path) -> std::io::Result<()> {
-    for entry in std::fs::read_dir(from)? {
-        let entry = entry?;
-        let kind = entry.file_type()?;
-        let dest = to.join(entry.file_name());
-        if kind.is_symlink() {
-            return Err(std::io::Error::other(format!(
-                "{} is a link",
-                entry.path().display()
-            )));
-        }
-        if kind.is_dir() {
-            std::fs::create_dir(&dest)?;
-            copy_tree(&entry.path(), &dest)?;
-        } else {
-            std::fs::copy(entry.path(), &dest)?;
+/// How long a staging folder must have gone unchanged before a sweep takes
+/// it, so a preview another running Signex holds is left alone.
+pub const STALE_AFTER: std::time::Duration = std::time::Duration::from_secs(3600);
+
+/// What a sweep takes as stale: changed before this session `started` and
+/// at least [`STALE_AFTER`] ago.
+pub fn stale_cutoff(started: SystemTime) -> SystemTime {
+    SystemTime::now()
+        .checked_sub(STALE_AFTER)
+        .map_or(started, |quiet| quiet.min(started))
+}
+
+/// Remove the staging folders a crash left (#3171): in each of `roots`,
+/// the folders whose name holds [`STAGING_MARK`] and that were last changed
+/// before `started` (callers pass [`stale_cutoff`] of this session's start),
+/// so no preview of this session is touched. A link, a file, a split library's folder (renamed out of the
+/// pattern, or holding [`SPLIT_MARKER`]) is left alone; a folder is emptied
+/// through its identity, never following a link. Returns how many went.
+pub fn sweep_stale(roots: &[PathBuf], started: SystemTime) -> usize {
+    let mut removed = 0;
+    for root in roots {
+        let Ok(entries) = std::fs::read_dir(root) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let name = entry.file_name();
+            let ours = name
+                .to_str()
+                .is_some_and(|n| n.starts_with('.') && n.contains(STAGING_MARK));
+            if ours && is_stale(&entry.path(), started) && remove_stale(&entry.path()) {
+                removed += 1;
+            }
         }
     }
-    Ok(())
+    removed
+}
+
+fn is_stale(path: &Path, started: SystemTime) -> bool {
+    let Ok(meta) = std::fs::symlink_metadata(path) else {
+        return false;
+    };
+    if is_link(&meta) || !meta.is_dir() || path.join(SPLIT_MARKER).exists() {
+        return false;
+    }
+    meta.modified().is_ok_and(|changed| changed < started)
+}
+
+fn remove_stale(path: &Path) -> bool {
+    let emptied = folder_id_at(path).and_then(|id| empty_folder(path, &id));
+    match emptied.and_then(|()| std::fs::remove_dir(path)) {
+        Ok(()) => {
+            log::info!("library import: removed the stale preview {}", path.display());
+            true
+        }
+        Err(e) => {
+            log::warn!(
+                "library import: the stale preview {} was not removed: {e}",
+                path.display()
+            );
+            false
+        }
+    }
 }
