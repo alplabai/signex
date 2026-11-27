@@ -392,35 +392,53 @@ fn parts_tools_are_off_while_the_filter_hides_the_highlighted_row() {
     assert!(matches!(tools(&app), (Some(_), Some(_), Some(_))));
 }
 
-/// Mockup row 119: the row the editor shows draws selected, so Edit is live
-/// on it with no separate highlight; Delete still waits for one.
+/// Mockup row 119 (decided 2026-11-27): Place and Edit follow the
+/// highlighted footprint, not the one the editor shows. With nothing
+/// highlighted they are off, Place saying a row is needed; a highlight
+/// turns them on for that row.
 #[test]
-fn edit_follows_the_footprint_the_editor_shows() {
-    let app = app_with_one_footprint();
+fn place_and_edit_follow_the_highlighted_footprint() {
+    let mut app = app_with_one_footprint();
     let ctx = &app.document_view.panel_ctx;
     let fp = ctx.footprint_editor.as_ref().expect("footprint editor");
     assert_eq!(fp.internal_selected_idx, None, "nothing highlighted");
     assert!(fp.internal_footprints[0].is_active);
     let tools = footprints::view(&app.library, ctx).tools;
+    assert!(tools.edit.is_none(), "the shown row alone is no target");
+    assert!(tools.place.is_none());
+    assert_eq!(tools.place_blocked, Some(ids::LIBRARY_PANEL_PLACE_NO_ROW));
+    assert!(tools.delete.is_none());
+
+    let _task = app.update(Message::Dock(DockMessage::Panel(
+        PanelMsg::FpLibrarySelectInternal(0),
+    )));
+    let tools = footprints::view(&app.library, &app.document_view.panel_ctx).tools;
     assert!(matches!(
         tools.edit,
         Some(DockMessage::Panel(PanelMsg::FpLibraryEditInternal(0)))
     ));
-    assert!(tools.delete.is_none());
+    assert!(matches!(
+        tools.delete,
+        Some(DockMessage::Panel(PanelMsg::FpLibraryDeleteInternal(0)))
+    ));
 }
 
 /// Mockup row 119: with no way to place, Place sends nothing and its tooltip
 /// gives the reason, in Footprints and in Symbols.
 #[test]
 fn place_is_off_with_its_reason_in_footprints_and_symbols() {
-    let app = app_with_one_footprint();
+    let mut app = app_with_one_footprint();
+    if let Some(doc) = app.document_state.footprint_editors.values_mut().next() {
+        doc.panel_selected_idx = Some(0);
+    }
+    app.refresh_panel_ctx();
     let ctx = &app.document_view.panel_ctx;
     let tools = footprints::view(&app.library, ctx).tools;
     assert!(tools.place.is_none());
     assert_eq!(
         tools.place_blocked,
         Some(ids::LIBRARY_PANEL_PLACE_NOT_IN_LIBRARY),
-        "this file is in no open library"
+        "the highlighted SOIC-8 is in no open library"
     );
 
     let app = app_with_one_symbol();

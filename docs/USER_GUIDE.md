@@ -452,8 +452,9 @@ you click holds while that tab stays in front. Under the chips sit the
 breadcrumb (library, file and count), one filter and the toolbar: **Place**,
 **Add**, **Edit** and, at the right end, **Delete**. In Parts the filter
 matches part numbers, MPNs and manufacturers and opens each library with a
-match, and the toolbar acts on the highlighted row (a greyed tool has nothing
-it can do there). The folder button in the panel's title bar is **Open
+match. In Parts and Footprints the toolbar acts on the highlighted row, and
+only while the filter shows it (a greyed tool has nothing it can do there); in
+Footprints the row the editor shows is not a target until you highlight it. The folder button in the panel's title bar is **Open
 Library…**. The **SCH Library** and **Footprint Library** rows of the panel
 list open this panel in Symbols or Footprints.
 

@@ -1,7 +1,8 @@
 //! The Library panel's Footprints kind (mockup row 119, was the Footprint
 //! Library panel, mockup row 121): the footprints inside the `.snxfpt` open in the footprint
 //! editor. A click highlights a row; Edit (or a double click) makes it the
-//! one the editor shows.
+//! one the editor shows. Place, Edit and Delete act on the highlighted row
+//! only (decided 2026-11-27).
 
 use iced::widget::{Column, container};
 use iced::{Element, Length, Widget};
@@ -44,9 +45,9 @@ pub(super) fn view<'a>(library: &'a LibraryState, ctx: &'a PanelContext) -> Kind
             "count" => fp.internal_footprints.len()
         ),
     };
-    // Edit and Delete act on a footprint only while the filter shows its
-    // row. Edit also takes the row the editor shows, which draws selected
-    // (mockup row 119); Delete needs an explicit highlight.
+    // Place, Edit and Delete act on the highlighted footprint, and only
+    // while the filter shows its row (mockup row 119); the row the editor
+    // shows is not a target of its own.
     let needle = i18n.fold_for_search(library.panel_search.trim());
     let in_view = |idx: &usize| {
         fp.internal_footprints
@@ -54,16 +55,12 @@ pub(super) fn view<'a>(library: &'a LibraryState, ctx: &'a PanelContext) -> Kind
             .is_some_and(|row| shows(row, &needle, i18n))
     };
     let selected = fp.internal_selected_idx.filter(in_view);
-    let edited = fp
-        .internal_selected_idx
-        .or_else(|| fp.internal_footprints.iter().position(|row| row.is_active))
-        .filter(in_view);
-    let (place, place_blocked) = place_tool(fp, edited);
+    let (place, place_blocked) = place_tool(fp, selected);
     let tools = Tools {
         place,
         place_blocked,
         add: Some(panel(PanelMsg::FpLibraryAddInternal)),
-        edit: edited.map(|i| panel(PanelMsg::FpLibraryEditInternal(i))),
+        edit: selected.map(|i| panel(PanelMsg::FpLibraryEditInternal(i))),
         delete: selected.map(|i| panel(PanelMsg::FpLibraryDeleteInternal(i))),
         delete_blocked: None,
     };
@@ -79,8 +76,8 @@ pub(super) fn view<'a>(library: &'a LibraryState, ctx: &'a PanelContext) -> Kind
     }
 }
 
-/// What Place does for the row Edit would act on: its message, or why it is
-/// off (mockup row 119).
+/// What Place does for the highlighted row: its message, or why it is off
+/// (mockup row 119).
 fn place_tool(
     fp: &FootprintEditorPanelContext,
     row: Option<usize>,
