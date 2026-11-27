@@ -7,31 +7,35 @@
 #   nodes  Every struct, enum, type alias, trait and union defined at item level
 #          in crates/signex-app/src/app/core.rs and app/core/**/*.rs. Skipped:
 #          items directly under `#[cfg(test)]` and everything inside them
-#          (scripts/uifree-test-item.yml), files mounted by a `#[cfg(test)] mod x;`
-#          (and the modules below them), and types declared inside a fn, an impl
-#          or a trait. A file that is not mounted, or mounted without
-#          `#[cfg(test)]`, is production whatever its name.
+#          (scripts/uifree-test-item.yml), files whose every top-level `mod x;`
+#          is under `#[cfg(test)]` (and the modules below them), and types
+#          declared inside a fn, an impl or a trait. A file that is not mounted,
+#          or mounted once without `#[cfg(test)]`, is production whatever its name.
 #   roots  The text of: `struct DocumentState` in
 #          crates/signex-app/src/app/state/mod.rs; the definitions of the
 #          app/state/ types its fields name (one level: `AgentEdits`); the
-#          signatures of every non-test fn in an `impl DocumentState` anywhere in
-#          signex-app; and the port types in scripts/core-closure-roots.txt
-#          (`Name  # why`; the comment is required).
+#          signatures of every non-test fn in an `impl DocumentState` in
+#          app/state/; and the port types in scripts/core-closure-roots.txt
+#          (`Name  # why`; the comment is required). An app/state/ file adds
+#          root text only when a top-level `mod x;` outside `#[cfg(test)]`
+#          mounts it, up to state/mod.rs.
 #   edges  A reaches B when B's name appears in A's definition (field types,
 #          variant payloads, alias target, generic arguments; enum variant NAMES
 #          are not edges), or in the signature (up to the body's `{`) of a
 #          non-test fn in an `impl` of A inside the core.
 #
-# Also fails on: two core types with one name; a core type named like a common
-# std or dependency type (String, Vec, Uuid, ...), which would collect edges from
-# that outside use; a `macro_rules!` or an item-level macro call in core
-# production code, whose items the scan cannot see. `#[path]` and `include!` are
-# banned in app/core/ by scripts/check_core_guard.sh.
+# Also fails on: two core types with one name; a name in DocumentState that two
+# app/state/ types share (each would add its definition); a core type named
+# like a common std or dependency type (String, Vec, Uuid, ...), which would
+# collect edges from that outside use; a `macro_rules!` or an item-level macro
+# call in core production code, whose items the scan cannot see. `#[path]` and
+# `include!` are banned in app/core/ by scripts/check_core_guard.sh.
 #
 # A node no root reaches is a violation. scripts/core-closure-baseline.txt lists
 # the ones known today (`path Name`); it may only shrink: a new violation fails,
 # so does a baseline line that is no longer one, and with `--no-growth <ref>` so
-# does a baseline line that `<ref>`'s baseline does not have.
+# does a baseline line that `<ref>`'s baseline does not have (a `<ref>` without
+# the baseline passes only if it has no guard script either).
 #
 # Method: ast-grep finds the items, impl fns, macros and test ranges; the lexer of
 # scripts/check_core_guard.awk drops comments and strings, so a doc comment
@@ -39,9 +43,7 @@
 # Known blind spots: a core type name that is also a crate-external name not on
 # the shadow list (`Point`) gets an edge from that outside use; a type reached
 # only through a free fn or a non-core, non-app/state wrapper of DocumentState
-# needs a root; outside app/core/ a file is test code only by name (`tests.rs`,
-# `*_tests.rs`, a `tests/` dir), so a test helper elsewhere named otherwise can
-# add root text; a field or signature compiled out by a non-test cfg
+# needs a root; a `#[path]` mount in app/state/ is not followed; a field or signature compiled out by a non-test cfg
 # (`#[cfg(any())]`) still makes an edge; and a view type added as a field or in
 # a signature of a reached core type is reached by design: review is the
 # mitigation for that edge.
@@ -185,17 +187,13 @@ ast_grep() {
 
 # The resolver's input: items, impl fns, macros, test ranges, lexed code, roots.
 feed() {
-  local f doc_fns others=()
+  local f
   ast_grep --inline-rules "$CORE_RULES" "${core[@]}" || return 2
   ast_grep --inline-rules "$STATE_RULES" "$STATE_DIR" || return 2
-  doc_fns="$(ast_grep --inline-rules "$DOC_FN_RULE" "$APP_SRC")" || return 2
-  printf '%s\n' "$doc_fns"
-  while IFS= read -r f; do others+=("$f"); done < <(
-    { printf '%s\n' "${state_files[@]}"; cut -f2 <<<"$doc_fns"; } | grep -v '^$' | sort -u)
-  # ${a[@]+...}: an empty array is unbound under `set -u` in bash 3.2.
-  ast_grep --rule "$TEST_RULE" "${core[@]}" ${others[@]+"${others[@]}"} || return 2
-  for f in "${core[@]}"; do printf 'F\t%s\n' "$f"; done
-  for f in "${core[@]}" ${others[@]+"${others[@]}"}; do
+  ast_grep --inline-rules "$DOC_FN_RULE" "$STATE_DIR" || return 2
+  ast_grep --rule "$TEST_RULE" "${core[@]}" "${state_files[@]}" || return 2
+  for f in "${core[@]}" "${state_files[@]}"; do
+    printf 'F\t%s\n' "$f"
     "$AWK" -v f="$f" -v depth=0 -v mode=lines -f "$LEXER" "$f" | "$AWK" '{ print "L\t" $0 }' || return 2
   done
   { grep -v '^BAD' <<<"$roots" || true; } | "$AWK" 'NF { print "R\t" $0 }'
@@ -208,8 +206,9 @@ if ! "$AWK" -F'\t' -v s="$STATE" '$1 == "state-type" && $2 == s && $5 == "Docume
 fi
 
 # V path name: unreachable; U name: a root that is no core type; D name paths:
-# a shared name; S path name: a shadowed std name; M path:line: a macro.
-result="$("$AWK" -F'\t' -v state="$STATE" -v core_rel="$CORE_REL" '
+# a shared name; E name paths: a DocumentState type name two app/state types
+# share; S path name: a shadowed std name; M path:line: a macro.
+result="$("$AWK" -F'\t' -v state="$STATE" -v state_dir="$STATE_DIR" -v core_rel="$CORE_REL" '
   BEGIN {
     n = split("String Vec Option Result Box Path PathBuf HashMap HashSet BTreeMap BTreeSet " \
       "VecDeque Arc Rc Cell RefCell Mutex RwLock Cow Uuid Value Map Duration Instant " \
@@ -218,39 +217,60 @@ result="$("$AWK" -F'\t' -v state="$STATE" -v core_rel="$CORE_REL" '
   }
   function dirname(p) { sub(/\/[^\/]*$/, "", p); return p }
   function basename(p) { sub(/^.*\//, "", p); return p }
-  # Is `mod stem` declared in parent under a #[cfg(test)] range?
-  function test_decl(parent, stem,   l, i) {
-    for (l = 1; l <= maxl[parent]; l++) {
-      if (!((parent, l) in code)) continue
-      if (code[parent, l] !~ "(^|[^A-Za-z0-9_])mod[[:space:]]+" stem "[[:space:]]*;") continue
-      for (i = 1; i <= nt; i++) if (tf[i] == parent && l >= ts[i] && l <= te[i]) return 1
-    }
-    return 0
-  }
-  # A core file is test code when it, or a module above it, is mounted by a
-  # `#[cfg(test)] mod x;`. Elsewhere a file is test code by its name.
-  function testfile(f,   g, stem, dir) {
-    if (f in tfile) return tfile[f]
-    if (index(f, core_rel) != 1) {
-      tfile[f] = (f ~ /(^|\/)(tests|[^\/]*_tests)\.rs$/ || f ~ /\/tests\//)
-      return tfile[f]
-    }
-    tfile[f] = 0
-    if (f == core_rel ".rs" || f == core_rel "/mod.rs") return 0
-    g = f
-    if (basename(g) == "mod.rs") g = dirname(g) ".rs"
-    sub(/\.rs$/, "", g)
-    stem = basename(g); dir = dirname(g)
-    if (test_decl(dir ".rs", stem) || test_decl(dir "/mod.rs", stem)) return tfile[f] = 1
-    if (dir == core_rel) return 0
-    if ((dir ".rs") in isfile) return tfile[f] = testfile(dir ".rs")
-    return tfile[f] = testfile(dir "/mod.rs")
-  }
-  function intest(file, line,   i) {
-    if (testfile(file)) return 1
+  function inrange(file, line,   i) {
     for (i = 1; i <= nt; i++) if (tf[i] == file && line >= ts[i] && line <= te[i]) return 1
     return 0
   }
+  # Count the `mod stem;` lines at the top level of parent (an inline `mod x { }`
+  # mounts another file) into dn, those under #[cfg(test)] into dt.
+  function decls(parent, stem,   l, d, c, pre) {
+    d = 0
+    for (l = 1; l <= maxl[parent]; l++) {
+      if (!((parent, l) in code)) continue
+      c = code[parent, l]
+      if (match(c, "(^|[^A-Za-z0-9_])mod[[:space:]]+" stem "[[:space:]]*;")) {
+        pre = substr(c, 1, RSTART)
+        if (d + gsub(/\{/, "{", pre) - gsub(/\}/, "}", pre) == 0) { dn++; dt += inrange(parent, l) }
+      }
+      d += gsub(/\{/, "{", c) - gsub(/\}/, "}", c)
+    }
+  }
+  # Split f into the module stem and the directory its parent file names.
+  function mount(f,   g) {
+    g = f
+    if (basename(g) == "mod.rs") g = dirname(g) ".rs"
+    sub(/\.rs$/, "", g)
+    mstem = basename(g); mdir = dirname(g)
+    dn = 0; dt = 0
+    decls(mdir ".rs", mstem); decls(mdir "/mod.rs", mstem)
+  }
+  function parent_of(dir) { return ((dir ".rs") in isfile) ? dir ".rs" : dir "/mod.rs" }
+  # A core file is test code when every top-level `mod x;` for it is under
+  # #[cfg(test)], or its parent module is test code. Unmounted: production.
+  function testfile(f,   dir) {
+    if (f in tfile) return tfile[f]
+    tfile[f] = 0
+    if (f == core_rel ".rs" || f == core_rel "/mod.rs") return 0
+    mount(f)
+    if (dn > 0 && dn == dt) return tfile[f] = 1
+    dir = mdir
+    if (dir == core_rel) return 0
+    return tfile[f] = testfile(parent_of(dir))
+  }
+  # An app/state file adds root text only when a top-level `mod x;` outside
+  # #[cfg(test)] mounts it, up to state/mod.rs. Unmounted: no root text.
+  function rootsrc(f,   dir) {
+    if (f in rsrc) return rsrc[f]
+    rsrc[f] = 0
+    if (f == state) return rsrc[f] = 1
+    mount(f)
+    if (dn == dt) return 0
+    dir = mdir
+    if (dir == state_dir) return rsrc[f] = 1
+    return rsrc[f] = rootsrc(parent_of(dir))
+  }
+  function intest(file, line) { return testfile(file) || inrange(file, line) }
+  function notroot(file, line) { return !rootsrc(file) || inrange(file, line) }
   function text(file, s, e,   l, t) {
     t = ""
     for (l = s; l <= e; l++) if ((file, l) in code) t = t " " code[file, l]
@@ -344,7 +364,7 @@ result="$("$AWK" -F'\t' -v state="$STATE" -v core_rel="$CORE_REL" '
     # Root text: DocumentState, the app/state types its fields name, the
     # signatures of its methods, and the roots file.
     for (i = 1; i <= ns2; i++) {
-      if (intest(sf[i], ss[i])) continue
+      if (notroot(sf[i], ss[i])) continue
       if (sf[i] == state && sname[i] == "DocumentState") docs = item_text(sf[i], ss[i], se[i], "DocumentState")
       else stype[sname[i]] = stype[sname[i]] SUBSEP i
     }
@@ -355,9 +375,14 @@ result="$("$AWK" -F'\t' -v state="$STATE" -v core_rel="$CORE_REL" '
       if (!(tok in stype) || (tok in seen)) continue
       seen[tok] = 1
       n = split(stype[tok], ids, SUBSEP)
+      if (n > 2) {
+        s = ""
+        for (k = 2; k <= n; k++) s = s ", " sf[ids[k]]
+        print "E\t" tok "\t" substr(s, 3)
+      }
       for (k = 2; k <= n; k++) rt = rt " " item_text(sf[ids[k]], ss[ids[k]], se[ids[k]], tok)
     }
-    for (i = 1; i <= nd; i++) if (!intest(df[i], dss[i])) rt = rt " " sig_text(df[i], dss[i], de[i], dfn[i])
+    for (i = 1; i <= nd; i++) if (!notroot(df[i], dss[i])) rt = rt " " sig_text(df[i], dss[i], de[i], dfn[i])
     reach_names(rt, "")
     for (i = 1; i <= nr; i++) {
       if (!(rname[i] in byname)) { print "U\t" rname[i]; continue }
@@ -387,6 +412,12 @@ while IFS=$'\t' read -r name where; do
   echo "  Names are matched by identifier: give each core type its own name."
   status=1
 done < <(lines D)
+while IFS=$'\t' read -r name where; do
+  [[ -z "$name" ]] && continue
+  echo "Core closure: FAIL — DocumentState names $name, which two app/state/ types are named: $where."
+  echo "  Its definition is root text: give each app/state/ type its own name."
+  status=1
+done < <(lines E)
 while IFS= read -r id; do
   [[ -z "$id" ]] && continue
   echo "Core closure: FAIL — $id is named like a std or dependency type; rename it."
@@ -443,7 +474,13 @@ if [[ -n "$growth_ref" ]]; then
     echo "Core closure: FAIL — --no-growth: $growth_ref is no commit here."
     status=1
   elif ! old="$(git show "$growth_ref:$BASELINE" 2>/dev/null)"; then
-    echo "Core closure: $growth_ref has no $BASELINE; nothing to compare."
+    # Only the change that adds the guard has a base without either file.
+    if git cat-file -e "$growth_ref:scripts/check_core_closure.sh" 2>/dev/null; then
+      echo "Core closure: FAIL — --no-growth: $growth_ref has the guard but no $BASELINE."
+      status=1
+    else
+      echo "Core closure: $growth_ref has no closure guard yet; nothing to compare."
+    fi
   else
     grown="$(LC_ALL=C comm -23 <(grep -v '^$' <<<"$known" || true) <(entries <<<"$old" | grep -v '^$' || true))"
     if [[ -n "$grown" ]]; then

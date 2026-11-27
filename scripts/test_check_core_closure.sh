@@ -65,21 +65,26 @@ judge() {
 # run_case <name> <pass|fail> <extra code of core/a.rs> [message] [roots file]
 #          [baseline lines]
 # Optional, set on the call: CORE_RS (extra code of app/core.rs); DOC_FIELDS
-# (extra fields of DocumentState); XF1/XB1 and
-# XF2/XB2 (another file below the tree root and its body); GROW_BASE (commit
-# the tree with this baseline, then check with --no-growth HEAD).
+# (extra fields of DocumentState); STATE_RS (extra code of state/mod.rs);
+# XF1/XB1, XF2/XB2 and XF3/XB3 (another file below the tree root and its
+# body); GROW_BASE (commit the tree with this baseline, then check with
+# --no-growth HEAD).
 # A fail case must print `message`; a pass case the OK line or `message`.
 run_case() {
-  local t="$TMP/$1" status=0 out args=()
+  local t="$TMP/$1" status=0 out args=() n f b
   mkdir -p "$t/scripts" "$t/$CORE_REL" "$t/$APP/state"
-  printf '%s\n' 'pub struct DocumentState {' '    /// not Unseen' \
+  printf '%s\n' "${STATE_RS:-}" 'pub struct DocumentState {' '    /// not Unseen' \
     '    pub doc: crate::app::core::a::Doc,' '    pub n: u64,' "${DOC_FIELDS:-}" '}' \
     > "$t/$APP/state/mod.rs"
   printf '%s\n' "$BASE_CORE" "$3" > "$t/$CORE_REL/a.rs"
   printf '%s\n' 'pub(crate) mod a;' "${CORE_RS:-}" > "$t/$CORE_REL.rs"
   printf '%s\n' '# roots' "${5:-$BASE_ROOTS}" > "$t/scripts/core-closure-roots.txt"
-  if [[ -n "${XF1:-}" ]]; then mkdir -p "$(dirname "$t/$XF1")"; printf '%s\n' "$XB1" > "$t/$XF1"; fi
-  if [[ -n "${XF2:-}" ]]; then mkdir -p "$(dirname "$t/$XF2")"; printf '%s\n' "$XB2" > "$t/$XF2"; fi
+  for n in 1 2 3; do
+    f="XF$n" b="XB$n"
+    [[ -z "${!f:-}" ]] && continue
+    mkdir -p "$(dirname "$t/${!f}")"
+    printf '%s\n' "${!b}" > "$t/${!f}"
+  done
   if [[ -n "${GROW_BASE:-}" ]]; then
     printf '%s\n' '# baseline' "$GROW_BASE" > "$t/scripts/core-closure-baseline.txt"
     commit "$t"
@@ -125,11 +130,15 @@ mod t;' XF1="$CORE_REL/t/mod.rs" XB1='mod deeper;' XF2="$CORE_REL/t/deeper.rs" X
 run_case baselined_violation_passes pass "$V" '' '' "$A ViewState"
 run_case fn_body_and_const_macros_are_fine pass 'impl Inner { pub fn v(&self) -> Vec<u8> { vec![1] } }
 const N: usize = m!();'
-DOC_FIELDS='    pub agent: agent::AgentEdits,' XF1="$APP/state/agent.rs" XB1="$AGENT" \
+STATE_RS='mod agent;' DOC_FIELDS='    pub agent: agent::AgentEdits,' \
+  XF1="$APP/state/agent.rs" XB1="$AGENT" \
   run_case root_via_state_type_of_a_field pass 'pub struct Joined;'
-XF1="$APP/edit.rs" XB1='impl DocumentState {
+STATE_RS='pub(crate) mod edit;' XF1="$APP/state/edit.rs" XB1='impl DocumentState {
     pub fn settle(&mut self) -> Vec<Reported> { Vec::new() }
 }' run_case root_via_document_state_method pass 'pub struct Reported;'
+STATE_RS='mod sub;' XF1="$APP/state/sub/mod.rs" XB1='mod edit;' XF2="$APP/state/sub/edit.rs" \
+  XB2='impl super::super::DocumentState { pub fn settle(&self) -> Reported { Reported } }' \
+  run_case root_via_nested_state_module pass 'pub struct Reported;'
 GROW_BASE="$A ViewState
 $A Gone" run_case baseline_shrinks_against_ref pass "$V" '' '' "$A ViewState"
 GROW_BASE="$A ViewState" run_case baseline_same_as_ref pass "$V" '' '' "$A ViewState"
@@ -161,13 +170,53 @@ run_case view_type_naming_core_is_still_unreachable fail 'pub struct ViewState {
 run_case variant_name_is_no_edge fail "$V"'
 pub enum Mode { Plain, #[allow(dead_code)] ViewState = 2, Held(Payload) }
 impl Inner { pub fn mode(&self) -> Mode { Mode::Plain } }' "    $A ViewState"
-XF1="$APP/state/agent.rs" XB1="$AGENT" \
-  run_case state_type_not_named_is_no_root fail 'pub struct Joined;' "    $A Joined" \
-  "$BASE_ROOTS" ''
-XF1="$APP/edit.rs" XB1='impl DocumentState {
+STATE_RS='mod agent;' XF1="$APP/state/agent.rs" XB1="$AGENT" \
+  run_case state_type_not_named_is_no_root fail 'pub struct Joined;' "    $A Joined"
+STATE_RS='mod edit;' XF1="$APP/state/edit.rs" XB1='impl DocumentState {
     #[cfg(test)]
     pub fn probe(&self) -> Reported { Reported }
 }' run_case test_document_state_method_is_no_root fail 'pub struct Reported;' "    $A Reported"
+EVIL='pub(crate) struct EvilView { pub zoom: f32 }'
+EVIL_FN='impl crate::app::state::DocumentState {
+    #[allow(dead_code)]
+    pub(crate) fn evil(&self) -> Option<crate::app::core::zz_evil::EvilView> { None }
+}'
+# Review fixture 58: a GUI file outside app/state/ roots nothing.
+XF1="$CORE_REL/zz_evil.rs" XB1="$EVIL" XF2="$APP/view/mod.rs" XB2="pub fn view() {}
+$EVIL_FN" run_case document_state_method_outside_state_is_no_root fail '' \
+  "    $CORE_REL/zz_evil.rs EvilView"
+# Review fixture 61: a test-only helper module of app/state/ roots nothing.
+STATE_RS='#[cfg(test)]
+mod probe_helpers;' XF1="$CORE_REL/zz_evil.rs" XB1="$EVIL" \
+  XF2="$APP/state/probe_helpers.rs" XB2="$EVIL_FN" \
+  run_case test_mounted_state_helper_is_no_root fail '' "    $CORE_REL/zz_evil.rs EvilView"
+XF1="$CORE_REL/zz_evil.rs" XB1="$EVIL" XF2="$APP/state/loose.rs" XB2="$EVIL_FN" \
+  run_case unmounted_state_file_is_no_root fail '' "    $CORE_REL/zz_evil.rs EvilView"
+STATE_RS='mod agent;
+mod inline { mod zz_evil_edit; }' XF1="$CORE_REL/zz_evil.rs" XB1="$EVIL" \
+  XF2="$APP/state/zz_evil_edit.rs" XB2="$EVIL_FN" \
+  run_case state_file_mounted_only_inline_is_no_root fail '' "    $CORE_REL/zz_evil.rs EvilView"
+# Review fixture 60: a second AgentEdits in app/state/ would add its fields.
+STATE_RS='mod agent;
+mod zz_shadow;' DOC_FIELDS='    pub agent: agent::AgentEdits,' \
+  XF1="$APP/state/agent.rs" XB1="$AGENT" XF2="$CORE_REL/zz_evil.rs" XB2="$EVIL" \
+  XF3="$APP/state/zz_shadow.rs" XB3='#[allow(dead_code)]
+pub(crate) struct AgentEdits { pub evil: crate::app::core::zz_evil::EvilView }' \
+  run_case state_type_name_shared fail 'pub struct Joined;' \
+  "DocumentState names AgentEdits, which two app/state/ types are named"
+# Review fixture 50: a test mount next to a production mount is production.
+CORE_RS='#[cfg(test)]
+mod zz_evil;
+#[cfg(not(test))]
+pub(crate) mod zz_evil;' XF1="$CORE_REL/zz_evil.rs" XB1="$EVIL" \
+  run_case test_and_production_mount fail '' "    $CORE_REL/zz_evil.rs EvilView"
+# Review fixture 51: a decl inside an inline test mod mounts another file.
+CORE_RS='pub(crate) mod zz_evil;
+#[cfg(test)]
+mod t {
+    mod zz_evil;
+}' XF1="$CORE_REL/zz_evil.rs" XB1="$EVIL" XF2="$CORE_REL/t/zz_evil.rs" XB2='' \
+  run_case nested_test_decl_is_another_file fail '' "    $CORE_REL/zz_evil.rs EvilView"
 run_case stale_baseline_entry fail '' "lists types that are no longer unreachable:
     $A Gone" '' "$A Gone"
 run_case stale_says_delete fail '' "delete these lines from scripts/core-closure-baseline.txt" \
@@ -214,14 +263,22 @@ judge generate_then_no_growth fail "grew against HEAD:
 status=0
 out="$(CORE_CLOSURE_ROOT="$t" bash "$GATE" --no-growth no-such-ref 2>&1)" || status=$?
 judge no_growth_bad_ref fail "no-such-ref is no commit here" "$status" "$out"
-# A base without the baseline file (the commit that adds the guard) passes.
+# A base with neither the guard nor its baseline (the change that adds the
+# guard) passes; a base with the guard but no baseline fails.
 t="$TMP/base_tree"
 commit "$t"
 git -C "$t" rm -q --cached scripts/core-closure-baseline.txt
 git -C "$t" -c user.name=c -c user.email=c@c commit -q -m drop
 status=0
 out="$(CORE_CLOSURE_ROOT="$t" bash "$GATE" --no-growth HEAD 2>&1)" || status=$?
-judge no_growth_base_without_baseline pass "has no scripts/core-closure-baseline.txt" "$status" "$out"
+judge no_growth_base_before_guard pass "has no closure guard yet" "$status" "$out"
+cp "$GATE" "$t/scripts/check_core_closure.sh"
+git -C "$t" add scripts/check_core_closure.sh
+git -C "$t" -c user.name=c -c user.email=c@c commit -q -m guard
+status=0
+out="$(CORE_CLOSURE_ROOT="$t" bash "$GATE" --no-growth HEAD 2>&1)" || status=$?
+judge no_growth_base_guard_without_baseline fail "has the guard but no scripts/core-closure-baseline.txt" \
+  "$status" "$out"
 
 # --- and the real tree passes ----------------------------------------------
 

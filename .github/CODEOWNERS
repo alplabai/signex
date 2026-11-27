@@ -30,11 +30,14 @@
 # The application core and its closure guard (#2326, ADR-0006 H7): a type in
 # app/core/, a new root or a baseline change needs a maintainer's approval.
 # `*` above already names both; these lines record the intent and must stay
-# if a narrower owner is ever added above. state/mod.rs holds DocumentState,
-# the root source; the .awk and .yml are the guard's own dependencies.
+# if a narrower owner is ever added above. app/state/ is the root source
+# (DocumentState, its field types, its methods); check_core_guard.sh bans the
+# #[path] / include! the closure scan cannot follow; the .awk and .yml are the
+# guard's own dependencies.
 /crates/signex-app/src/app/core/                 @hkngln @alpCaner
 /crates/signex-app/src/app/core.rs               @hkngln @alpCaner
-/crates/signex-app/src/app/state/mod.rs          @hkngln @alpCaner
+/crates/signex-app/src/app/state/                @hkngln @alpCaner
+/scripts/check_core_guard.sh                     @hkngln @alpCaner
 /scripts/check_core_closure.sh                   @hkngln @alpCaner
 /scripts/test_check_core_closure.sh              @hkngln @alpCaner
 /scripts/core-closure-roots.txt                  @hkngln @alpCaner
