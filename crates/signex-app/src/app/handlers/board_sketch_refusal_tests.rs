@@ -97,7 +97,7 @@ fn an_open_outline_is_refused_with_a_toast_that_places_the_gap() {
     let texts = main_window_texts(&mut app);
     assert!(texts.iter().any(|t| t == TOAST), "{texts:#?}");
     let place = format!("Gap at ({:.2}, {:.2}) mm", gap.at.x, gap.at.y);
-    assert!(texts.iter().any(|t| *t == place), "{place:?} in {texts:#?}");
+    assert!(texts.contains(&place), "{place:?} in {texts:#?}");
     let id = line.to_string();
     assert!(
         !texts.iter().any(|t| t.contains(&id)),

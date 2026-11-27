@@ -173,7 +173,6 @@ fn length_row<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use iced::Widget as _;
 
     fn ctx_with(layout: RichNoteLayout) -> PanelContext {
         let (app, _boot) = crate::app::Signex::new();
