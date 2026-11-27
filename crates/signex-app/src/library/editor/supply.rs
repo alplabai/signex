@@ -18,7 +18,7 @@
 
 use iced::widget::{Column, Widget, column, pick_list, scrollable};
 use iced::{Element, Length};
-use signex_i18n::{I18n, ids, t};
+use signex_i18n::{I18n, UserText, ids, t};
 use signex_library::{
     AlternateStatus, AlternateSupply, DistributorSource, ManufacturerLifecycle, ManufacturerPart,
     RowAlternateSupply,
@@ -26,7 +26,7 @@ use signex_library::{
 use signex_types::theme::ThemeTokens;
 use signex_widgets::dropdown_style::GraphiteDropdown as _;
 use signex_widgets::theme_ext;
-use signex_widgets::{raw, text, text_input};
+use signex_widgets::{Label, raw, text, text_input};
 
 use super::super::messages::{EditorMsg, LibraryMessage};
 use super::super::state::{ComponentPreviewState, EditorAddress};
@@ -406,13 +406,13 @@ fn stock_cell<'a>(
     address: &EditorAddress,
 ) -> Element<'a, LibraryMessage> {
     let typed = alt.manual_stock.map(|n| n.to_string()).unwrap_or_default();
-    let fetched = supply
-        .fetched_stock
-        .as_ref()
-        .map(|f| f.value.to_string())
-        .unwrap_or_else(|| t!(i18n, ids::VARIANT_EDIT_STOCK_UNKNOWN).into_string());
+    // The fetched count is distributor data, shown as it came.
+    let fetched: Label<'a> = match &supply.fetched_stock {
+        Some(f) => UserText::new(f.value.to_string()).into(),
+        None => t!(i18n, ids::VARIANT_EDIT_STOCK_UNKNOWN).into(),
+    };
     let address = address.clone();
-    let field = text_input(raw(fetched), typed)
+    let field = text_input(fetched, typed)
         .on_input(move |value| {
             editor_event(
                 &address,
