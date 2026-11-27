@@ -15,6 +15,7 @@ mod pad;
 mod pad_input;
 mod pad_library;
 mod pad_stack;
+mod pad_thermal;
 mod pad_trapezoid;
 mod pattern_mask;
 mod properties_view;

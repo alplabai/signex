@@ -13,6 +13,7 @@ use super::extras::{FootprintExtras, PadExtras};
 use super::pad_shape_cells::{
     check_shape, refuse_unreadable_shape, take_shape_cells, with_shape_cells,
 };
+use super::pad_thermal_cells::{take_thermal_cell, with_thermal_cell};
 use super::pcb_cells::{
     take_layer_sizes_cell, take_locked_cell, take_net_locked_cell, take_rotation_cell,
     with_layer_sizes_cell, with_locked_cell, with_net_locked_cell, with_rotation_cell,
@@ -678,15 +679,18 @@ pub(in crate::format) fn pad_to_row(
         net_number,
         net_name,
         roundrect_ratio: pad.roundrect_ratio,
-        unknown_columns: with_shape_cells(
-            with_layer_sizes_cell(
-                with_rotation_cell(
-                    with_net_locked_cell(pad.unknown_columns.clone(), pad.net_locked),
-                    pad.rotation,
+        unknown_columns: with_thermal_cell(
+            with_shape_cells(
+                with_layer_sizes_cell(
+                    with_rotation_cell(
+                        with_net_locked_cell(pad.unknown_columns.clone(), pad.net_locked),
+                        pad.rotation,
+                    )?,
+                    pad.layer_sizes.as_ref(),
                 )?,
-                pad.layer_sizes.as_ref(),
+                pad,
             )?,
-            pad,
+            &pad.thermal,
         )?,
     })
 }
@@ -713,6 +717,7 @@ pub(in crate::format) fn row_to_pad(
     let layer_sizes = take_layer_sizes_cell(&mut row.unknown_columns, block, index)?;
     let (trapezoid_delta, custom_outline) =
         take_shape_cells(&mut row.unknown_columns, block, index)?;
+    let thermal = take_thermal_cell(&mut row.unknown_columns, block, index)?;
     let drill = if row.drill > 0 {
         Some(DrillDef {
             diameter: nm_to_mm(row.drill),
@@ -751,6 +756,7 @@ pub(in crate::format) fn row_to_pad(
         custom_outline,
         net_locked,
         layer_sizes,
+        thermal,
         unknown: extras.unknown,
         unknown_columns: row.unknown_columns,
     };

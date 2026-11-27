@@ -682,6 +682,11 @@ leave_sheet	in_window_rewrite	document_window	gui	window	routing
 leave_sheet	refusal_needs	ParentSheet	gui	active document	routing
 leave_sheet	disabled_still_runs	explains_when_unavailable	gui	active document	gate
 leave_sheet	headless_refusal	headless_refusal	gui	none	routing
+length_matching	bridge	Dock(Panel(LengthMatching(TabOpened)))	gui	active document	gate
+length_matching	operand_handler	run_operands: named document	core	origin	handler
+length_matching	in_window_rewrite	document_window	gui	window	routing
+length_matching	refusal_needs	Pcb	gui	active document	routing
+length_matching	headless_missing_operand	needs `document`	core	none	routing
 list_annotations	query	run_query	core	origin	handler
 list_annotations	headless_missing_operand	needs `document`	core	none	routing
 list_diff_pairs	query	run_query	core	origin	handler
@@ -1365,6 +1370,10 @@ remove_last_vertex	bridge	Tool(RemoveLastVertex)	gui	active document,selection,i
 remove_last_vertex	in_window_rewrite	document_window	gui	window	routing
 remove_last_vertex	refusal_needs	VertexTarget	gui	active document,selection,in-progress edit	routing
 remove_last_vertex	headless_refusal	headless_refusal	gui	none	routing
+remove_length_group	operand_handler	run_operands: named document	core	origin	handler
+remove_length_group	refusal_needs	Pcb	core	active document	routing
+remove_length_group	refusal_needs_operands	needs_operands_reason	gui	none	routing
+remove_length_group	headless_missing_operand	needs `document`	core	none	routing
 remove_teardrops	bridge	Pcb(Tools(TeardropsRemoveRequested))	core	active document,selection	handler
 remove_teardrops	operand_handler	run_operands: named document	core	origin,settings	handler
 remove_teardrops	in_window_rewrite	document_window	gui	window	routing
@@ -1437,6 +1446,9 @@ rotate_selection_cw	in_window_rewrite	document_window	gui	window	routing
 rotate_selection_cw	refusal_needs	Turn	split	active document,selection,tool state,in-progress edit	routing
 rotate_selection_cw	disabled_still_runs_refusal	explains_refusal_in	split	active document,selection,tool state,in-progress edit	handler
 rotate_selection_cw	split_core_command	the core command after the router	core	active document,selection,tool state	declared
+route_options	operand_handler	run_operands: named document	gui	tool state,pre-placement form,origin	handler
+route_options	refusal_needs_operands	needs_operands_reason	gui	none	routing
+route_options	headless_missing_operand	needs `document`	gui	none	routing
 rubber_stamp_copy	bridge	Edit(RubberStampCopy)	gui	active document	gate
 rubber_stamp_copy	in_window_rewrite	document_window	gui	window	routing
 rubber_stamp_copy	refusal_needs	Schematic	gui	active document	routing
@@ -1572,6 +1584,10 @@ set_board_panel	operand_handler	run_operands: named document	core	origin	handler
 set_board_panel	refusal_needs	Pcb	core	active document	routing
 set_board_panel	refusal_needs_operands	needs_operands_reason	gui	none	routing
 set_board_panel	headless_missing_operand	needs `document`	core	none	routing
+set_diff_pair_width	operand_handler	run_operands: named document	core	selection,origin	handler
+set_diff_pair_width	refusal_needs	Pcb	core	active document	routing
+set_diff_pair_width	refusal_needs_operands	needs_operands_reason	gui	none	routing
+set_diff_pair_width	headless_missing_operand	needs `document`	core	none	routing
 set_dock_panel	operand_handler	run_operands: active-tab gate unless a document is named	gui	active document,window	handler
 set_dock_panel	refusal_needs_operands	needs_operands_reason	gui	none	routing
 set_dock_panel	headless_missing_operand	needs `panel`	gui	none	routing
@@ -1612,6 +1628,10 @@ set_layer_visible	operand_handler	run_operands: named document	gui	origin	handle
 set_layer_visible	refusal_needs	Pcb	gui	active document	routing
 set_layer_visible	refusal_needs_operands	needs_operands_reason	gui	none	routing
 set_layer_visible	headless_missing_operand	needs `layer`	gui	none	routing
+set_length_group	operand_handler	run_operands: named document	core	origin	handler
+set_length_group	refusal_needs	Pcb	core	active document	routing
+set_length_group	refusal_needs_operands	needs_operands_reason	gui	none	routing
+set_length_group	headless_missing_operand	needs `document`	core	none	routing
 set_net_class_rules	operand_handler	run_operands: named document	core	origin	handler
 set_net_class_rules	refusal_needs_operands	needs_operands_reason	gui	none	routing
 set_net_class_rules	headless_missing_operand	needs `document`	core	none	routing
@@ -1639,6 +1659,30 @@ set_pad_shape	operand_handler	run_operands: named document	core	origin	handler
 set_pad_shape	refusal_needs	Pcb	core	active document	routing
 set_pad_shape	refusal_needs_operands	needs_operands_reason	gui	none	routing
 set_pad_shape	headless_missing_operand	needs `document`	core	none	routing
+set_pad_teardrop	operand_handler	run_operands: named document	core	origin	handler
+set_pad_teardrop	refusal_needs	Pcb	core	active document	routing
+set_pad_teardrop	refusal_needs_operands	needs_operands_reason	gui	none	routing
+set_pad_teardrop	headless_missing_operand	needs `document`	core	none	routing
+set_pad_thermal_relief	operand_handler	run_operands: named document	core	origin	handler
+set_pad_thermal_relief	refusal_needs	Pcb	core	active document	routing
+set_pad_thermal_relief	refusal_needs_operands	needs_operands_reason	gui	none	routing
+set_pad_thermal_relief	headless_missing_operand	needs `document`	core	none	routing
+set_pour_corners	operand_handler	run_operands: named document	core	origin	handler
+set_pour_corners	refusal_needs	Pcb	core	active document	routing
+set_pour_corners	refusal_needs_operands	needs_operands_reason	gui	none	routing
+set_pour_corners	headless_missing_operand	needs `document`	core	none	routing
+set_pour_fill	operand_handler	run_operands: named document	core	origin	handler
+set_pour_fill	refusal_needs	Pcb	core	active document	routing
+set_pour_fill	refusal_needs_operands	needs_operands_reason	gui	none	routing
+set_pour_fill	headless_missing_operand	needs `document`	core	none	routing
+set_pour_properties	operand_handler	run_operands: named document	core	origin	handler
+set_pour_properties	refusal_needs	Pcb	core	active document	routing
+set_pour_properties	refusal_needs_operands	needs_operands_reason	gui	none	routing
+set_pour_properties	headless_missing_operand	needs `document`	core	none	routing
+set_pour_thermal_relief	operand_handler	run_operands: named document	core	origin	handler
+set_pour_thermal_relief	refusal_needs	Pcb	core	active document	routing
+set_pour_thermal_relief	refusal_needs_operands	needs_operands_reason	gui	none	routing
+set_pour_thermal_relief	headless_missing_operand	needs `document`	core	none	routing
 set_selection_filters	operand_handler	run_operands: active-tab gate unless a document is named	gui	none	handler
 set_selection_filters	refusal_needs_operands	needs_operands_reason	gui	none	routing
 set_selection_filters	headless_missing_operand	needs `kinds`	gui	none	routing
@@ -1651,6 +1695,10 @@ set_sheet_variable	headless_missing_operand	needs `name`	core	none	routing
 set_symbol_parameter	operand_handler	run_operands: active-tab gate unless a document is named	core	active document,origin	handler
 set_symbol_parameter	refusal_needs_operands	needs_operands_reason	gui	none	routing
 set_symbol_parameter	headless_missing_operand	needs `id`	core	none	routing
+set_teardrop_rule	operand_handler	run_operands: named document	core	origin	handler
+set_teardrop_rule	refusal_needs	Pcb	core	active document	routing
+set_teardrop_rule	refusal_needs_operands	needs_operands_reason	gui	none	routing
+set_teardrop_rule	headless_missing_operand	needs `document`	core	none	routing
 set_via_span	operand_handler	run_operands: named document	core	origin	handler
 set_via_span	refusal_needs	Pcb	core	active document	routing
 set_via_span	refusal_needs_operands	needs_operands_reason	gui	none	routing

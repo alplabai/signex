@@ -474,6 +474,9 @@ impl Signex {
         if self.polygon_manager_tab_in_window(is_main) {
             return self.view_polygon_manager_tab();
         }
+        if self.length_matching_tab_in_window(is_main) {
+            return self.view_length_matching_tab();
+        }
         if let Some(symbol) = self.pin_table_tab_in_window(is_main) {
             return self.view_pin_table_tab(symbol);
         }

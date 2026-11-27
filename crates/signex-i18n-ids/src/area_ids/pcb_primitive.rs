@@ -293,6 +293,8 @@ define_ids! {
     PCB_PRIM_POUR_FILL_SOLID = "pcb-prim-pour-fill-solid";
     PCB_PRIM_POUR_FILL_HATCHED = "pcb-prim-pour-fill-hatched";
     PCB_PRIM_POUR_HATCHED_TIP = "pcb-prim-pour-hatched-tip";
+    PCB_PRIM_POUR_HATCH_WIDTH = "pcb-prim-pour-hatch-width";
+    PCB_PRIM_POUR_HATCH_GAP = "pcb-prim-pour-hatch-gap";
     PCB_PRIM_POUR_THERMAL = "pcb-prim-pour-thermal";
     PCB_PRIM_POUR_THERMAL_TIP = "pcb-prim-pour-thermal-tip";
     PCB_PRIM_POUR_SPOKE_GAP = "pcb-prim-pour-spoke-gap";
@@ -420,4 +422,47 @@ define_ids! {
     PCB_PRIM_DIM_TRAILING_ZEROS = "pcb-prim-dim-trailing-zeros";
     // mockup row 96
     PCB_PRIM_VIA_TYPE_SIZES = "pcb-prim-via-type-sizes";
+    // diff-pair-track (#2585, mockup row 95)
+    PCB_PRIM_PAIR = "pcb-prim-pair";
+    PCB_PRIM_PAIRED_NET = "pcb-prim-paired-net";
+    PCB_PRIM_PAIR_GAP = "pcb-prim-pair-gap";
+    PCB_PRIM_PAIR_BOTH_NETS = "pcb-prim-pair-both-nets";
+    // length-matching (#2797, mockup row 107)
+    LENGTH_MATCHING_TAB_KIND = "length-matching-tab-kind";
+    LENGTH_MATCHING_SHOW_AS_PANEL = "length-matching-show-as-panel";
+    LENGTH_MATCHING_FILTER = "length-matching-filter";
+    LENGTH_MATCHING_FILTER_ALL = "length-matching-filter-all";
+    LENGTH_MATCHING_FILTER_OUT = "length-matching-filter-out";
+    LENGTH_MATCHING_SUMMARY = "length-matching-summary";
+    LENGTH_MATCHING_OUT_COUNT = "length-matching-out-count";
+    LENGTH_MATCHING_ALL_IN_BAND = "length-matching-all-in-band";
+    LENGTH_MATCHING_MEMBERS = "length-matching-members";
+    LENGTH_MATCHING_BAND = "length-matching-band";
+    LENGTH_MATCHING_RULE = "length-matching-rule";
+    LENGTH_MATCHING_NAME = "length-matching-name";
+    LENGTH_MATCHING_TARGET = "length-matching-target";
+    LENGTH_MATCHING_TOLERANCE = "length-matching-tolerance";
+    LENGTH_MATCHING_TOPOLOGY = "length-matching-topology";
+    LENGTH_MATCHING_TOPOLOGY_STAR = "length-matching-topology-star";
+    LENGTH_MATCHING_TOPOLOGY_CHAIN = "length-matching-topology-chain";
+    LENGTH_MATCHING_TOPOLOGY_FLY_BY = "length-matching-topology-fly-by";
+    LENGTH_MATCHING_TOPOLOGY_T = "length-matching-topology-t";
+    LENGTH_MATCHING_NEW_GROUP = "length-matching-new-group";
+    LENGTH_MATCHING_ADD_GROUP = "length-matching-add-group";
+    LENGTH_MATCHING_ADD_NET = "length-matching-add-net";
+    LENGTH_MATCHING_REMOVE_NET = "length-matching-remove-net";
+    LENGTH_MATCHING_DELETE_GROUP = "length-matching-delete-group";
+    LENGTH_MATCHING_PICK_GROUP = "length-matching-pick-group";
+    LENGTH_MATCHING_STATUS_OVER = "length-matching-status-over";
+    LENGTH_MATCHING_STATUS_SHORT = "length-matching-status-short";
+    LENGTH_MATCHING_STATUS_UNROUTED = "length-matching-status-unrouted";
+    LENGTH_MATCHING_STATUS_MISSING = "length-matching-status-missing";
+    LENGTH_MATCHING_PAIR = "length-matching-pair";
+    LENGTH_MATCHING_MEASURED = "length-matching-measured";
+    LENGTH_MATCHING_FOOTER = "length-matching-footer";
+    LENGTH_MATCHING_FOOTER_NOTE = "length-matching-footer-note";
+    LENGTH_MATCHING_NO_BOARD_TITLE = "length-matching-no-board-title";
+    LENGTH_MATCHING_NO_BOARD = "length-matching-no-board";
+    LENGTH_MATCHING_NO_MATCH = "length-matching-no-match";
+    LENGTH_MATCHING_EDIT = "length-matching-edit";
 }

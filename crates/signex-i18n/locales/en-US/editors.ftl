@@ -879,6 +879,7 @@ editors-fp-pad-invalid-positive = Must be greater than 0
 editors-fp-pad-invalid-negative = Must be 0 or more
 editors-fp-pad-invalid-no-copper = Leaves no copper with this trapezoid
 editors-fp-pad-invalid-corner-radius = Must be 0 to 50
+editors-fp-pad-invalid-spokes = Must be a whole number from 1 to 4
 # Illustration labels. $value is a length in mm, already formatted.
 editors-fp-pad-callout-title = Pad { $number } · { $layer }
 editors-fp-pad-callout-size-x = Size X { $value }

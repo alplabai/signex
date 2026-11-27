@@ -17,6 +17,7 @@
 //! and the editor; a typical footprint therefore needs no extra column.
 
 use signex_sketch::attr::{ElectricalType, PadFeature, TestpointFlags};
+use signex_types::pad_thermal::{is_spoke_count, is_thermal_length};
 
 use super::serde_tsv::{non_finite_pad, parse_opt_f64_cell_fp};
 use super::{FootprintFileError, Pad};
@@ -210,7 +211,81 @@ pub(super) static EXTENDED_COLUMNS: &[ExtendedColumn] = &[
     opt_f64_col!(hole_rotation_deg),
     opt_f64_col!(copper_offset_x_mm),
     opt_f64_col!(copper_offset_y_mm),
+    // #2593: the pad's own thermal relief values, empty for the pour's.
+    ExtendedColumn {
+        name: "thermal_air_gap",
+        encode: |p| thermal_mm_cell(p, p.thermal.air_gap, "thermal_air_gap"),
+        decode: |p, s| {
+            p.thermal.air_gap = parse_thermal_mm("thermal_air_gap", s)?;
+            Ok(())
+        },
+    },
+    ExtendedColumn {
+        name: "thermal_spoke_width",
+        encode: |p| thermal_mm_cell(p, p.thermal.spoke_width, "thermal_spoke_width"),
+        decode: |p, s| {
+            p.thermal.spoke_width = parse_thermal_mm("thermal_spoke_width", s)?;
+            Ok(())
+        },
+    },
+    ExtendedColumn {
+        name: "thermal_spokes",
+        encode: |p| match p.thermal.spokes {
+            None => Ok(String::new()),
+            Some(n) if is_spoke_count(n) => Ok(n.to_string()),
+            Some(n) => Err(FootprintFileError::InvalidNumericCell {
+                column: "thermal_spokes",
+                value: format!("pad {:?}: {n}", p.number),
+            }),
+        },
+        decode: |p, s| {
+            p.thermal.spokes = parse_spokes(s)?;
+            Ok(())
+        },
+    },
 ];
+
+/// A pad's own air gap or spoke width as a cell: empty for the pour's; a
+/// value no pour can use refuses the save, as the reader would refuse it.
+fn thermal_mm_cell(
+    pad: &Pad,
+    value: Option<f64>,
+    column: &'static str,
+) -> Result<String, FootprintFileError> {
+    match value {
+        None => Ok(String::new()),
+        Some(mm) if is_thermal_length(mm) => {
+            fmt_f64(mm).ok_or_else(|| non_finite_pad(&pad.number, column))
+        }
+        Some(mm) => Err(FootprintFileError::InvalidNumericCell {
+            column,
+            value: format!("pad {:?}: {mm}", pad.number),
+        }),
+    }
+}
+
+fn parse_thermal_mm(column: &'static str, s: &str) -> Result<Option<f64>, FootprintFileError> {
+    match parse_opt_f64_cell_fp(column, s)? {
+        Some(mm) if !is_thermal_length(mm) => Err(FootprintFileError::InvalidNumericCell {
+            column,
+            value: s.to_string(),
+        }),
+        parsed => Ok(parsed),
+    }
+}
+
+fn parse_spokes(s: &str) -> Result<Option<u8>, FootprintFileError> {
+    if s.is_empty() {
+        return Ok(None);
+    }
+    match s.parse::<u8>() {
+        Ok(n) if is_spoke_count(n) => Ok(Some(n)),
+        _ => Err(FootprintFileError::InvalidNumericCell {
+            column: "thermal_spokes",
+            value: s.to_string(),
+        }),
+    }
+}
 
 pub(super) fn column_by_name(name: &str) -> Option<&'static ExtendedColumn> {
     EXTENDED_COLUMNS.iter().find(|c| c.name == name)

@@ -4,6 +4,7 @@
 
 use std::collections::BTreeSet;
 
+use signex_types::format::mm_as_stored_nm;
 use signex_types::pcb::PcbBoard;
 use signex_types::pcb_options::BoardOptions;
 
@@ -73,6 +74,30 @@ fn check(options: &BoardOptions) -> Result<(), BoardCommandError> {
     if let Some(panel) = &options.panel {
         panel.check().map_err(BoardCommandError::Panel)?;
     }
+    // Length-matching groups (#2797): the file stores what this lets in.
+    for group in &options.length_groups {
+        finite(group.target_mm, "group target")?;
+        finite(group.tolerance_mm, "group tolerance")?;
+        // Judged on the stored nm: under half a nm is written as 0, which the
+        // file refuses on load.
+        if !mm_as_stored_nm(group.target_mm).is_some_and(|nm| nm > 0) {
+            return Err(BoardCommandError::NotPositive {
+                field: "group target",
+            });
+        }
+        if group.tolerance_mm < 0.0 {
+            return Err(BoardCommandError::Negative {
+                field: "group tolerance",
+            });
+        }
+        if !seen.insert(group.uuid) {
+            return Err(BoardCommandError::DuplicateOption(group.uuid));
+        }
+    }
+    options
+        .teardrops
+        .check()
+        .map_err(BoardCommandError::TeardropRule)?;
     Ok(())
 }
 

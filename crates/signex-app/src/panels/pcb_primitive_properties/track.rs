@@ -6,15 +6,17 @@
 
 use iced::widget::{container, row};
 use iced::{Element, Length, Widget as _};
-use signex_i18n::ids;
+use signex_i18n::{UserText, ids, t};
 use signex_types::pcb_layer::PcbLayer;
-use signex_widgets::text;
+use signex_widgets::{Label, text};
 
 use super::drawing::{self, keys};
 use super::linked::{self, linked_row, mm_point};
 use super::mask::track_mask_section;
-use super::rows::{Look, Section, dropdown, fixed_mm, net_value, stack};
-use super::{PcbPrimitiveMsg, PrimitiveField as F, SP, TS, TrackFacts, net_info};
+use super::rows::{Look, Section, dropdown, fixed_mm, labelled, net_value, stack};
+use super::{
+    PairFacts, PcbPrimitiveMsg, PrimitiveCommon, PrimitiveField as F, SP, TS, TrackFacts, net_info,
+};
 use crate::panels::{PanelContext, PanelMsg};
 use crate::pcb_canvas::layer_style;
 use crate::styles::tokens::resolve;
@@ -71,6 +73,9 @@ fn properties<'a>(look: Look<'a>, f: &'a TrackFacts) -> Option<Element<'a, Panel
             net_value(look, common),
         ),
     );
+    if let Some(pair) = &f.pair {
+        pair_rows(look, &mut s, common, pair);
+    }
     s.push(
         common,
         ids::PCB_PRIM_LAYER,
@@ -164,6 +169,51 @@ fn properties<'a>(look: Look<'a>, f: &'a TrackFacts) -> Option<Element<'a, Panel
         super::rows::labelled(look, ids::PCB_PRIM_TUNE_LENGTH, tune),
     );
     s.finish()
+}
+
+/// The rows of a differential pair's tracks (#2585, mockup row 95): the
+/// pair, the net paired with the shown one, and the copper gap between the
+/// two tracks. Width above applies to both tracks of the pair.
+fn pair_rows<'a>(
+    look: Look<'a>,
+    s: &mut Section<'a>,
+    common: &PrimitiveCommon,
+    pair: &'a PairFacts,
+) {
+    let name = linked::read_only(look, UserText::new(pair.name.clone()));
+    s.push(
+        common,
+        ids::PCB_PRIM_PAIR,
+        labelled(look, ids::PCB_PRIM_PAIR, name),
+    );
+    let paired: Label<'a> = match &pair.paired_net {
+        Some(net) => UserText::new(net.clone()).into(),
+        None => t!(
+            look.ctx.i18n,
+            ids::PCB_PRIM_PAIR_BOTH_NETS,
+            "positive" => pair.positive.clone(),
+            "negative" => pair.negative.clone()
+        )
+        .into(),
+    };
+    s.push(
+        common,
+        ids::PCB_PRIM_PAIRED_NET,
+        labelled(
+            look,
+            ids::PCB_PRIM_PAIRED_NET,
+            linked::read_only(look, paired),
+        ),
+    );
+    s.push(
+        common,
+        ids::PCB_PRIM_PAIR_GAP,
+        labelled(
+            look,
+            ids::PCB_PRIM_PAIR_GAP,
+            linked::length(look, pair.gap_mm.map(fixed_mm)),
+        ),
+    );
 }
 
 /// The layer dot and the Layer dropdown of the board's copper layers.

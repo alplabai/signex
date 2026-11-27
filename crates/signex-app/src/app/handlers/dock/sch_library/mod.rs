@@ -267,6 +267,9 @@ impl Signex {
             PanelMsg::FpEditorToggleSelectedPadThermalRelief { idx, value } => {
                 self.fp_editor_toggle_selected_pad_thermal_relief(*idx, *value)
             }
+            PanelMsg::FpEditorPadThermalTyped { idx, field, value } => {
+                self.fp_pad_thermal_typed(*idx, *field, value)
+            }
             PanelMsg::FpEditorSetSelectedPadFeatureTop { idx, value } => {
                 self.fp_editor_set_selected_pad_feature_top(*idx, *value)
             }

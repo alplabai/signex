@@ -50,6 +50,7 @@ fn footprint(uuid: Uuid, reference: &str, x: f64) -> Footprint {
         rotation: 0.0,
         layer_sizes: None,
         net_locked: false,
+        thermal: Default::default(),
         unknown: Default::default(),
         unknown_columns: Default::default(),
     };

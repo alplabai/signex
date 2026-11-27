@@ -22,9 +22,12 @@ pub(super) const SNXFPT_FORMAT_SKETCH_LINKS: &str = "snxfpt/1.2";
 /// build would drop them on save, so it refuses the file by name.
 pub(super) const SNXFPT_FORMAT_V1_3: &str = "snxfpt/1.3";
 
-/// Written while the file embeds a STEP model (`[[models]]`, #3107/#3108):
-/// a 1.3 build ignores the section and would drop the models on save, so it
-/// refuses the file by name. Wins over every lower token.
+/// Written while the file embeds a STEP model (`[[models]]`, #3107/#3108)
+/// or a pad or a sketch pad sets its own thermal relief values (#2593): a
+/// 1.3 build ignores the models section and would drop the models on save,
+/// refuses the pad columns as a schema mismatch and would drop the sketch
+/// pad's values on save, so it refuses the file by name. Wins over every
+/// lower token.
 pub(super) const SNXFPT_FORMAT_V1_4: &str = "snxfpt/1.4";
 
 /// `.snxfpt` version policy. A newer token, minor included, is refused by
@@ -47,7 +50,7 @@ impl FootprintFile {
     /// file whose last model, link, sweep or generated feature goes drops
     /// back down.
     pub fn format_token(&self) -> &'static str {
-        if self.writes_models() {
+        if self.writes_models() || self.footprints.iter().any(has_pad_thermal) {
             return SNXFPT_FORMAT_V1_4;
         }
         let needs_1_3 = |fp: &Footprint| {
@@ -68,4 +71,15 @@ impl FootprintFile {
             SNXFPT_FORMAT_V1_1
         }
     }
+}
+
+/// Whether a pad or a sketch pad of `fp` sets its own thermal relief values.
+fn has_pad_thermal(fp: &Footprint) -> bool {
+    let mut sketch_pads = fp
+        .sketch
+        .iter()
+        .flat_map(|sketch| sketch.entities.iter())
+        .filter_map(|entity| entity.pad.as_ref());
+    fp.pads.iter().any(|pad| !pad.thermal.is_rule())
+        || sketch_pads.any(|attr| !attr.stack.thermal.is_rule())
 }

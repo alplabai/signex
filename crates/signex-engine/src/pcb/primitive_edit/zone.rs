@@ -1,12 +1,15 @@
 //! Area fields (#2393): the layer and net of a fill, solid region, polygon
 //! pour, keepout or pour cutout, and a pour's clearance, minimum width, priority and
-//! island rules (#2216), and whether it is shelved (#2523) or unfilled
-//! (#2506).
+//! island rules (#2216), whether it is shelved (#2523) or unfilled
+//! (#2506), its corners (#2578), its fill mode and hatch (#2579), and its
+//! thermal relief (#2580).
 
 use signex_types::format::{parse_pcb_layer, pcb_layer_token};
-use signex_types::pcb::{PcbBoard, Zone};
+use signex_types::pad_thermal::is_thermal_length;
+use signex_types::pcb::{PCB_THERMAL_BRIDGE_MM, PCB_THERMAL_GAP_MM, PcbBoard, Zone};
 use signex_types::pcb_layer::PcbLayer;
 use signex_types::zone_keepout::{KEEPOUT_FILL, keepout_copper};
+use signex_types::zone_pour_shape::{PourCorners, PourFillMode};
 use uuid::Uuid;
 
 use super::{PrimitiveEditRefusal, finite};
@@ -43,6 +46,29 @@ pub enum ZoneEdit {
     /// but holds no copper until the next Repour. Other areas are left as
     /// they are.
     Unfilled(bool),
+    /// How a pour's fill shapes the convex corners of its outline (#2578).
+    /// Other areas are left as they are.
+    Corners(PourCorners),
+    /// A pour's corner radius or chamfer, in mm, from 0. Other areas are
+    /// left as they are.
+    CornerSize(f64),
+    /// Solid or hatched copper (#2579). Other areas are left as they are.
+    FillMode(PourFillMode),
+    /// A hatched pour's line width and the gap between lines, in mm, from
+    /// 0 (0 uses the default). Other areas are left as they are.
+    HatchWidth(f64),
+    HatchGap(f64),
+    /// Whether a pour joins the pads of its net through thermal relief
+    /// spokes (#2580). Switching it on sets a stored gap or spoke width that
+    /// is no length above 0 to the default, so the panel shows what the
+    /// fill uses. Other areas are left as they are.
+    ThermalRelief(bool),
+    /// A pour's spoke width in mm, above 0. Other areas are left as they
+    /// are.
+    ThermalSpokeWidth(f64),
+    /// A pour's thermal air gap in mm, above 0. Other areas are left as
+    /// they are.
+    ThermalAirGap(f64),
 }
 
 /// Whether `layer` can hold `zone`: copper for a copper area, a layer that
@@ -61,6 +87,16 @@ pub fn zone_edit_command(
     zones: &[Uuid],
     edit: ZoneEdit,
 ) -> Result<Option<BoardCommand>, PrimitiveEditRefusal> {
+    zone_edits_command(board, zones, &[edit])
+}
+
+/// The command setting every edit of `edits`, in order, on every area in
+/// `zones`: one replace, so one undo step. A refused edit refuses all.
+pub fn zone_edits_command(
+    board: &PcbBoard,
+    zones: &[Uuid],
+    edits: &[ZoneEdit],
+) -> Result<Option<BoardCommand>, PrimitiveEditRefusal> {
     if zones.is_empty() {
         return Err(PrimitiveEditRefusal::Empty);
     }
@@ -72,7 +108,9 @@ pub fn zone_edit_command(
             .find(|z| z.uuid == *id)
             .ok_or(PrimitiveEditRefusal::Gone)?;
         let mut new = old.clone();
-        apply_zone_edit(board, &mut new, edit)?;
+        for &edit in edits {
+            apply_zone_edit(board, &mut new, edit)?;
+        }
         if new != *old {
             changed.push(BoardItem::Zone(new));
         }
@@ -91,7 +129,10 @@ pub fn apply_zone_edit(
     if let ZoneEdit::Clearance(v)
     | ZoneEdit::MinThickness(v)
     | ZoneEdit::MinIslandArea(v)
-    | ZoneEdit::Priority(v) = edit
+    | ZoneEdit::Priority(v)
+    | ZoneEdit::CornerSize(v)
+    | ZoneEdit::HatchWidth(v)
+    | ZoneEdit::HatchGap(v) = edit
         && finite(v)? < 0.0
     {
         return Err(PrimitiveEditRefusal::Negative);
@@ -100,6 +141,11 @@ pub fn apply_zone_edit(
         && (v.fract() != 0.0 || v > f64::from(u32::MAX))
     {
         return Err(PrimitiveEditRefusal::NotWhole);
+    }
+    if let ZoneEdit::ThermalSpokeWidth(v) | ZoneEdit::ThermalAirGap(v) = edit
+        && !is_thermal_length(finite(v)?)
+    {
+        return Err(PrimitiveEditRefusal::NotPositive);
     }
     match edit {
         ZoneEdit::Layer(layer) => {
@@ -127,6 +173,14 @@ pub fn apply_zone_edit(
         | ZoneEdit::RemoveDeadIslands(_)
         | ZoneEdit::Shelved(_)
         | ZoneEdit::Unfilled(_)
+        | ZoneEdit::Corners(_)
+        | ZoneEdit::CornerSize(_)
+        | ZoneEdit::FillMode(_)
+        | ZoneEdit::HatchWidth(_)
+        | ZoneEdit::HatchGap(_)
+        | ZoneEdit::ThermalRelief(_)
+        | ZoneEdit::ThermalSpokeWidth(_)
+        | ZoneEdit::ThermalAirGap(_)
             if !zone.is_pour() => {}
         ZoneEdit::Clearance(v) => zone.clearance = v,
         ZoneEdit::MinThickness(v) => zone.min_thickness = v,
@@ -139,6 +193,22 @@ pub fn apply_zone_edit(
         // as it was.
         ZoneEdit::Unfilled(_) if zone.shelved => {}
         ZoneEdit::Unfilled(on) => zone.unfilled = on,
+        ZoneEdit::Corners(corners) => zone.corners = corners,
+        ZoneEdit::CornerSize(v) => zone.corner_size = v,
+        ZoneEdit::FillMode(mode) => zone.fill_mode = mode,
+        ZoneEdit::HatchWidth(v) => zone.hatch_width = v,
+        ZoneEdit::HatchGap(v) => zone.hatch_gap = v,
+        ZoneEdit::ThermalRelief(on) => {
+            zone.thermal_relief = on;
+            if on && !is_thermal_length(zone.thermal_gap) {
+                zone.thermal_gap = PCB_THERMAL_GAP_MM;
+            }
+            if on && !is_thermal_length(zone.thermal_width) {
+                zone.thermal_width = PCB_THERMAL_BRIDGE_MM;
+            }
+        }
+        ZoneEdit::ThermalSpokeWidth(v) => zone.thermal_width = v,
+        ZoneEdit::ThermalAirGap(v) => zone.thermal_gap = v,
     }
     Ok(())
 }

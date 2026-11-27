@@ -197,16 +197,56 @@ pub fn min_via_drill(board: &PcbBoard) -> Option<f64> {
         .filter(|d| *d > 0.0)
 }
 
+/// The smallest drill a via is held to (#2735): `rule_mm`, the limit the
+/// written design rules set for that via's net and layers, when one
+/// applies, as the design rule check holds it; else the board setup's
+/// ([`min_via_drill`]), which the check does not enforce yet.
+pub fn via_min_drill(board: &PcbBoard, rule_mm: Option<f64>) -> Option<f64> {
+    rule_mm.or_else(|| min_via_drill(board))
+}
+
 /// The type of `types` that `via` is, by kind, span and tenting.
 pub fn type_of(types: &[ViaTypeDef], via: &Via) -> Option<usize> {
     let key = ViaTypeKey::of_via(via)?;
     types.iter().position(|t| t.key() == key)
 }
 
+/// Which sizes of a via are its own, not its type's (#2735).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct SizeOverride {
+    pub diameter: bool,
+    pub drill: bool,
+}
+
+impl SizeOverride {
+    /// Whether either size is overridden.
+    pub fn any(self) -> bool {
+        self.diameter || self.drill
+    }
+
+    /// The sizes either of two vias overrides: what a selection shows.
+    #[must_use]
+    pub fn either(self, other: Self) -> Self {
+        Self {
+            diameter: self.diameter || other.diameter,
+            drill: self.drill || other.drill,
+        }
+    }
+}
+
+/// Which of `via`'s sizes differ from the type's: the one judgement the
+/// Via panel's bold rows and reset arrows read.
+pub fn overridden_fields(t: &ViaTypeDef, via: &Via) -> SizeOverride {
+    SizeOverride {
+        diameter: (via.diameter - t.diameter).abs() > SAME_SIZE_MM,
+        drill: (via.drill - t.drill).abs() > SAME_SIZE_MM,
+    }
+}
+
 /// Whether `via` has a size of its own: its diameter or drill differs from
 /// the type's.
 pub fn is_overridden(t: &ViaTypeDef, via: &Via) -> bool {
-    (via.diameter - t.diameter).abs() > SAME_SIZE_MM || (via.drill - t.drill).abs() > SAME_SIZE_MM
+    overridden_fields(t, via).any()
 }
 
 /// The command making every via of `items` a via of type `t`: its span,

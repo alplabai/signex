@@ -60,7 +60,10 @@ impl Signex {
                 let lock = item_lock(tracks.iter().any(|s| s.locked));
                 let mut common = self.primitive_common(board, target, lock)?;
                 common.locked_count = mixed_lock(tracks.iter().map(|s| s.locked));
-                PcbPrimitiveFacts::Track(track_facts(board, common, &tracks, i18n))
+                let mut facts = track_facts(board, common, &tracks, i18n);
+                // #2585: the pair the tracks belong to, by the board's classes.
+                facts.pair = super::pair::pair_facts(board, self.board_net_classes(path), &tracks);
+                PcbPrimitiveFacts::Track(facts)
             }
             ItemRef::Via(_) => {
                 let vias: Vec<&Via> = target
@@ -74,7 +77,8 @@ impl Signex {
                 let lock = item_lock(vias.iter().any(|v| v.locked));
                 let mut common = self.primitive_common(board, target, lock)?;
                 common.locked_count = mixed_lock(vias.iter().map(|v| v.locked));
-                let mut facts = via_facts(board, common, &vias, i18n);
+                let rules = self.via_panel_rules(path, board);
+                let mut facts = via_facts(board, common, &vias, rules.as_ref(), i18n);
                 // The shown layer is the panel's state (mockup row 96).
                 let panel = &self.interaction_state.pcb_primitive;
                 facts.view_layer = panel
@@ -161,6 +165,19 @@ impl Signex {
                 return None;
             }
         })
+    }
+
+    /// The design rules the check of the board at `path` applies, for the
+    /// Via panel's minimum drill (#2735); `None` when they do not compile,
+    /// and the panel falls back on the board setup's minimum.
+    pub(super) fn via_panel_rules(
+        &self,
+        path: &Path,
+        board: &PcbBoard,
+    ) -> Option<signex_drc::DrcRules> {
+        self.board_design_rules(path, board)
+            .ok()
+            .map(|(rules, _)| rules)
     }
 
     /// The facts every kind shares. `None` when a selected item is gone.
@@ -350,14 +367,18 @@ pub(super) fn track_facts(
         locked: shared(tracks.iter().map(|s| s.locked)),
         paste_mask: shared(tracks.iter().map(|s| s.attributes.paste_mask)),
         solder_mask: shared(tracks.iter().map(|s| s.attributes.solder_mask)),
+        pair: None,
         common,
     }
 }
 
+/// `rules`: the board's design rules, when they compile, for the minimum
+/// drill the check holds the vias to (#2735).
 pub(super) fn via_facts(
     board: &PcbBoard,
     common: PrimitiveCommon,
     vias: &[&Via],
+    rules: Option<&signex_drc::DrcRules>,
     i18n: &I18n,
 ) -> ViaFacts {
     let origin = board.options.origin;
@@ -403,6 +424,7 @@ pub(super) fn via_facts(
         via_type: None,
         type_size: None,
         overridden: None,
+        overridden_sizes: None,
         protection: None,
         drill_pair: None,
         finished_hole: None,
@@ -410,7 +432,7 @@ pub(super) fn via_facts(
         reaches: (true, true),
         view_layer: None,
     };
-    stack_facts::fill_via_type_facts(&mut facts, board, &stack, vias, i18n);
+    stack_facts::fill_via_type_facts(&mut facts, board, &stack, vias, rules, i18n);
     facts
 }
 

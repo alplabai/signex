@@ -360,14 +360,13 @@ fn via_stack<'a>(look: Look<'a>, f: &'a ViaFacts) -> Option<Element<'a, PanelMsg
     if !common.target.is_placement() && f.overridden == Some(true) {
         s.push_row(caption(look, look.t(ids::PCB_PRIM_OVERRIDE_NOTE)));
     }
-    let type_size = f.type_size;
     if f.mode == Some(StackMode::Simple) || f.layer_sizes.is_empty() {
-        let row = size_row(look, f, F::Diameter, f.diameter, type_size.map(|t| t.0));
+        let row = size_row(look, f, F::Diameter, f.diameter);
         s.push(common, ids::PCB_PRIM_DIAMETER, row);
     } else {
         size_rows(look, common, &f.layer_sizes, false, true, &mut s);
     }
-    let row = size_row(look, f, F::HoleSize, f.hole, type_size.map(|t| t.1));
+    let row = size_row(look, f, F::HoleSize, f.hole);
     s.push(common, ids::PCB_PRIM_DRILL, row);
     // The Via tool's form sets the drill; a placed via's finished hole types
     // the drill that leaves it.
@@ -409,20 +408,21 @@ fn via_stack<'a>(look: Look<'a>, f: &'a ViaFacts) -> Option<Element<'a, PanelMsg
 }
 
 /// Diameter or Drill, always typed: "from type" while it is the type's value;
-/// bold with a reset arrow while it differs.
+/// bold with a reset arrow while it differs, as the engine judges (#2735).
 fn size_row<'a>(
     look: Look<'a>,
     f: &'a ViaFacts,
     field: F,
     value: Option<f64>,
-    of_type: Option<f64>,
 ) -> Element<'a, PanelMsg> {
     let common = &f.common;
-    let differs = match (value, of_type) {
-        (Some(v), Some(t)) => (v - t).abs() > 1e-9,
-        (None, Some(_)) => true,
-        _ => false,
-    };
+    let differs = f.overridden_sizes.is_some_and(|o| {
+        if field == F::Diameter {
+            o.diameter
+        } else {
+            o.drill
+        }
+    });
     let own = differs && !common.target.is_placement();
     let input = if own && value.is_some() {
         bold_mm_field(look, f, field, value)

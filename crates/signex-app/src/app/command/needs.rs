@@ -596,6 +596,10 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         "assign_footprint" => Needs::Schematic,
         // #2389: length tuning of the selected tracks' nets.
         "tune_net_length" | "tune_diff_pair" => Needs::Pcb,
+        // #2585, #2797: a pair's width and the board's length-matching groups.
+        "set_diff_pair_width" | "length_matching" | "set_length_group" | "remove_length_group" => {
+            Needs::Pcb
+        }
         // #2401, #2407: the layer stack and the track and via edits.
         "board_layer_stack"
         | "set_layer_stack"
@@ -603,9 +607,14 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         | "unlock_board_items"
         | "set_via_span"
         | "set_layer_sizes"
-        | "set_pad_shape" => Needs::Pcb,
+        | "set_pad_shape"
+        | "set_pour_corners"
+        | "set_pour_fill"
+        | "set_pour_thermal_relief"
+        | "set_pad_thermal_relief" => Needs::Pcb,
         // #2408: with nothing selected these act on every pour or net.
         "stitch_vias" | "add_teardrops" | "remove_teardrops" => Needs::Pcb,
+        "set_teardrop_rule" | "set_pad_teardrop" | "set_pour_properties" => Needs::Pcb,
         // #2408, #2409: these act on the selection only.
         "gloss_selected_routes" | "board_shape_from_selection" | "keepout_from_selection" => {
             Needs::PcbSelection

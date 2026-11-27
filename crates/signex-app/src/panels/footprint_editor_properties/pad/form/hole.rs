@@ -1,29 +1,24 @@
 //! Hole Details of a through-hole pad, a slot or a non-plated hole (mockup
 //! row 125): the hole shape the model stores (Round or Slot), its size with
 //! Plated, the tolerance, the rotation of a slot, and the thermal relief of
-//! a plated pad as an enable header over its rule values (Caner,
-//! 2026-11-19).
+//! a plated pad (`thermal`, Caner, 2026-11-19; per-pad values #2593).
 
 use iced::alignment::Horizontal;
 use iced::widget::{Column, Space, container, stack};
 use iced::{Element, Length, Padding, Widget as _};
 use signex_i18n::{Localized, UserText, ids, t};
 use signex_types::theme::ThemeTokens;
-use signex_widgets::enable_section::EnableSection;
 use signex_widgets::{CheckboxLabel as _, Label, segmented, text};
 
 use super::super::super::super::PanelMsg;
 use super::super::choices::HoleShapeChoice;
 use super::super::field::{Shown, labelled_row, number_input, pair, segment_style, with_refusals};
 use super::super::illustration::{HOLE, SLOT};
-use super::super::rule_row::rule_only_row;
 use super::{
     Form, PadClass, pad_drill_diameter_msg, pad_drill_slot_length_msg, pad_hole_rotation_msg,
     pad_hole_tolerance_minus_msg, pad_hole_tolerance_plus_msg, pad_plated_msg,
-    pad_thermal_relief_msg,
 };
 use crate::library::editor::footprint::pad_field;
-use crate::panels::enable_section::enable_section_style;
 use crate::styles::tokens::resolve;
 use crate::styles::{Spacing, TypeScale};
 
@@ -169,42 +164,9 @@ pub(super) fn push<'a>(
         ));
     }
     if form.class.has_copper_stack() {
-        col = col.push(thermal_relief(form));
+        col = col.push(super::thermal::thermal_relief(form));
     }
     col
-}
-
-/// Thermal relief: the shipped switch as the enable header ("off · direct
-/// connect" while off), over Air gap, Spoke width and Spokes, which the
-/// board's rule decides for a library pad (Caner, 2026-11-19).
-fn thermal_relief<'a>(form: &Form<'_>) -> Element<'a, PanelMsg> {
-    let (target, i18n, tokens, palette) = (form.target, form.i18n, form.tokens, form.palette);
-    let is_on = form.values.stack.thermal_relief;
-    let body = Column::new()
-        .width(Length::Fill)
-        .push(rule_only_row(
-            t!(i18n, ids::EDITORS_FP_PAD_AIR_GAP),
-            palette,
-            tokens,
-            i18n,
-        ))
-        .push(rule_only_row(
-            t!(i18n, ids::EDITORS_FP_PAD_SPOKE_WIDTH),
-            palette,
-            tokens,
-            i18n,
-        ))
-        .push(rule_only_row(
-            t!(i18n, ids::EDITORS_FP_PAD_SPOKES),
-            palette,
-            tokens,
-            i18n,
-        ));
-    let section = EnableSection::new(t!(i18n, ids::EDITORS_PAD_THERMAL_RELIEF), is_on)
-        .on_toggle(move |on| pad_thermal_relief_msg(target, on))
-        .view(enable_section_style(tokens), body.boxed());
-    let caption = (!is_on).then(|| t!(i18n, ids::EDITORS_FP_PAD_THERMAL_OFF));
-    with_header_caption(section, caption, tokens)
 }
 
 /// `section` with `caption` at the right end of its enable header ("off",

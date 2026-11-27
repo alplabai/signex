@@ -1,8 +1,8 @@
 //! The area illustration (#2523, mockup row 99): a corner of the pour around a pad of
-//! its net, joined directly, and a pad of another net cleared by the
-//! Clearance; a shelved pour as its dashed outline alone; a keepout or a
-//! pour cutout (#2871) as its outline and what it keeps out. Thermal relief spokes are not drawn: the
-//! fill joins pads solidly (`docs/PCB_TOOLS.md`, "Polygon Pour").
+//! its net, joined directly or, with Thermal Relief on, through spokes across
+//! an air gap (#2580), and a pad of another net cleared by the Clearance; a
+//! shelved pour as its dashed outline alone; a keepout or a pour cutout
+//! (#2871) as its outline and what it keeps out.
 
 use iced::{Point, Rectangle, Size};
 use signex_i18n::{I18n, Localized, UserText, ids, t};
@@ -64,8 +64,8 @@ pub(in crate::panels::pcb_primitive_properties) fn illustration(
         .layer
         .as_ref()
         .map_or_else(String::new, |l| l.label.clone());
-    // The fill joins pads solidly: no spokes to show yet.
-    let art = canvas().feature(THERMAL, false);
+    let relief_on = f.thermal.is_some_and(|(on, _, _)| on);
+    let art = canvas().feature(THERMAL, relief_on);
     match f.kind {
         Some(ZoneKind::Keepout) => {
             let caption = t!(i18n, ids::PCB_PRIM_POUR_DRAWING_KEEPOUT);
@@ -128,9 +128,10 @@ pub(in crate::panels::pcb_primitive_properties) fn illustration(
         )
         .linked(CLEARANCE),
     )
+    .parts(relief_copper(f.thermal, paint))
     .part(outline(false))
     .parts(pads(net, i18n))
-    .parts(relief(i18n))
+    .parts(relief(i18n, relief_on))
     .part(Part::callout(Callout::new(edge, edge_out)).linked(CLEARANCE))
     .part(
         Part::leader(Leader {
@@ -222,18 +223,55 @@ fn pads(net: String, i18n: &I18n) -> Vec<Part> {
     parts
 }
 
-/// The pad of the pour's net: joined directly. The spoke and gap leaders
-/// need the thermal feature, which stays off while the fill draws no
-/// spokes.
-fn relief(i18n: &I18n) -> Vec<Part> {
+/// The air gap round the pad of the pour's net, knocked out to the panel
+/// ground, and the four spokes across it, drawn at the stored gap and
+/// width; shown while Thermal Relief is on.
+fn relief_copper(thermal: Option<(bool, f64, f64)>, paint: Paint) -> Vec<Part> {
+    let (spoke_mm, gap_mm) = thermal.map_or((0.0, 0.0), |(_, s, g)| (s, g));
+    let gap = (gap_mm as f32 * SCALE).clamp(3.0, 12.0);
+    let width = (spoke_mm as f32 * SCALE).clamp(2.0, 8.0);
+    let reach = PAD_R + gap + 3.0;
+    let ring = Part::new(
+        Primitive::Circle {
+            center: Point::new(OWN_PAD_X, PAD_Y),
+            radius: PAD_R + gap,
+        },
+        Style::filled(Paint::Ink(Ink::Panel), Tint::Solid),
+    )
+    .linked(SPOKE_GAP)
+    .requires(THERMAL);
+    let spoke = |rect: Rectangle| {
+        Part::new(Primitive::Rect { rect }, Style::filled(paint, Tint::Body))
+            .linked(SPOKE_GAP)
+            .requires(THERMAL)
+    };
     vec![
-        label(
+        ring,
+        spoke(Rectangle::new(
+            Point::new(OWN_PAD_X - reach, PAD_Y - width / 2.0),
+            Size::new(2.0 * reach, width),
+        )),
+        spoke(Rectangle::new(
+            Point::new(OWN_PAD_X - width / 2.0, PAD_Y - reach),
+            Size::new(width, 2.0 * reach),
+        )),
+    ]
+}
+
+/// The pad of the pour's net: "direct connect" while Thermal Relief is off;
+/// the spoke and gap leaders, which need the thermal feature, while on.
+fn relief(i18n: &I18n, relief_on: bool) -> Vec<Part> {
+    let mut parts = Vec::new();
+    if !relief_on {
+        parts.push(label(
             Point::new(OWN_PAD_X, PAD_Y - PAD_R - 7.0),
             t!(i18n, ids::PCB_PRIM_POUR_DRAWING_DIRECT),
             Anchor::Middle,
             TextRole::Note,
             &[THERMAL],
-        ),
+        ));
+    }
+    parts.extend([
         Part::leader(Leader {
             at: Point::new(OWN_PAD_X + PAD_R * 0.7, PAD_Y - PAD_R * 0.7),
             label_at: Point::new(OWN_PAD_X + 34.0, TOP + 6.0),
@@ -250,7 +288,8 @@ fn relief(i18n: &I18n) -> Vec<Part> {
         })
         .linked(SPOKE_GAP)
         .requires(THERMAL),
-    ]
+    ]);
+    parts
 }
 
 /// A keepout or a pour cutout (#2871): its outline with a light tint, and
@@ -298,13 +337,34 @@ fn keepout(
 mod tests {
     use super::*;
 
+    /// Thermal Relief off: no gap, spoke or leader shows; "direct connect"
+    /// does.
     #[test]
-    fn the_spoke_and_gap_leaders_stay_out_while_the_fill_draws_no_spokes() {
+    fn the_spoke_and_gap_leaders_stay_out_while_thermal_relief_is_off() {
+        let off = Some((false, 0.254, 0.508));
         let art = canvas()
-            .parts(relief(&I18n::en_us()))
+            .parts(relief_copper(off, Paint::Ink(Ink::Secondary)))
+            .parts(relief(&I18n::en_us(), false))
             .feature(THERMAL, false);
         assert!(art.visible_parts().all(|p| !p.is_linked_to(&SPOKE_GAP)));
         assert!(art.visible_parts().any(|p| p.is_linked_to(&THERMAL)));
+    }
+
+    /// #2580: Thermal Relief on draws the gap ring, the spokes and their two
+    /// leaders, and no "direct connect".
+    #[test]
+    fn thermal_relief_on_draws_the_gap_the_spokes_and_their_leaders() {
+        let on = Some((true, 0.254, 0.508));
+        let art = canvas()
+            .parts(relief_copper(on, Paint::Ink(Ink::Secondary)))
+            .parts(relief(&I18n::en_us(), true))
+            .feature(THERMAL, true);
+        let spoke_gap = art
+            .visible_parts()
+            .filter(|p| p.is_linked_to(&SPOKE_GAP))
+            .count();
+        assert_eq!(spoke_gap, 5, "the ring, two spokes and two leaders");
+        assert!(art.visible_parts().all(|p| !p.is_linked_to(&THERMAL)));
     }
 
     #[test]

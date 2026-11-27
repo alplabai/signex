@@ -190,6 +190,7 @@ layout_plan_get
 layout_plan_set
 layout_plan_status
 leave_sheet
+length_matching
 list_annotations
 list_diff_pairs
 list_documents
@@ -370,6 +371,7 @@ regenerate_block_diagram
 remove_board_panel
 remove_from_union
 remove_last_vertex
+remove_length_group
 remove_teardrops
 rename_net_class
 repair_pin_junctions
@@ -388,6 +390,7 @@ rotate_clockwise
 rotate_counterclockwise
 rotate_selection
 rotate_selection_cw
+route_options
 rubber_stamp_copy
 rules_add
 rules_conflicts
@@ -429,6 +432,7 @@ set_active_layer
 set_board_graphic
 set_board_origin
 set_board_panel
+set_diff_pair_width
 set_dock_panel
 set_footprint_position
 set_footprint_rotation
@@ -439,6 +443,7 @@ set_layer_sizes
 set_layer_stack
 set_layer_tab_names
 set_layer_visible
+set_length_group
 set_net_class_rules
 set_net_tie
 set_object_position
@@ -447,10 +452,17 @@ set_object_text
 set_object_transparency
 set_object_visible
 set_pad_shape
+set_pad_teardrop
+set_pad_thermal_relief
+set_pour_corners
+set_pour_fill
+set_pour_properties
+set_pour_thermal_relief
 set_selection_filters
 set_sheet_symbol_size
 set_sheet_variable
 set_symbol_parameter
+set_teardrop_rule
 set_via_span
 sheet_navigation_back
 sheet_navigation_forward

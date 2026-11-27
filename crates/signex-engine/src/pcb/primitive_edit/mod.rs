@@ -34,7 +34,9 @@ pub use graphic::{GraphicEdit, apply_graphic_edit, graphic_edit_command};
 pub use pad::{PadEdit, pad_edit_command};
 pub use track::{TrackEdit, track_edit_command, track_location};
 pub use via::{ViaEdit, edit_vias, via_edit_command};
-pub use zone::{ZoneEdit, apply_zone_edit, zone_edit_command, zone_layer_allowed};
+pub use zone::{
+    ZoneEdit, apply_zone_edit, zone_edit_command, zone_edits_command, zone_layer_allowed,
+};
 
 use signex_types::pcb::MaskExpansion;
 
@@ -77,6 +79,9 @@ pub enum PrimitiveEditRefusal {
     /// A trapezoid or custom pad the edit would leave with no copper (#2242).
     #[error("{0}")]
     PadShape(signex_types::pcb_pad_shape::PadShapeFault),
+    /// A pad thermal relief value no pour can use (#2593).
+    #[error("{0}")]
+    PadThermal(signex_types::pad_thermal::PadThermalFault),
 }
 
 fn finite(value: f64) -> Result<f64, PrimitiveEditRefusal> {

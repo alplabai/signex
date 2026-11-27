@@ -6,7 +6,7 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 use pcb_geom::ConnectionCounts;
-use signex_engine::pcb::route::diff_pair_of;
+use signex_engine::pcb::route::{diff_pair_of, pair_name};
 use signex_i18n::{I18n, MessageId, ids};
 use signex_types::format::parse_pcb_layer;
 use signex_types::net_class::{NetClass, first_matching_class};
@@ -101,23 +101,6 @@ pub struct PcbNetsSummary {
     pub pairs: Vec<PcbDiffPairRow>,
     /// The polygon pours, in board order.
     pub pours: Vec<PcbPourRow>,
-}
-
-/// What two pair nets share, without a trailing `_`: `USB_D` for `USB_DP`
-/// and `USB_DM`; both names when they share nothing.
-fn pair_name(positive: &str, negative: &str) -> String {
-    let shared: String = positive
-        .chars()
-        .zip(negative.chars())
-        .take_while(|(a, b)| a == b)
-        .map(|(a, _)| a)
-        .collect();
-    let stem = shared.trim_end_matches(['_', '-', '+', '.']);
-    if stem.is_empty() {
-        format!("{positive} / {negative}")
-    } else {
-        stem.to_owned()
-    }
 }
 
 /// The polygon pours of `board`, in board order.

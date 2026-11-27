@@ -31,6 +31,8 @@ mod mount_style;
 mod pad;
 mod pad_columns;
 mod pad_shape_check;
+#[cfg(test)]
+mod pad_thermal_tests;
 mod pitch;
 mod serde_tsv;
 mod silk_marker;

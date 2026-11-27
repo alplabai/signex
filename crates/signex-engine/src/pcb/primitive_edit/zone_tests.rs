@@ -178,3 +178,177 @@ fn a_pour_is_unfilled_in_one_step_and_undone_exactly() {
         "a shelved pour has nothing to unfill"
     );
 }
+
+/// #2578 / #2579: a pour's corners, fill mode and hatch are set together as
+/// one replace, undone exactly; a negative size is refused and nothing
+/// moves; a fill, region or keepout has none.
+#[test]
+fn a_pours_corners_and_hatch_are_one_step_and_undone_exactly() {
+    use signex_types::zone_pour_shape::{PourCorners, PourFillMode};
+    let b = with_fill(POUR_FILL);
+    let edits = [
+        ZoneEdit::Corners(PourCorners::Rounded),
+        ZoneEdit::CornerSize(0.5),
+        ZoneEdit::FillMode(PourFillMode::Hatched),
+        ZoneEdit::HatchWidth(0.3),
+        ZoneEdit::HatchGap(0.6),
+    ];
+    let command = zone_edits_command(&b, &[id(ZONE_1)], &edits)
+        .expect("allowed")
+        .expect("a change");
+    let mut engine = crate::pcb::BoardEngine::new(b.clone(), 1);
+    engine.execute(command).expect("applies");
+    let zone = &engine.board().zones[0];
+    assert_eq!(
+        (zone.corners, zone.corner_size, zone.fill_mode),
+        (PourCorners::Rounded, 0.5, PourFillMode::Hatched)
+    );
+    assert_eq!((zone.hatch_width, zone.hatch_gap), (0.3, 0.6));
+    engine.undo().expect("undo").expect("one step");
+    assert_eq!(
+        engine.board().zones,
+        b.zones,
+        "the inverse restores all five"
+    );
+
+    for bad in [
+        ZoneEdit::CornerSize(-0.1),
+        ZoneEdit::HatchWidth(-1.0),
+        ZoneEdit::HatchGap(-1.0),
+    ] {
+        let refused = zone_edits_command(
+            &b,
+            &[id(ZONE_1)],
+            &[ZoneEdit::Corners(PourCorners::Chamfer), bad],
+        );
+        assert_eq!(refused, Err(PrimitiveEditRefusal::Negative), "{bad:?}");
+    }
+    let mut nan = b.clone();
+    assert_eq!(
+        edit(&mut nan, ZoneEdit::CornerSize(f64::NAN)),
+        Err(PrimitiveEditRefusal::NonFinite)
+    );
+
+    let mut solid = with_fill("solid");
+    assert_eq!(
+        edit(&mut solid, ZoneEdit::Corners(PourCorners::Chamfer)),
+        Ok(false)
+    );
+    assert_eq!(
+        edit(&mut solid, ZoneEdit::FillMode(PourFillMode::Hatched)),
+        Ok(false)
+    );
+    let mut keepout = with_fill(KEEPOUT_FILL);
+    assert_eq!(edit(&mut keepout, ZoneEdit::HatchWidth(0.3)), Ok(false));
+}
+
+/// #2580: Thermal Relief on seeds a gap and spoke width that are no length
+/// with the defaults; the width and gap are lengths above 0; a fill, region
+/// or keepout has no relief.
+#[test]
+fn a_pour_switches_thermal_relief_and_takes_a_spoke_width_and_air_gap() {
+    use signex_types::pcb::{PCB_THERMAL_BRIDGE_MM, PCB_THERMAL_GAP_MM};
+    let mut b = with_fill(POUR_FILL);
+    b.zones[0].thermal_gap = 0.0;
+    b.zones[0].thermal_width = 0.0;
+    assert_eq!(edit(&mut b, ZoneEdit::ThermalRelief(true)), Ok(true));
+    let zone = &b.zones[0];
+    assert!(zone.thermal_relief);
+    assert_eq!(
+        (zone.thermal_gap, zone.thermal_width),
+        (PCB_THERMAL_GAP_MM, PCB_THERMAL_BRIDGE_MM)
+    );
+    assert_eq!(edit(&mut b, ZoneEdit::ThermalSpokeWidth(0.4)), Ok(true));
+    assert_eq!(edit(&mut b, ZoneEdit::ThermalAirGap(0.3)), Ok(true));
+    assert_eq!(
+        (b.zones[0].thermal_width, b.zones[0].thermal_gap),
+        (0.4, 0.3)
+    );
+    assert_eq!(edit(&mut b, ZoneEdit::ThermalRelief(false)), Ok(true));
+    assert_eq!(
+        (b.zones[0].thermal_width, b.zones[0].thermal_gap),
+        (0.4, 0.3),
+        "off keeps the width and gap"
+    );
+    for bad in [0.0, -0.1] {
+        assert_eq!(
+            edit(&mut b, ZoneEdit::ThermalAirGap(bad)),
+            Err(PrimitiveEditRefusal::NotPositive)
+        );
+    }
+    assert_eq!(
+        edit(&mut b, ZoneEdit::ThermalSpokeWidth(f64::NAN)),
+        Err(PrimitiveEditRefusal::NonFinite)
+    );
+    let mut solid = with_fill("solid");
+    assert_eq!(edit(&mut solid, ZoneEdit::ThermalRelief(true)), Ok(false));
+}
+
+/// #2580: several edits on the pours are one replace, undone exactly; one
+/// refused edit refuses them all.
+#[test]
+fn thermal_relief_edits_together_are_one_step() {
+    let b = with_fill(POUR_FILL);
+    let edits = [
+        ZoneEdit::ThermalRelief(true),
+        ZoneEdit::ThermalSpokeWidth(0.35),
+        ZoneEdit::ThermalAirGap(0.45),
+    ];
+    let command = zone_edits_command(&b, &[id(ZONE_1)], &edits)
+        .expect("allowed")
+        .expect("a change");
+    let mut engine = crate::pcb::BoardEngine::new(b.clone(), 1);
+    engine.execute(command).expect("applies");
+    let zone = &engine.board().zones[0];
+    assert_eq!(
+        (zone.thermal_relief, zone.thermal_width, zone.thermal_gap),
+        (true, 0.35, 0.45)
+    );
+    engine.undo().expect("undo").expect("a step");
+    assert_eq!(engine.board().zones, b.zones);
+    let refused = [ZoneEdit::ThermalRelief(true), ZoneEdit::ThermalAirGap(0.0)];
+    assert_eq!(
+        zone_edits_command(&b, &[id(ZONE_1)], &refused),
+        Err(PrimitiveEditRefusal::NotPositive)
+    );
+}
+
+/// `set_pour_properties`: the priority and island rules of a pour set
+/// together are one replace whose inverse undoes all of them; one refused
+/// value refuses the lot.
+#[test]
+fn several_pour_fields_are_one_replace_and_one_refusal_refuses_all() {
+    let mut b = with_fill(POUR_FILL);
+    let before = b.zones[0].clone();
+    let edits = [
+        ZoneEdit::Priority(2.0),
+        ZoneEdit::MinIslandArea(1.5),
+        ZoneEdit::RemoveDeadIslands(true),
+    ];
+    let command = zone_edits_command(&b, &[id(ZONE_1)], &edits)
+        .expect("allowed")
+        .expect("a change");
+    assert!(matches!(
+        command,
+        crate::pcb::BoardCommand::ReplaceItems { .. }
+    ));
+    let applied = command.apply(&mut b).expect("applies");
+    let zone = &b.zones[0];
+    assert_eq!(
+        (
+            zone.priority,
+            zone.min_island_area,
+            zone.remove_dead_islands
+        ),
+        (2, 1.5, true)
+    );
+    applied.inverse.apply(&mut b).expect("undoes");
+    assert_eq!(b.zones[0], before);
+
+    let refused = [ZoneEdit::Priority(2.0), ZoneEdit::MinIslandArea(-1.0)];
+    assert_eq!(
+        zone_edits_command(&b, &[id(ZONE_1)], &refused),
+        Err(PrimitiveEditRefusal::Negative)
+    );
+    assert_eq!(b.zones[0], before);
+}

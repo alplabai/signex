@@ -317,6 +317,7 @@ fn fiducial(index: usize, at: Point, diameter: f64) -> Footprint {
         custom_outline: Vec::new(),
         rotation: 0.0,
         net_locked: false,
+        thermal: Default::default(),
         layer_sizes: None,
         unknown: Default::default(),
         unknown_columns: Default::default(),

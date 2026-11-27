@@ -41,7 +41,8 @@ pub(crate) fn keep_pages_after_boards(tabs: &mut Vec<TabInfo>, active: usize) ->
     // its kind per path.
     let is_board: fn(&TabKind) -> bool = |kind| matches!(kind, TabKind::Pcb);
     let active = keep_pages_after_owners(tabs, active, TabKind::is_layer_stack, is_board);
-    keep_pages_after_owners(tabs, active, TabKind::is_polygon_manager, is_board)
+    let active = keep_pages_after_owners(tabs, active, TabKind::is_polygon_manager, is_board);
+    keep_pages_after_owners(tabs, active, TabKind::is_length_matching, is_board)
 }
 
 /// Move any page tab (`is_page`) left of its owner's tab (`is_owner`, the

@@ -158,10 +158,19 @@ shows ("Thru 1:4"). Picking a type in the Via panel sets the vias' kind,
 span, diameter, drill and tenting as one undo step. Diameter, Drill and
 Finished Hole are always editable. A via whose diameter or drill differs from
 its type's is an override: that size is in bold with a reset arrow, and its
-"from type" note goes. Typing the type's value clears the override. The
-finished hole is the drill less twice `VIA_PLATING_MM` (0.025 mm), and typing
-one sets the drill that leaves it; a drill below `PcbSetup::via_min_drill`
-shows a warning.
+"from type" note goes. Which size differs is the engine's judgement alone
+(`via_types::overridden_fields`, sizes within 1e-7 mm are the same, #2735);
+the panel reads it and does not compare values itself. Typing the type's
+value clears the override. The finished hole is the drill less twice
+`VIA_PLATING_MM` (0.025 mm), and typing one sets the drill that leaves it.
+
+A drill below the via's minimum shows a warning. The minimum is the one the
+design rule check holds that via to, a written `via` rule's `drill >=` for
+its net, class and layers (`DrcRules::via_drill_limit_mm`), so the panel and
+the check agree; where no written rule applies it is
+`PcbSetup::via_min_drill`, which the check does not enforce yet
+(`via_types::via_min_drill`, #2735). With several vias selected the largest
+of their minimums is shown.
 
 A known trap of derived types: the type's size is the one most of its vias
 share, so an override on most vias of a type moves the type's size with it.

@@ -98,6 +98,8 @@ mod field_edits;
 pub(crate) mod form_look;
 pub(crate) mod graphite;
 pub(crate) mod illustration;
+pub mod length_matching;
+pub use length_matching::{LengthMatchingFacts, LengthMatchingMsg, LengthMatchingUi};
 mod library_row;
 mod messages;
 pub(crate) mod messages_row;

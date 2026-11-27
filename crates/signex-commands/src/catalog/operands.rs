@@ -457,6 +457,35 @@ pub const TUNE_PAIR: &[Operand] = &[
     optional("net", OperandKind::Text),
 ];
 
+/// The width of a differential pair's tracks (#2585): `net` names either
+/// net of the pair (every track of both nets), else the selected tracks
+/// and the tracks coupled to them; `width` in mm.
+pub const SET_PAIR_WIDTH: &[Operand] = &[
+    required("document", OperandKind::Document),
+    optional("net", OperandKind::Text),
+    required("width", OperandKind::Text),
+];
+
+/// A length-matching group of the named board (#2797), made when the board
+/// has none of that `name`: `target` and `tolerance` in mm (both needed to
+/// make one), `topology` (`star`, `chain`, `fly_by`, `t`), `members` the
+/// net names, comma separated, and `rename` its new name.
+pub const LENGTH_GROUP: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("name", OperandKind::Text),
+    optional("rename", OperandKind::Text),
+    optional("target", OperandKind::Text),
+    optional("tolerance", OperandKind::Text),
+    optional("topology", OperandKind::Text),
+    optional("members", OperandKind::Text),
+];
+
+/// The length-matching group `name` of the named board (#2797).
+pub const REMOVE_LENGTH_GROUP: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("name", OperandKind::Text),
+];
+
 /// Colour the net under a point of the named document's sheet.
 pub const COLOR_NET: &[Operand] = &[
     required("at", OperandKind::Point),
@@ -683,6 +712,18 @@ pub const CHECK_REQUIREMENTS: &[Operand] = &[
 /// Select Net and Highlight Net on a board (#2403): the net by name; without
 /// it, the net of the selection or of what is under the cursor.
 pub const BOARD_NET: &[Operand] = &[optional("net", OperandKind::Text)];
+/// `route_options` (#2719): the Interactive Routing options for the named
+/// board; each one given is set first. `conflict_mode` is `walkaround` or
+/// `push_and_shove`, `corner_mode` `90`, `45_start`, `45_end` or
+/// `any_angle`.
+pub const ROUTE_OPTIONS: &[Operand] = &[
+    required("document", OperandKind::Document),
+    optional("conflict_mode", OperandKind::Text),
+    optional("corner_mode", OperandKind::Text),
+    optional("width", OperandKind::Text),
+    optional("via_diameter", OperandKind::Text),
+    optional("via_hole", OperandKind::Text),
+];
 /// `measure_board` (#2403): point to point from `start` to `end`, or edge to
 /// edge between the two items `ids` names.
 pub const MEASURE_BOARD: &[Operand] = &[
@@ -1074,6 +1115,25 @@ pub const SET_PAD_SHAPE: &[Operand] = &[
     required("shape", OperandKind::Text),
     optional("delta", OperandKind::Text),
     optional("corners", OperandKind::Text),
+];
+/// `set_pour_thermal_relief` (#2580): polygon pours by uuid, the switch and
+/// the spoke width and air gap in mm; at least one of the three.
+pub const SET_POUR_THERMAL_RELIEF: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("ids", OperandKind::Targets),
+    optional("on", OperandKind::Bool),
+    optional("spoke_width", OperandKind::Text),
+    optional("air_gap", OperandKind::Text),
+];
+/// `set_pad_thermal_relief` (#2593): footprint pads by uuid; each of
+/// `air_gap` and `spoke_width` is `rule` or mm, `spokes` is `rule` or a count
+/// from 1 to 4; at least one of the three.
+pub const SET_PAD_THERMAL_RELIEF: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("ids", OperandKind::Targets),
+    optional("air_gap", OperandKind::Text),
+    optional("spoke_width", OperandKind::Text),
+    optional("spokes", OperandKind::Text),
 ];
 /// `generate_block_diagram` (#2968): a block diagram of the project
 /// `document` names (the project, or one of its documents), written to

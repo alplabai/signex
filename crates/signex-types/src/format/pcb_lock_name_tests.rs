@@ -26,6 +26,7 @@ fn pad(n: u128, locked: bool) -> Pad {
         rotation: 0.0,
         layer_sizes: None,
         net_locked: locked,
+        thermal: Default::default(),
         unknown: Default::default(),
         unknown_columns: Default::default(),
     }
