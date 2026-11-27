@@ -6854,7 +6854,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tiny-skia 0.11.4",
  "ttf-parser",
- "usvg",
+ "usvg 0.48.1",
  "uuid",
 ]
 

@@ -60,6 +60,9 @@ pub(super) fn grey_elements(elements: &mut [SvgElement], paper: (f32, f32, f32))
                 }
             }
             SvgElement::Text { fill_rgb, .. } => *fill_rgb = greyed_rgb(*fill_rgb, paper),
+            // A part never draws a picture: images are sheet drawings, not
+            // symbol graphics, so nothing here is greyed.
+            SvgElement::Image { .. } => {}
         }
     }
 }

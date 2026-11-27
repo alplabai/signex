@@ -157,7 +157,7 @@ fn child_strokes(ctx: &ExportContext, opts: &PdfOptions) -> (Vec<Stroke>, Rgb) {
                 closed: commands.iter().any(|c| matches!(c, SvgPathCommand::Close)),
                 rgb: style.stroke_rgb,
             }),
-            SvgElement::Text { .. } => None,
+            SvgElement::Text { .. } | SvgElement::Image { .. } => None,
         })
         .collect();
     (strokes, svg.paper)

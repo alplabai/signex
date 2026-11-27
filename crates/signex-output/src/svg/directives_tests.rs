@@ -105,6 +105,7 @@ fn a_classed_blanket_prints_its_outline_and_its_flag_in_the_directive_colour() {
                 assert_eq!(style.fill_rgb, None);
             }
             SvgElement::Text { fill_rgb, .. } => assert_eq!(*fill_rgb, palette.no_connect),
+            SvgElement::Image { .. } => panic!("a directive draws no image"),
         }
     }
     // A dashed outline: more marks than its four edges, plus the flag box.

@@ -102,7 +102,7 @@ fn drawn_with(
                 commands.len(),
                 *style,
             )),
-            SvgElement::Text { .. } => None,
+            SvgElement::Text { .. } | SvgElement::Image { .. } => None,
         })
         .collect();
     let outline = paths
