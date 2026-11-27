@@ -291,6 +291,11 @@ impl Signex {
         if self.is_repeat_of_resuming_esc(&event) {
             return Task::none();
         }
+        // A Components panel header click reads Shift to add a nested sort
+        // key (mockup row 52); mouse events carry no modifiers.
+        if let keyboard::Event::ModifiersChanged(modifiers) = &event {
+            self.library.components_panel.table.shift_held = modifiers.shift();
+        }
         let (message, swallowed_by) = self.route_key_by(window, &event);
         // #1378 - a key press that is not a keymap stroke (Esc, F1, a
         // selection slot, a palette or recorder key) abandons the pending

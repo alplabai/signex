@@ -44,6 +44,7 @@ mod commit_pending;
 mod component_preview;
 mod components_panel;
 mod components_panel_rows;
+mod components_table;
 #[cfg(test)]
 mod datasheet_open_tests;
 mod datasheet_save;
@@ -695,6 +696,7 @@ impl Signex {
             LibraryMessage::ComponentsPanelOpenProjectClicked => {
                 Task::done(Message::Menu(crate::menu_bar::MenuMessage::OpenProject))
             }
+            LibraryMessage::ComponentsTable(msg) => self.handle_components_table(msg),
             LibraryMessage::BrowserPreviewLoaded {
                 key,
                 generation,

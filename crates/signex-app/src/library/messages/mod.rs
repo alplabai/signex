@@ -26,12 +26,14 @@ use super::state::PreviewTab;
 pub type ComponentId = Uuid;
 pub type Version = u32;
 
+mod components_table;
 mod datasheet;
 mod import;
 mod library_message;
 mod placed_part;
 mod range_filter;
 pub use crate::app::core::resolved_placement::ResolvedPlacement;
+pub use components_table::{ComponentsTableMsg, HeaderAction};
 pub use datasheet::{DatasheetMsg, PickedFile, PickedPdf};
 pub use import::LibraryImportMsg;
 pub use library_message::{

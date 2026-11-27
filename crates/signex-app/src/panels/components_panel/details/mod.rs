@@ -386,8 +386,17 @@ pub(crate) fn view<'a>(
         );
     }
 
+    // Every parameter with its value, pinned ones first (components-cx).
+    let (lines, more) = crate::panels::components_panel::table::detail_lines(&panel.table, i18n);
     col = col.push(title(ids::PANELS_COMPONENTS_DETAILS_PARAMETERS));
-    col = col.push(graphite::parameter_table(&d.parameters, tokens, i18n));
+    col = col.push(graphite::parameter_table(lines, tokens, i18n));
+    col = col.push(crate::panels::components_panel::table::details_extras(
+        &panel.table,
+        more,
+        title,
+        tokens,
+        i18n,
+    ));
     col = col.push(Space::new().height(SP.m).boxed());
 
     scrollable(container(col).padding([SP.s, 10.0]).width(Length::Fill))
