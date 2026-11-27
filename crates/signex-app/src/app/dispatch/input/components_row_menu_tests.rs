@@ -64,12 +64,13 @@ fn use_built_in(app: &mut Signex, id: &str) {
     app.ui_state.active_keymap = std::sync::Arc::new(set.compile_active());
 }
 
-/// The standard profile binds Enter: the menu shows Enter and Enter places.
+/// The standard profile binds Enter: the menu shows ENTER (named keys
+/// print in capitals, as on key caps: keys.ftl) and Enter places.
 #[test]
 fn the_standard_profile_shows_and_takes_enter() {
     let mut app = app_with_open_menu();
     use_built_in(&mut app, "signex_standard");
-    assert_eq!(hint(&app), "Enter");
+    assert_eq!(hint(&app), "ENTER");
     assert!(places(&app, keyboard::Key::Named(Named::Enter)));
 }
 
