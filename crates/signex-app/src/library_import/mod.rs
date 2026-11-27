@@ -19,6 +19,7 @@
 pub mod confine;
 pub mod describe;
 pub mod discovery;
+mod empty_dir;
 pub mod error;
 pub mod events;
 pub mod output;

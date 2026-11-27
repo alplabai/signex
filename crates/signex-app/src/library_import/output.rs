@@ -8,6 +8,7 @@
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 
+use super::empty_dir::{FolderId, empty_folder, folder_id};
 use super::error::ImportError;
 use super::run::{LibraryRunRequest, RunMode};
 
@@ -18,8 +19,9 @@ pub enum Held {
     NotOwned,
     /// This run created the folder.
     Created,
-    /// An empty folder that was there: emptied after a failure, kept.
-    Adopted,
+    /// An empty folder that was there, with its identity when the run
+    /// took it: emptied after a failure, kept.
+    Adopted(FolderId),
 }
 
 /// The output folder as a run has taken it.
@@ -59,7 +61,7 @@ pub fn claim_output(request: &LibraryRunRequest) -> Result<ClaimedOutput, Import
         Ok(meta) if meta.is_dir() => {
             let mut entries = std::fs::read_dir(out).map_err(unusable)?;
             return match entries.next() {
-                None => Ok(claimed(Held::Adopted, None)),
+                None => Ok(claimed(Held::Adopted(folder_id(&meta)), None)),
                 Some(_) => Err(taken()),
             };
         }
@@ -116,50 +118,25 @@ impl ClaimedOutput {
                     false
                 }
             },
-            Held::Adopted => self.empty_adopted(),
+            Held::Adopted(id) => self.empty_adopted(&id),
         };
         self.remove_created_parents();
         released
     }
 
     /// Remove what the run wrote inside the adopted folder, never following
-    /// a link: a link inside is removed itself, and a folder that has
-    /// become a link is left alone.
-    fn empty_adopted(&self) -> bool {
-        let folder = &self.folder;
-        let warn = |what: &Path, e: &std::io::Error| {
-            log::warn!("library import: could not remove {}: {e}", what.display());
-        };
-        match std::fs::symlink_metadata(folder) {
-            Ok(meta) if meta.is_dir() && !meta.file_type().is_symlink() => {}
-            Ok(_) => {
-                log::warn!(
-                    "library import: {} is no longer a folder; left as it is",
-                    folder.display()
+    /// a link (`empty_dir`); a folder swapped in at its path is left alone.
+    fn empty_adopted(&self, id: &FolderId) -> bool {
+        match empty_folder(&self.folder, id) {
+            Ok(()) => true,
+            Err(e) => {
+                log::error!(
+                    "library import: {} not emptied: {e}",
+                    self.folder.display()
                 );
-                return false;
-            }
-            Err(e) => {
-                warn(folder, &e);
-                return false;
+                false
             }
         }
-        let entries = match std::fs::read_dir(folder) {
-            Ok(entries) => entries,
-            Err(e) => {
-                warn(folder, &e);
-                return false;
-            }
-        };
-        let mut emptied = true;
-        for entry in entries {
-            let result = entry.and_then(|entry| remove_entry(&entry.path()));
-            if let Err(e) = result {
-                warn(folder, &e);
-                emptied = false;
-            }
-        }
-        emptied
     }
 
     /// Remove the parent folders this run created, bottom-up, while each is
@@ -176,20 +153,5 @@ impl ClaimedOutput {
                 return;
             }
         }
-    }
-}
-
-/// Remove one entry of the adopted folder. A link is removed as a link
-/// (on Windows a link to a folder is removed as a folder); a real folder
-/// goes with what is in it, without following the links inside.
-fn remove_entry(path: &Path) -> std::io::Result<()> {
-    let meta = std::fs::symlink_metadata(path)?;
-    if meta.file_type().is_symlink() {
-        return std::fs::remove_file(path).or_else(|e| std::fs::remove_dir(path).map_err(|_| e));
-    }
-    if meta.is_dir() {
-        std::fs::remove_dir_all(path)
-    } else {
-        std::fs::remove_file(path)
     }
 }

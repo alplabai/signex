@@ -33,7 +33,7 @@ fn a_new_run_creates_its_folder_and_refuses_one_that_holds_anything() {
     assert!(new.is_dir(), "created with its parents");
     // An empty folder that is there is adopted as it is.
     let adopted = claim(&new, RunMode::Preview).unwrap();
-    assert_eq!(adopted.held, Held::Adopted);
+    assert!(matches!(adopted.held, Held::Adopted(_)));
     assert_eq!(adopted.created_parent, None);
     std::fs::write(new.join("theirs.txt"), "keep").unwrap();
     assert_eq!(
@@ -149,4 +149,44 @@ fn a_failed_update_leaves_its_folder_to_the_restore() {
     let claimed = claim(&out, RunMode::Update).unwrap();
     assert!(!claimed.release_after_failure());
     assert!(out.join("Lib.snxlib").exists());
+}
+
+/// A folder swapped for a link to another folder after the run took it:
+/// nothing inside the link's target is deleted, and nothing is said to be
+/// removed.
+#[cfg(unix)]
+#[test]
+fn a_folder_swapped_for_a_link_deletes_nothing_in_its_target() {
+    let dir = tempfile::tempdir().unwrap();
+    let victim = dir.path().join("victim");
+    std::fs::create_dir(&victim).unwrap();
+    std::fs::write(victim.join("precious.txt"), "keep").unwrap();
+    let out = dir.path().join("Mine");
+    std::fs::create_dir(&out).unwrap();
+    let claimed = claim(&out, RunMode::Import).unwrap();
+    std::fs::write(out.join("half.snxsym"), "x").unwrap();
+    std::fs::rename(&out, dir.path().join("moved")).unwrap();
+    std::os::unix::fs::symlink(&victim, &out).unwrap();
+    assert!(!claimed.release_after_failure());
+    assert!(victim.join("precious.txt").exists());
+    assert!(std::fs::symlink_metadata(&out).unwrap().file_type().is_symlink());
+    assert!(dir.path().join("moved/half.snxsym").exists());
+}
+
+/// Another folder at the adopted folder's path is not the one the run
+/// took: everything in it is kept.
+#[cfg(unix)]
+#[test]
+fn another_folder_at_the_adopted_path_keeps_everything() {
+    let dir = tempfile::tempdir().unwrap();
+    let out = dir.path().join("Mine");
+    std::fs::create_dir(&out).unwrap();
+    let claimed = claim(&out, RunMode::Import).unwrap();
+    // The adopted folder lives on under another name, so the new one
+    // cannot reuse its inode.
+    std::fs::rename(&out, dir.path().join("old")).unwrap();
+    std::fs::create_dir(&out).unwrap();
+    std::fs::write(out.join("theirs.txt"), "keep").unwrap();
+    assert!(!claimed.release_after_failure());
+    assert!(out.join("theirs.txt").exists());
 }
