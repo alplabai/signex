@@ -162,7 +162,8 @@ pub(super) fn shift_snapshot_for_selection(
             SchDrawing::Bezier(_)
             | SchDrawing::Dimension(_)
             | SchDrawing::Table(_)
-            | SchDrawing::Image(_) => {}
+            | SchDrawing::Image(_)
+            | SchDrawing::Curve(_) => {}
         }
     }
     out

@@ -16,6 +16,7 @@ mod join;
 mod movement;
 mod parts;
 mod selection;
+mod shapes;
 mod transform;
 mod ui;
 
@@ -30,6 +31,8 @@ use join::apply_symbol_join;
 use movement::apply_symbol_move;
 use parts::apply_symbol_parts;
 use selection::apply_symbol_selection;
+use shapes::bezier_click;
+pub(crate) use shapes::place_shape;
 use transform::apply_symbol_transform;
 use ui::apply_symbol_ui;
 
@@ -160,30 +163,6 @@ pub(super) fn commit_or_discard_polygon(editor: &mut SymEditor) {
 
 /// Two arc angles this close (degrees) sweep nothing.
 const ARC_SAME_ANGLE_DEG: f64 = 1e-6;
-
-/// One click of the Bezier gesture. The fourth takes the stash and places
-/// the curve as a single undo step; four clicks on one point place nothing,
-/// as a degenerate polygon does.
-fn bezier_click(editor: &mut SymEditor, x: f64, y: f64) {
-    editor.polygon_vertices.push((x, y));
-    let &[a, b, c, d] = editor.polygon_vertices.as_slice() else {
-        editor.canvas_cache.clear();
-        return;
-    };
-    editor.polygon_vertices.clear();
-    let points = [a, b, c, d].map(|(x, y)| [x, y]);
-    let eps_sq =
-        signex_library::CHAIN_ENDPOINT_EPSILON_MM * signex_library::CHAIN_ENDPOINT_EPSILON_MM;
-    if points.iter().all(|&p| dist_sq(p, points[0]) <= eps_sq) {
-        editor.canvas_cache.clear();
-        return;
-    }
-    push_graphic(
-        editor,
-        signex_library::SymbolGraphicKind::Bezier { points },
-        0.15,
-    );
-}
 
 /// Perpendicular-distance threshold (mm) below which a click-collected
 /// vertex is treated as lying exactly on the reference line for

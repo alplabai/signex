@@ -352,6 +352,10 @@ fn drawing_at(d: &SchDrawing) -> Point {
         SchDrawing::Dimension(d) => midpoint(d.from, d.to),
         SchDrawing::Table(t) => t.position,
         SchDrawing::Image(i) => i.centre(),
+        SchDrawing::Curve(c) => {
+            let (lo, hi) = c.bounds();
+            midpoint(lo, hi)
+        }
     }
 }
 

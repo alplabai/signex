@@ -682,6 +682,10 @@ define_ids! {
         CMD_FOOTPRINT_MODE_SKETCH = "cmd-footprint-mode-sketch";
         CMD_FOOTPRINT_MODE_VIEW_3D = "cmd-footprint-mode-view-3d";
         CMD_FOOTPRINT_RECOMPUTE_COURTYARD_OUTLINE = "cmd-footprint-recompute-courtyard-outline";
+        CMD_SYMBOL_DRAW_ELLIPTICAL_ARC = "cmd-symbol-draw-elliptical-arc";
+        CMD_SYMBOL_DRAW_BEZIER = "cmd-symbol-draw-bezier";
+        CMD_SYMBOL_DRAW_ROUND_RECTANGLE = "cmd-symbol-draw-round-rectangle";
+        CMD_SYMBOL_DRAW_PIE = "cmd-symbol-draw-pie";
         CMD_CATEGORY_EDIT = "cmd-category-edit";
         CMD_CATEGORY_MODIFY = "cmd-category-modify";
         CMD_CATEGORY_INTERACTIVE = "cmd-category-interactive";

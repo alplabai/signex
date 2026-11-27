@@ -5,7 +5,8 @@
 
 use super::super::*;
 use signex_types::schematic::{
-    DimensionArrows, DimensionDirection, DimensionUnits, Point, SchBezier, SchDimension,
+    CurveShape, CurveTool, DimensionArrows, DimensionDirection, DimensionUnits, Point, SchBezier,
+    SchDimension,
 };
 
 /// Which tool the draft belongs to.
@@ -14,6 +15,8 @@ pub enum AnnotationDraftKind {
     Bezier,
     LinearDimension,
     AlignedDimension,
+    /// An ellipse, elliptical arc or round rectangle (#1267).
+    Curve(CurveTool),
 }
 
 /// The colours of the hint bar, from the UI theme tokens.
@@ -70,7 +73,7 @@ impl AnnotationDraft {
         let from = *self.points.first()?;
         let to = self.points.get(1).copied().unwrap_or(cursor);
         let direction = match self.kind {
-            AnnotationDraftKind::Bezier => return None,
+            AnnotationDraftKind::Bezier | AnnotationDraftKind::Curve(_) => return None,
             AnnotationDraftKind::LinearDimension => SchDimension::linear_direction(from, to),
             AnnotationDraftKind::AlignedDimension => DimensionDirection::Aligned,
         };
@@ -106,6 +109,15 @@ impl AnnotationDraft {
             cursor,
         ))
     }
+
+    /// The curve the cursor at `cursor` would lead to, for a curve draft
+    /// with at least one point (the shared `CurveTool::shape`).
+    pub fn curve_at(&self, cursor: Point) -> Option<CurveShape> {
+        let AnnotationDraftKind::Curve(tool) = self.kind else {
+            return None;
+        };
+        tool.shape(&self.points, cursor)
+    }
 }
 
 impl SchematicCanvas<'_> {
@@ -133,7 +145,10 @@ impl SchematicCanvas<'_> {
             frame.stroke(&canvas::Path::circle(to_screen(*p), 4.0), stroke);
         }
         // Paused, nothing follows the cursor, as with the other ghosts.
-        let is_dimension = draft.kind != AnnotationDraftKind::Bezier;
+        let is_dimension = matches!(
+            draft.kind,
+            AnnotationDraftKind::LinearDimension | AnnotationDraftKind::AlignedDimension
+        );
         if self.placement_paused && is_dimension {
             draw_hint_bar(frame, bounds, draft);
             return;
@@ -147,6 +162,21 @@ impl SchematicCanvas<'_> {
                 path.bezier_curve_to(c1, c2, e);
             });
             frame.stroke(&curve, stroke);
+        } else if let Some(shape) = draft.curve_at(cursor) {
+            let outline = shape.flatten();
+            let path = canvas::Path::new(|path| {
+                for (i, p) in outline.iter().enumerate() {
+                    if i == 0 {
+                        path.move_to(to_screen(*p));
+                    } else {
+                        path.line_to(to_screen(*p));
+                    }
+                }
+                if shape.is_closed() {
+                    path.close();
+                }
+            });
+            frame.stroke(&path, stroke);
         } else if let Some(d) = draft.dimension_at(cursor) {
             self.draw_dimension_draft(frame, &d, &to_screen, draft);
         }

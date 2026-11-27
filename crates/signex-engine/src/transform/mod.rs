@@ -671,7 +671,8 @@ impl Engine {
                         SchDrawing::Bezier(_)
                         | SchDrawing::Dimension(_)
                         | SchDrawing::Table(_)
-                        | SchDrawing::Image(_) => {}
+                        | SchDrawing::Image(_)
+                        | SchDrawing::Curve(_) => {}
                     }
                     true
                 })

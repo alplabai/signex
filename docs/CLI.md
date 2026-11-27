@@ -124,7 +124,9 @@ the dialog cannot be answered.
 The placements (`place_net_label` and the other labels, `place_power_symbol`,
 `place_junction`, `place_no_connect`, `place_no_erc`, `place_wire`, `draw_wire`,
 `place_bus`, `draw_bus`, `place_text`, `place_text_string`, `draw_line`,
-`draw_graphic_line`, `draw_rectangle`, and the directives `place_blanket`,
+`draw_graphic_line`, `draw_rectangle`, the curve drawings `draw_ellipse`,
+`draw_elliptical_arc` and `draw_round_rectangle` (#1267, see "Curve drawings"
+below), and the directives `place_blanket`,
 `place_compile_mask`, `place_diff_pair` and `edit_blanket` (#2420) and
 `place_parameter_set` (#1489: `at` on a wire, refused off one; optional
 `class`, `diff_pair_class`, `width`, `clearance`, `via_diameter` and
@@ -711,6 +713,57 @@ delete_selection document=<sheet or board> ids=<uuids>
 - A headless run without operands acts on the session's own selection, as
   the window's key does. Delete in a footprint editor stays the editor's own
   route until slice S-L and takes no operands.
+
+## Curve drawings
+
+`draw_ellipse center=x,y radius_x=.. radius_y=..`,
+`draw_elliptical_arc center=x,y radius_x=.. radius_y=.. start_angle=..
+end_angle=..` and `draw_round_rectangle start=x,y end=x,y
+[corner_radius=..]` (#1267) place one drawing, one undo step, as the clicks
+of the same tool do. The centre and corners are points, refused off the grid
+as for any placement; the radii and the corner radius are lengths in mm above
+zero. Angles are degrees within ±360, measured counter-clockwise from the
++X direction in sheet coordinates, and the arc runs counter-clockwise from
+the start angle to the end angle. A left-out corner radius is 1.27 mm; any
+radius is held to half the short side. Width and fill are the project's shape
+defaults. A shape with no visible size, or an arc whose two angles are the
+same, is `refused`. The run answers with the drawing's `id` and its `kind`
+(`ellipse`, `elliptical_arc` or `round_rect`):
+
+```json
+{"id": "0192f3a4-...", "kind": "ellipse"}
+```
+
+## Symbol shapes
+
+The symbol editor's curve tools (#2838) draw on the open symbol `document`
+names, a `.snxsym` id or path:
+
+```text
+symbol_draw_elliptical_arc document=.. center=x,y radius_x=.. radius_y=.. start_angle=.. end_angle=..
+symbol_draw_bezier document=.. start=x,y control_1=x,y control_2=x,y end=x,y
+symbol_draw_round_rectangle document=.. start=x,y end=x,y [corner_radius=..]
+symbol_draw_pie document=.. center=x,y radius=.. start_angle=.. end_angle=..
+```
+
+Points are in the symbol's own mm, as the editor's status bar reads them,
+taken as given; a pin reference is `refused`. Angles are degrees within
+±360, counter-clockwise from the start angle to the end angle, stored in
+`[0, 360)`. A left-out corner radius is the tool's 1.27 mm; any radius is
+held to half the short side. Each shape is one undo step of the symbol's
+editor, with the tool's stroke and no fill, on the part and body the editor
+shows. A shape with no visible size, an arc or pie whose angles are the same,
+or a Bezier whose four points are one is `refused`. A symbol that is not open
+in an editor is `refused`: open it first with `open_document`. The run
+answers with the graphic:
+
+```json
+{"document": "/lib/R.snxsym", "index": 3, "kind": "pie", "part": 1,
+ "body_style": 1, "stroke_width": 0.15, "shape": {"...": "..."}}
+```
+
+These commands are on the agent channel; `apply_edits` does not carry them,
+since a symbol keeps its own editor's undo stack.
 
 ## Placement extras
 

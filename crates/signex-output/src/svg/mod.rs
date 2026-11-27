@@ -37,6 +37,8 @@ pub(crate) use images::decode_rgba;
 pub use images::{ExportImages, SvgPicture};
 #[cfg(test)]
 mod annotation_drawing_tests;
+#[cfg(test)]
+mod curve_drawing_tests;
 
 #[derive(Debug, Clone, Copy)]
 pub enum SvgTextAlign {

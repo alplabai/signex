@@ -17,6 +17,13 @@ pub(crate) mod updates;
 /// when it opens a symbol.
 pub(crate) use updates::fit_to_viewport;
 
+/// The tool a person arms, which the commands' tests compare against.
+#[cfg(test)]
+pub(crate) use canvas::SymbolTool;
+/// Place a curve shape as the tool's last click does (#2838): the
+/// `symbol_draw_*` commands' commit.
+pub(crate) use updates::place_shape;
+
 /// The Properties panel's state and messages for a symbol editor (mockup
 /// rows 122 and 123), and the rectangle Width / Height rule its form and the graphic
 /// edit share: the slice's surface for the panel and the dock handler.

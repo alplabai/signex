@@ -148,6 +148,15 @@ impl Signex {
             ActiveBarAction::DrawBezier => {
                 follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Bezier)));
             }
+            ActiveBarAction::DrawEllipse => {
+                follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Ellipse)));
+            }
+            ActiveBarAction::DrawEllipticalArc => {
+                follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::EllipticalArc)));
+            }
+            ActiveBarAction::DrawRoundRectangle => {
+                follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::RoundRectangle)));
+            }
             ActiveBarAction::DrawTable => {
                 follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Table)));
             }

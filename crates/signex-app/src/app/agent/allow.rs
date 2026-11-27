@@ -230,6 +230,11 @@ mod tests {
                 "stitch_vias",
                 "swap_gates",
                 "swap_pins",
+                // #2838: a curve shape drawn on the symbol named.
+                "symbol_draw_bezier",
+                "symbol_draw_elliptical_arc",
+                "symbol_draw_pie",
+                "symbol_draw_round_rectangle",
                 // #2249: the window layout, by the maintainer's rule that
                 // everything is AI-controllable.
                 "tile_windows_horizontally",
@@ -281,6 +286,9 @@ mod tests {
             "draw_line",
             "draw_graphic_line",
             "draw_rectangle",
+            "draw_ellipse",
+            "draw_elliptical_arc",
+            "draw_round_rectangle",
         ] {
             let meta = metadata_for(&id(name)).expect("in the catalog");
             assert!(

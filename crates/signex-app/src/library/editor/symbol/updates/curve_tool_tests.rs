@@ -68,6 +68,24 @@ fn four_clicks_on_one_point_place_nothing() {
     assert!(editor.polygon_vertices.is_empty());
 }
 
+/// #2838: the commit the tools and the `symbol_draw_*` commands share places
+/// only the curve kinds, and changes nothing when it refuses.
+#[test]
+fn the_shared_commit_refuses_a_kind_that_is_not_a_curve() {
+    let mut editor = new_editor(SymbolTool::Select);
+    let line = SymbolGraphicKind::Line {
+        from: [0.0, 0.0],
+        to: [2.54, 2.54],
+    };
+    assert_eq!(
+        place_shape(&mut editor, line),
+        Err(shapes::ShapeRefusal::NotACurve)
+    );
+    assert!(editor.primitive().graphics.is_empty());
+    assert_eq!(editor.history.undo_len(), 0);
+    assert!(!editor.is_dirty());
+}
+
 #[test]
 fn cancelling_a_bezier_drops_its_clicks() {
     let mut editor = new_editor(SymbolTool::PlaceBezier);

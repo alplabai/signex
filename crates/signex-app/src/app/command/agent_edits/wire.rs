@@ -257,6 +257,11 @@ const PROJECT_WIDE: &[(&str, &str)] = &[
         "set_footprint_text",
         "it edits a board, which no sheet's undo step covers; run it as its own command",
     ),
+    // #2838: a symbol has its own editor's undo stack.
+    ("symbol_draw_elliptical_arc", SYMBOL_EDIT),
+    ("symbol_draw_bezier", SYMBOL_EDIT),
+    ("symbol_draw_round_rectangle", SYMBOL_EDIT),
+    ("symbol_draw_pie", SYMBOL_EDIT),
     // #2389: length tuning lands on the named board's own undo stack.
     (
         "tune_net_length",
@@ -360,6 +365,9 @@ const PROJECT_WIDE: &[(&str, &str)] = &[
 
 const BOARD_EDIT: &str =
     "it edits a board, which no sheet's undo step covers; run it as its own command";
+
+const SYMBOL_EDIT: &str =
+    "it edits a symbol, which no sheet's undo step covers; run it as its own command";
 
 /// Commands an agent runs as their own labelled step but an edit list does
 /// not carry yet: whether a list may carry them is not decided (#2326 slice
@@ -549,9 +557,13 @@ mod tests {
             "clear_all_net_colors",
             "color_net",
             "draw_bus",
+            // #1267: the curve drawings, placements like the rectangle.
+            "draw_ellipse",
+            "draw_elliptical_arc",
             "draw_graphic_line",
             "draw_line",
             "draw_rectangle",
+            "draw_round_rectangle",
             "draw_wire",
             "edit_blanket",
             "edit_no_erc_rules",

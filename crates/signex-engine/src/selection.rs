@@ -598,6 +598,9 @@ impl Engine {
                         ));
                         info.push(("Width".into(), format!("{:.3}", b.width)));
                     }
+                    SchDrawing::Curve(c) => {
+                        info.extend(crate::curve_info::rows(c, |y| self.document.page_y(y)));
+                    }
                     SchDrawing::Dimension(dim) => {
                         info.push(("Type".into(), "Dimension".into()));
                         info.push(("Length".into(), format!("{:.3}", dim.measured_mm())));

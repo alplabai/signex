@@ -313,16 +313,16 @@ draw_bus	operand_handler	run_operands: active-tab gate unless a document is name
 draw_bus	in_window_rewrite	document_window	gui	window	routing
 draw_bus	refusal_needs	Schematic	gui	active document	routing
 draw_bus	headless_missing_operand	needs `start`	core	none	routing
-draw_ellipse	active_bar	DrawEllipse	gui	none	handler
+draw_ellipse	active_bar	DrawEllipse	gui	active document	gate
+draw_ellipse	operand_handler	run_operands: active-tab gate unless a document is named	core	active document,tool state,origin	handler
 draw_ellipse	in_window_rewrite	document_window	gui	window	routing
-draw_ellipse	refusal_needs	Planned	gui	none	routing
-draw_ellipse	disabled_still_runs	explains_when_unavailable	gui	none	handler
-draw_ellipse	headless_refusal	headless_refusal	gui	none	routing
-draw_elliptical_arc	active_bar	DrawEllipticalArc	gui	none	handler
+draw_ellipse	refusal_needs	Schematic	gui	active document	routing
+draw_ellipse	headless_missing_operand	needs `center`	core	none	routing
+draw_elliptical_arc	active_bar	DrawEllipticalArc	gui	active document	gate
+draw_elliptical_arc	operand_handler	run_operands: active-tab gate unless a document is named	core	active document,tool state,origin	handler
 draw_elliptical_arc	in_window_rewrite	document_window	gui	window	routing
-draw_elliptical_arc	refusal_needs	Planned	gui	none	routing
-draw_elliptical_arc	disabled_still_runs	explains_when_unavailable	gui	none	handler
-draw_elliptical_arc	headless_refusal	headless_refusal	gui	none	routing
+draw_elliptical_arc	refusal_needs	Schematic	gui	active document	routing
+draw_elliptical_arc	headless_missing_operand	needs `center`	core	none	routing
 draw_full_circle	active_bar	DrawFullCircle	gui	active document	gate
 draw_full_circle	in_window_rewrite	document_window	gui	window	routing
 draw_full_circle	refusal_needs	Schematic	gui	active document	routing
@@ -350,11 +350,11 @@ draw_rectangle	operand_handler	run_operands: active-tab gate unless a document i
 draw_rectangle	in_window_rewrite	document_window	gui	window	routing
 draw_rectangle	refusal_needs	Schematic	gui	active document	routing
 draw_rectangle	headless_missing_operand	needs `start`	core	none	routing
-draw_round_rectangle	active_bar	DrawRoundRectangle	gui	none	handler
+draw_round_rectangle	active_bar	DrawRoundRectangle	gui	active document	gate
+draw_round_rectangle	operand_handler	run_operands: active-tab gate unless a document is named	core	active document,tool state,origin	handler
 draw_round_rectangle	in_window_rewrite	document_window	gui	window	routing
-draw_round_rectangle	refusal_needs	Planned	gui	none	routing
-draw_round_rectangle	disabled_still_runs	explains_when_unavailable	gui	none	handler
-draw_round_rectangle	headless_refusal	headless_refusal	gui	none	routing
+draw_round_rectangle	refusal_needs	Schematic	gui	active document	routing
+draw_round_rectangle	headless_missing_operand	needs `start`	core	none	routing
 draw_wire	active_bar	DrawWire	gui	active document	gate
 draw_wire	operand_handler	run_operands: active-tab gate unless a document is named	core	active document,tool state,origin	handler
 draw_wire	in_window_rewrite	document_window	gui	window	routing
@@ -1508,6 +1508,22 @@ swap_pins	headless_missing_operand	needs `document`	core	none	routing
 switch_segment_posture	bridge	Tool(CornerFlipRequested)	gui	tool state,in-progress edit	handler
 switch_segment_posture	in_window_rewrite	document_window	gui	window	routing
 switch_segment_posture	headless_refusal	headless_refusal	gui	none	routing
+symbol_draw_bezier	operand_handler	run_operands: named document	core	tool state,origin	handler
+symbol_draw_bezier	refusal_needs	SymbolEditor	core	active document	routing
+symbol_draw_bezier	refusal_needs_operands	needs_operands_reason	gui	none	routing
+symbol_draw_bezier	headless_missing_operand	needs `document`	core	none	routing
+symbol_draw_elliptical_arc	operand_handler	run_operands: named document	core	tool state,origin	handler
+symbol_draw_elliptical_arc	refusal_needs	SymbolEditor	core	active document	routing
+symbol_draw_elliptical_arc	refusal_needs_operands	needs_operands_reason	gui	none	routing
+symbol_draw_elliptical_arc	headless_missing_operand	needs `document`	core	none	routing
+symbol_draw_pie	operand_handler	run_operands: named document	core	tool state,origin	handler
+symbol_draw_pie	refusal_needs	SymbolEditor	core	active document	routing
+symbol_draw_pie	refusal_needs_operands	needs_operands_reason	gui	none	routing
+symbol_draw_pie	headless_missing_operand	needs `document`	core	none	routing
+symbol_draw_round_rectangle	operand_handler	run_operands: named document	core	tool state,origin	handler
+symbol_draw_round_rectangle	refusal_needs	SymbolEditor	core	active document	routing
+symbol_draw_round_rectangle	refusal_needs_operands	needs_operands_reason	gui	none	routing
+symbol_draw_round_rectangle	headless_missing_operand	needs `document`	core	none	routing
 sync_sheet_entries	bridge	Edit(SheetSync(Requested))	gui	active document	gate
 sync_sheet_entries	operand_handler	run_operands: active-tab gate unless a document is named	core	active document,origin	handler
 sync_sheet_entries	in_window_rewrite	document_window	gui	window	routing

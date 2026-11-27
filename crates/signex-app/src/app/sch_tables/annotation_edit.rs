@@ -1,11 +1,12 @@
-//! One Properties edit of a Bezier, dimension or table (#1267, #1300), and
+//! One Properties edit of a Bezier, dimension, table or curve (#1267, #1300), and
 //! the drawing it gives. Pure: the handler sends the result through
 //! `Command::UpdateSchDrawing`, so every edit is one undo step.
 
 use signex_types::net_class::NetLineStyle;
 use signex_types::schematic::{
-    DIMENSION_MAX_PRECISION, DimensionArrows, DimensionDirection, DimensionUnits, LineEnds,
-    PinSort, Point, SchDrawing, SchTable, StrokeColor, TableBorders, TableRefresh, TableSource,
+    DIMENSION_MAX_PRECISION, DimensionArrows, DimensionDirection, DimensionUnits, FillType,
+    LineEnds, PinSort, Point, SchDrawing, SchTable, StrokeColor, TableBorders, TableRefresh,
+    TableSource,
 };
 
 /// Smallest text size and largest padding a table takes (mm).
@@ -83,9 +84,20 @@ pub enum AnnotationEdit {
     TableCell(usize, usize, String),
     /// A typed table's columns and rows, from a CSV import.
     TableImported(Vec<String>, Vec<Vec<String>>),
+    /// A curve's centre: an ellipse, elliptical arc or pie (#1267).
+    CurveCenter(Axis, f64),
+    /// A curve's X or Y radius; a pie's one radius takes either.
+    CurveRadius(Axis, f64),
+    /// An elliptical arc's or pie's start (`false`) or end (`true`) angle.
+    CurveAngle(bool, f64),
+    /// A round rectangle's first (`false`) or opposite (`true`) corner.
+    CurveCorner(bool, Axis, f64),
+    CornerRadius(f64),
+    /// A closed curve's fill.
+    Fill(FillType),
 }
 
-fn set_axis(p: &mut Point, axis: Axis, value: f64) {
+pub(super) fn set_axis(p: &mut Point, axis: Axis, value: f64) {
     match axis {
         Axis::X => p.x = value,
         Axis::Y => p.y = value,
@@ -135,6 +147,7 @@ pub(crate) fn apply_annotation_edit(
         },
         SchDrawing::Dimension(d) => apply_to_dimension(d, edit),
         SchDrawing::Table(t) => apply_to_table(t, edit),
+        SchDrawing::Curve(c) => super::curve_edit::apply_to_curve(c, edit),
         SchDrawing::Line { .. }
         | SchDrawing::Rect { .. }
         | SchDrawing::Circle { .. }

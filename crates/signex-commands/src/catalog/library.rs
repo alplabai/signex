@@ -1,8 +1,56 @@
 //! Library commands: the library browser and Components panel, editing a
-//! library symbol, and the footprint editor modes.
+//! library symbol, the footprint editor modes, and the symbol editor's curve
+//! shapes drawn from operands.
 
-use super::{CommandFlags, CommandGroup, CommandMetadata, DocumentKind, Enablement};
+use super::{
+    CommandFlags, CommandGroup, CommandMetadata, DocumentKind, Enablement, Operand, OperandKind,
+};
 use signex_i18n_ids::command_ids;
+
+const fn operand(name: &'static str, kind: OperandKind, required: bool) -> Operand {
+    Operand {
+        name,
+        kind,
+        required,
+    }
+}
+
+// #2838: each shape lands on the open symbol `document` names, in the
+// symbol's own mm, on the part and body the editor shows.
+
+/// An elliptical arc: the ellipse, then the angles, counter-clockwise.
+const SYMBOL_ELLIPTICAL_ARC: &[Operand] = &[
+    operand("document", OperandKind::Document, true),
+    operand("center", OperandKind::Point, true),
+    operand("radius_x", OperandKind::Length, true),
+    operand("radius_y", OperandKind::Length, true),
+    operand("start_angle", OperandKind::Turn, true),
+    operand("end_angle", OperandKind::Turn, true),
+];
+/// A cubic Bezier through its start, two control points and end.
+const SYMBOL_BEZIER: &[Operand] = &[
+    operand("document", OperandKind::Document, true),
+    operand("start", OperandKind::Point, true),
+    operand("control_1", OperandKind::Point, true),
+    operand("control_2", OperandKind::Point, true),
+    operand("end", OperandKind::Point, true),
+];
+/// A round rectangle: two opposite corners; the radius, left out, is the
+/// tool's default held to half the short side.
+const SYMBOL_ROUND_RECTANGLE: &[Operand] = &[
+    operand("document", OperandKind::Document, true),
+    operand("start", OperandKind::Point, true),
+    operand("end", OperandKind::Point, true),
+    operand("corner_radius", OperandKind::Length, false),
+];
+/// A pie: the circle, then the wedge's angles, counter-clockwise.
+const SYMBOL_PIE: &[Operand] = &[
+    operand("document", OperandKind::Document, true),
+    operand("center", OperandKind::Point, true),
+    operand("radius", OperandKind::Length, true),
+    operand("start_angle", OperandKind::Turn, true),
+    operand("end_angle", OperandKind::Turn, true),
+];
 
 pub(super) const LIBRARY: &[CommandMetadata] = &[
     CommandMetadata {
@@ -83,6 +131,50 @@ pub(super) const LIBRARY: &[CommandMetadata] = &[
         group: CommandGroup::ThreeD,
         enable: Enablement::RequiresDocument(DocumentKind::Footprint),
         flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "symbol_draw_elliptical_arc",
+        category: "place",
+        label: command_ids::CMD_SYMBOL_DRAW_ELLIPTICAL_ARC,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::RequiresDocument(DocumentKind::Symbol),
+        flags: CommandFlags::MUTATES,
+        operands: SYMBOL_ELLIPTICAL_ARC,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "symbol_draw_bezier",
+        category: "place",
+        label: command_ids::CMD_SYMBOL_DRAW_BEZIER,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::RequiresDocument(DocumentKind::Symbol),
+        flags: CommandFlags::MUTATES,
+        operands: SYMBOL_BEZIER,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "symbol_draw_round_rectangle",
+        category: "place",
+        label: command_ids::CMD_SYMBOL_DRAW_ROUND_RECTANGLE,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::RequiresDocument(DocumentKind::Symbol),
+        flags: CommandFlags::MUTATES,
+        operands: SYMBOL_ROUND_RECTANGLE,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "symbol_draw_pie",
+        category: "place",
+        label: command_ids::CMD_SYMBOL_DRAW_PIE,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::RequiresDocument(DocumentKind::Symbol),
+        flags: CommandFlags::MUTATES,
+        operands: SYMBOL_PIE,
         ..CommandMetadata::DEFAULT
     },
 ];

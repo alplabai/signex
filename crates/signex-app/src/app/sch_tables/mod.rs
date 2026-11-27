@@ -5,6 +5,9 @@
 
 mod annotation_edit;
 mod csv;
+mod curve_edit;
+#[cfg(test)]
+mod curve_edit_tests;
 mod panel;
 mod refresh;
 mod rows;

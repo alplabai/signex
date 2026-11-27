@@ -10,7 +10,7 @@ use crate::app::{Message, Signex};
 use crate::panels::{AnnotationPanelMsg, AnnotationPanelState};
 
 impl Signex {
-    /// The selected Bezier, dimension or table on the active sheet.
+    /// The selected Bezier, dimension, table or curve on the active sheet.
     fn selected_annotation(&self) -> Option<uuid::Uuid> {
         let ctx = &self.document_state.panel_ctx;
         if ctx.selected_kind != Some(SelectedKind::Drawing) {
@@ -22,7 +22,7 @@ impl Signex {
             .document()
             .drawings
             .iter()
-            .any(|d| d.uuid() == id && d.needs_format_1_3())
+            .any(|d| d.uuid() == id && (d.needs_format_1_3() || d.needs_curve_format()))
             .then_some(id)
     }
 

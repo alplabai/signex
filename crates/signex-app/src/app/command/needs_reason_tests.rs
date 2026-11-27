@@ -42,6 +42,9 @@ fn old_reason(need: Needs) -> &'static str {
         Needs::Canvas => "No schematic or PCB is open",
         Needs::FitTarget => "No schematic or PCB is open",
         Needs::FootprintEditor => "No footprint editor is open",
+        // New with the symbol editor's shape commands (#2838): it replaced
+        // no English literal.
+        Needs::SymbolEditor => "No symbol editor is open",
         Needs::Pcb => "No PCB is open",
         Needs::NetClassTable => "No schematic or PCB is open",
         Needs::EditablePcb => "No PCB is open, or the board is read-only",
@@ -90,7 +93,7 @@ fn every_need() -> Vec<Needs> {
 #[test]
 fn every_reason_renders_the_english_it_replaced() {
     let needs = every_need();
-    assert_eq!(needs.len(), 48, "a need no catalog id reaches: {needs:?}");
+    assert_eq!(needs.len(), 49, "a need no catalog id reaches: {needs:?}");
     for need in needs {
         assert_eq!(
             Translatable::new(need.reason()).render_en_us(),

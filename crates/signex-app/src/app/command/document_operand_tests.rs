@@ -442,6 +442,10 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
         "draw_line",
         "draw_graphic_line",
         "draw_rectangle",
+        // #1267: the curve drawings.
+        "draw_ellipse",
+        "draw_elliptical_arc",
+        "draw_round_rectangle",
         "place_blanket",
         "edit_blanket",
         "edit_no_erc_rules",
@@ -650,6 +654,12 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     "export_notebook_timeline",
                     "mark_notebook_attachment_valid",
                     "attach_notebook_file",
+                    // #2838: the symbol editor's curve shapes, on the
+                    // symbol named.
+                    "symbol_draw_elliptical_arc",
+                    "symbol_draw_bezier",
+                    "symbol_draw_round_rectangle",
+                    "symbol_draw_pie",
                 ]
                 .contains(&name),
                 "{name} declares a document operand"

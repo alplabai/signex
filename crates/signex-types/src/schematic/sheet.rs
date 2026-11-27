@@ -340,6 +340,9 @@ pub enum SchDrawing {
     /// An image, a project asset (#1116); see `sch_image.rs`. Stored in
     /// the file's `images` rows, not among the drawings.
     Image(super::SchImage),
+    /// An ellipse, elliptical arc or round rectangle (#1267); see
+    /// `drawing_curve.rs`.
+    Curve(super::SchCurve),
 }
 
 // ---------------------------------------------------------------------------
@@ -387,93 +390,6 @@ impl FromIterator<(String, LibSymbol)> for LibSymbolTable {
 // ---------------------------------------------------------------------------
 // Top-level sheet
 // ---------------------------------------------------------------------------
-
-impl SchDrawing {
-    /// The drawing's own id, whichever shape it is.
-    pub fn uuid(&self) -> Uuid {
-        match self {
-            Self::Line { uuid, .. }
-            | Self::Rect { uuid, .. }
-            | Self::Circle { uuid, .. }
-            | Self::Arc { uuid, .. }
-            | Self::Polyline { uuid, .. } => *uuid,
-            Self::Bezier(b) => b.uuid,
-            Self::Dimension(d) => d.uuid,
-            Self::Table(t) => t.uuid,
-            Self::Image(i) => i.uuid,
-        }
-    }
-
-    /// Give the drawing a new id, whichever shape it is.
-    pub fn set_uuid(&mut self, id: Uuid) {
-        match self {
-            Self::Line { uuid, .. }
-            | Self::Rect { uuid, .. }
-            | Self::Circle { uuid, .. }
-            | Self::Arc { uuid, .. }
-            | Self::Polyline { uuid, .. } => *uuid = id,
-            Self::Bezier(b) => b.uuid = id,
-            Self::Dimension(d) => d.uuid = id,
-            Self::Table(t) => t.uuid = id,
-            Self::Image(i) => i.uuid = id,
-        }
-    }
-
-    /// Whether the drawing is locked (#1573), whichever shape it is.
-    pub fn is_locked(&self) -> bool {
-        match self {
-            Self::Line { locked, .. }
-            | Self::Rect { locked, .. }
-            | Self::Circle { locked, .. }
-            | Self::Arc { locked, .. }
-            | Self::Polyline { locked, .. } => *locked,
-            Self::Bezier(b) => b.locked,
-            Self::Dimension(d) => d.locked,
-            Self::Table(t) => t.locked,
-            Self::Image(i) => i.locked,
-        }
-    }
-
-    /// Set the lock, whichever shape the drawing is.
-    pub fn set_locked(&mut self, value: bool) {
-        match self {
-            Self::Line { locked, .. }
-            | Self::Rect { locked, .. }
-            | Self::Circle { locked, .. }
-            | Self::Arc { locked, .. }
-            | Self::Polyline { locked, .. } => *locked = value,
-            Self::Bezier(b) => b.locked = value,
-            Self::Dimension(d) => d.locked = value,
-            Self::Table(t) => t.locked = value,
-            Self::Image(i) => i.locked = value,
-        }
-    }
-
-    /// Whether a sheet holding this drawing needs format `snxsch/1.3`: the
-    /// Bezier, dimension and table kinds are new in it (#1267, #1300). An
-    /// image needs no new token: its rows are a key an older build keeps.
-    pub fn needs_format_1_3(&self) -> bool {
-        matches!(self, Self::Bezier(_) | Self::Dimension(_) | Self::Table(_))
-    }
-
-    /// Map an annotation kind's points through `f` (move, rotate, mirror);
-    /// `false` for the classic shapes, which their callers move point by
-    /// point.
-    pub fn map_annotation_points(&mut self, f: impl Fn(Point) -> Point) -> bool {
-        match self {
-            Self::Bezier(b) => b.map_points(f),
-            Self::Dimension(d) => d.map_points(f),
-            Self::Table(t) => t.map_points(f),
-            Self::Image(i) => i.map_points(f),
-            Self::Line { .. }
-            | Self::Rect { .. }
-            | Self::Circle { .. }
-            | Self::Arc { .. }
-            | Self::Polyline { .. } => return false,
-        }
-        true
-    }
-}
 
 /// `skip_serializing_if` predicate: a lock is written only when set, so an
 /// untouched file re-saves byte-identical.

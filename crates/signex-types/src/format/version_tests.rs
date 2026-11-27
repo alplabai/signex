@@ -298,11 +298,12 @@ fn a_sheet_and_a_board_keep_their_uuid_across_write_and_parse() {
 }
 
 /// Schematic Refinement content writes `snxsch/1.3`: this build reads and
-/// edits a 1.3 file, a 1.5 file opens read-only and every save of it is
-/// refused, and a build that knew only 1.2 sees 1.3 as a newer minor.
+/// edits a 1.3 file, a 1.6 file opens read-only and every save of it is
+/// refused, and a build that knew only 1.2 sees 1.3 as a newer minor. 1.5 is
+/// this build's own curve-drawing token (#1267).
 #[test]
-fn snxsch_1_3_is_read_and_1_5_opens_read_only() {
-    assert_eq!(SNXSCH_VERSION.current, SNXSCH_FORMAT_BUS_STYLE);
+fn snxsch_1_3_is_read_and_1_6_opens_read_only() {
+    assert_eq!(SNXSCH_VERSION.current, SNXSCH_FORMAT_CURVES);
     assert!(SNXSCH_VERSION.readable.contains(&"snxsch/1.3"));
     let file = SnxSchematic::parse(&format!("format = \"snxsch/1.3\"\n{SCH_ID}")).unwrap();
     assert!(!file.is_from_newer_minor());
@@ -311,11 +312,11 @@ fn snxsch_1_3_is_read_and_1_5_opens_read_only() {
     let out = file.write_string().unwrap();
     assert!(out.starts_with("format = \"snxsch/1.1\""), "{out}");
 
-    let newer = SnxSchematic::parse(&format!("format = \"snxsch/1.5\"\n{SCH_ID}")).unwrap();
+    let newer = SnxSchematic::parse(&format!("format = \"snxsch/1.6\"\n{SCH_ID}")).unwrap();
     assert!(newer.is_from_newer_minor());
     assert!(newer.sheet.is_read_only());
     let err = newer.write_string().unwrap_err();
-    assert!(err.to_string().contains("snxsch/1.5"), "{err}");
+    assert!(err.to_string().contains("snxsch/1.6"), "{err}");
     assert!(
         SnxSchematic::new(newer.sheet.clone())
             .write_string()

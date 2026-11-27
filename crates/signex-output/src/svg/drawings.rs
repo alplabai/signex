@@ -13,8 +13,8 @@ use super::*;
 use crate::pdf::layout::PageTransform;
 use crate::pdf::palette::SchematicPalette;
 use signex_types::schematic::{
-    DIMENSION_TEXT_MM, DrawingPlacement, FillType, Point, SchBezier, SchDimension, SchDrawing,
-    SchematicDefaults, SchematicSheet, StrokeColor, power_net_names,
+    DIMENSION_TEXT_MM, DrawingPlacement, FillType, Point, SchBezier, SchCurve, SchDimension,
+    SchDrawing, SchematicDefaults, SchematicSheet, StrokeColor, power_net_names,
 };
 
 /// The drawings of `placement`, in file order; an image's picture comes
@@ -80,6 +80,7 @@ pub(super) fn push_sch_drawing_path(
                 },
             ));
         }
+        SchDrawing::Curve(c) => out.push(curve_path(c, xform, palette, defaults)),
         SchDrawing::Line {
             start, end, width, ..
         } => {
@@ -349,11 +350,48 @@ fn push_dimension(
     });
 }
 
-/// Every point an annotation drawing (Bezier, dimension, table, image)
+/// A curve drawing (#1267): its flattened outline as one path, closed and
+/// filled when the shape is closed, in its own colour or the drawing colour.
+fn curve_path(
+    c: &SchCurve,
+    xform: &PageTransform,
+    palette: &SchematicPalette,
+    defaults: &SchematicDefaults,
+) -> SvgElement {
+    let rgb = stroke_rgb(c.stroke_color, palette.symbol_stroke);
+    let points = c.flatten();
+    let mut commands: Vec<SvgPathCommand> = points
+        .iter()
+        .enumerate()
+        .map(|(i, p)| {
+            let at = pt(xform.x(p.x), xform.px_y(p.y));
+            if i == 0 {
+                SvgPathCommand::MoveTo(at)
+            } else {
+                SvgPathCommand::LineTo(at)
+            }
+        })
+        .collect();
+    if c.shape.is_closed() {
+        commands.push(SvgPathCommand::Close);
+    }
+    SvgElement::Path {
+        commands,
+        style: SvgStyle {
+            stroke_alpha: 1.0,
+            stroke_rgb: Some(rgb),
+            fill_rgb: fill_to_rgb(c.drawn_fill(), rgb, palette.symbol_fill),
+            stroke_width: (defaults.shape_stroke_mm(c.width) * xform.mm_to_unit) as f32,
+        },
+    }
+}
+
+/// Every point an annotation drawing (Bezier, dimension, table, image, curve)
 /// reaches, for the page's content box; empty for the classic shapes.
 pub(crate) fn annotation_extent(drawing: &SchDrawing) -> Vec<Point> {
     match drawing {
         SchDrawing::Bezier(b) => b.flatten(),
+        SchDrawing::Curve(c) => c.flatten(),
         SchDrawing::Dimension(d) => d.outline_points(),
         SchDrawing::Table(t) => {
             let (lo, hi) = t.bounds();

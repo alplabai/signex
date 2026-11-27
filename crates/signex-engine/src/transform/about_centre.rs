@@ -412,6 +412,7 @@ impl Engine {
                 SchDrawing::Dimension(dim) => dim.map_points(|p| transform.point(centre, p)),
                 SchDrawing::Table(t) => t.map_points(|p| transform.point(centre, p)),
                 SchDrawing::Image(i) => i.map_points(|p| transform.point(centre, p)),
+                SchDrawing::Curve(c) => c.map_points(|p| transform.point(centre, p)),
             }
         }
         for d in doc

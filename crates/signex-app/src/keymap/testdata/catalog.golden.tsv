@@ -165,12 +165,12 @@ remove_teardrops	pcb	Remove the teardrops of the selected nets, or of every net	
 gloss_selected_routes	pcb	Shorten the selected routes by cutting their corners where the clearance allows	Gloss Selected Routes	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,ids:targets
 draw_arc	place	Draw arc	Arc	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
 draw_full_circle	place	Draw full circle	Full Circle	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
-draw_elliptical_arc	place	Draw elliptical arc	Elliptical Arc	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
-draw_ellipse	place	Draw ellipse	Ellipse	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
+draw_elliptical_arc	place	Draw elliptical arc	Elliptical Arc	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	center:point/mm,radius_x:length/mm,radius_y:length/mm,start_angle:turn/deg,end_angle:turn/deg,document:document?
+draw_ellipse	place	Draw ellipse	Ellipse	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	center:point/mm,radius_x:length/mm,radius_y:length/mm,document:document?
 draw_line	place	Draw line	Line	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	start:point/mm,end:point/mm,document:document?
 draw_graphic_line	place	Draw graphic line	-	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	start:point/mm,end:point/mm,document:document?
 draw_rectangle	place	Draw rectangle	Rectangle	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	start:point/mm,end:point/mm,document:document?
-draw_round_rectangle	place	Draw round rectangle	Round Rectangle	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
+draw_round_rectangle	place	Draw round rectangle	Round Rectangle	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	start:point/mm,end:point/mm,corner_radius:length/mm?,document:document?
 draw_polygon	place	Draw polygon	Polygon	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
 draw_bezier	place	Draw bezier	Bezier	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
 place_table	place	Place table	Table	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
@@ -408,6 +408,10 @@ footprint_mode_pads	library	Switch footprint editor to Pads mode	-	3D	-	-	Requir
 footprint_mode_sketch	library	Switch footprint editor to Sketch mode	-	3D	-	-	RequiresDocument(Footprint)	gui_only	-
 footprint_mode_view_3d	library	Switch footprint editor to 3D View mode	-	3D	-	-	RequiresDocument(Footprint)	gui_only	-
 footprint_recompute_courtyard_outline	library	Recompute footprint courtyard outline from pads	-	3D	-	-	RequiresDocument(Footprint)	gui_only	-
+symbol_draw_elliptical_arc	place	Draw an elliptical arc on a symbol	-	General	-	-	RequiresDocument(Symbol)	mutates_doc,undoable	document:document,center:point/mm,radius_x:length/mm,radius_y:length/mm,start_angle:turn/deg,end_angle:turn/deg
+symbol_draw_bezier	place	Draw a Bezier curve on a symbol	-	General	-	-	RequiresDocument(Symbol)	mutates_doc,undoable	document:document,start:point/mm,control_1:point/mm,control_2:point/mm,end:point/mm
+symbol_draw_round_rectangle	place	Draw a round rectangle on a symbol	-	General	-	-	RequiresDocument(Symbol)	mutates_doc,undoable	document:document,start:point/mm,end:point/mm,corner_radius:length/mm?
+symbol_draw_pie	place	Draw a pie chart on a symbol	-	General	-	-	RequiresDocument(Symbol)	mutates_doc,undoable	document:document,center:point/mm,radius:length/mm,start_angle:turn/deg,end_angle:turn/deg
 open_command_palette	commands	Open command palette	-	General	-	-	Always	gui_only	-
 open_preferences	preferences	Open preferences	Preferences...	General	-	-	Always	gui_only	-
 open_schematic_preferences	preferences	Open schematic preferences	-	General	-	-	Always	gui_only	-

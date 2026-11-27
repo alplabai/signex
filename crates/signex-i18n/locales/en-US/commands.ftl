@@ -707,6 +707,10 @@ cmd-footprint-mode-pads = Switch footprint editor to Pads mode
 cmd-footprint-mode-sketch = Switch footprint editor to Sketch mode
 cmd-footprint-mode-view-3d = Switch footprint editor to 3D View mode
 cmd-footprint-recompute-courtyard-outline = Recompute footprint courtyard outline from pads
+cmd-symbol-draw-elliptical-arc = Draw an elliptical arc on a symbol
+cmd-symbol-draw-bezier = Draw a Bezier curve on a symbol
+cmd-symbol-draw-round-rectangle = Draw a round rectangle on a symbol
+cmd-symbol-draw-pie = Draw a pie chart on a symbol
 
 cmd-category-edit = Edit
 cmd-category-modify = Modify

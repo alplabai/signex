@@ -611,7 +611,9 @@ buttons (`menu_bar/model/sheet_place.rs`):
   (`place_aligned_dimension`) were added with #1267 / #1300. Graphic...
   (`place_graphic`) went live with #1116: it asks for an image file and puts
   the image on the cursor (`docs/SCHEMATIC_IMAGES.md`); the label is
-  unchanged.
+  unchanged. Elliptical Arc (`draw_elliptical_arc`), Ellipse
+  (`draw_ellipse`) and Round Rectangle (`draw_round_rectangle`) went live
+  with #1267.
 
 A live row runs its catalog command, the one the Active Bar's row names, and
 is gated by it (`Needs::Schematic`: greyed without a sheet). Its shortcut is
@@ -1066,8 +1068,9 @@ what each will do:
 Every other menu row runs a command (#2247). The only greyed tool rows are the
 planned tools of Place on a sheet and on a board, each with its reason.
 
-Place on a sheet has five planned commands (#2415; Bezier left the list with
-#1267, Parameter Set with #1489 and Graphic... with #1116), greyed with the planned
+Place on a sheet has two planned commands (#2415; Bezier, Elliptical Arc,
+Ellipse and Round Rectangle left the list with #1267, Parameter Set with
+#1489 and Graphic... with #1116), greyed with the planned
 tooltip in every state until their tools are built
 (`menu_bar/model/sheet_place.rs`, `active_bar::PLANNED_TOOLS`). The three
 harness rows went live with the harness tools (#1280, see
@@ -1077,9 +1080,6 @@ harness rows went live with the harness tools (#1280, see
 |---|---|---|
 | Ports & Connectors | Device Sheet Symbol | `place_device_sheet_symbol` |
 | Ports & Connectors | Reuse Block... | `place_reuse_block` |
-| Graphics | Elliptical Arc | `draw_elliptical_arc` |
-| Graphics | Ellipse | `draw_ellipse` |
-| Graphics | Round Rectangle | `draw_round_rectangle` |
 
 Each one is the row of a planned Active Bar tool. It is not a
 `stub()` row: it names its catalog command and goes live when that tool is

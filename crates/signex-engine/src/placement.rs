@@ -396,12 +396,16 @@ pub(crate) fn drawing_points(d: &SchDrawing) -> Vec<Point> {
             let (lo, hi) = i.bounds();
             vec![lo, Point::new(hi.x, lo.y), hi, Point::new(lo.x, hi.y)]
         }
+        SchDrawing::Curve(c) => {
+            let (lo, hi) = c.bounds();
+            vec![lo, Point::new(hi.x, lo.y), hi, Point::new(lo.x, hi.y)]
+        }
     }
 }
 
 /// The points that move drawing `d`: [`drawing_points`] for the classic
-/// shapes; a dimension's two measured points (its offset is relative) and a
-/// table's or an image's corner.
+/// shapes; a dimension's two measured points (its offset is relative), a
+/// table's or an image's corner and a curve's centre or corners.
 fn drawing_points_mut(d: &mut SchDrawing) -> Vec<&mut Point> {
     match d {
         SchDrawing::Line { start, end, .. } | SchDrawing::Rect { start, end, .. } => {
@@ -416,6 +420,7 @@ fn drawing_points_mut(d: &mut SchDrawing) -> Vec<&mut Point> {
         SchDrawing::Dimension(d) => vec![&mut d.from, &mut d.to],
         SchDrawing::Table(t) => vec![&mut t.position],
         SchDrawing::Image(i) => vec![&mut i.position],
+        SchDrawing::Curve(c) => c.shape.anchor_points_mut(),
     }
 }
 

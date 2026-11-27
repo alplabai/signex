@@ -6,6 +6,7 @@ mod annotation;
 mod annotation_placements;
 mod clipboard_harness;
 mod clipboard_text;
+mod curve_info;
 mod derived_ids;
 mod notice;
 pub use notice::{EngineNotice, NoticeMark, RefusedPinDot};
@@ -60,6 +61,8 @@ mod annotation_drawing_tests;
 mod annotation_placements_tests;
 #[cfg(test)]
 mod annotation_tests;
+#[cfg(test)]
+mod curve_drawing_tests;
 #[cfg(test)]
 mod document_id_tests;
 

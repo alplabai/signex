@@ -20,9 +20,6 @@ pub const PLANNED_TOOLS: &[(ActiveBarAction, &str)] = &[
         "Device Sheet Symbol",
     ),
     (ActiveBarAction::PlaceReuseBlock, "Reuse Block"),
-    (ActiveBarAction::DrawRoundRectangle, "Round Rectangle"),
-    (ActiveBarAction::DrawEllipse, "Ellipse"),
-    (ActiveBarAction::DrawEllipticalArc, "Elliptical Arc"),
 ];
 
 /// The user-facing name of `action` when it is a planned placeholder.
@@ -53,13 +50,7 @@ mod tests {
     /// fails here; add a real tool instead, or — if a placeholder really
     /// must ship — add its name to this list in the same change and say
     /// why in the PR.
-    const EXPECTED: &[&str] = &[
-        "Device Sheet Symbol",
-        "Reuse Block",
-        "Round Rectangle",
-        "Ellipse",
-        "Elliptical Arc",
-    ];
+    const EXPECTED: &[&str] = &["Device Sheet Symbol", "Reuse Block"];
 
     #[test]
     fn planned_tool_set_can_only_shrink() {

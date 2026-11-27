@@ -2025,6 +2025,26 @@
     "category": "interactive"
   },
   {
+    "id": "symbol_draw_bezier",
+    "group": "General",
+    "category": "place"
+  },
+  {
+    "id": "symbol_draw_elliptical_arc",
+    "group": "General",
+    "category": "place"
+  },
+  {
+    "id": "symbol_draw_pie",
+    "group": "General",
+    "category": "place"
+  },
+  {
+    "id": "symbol_draw_round_rectangle",
+    "group": "General",
+    "category": "place"
+  },
+  {
     "id": "sync_sheet_entries",
     "group": "Schematic",
     "category": "design"

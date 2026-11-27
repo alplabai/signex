@@ -775,6 +775,10 @@ mod tests {
             "draw_full_circle",
             "draw_rectangle",
             "draw_polygon",
+            // #1267: the curve tools.
+            "draw_ellipse",
+            "draw_elliptical_arc",
+            "draw_round_rectangle",
             // #2416: the sheet's selection filter and the Net Classes panel.
             "open_selection_filter",
             "open_net_classes",

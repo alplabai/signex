@@ -300,7 +300,8 @@ impl SchematicCanvas<'_> {
                                 SchDrawing::Bezier(_)
                                 | SchDrawing::Dimension(_)
                                 | SchDrawing::Table(_)
-                                | SchDrawing::Image(_) => {
+                                | SchDrawing::Image(_)
+                                | SchDrawing::Curve(_) => {
                                     let b = crate::schematic_runtime::annotation_aabb(d);
                                     push_pt(b.min_x, b.min_y, 1.0);
                                     push_pt(b.max_x, b.max_y, 1.0);

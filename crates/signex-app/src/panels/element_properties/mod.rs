@@ -13,6 +13,7 @@ mod channel_naming_menu;
 mod channel_view;
 mod child_sheet;
 mod child_sheet_repeat;
+mod curve;
 mod design_notes;
 mod dimension;
 mod directive;

@@ -26,6 +26,9 @@ mod board_view_operands;
 pub(crate) mod bridge;
 mod component_operand;
 #[cfg(test)]
+mod curve_operand_tests;
+mod curve_operands;
+#[cfg(test)]
 mod directive_operand_tests;
 mod directive_operands;
 #[cfg(test)]
@@ -115,6 +118,9 @@ mod sheet_sync_operand_tests;
 mod sheet_sync_operands;
 #[cfg(test)]
 mod sheet_variable_operand_tests;
+#[cfg(test)]
+mod symbol_shape_operand_tests;
+mod symbol_shape_operands;
 #[cfg(test)]
 mod text_note_format_tests;
 pub(crate) mod translator;

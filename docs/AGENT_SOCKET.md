@@ -150,6 +150,10 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
   each, answered with the drawing as JSON), and `set_footprint_text` (#2368;
   a component's designator or comment placed, turned, sized or justified on
   its own, one board undo step, answered with the text as JSON), and the
+  symbol editor's curve shapes `symbol_draw_elliptical_arc`,
+  `symbol_draw_bezier`, `symbol_draw_round_rectangle` and `symbol_draw_pie`
+  (#2838; one undo step of the named symbol's editor, answered with the
+  graphic as JSON, [CLI.md](CLI.md) "Symbol shapes"), and the
   length tuning commands
   `tune_net_length` and `tune_diff_pair` (#2389; one undo step on the named
   board, answered with the tuned nets and their lengths as JSON), and the

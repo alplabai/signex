@@ -23,6 +23,7 @@ command-needs-draw-in-progress = No wire, bus or polyline is being drawn
 command-needs-sheets = No schematic or project is open
 command-needs-active-sheet = No sheet is open
 command-needs-footprint-editor = No footprint editor is open
+command-needs-symbol-editor = No symbol editor is open
 command-needs-pcb = No PCB is open
 command-needs-editable-pcb = No PCB is open, or the board is read-only
 command-needs-measure-target = No schematic or PCB is in view

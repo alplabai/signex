@@ -277,6 +277,9 @@ pub(super) fn bar_items(
                     | Tool::Rectangle
                     | Tool::Circle
                     | Tool::Bezier
+                    | Tool::Ellipse
+                    | Tool::EllipticalArc
+                    | Tool::RoundRectangle
                     | Tool::Table
                     | Tool::LinearDimension
                     | Tool::AlignedDimension
