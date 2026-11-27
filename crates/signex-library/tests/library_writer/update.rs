@@ -551,3 +551,34 @@ fn an_update_that_stops_part_way_leaves_everything_recorded() {
     assert_eq!(summary.files_deleted, 1);
     assert!(!ledger_files(&root).contains(&fp_rel(1)));
 }
+
+#[cfg(unix)]
+#[test]
+fn an_update_never_writes_through_a_planted_link() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("Synthetic");
+    synthetic::library(20).write(&root).unwrap();
+    let outside = dir.path().join("outside.txt");
+    std::fs::write(&outside, b"keep me").unwrap();
+    let ledger = root.join(".signex-import-ledger.json");
+    std::fs::remove_file(&ledger).unwrap();
+    std::os::unix::fs::symlink(&outside, &ledger).unwrap();
+    let before = read_tree(&root);
+    assert!(synthetic::library(21).write_update(&root).is_err());
+    assert_eq!(std::fs::read(&outside).unwrap(), b"keep me");
+    assert_eq!(read_tree(&root), before, "a refused update changes nothing");
+}
+
+#[cfg(unix)]
+#[test]
+fn an_update_never_writes_into_a_linked_folder() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("Synthetic");
+    synthetic::library(20).write(&root).unwrap();
+    let elsewhere = dir.path().join("elsewhere");
+    std::fs::rename(root.join("symbols"), &elsewhere).unwrap();
+    std::os::unix::fs::symlink(&elsewhere, root.join("symbols")).unwrap();
+    let outside_before = read_tree(&elsewhere);
+    assert!(synthetic::library(21).write_update(&root).is_err());
+    assert_eq!(read_tree(&elsewhere), outside_before);
+}

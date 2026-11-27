@@ -203,6 +203,15 @@ fn apply(
     (gone, (first_ledger, ledger)): (&[String], (Vec<u8>, Vec<u8>)),
     summary: &mut UpdateSummary,
 ) -> Result<(), LibraryError> {
+    // No target may be, or lie behind, a symbolic link: checked for all of
+    // them before anything is written, so a refusal changes nothing.
+    update_guard::refuse_links(dir, Path::new(LEDGER_FILE))?;
+    if let Ok(rel) = snxlib.strip_prefix(dir) {
+        update_guard::refuse_links(dir, rel)?;
+    }
+    for rel in files.keys() {
+        update_guard::refuse_links(dir, rel)?;
+    }
     // First the union of the old and new ledgers, so a crash from here on
     // leaves every file this update writes recorded, none orphaned.
     let ledger_path = dir.join(LEDGER_FILE);

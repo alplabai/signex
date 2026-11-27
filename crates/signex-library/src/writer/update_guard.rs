@@ -166,3 +166,21 @@ impl KeptRefs {
         stem.is_some_and(|u| self.0.contains(&u))
     }
 }
+
+/// Refuse a write target under `dir` that is, or lies behind, a symbolic
+/// link. An imported library may come from someone else's repository, so a
+/// planted link (the ledger, the `.snxlib`, or a `symbols/` folder pointing
+/// elsewhere) must never make an update write outside the library.
+pub(super) fn refuse_links(dir: &Path, rel: &Path) -> Result<(), LibraryError> {
+    let mut at = dir.to_path_buf();
+    for part in rel.components() {
+        at.push(part);
+        if std::fs::symlink_metadata(&at).is_ok_and(|m| m.file_type().is_symlink()) {
+            return Err(LibraryError::Conflict(format!(
+                "{} is a symbolic link; the update writes only real files inside the library and changes nothing",
+                at.display()
+            )));
+        }
+    }
+    Ok(())
+}
