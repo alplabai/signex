@@ -78,6 +78,34 @@ impl ComponentRow {
         self.alternate_symbols.retain(|a| a.symbol_ref != symbol);
         self.symbol_ref = symbol;
     }
+
+    /// Bind `new` wherever the row binds `old`: as its default (as
+    /// [`Self::bind_default_symbol`] does) and in its alternates, each
+    /// keeping its label. An alternate that would then repeat the default or
+    /// another alternate is dropped; other alternates are left as they are.
+    /// Returns whether the row changed.
+    pub fn replace_symbol(&mut self, old: &PrimitiveRef, new: PrimitiveRef) -> bool {
+        if *old == new || !self.binds_symbol(old) {
+            return false;
+        }
+        if self.symbol_ref == *old {
+            self.bind_default_symbol(new);
+        }
+        let mut new_bound =
+            self.symbol_ref == new || self.alternate_symbols.iter().any(|a| a.symbol_ref == new);
+        self.alternate_symbols.retain_mut(|a| {
+            if a.symbol_ref != *old {
+                return true;
+            }
+            if new_bound {
+                return false;
+            }
+            a.symbol_ref = new;
+            new_bound = true;
+            true
+        });
+        true
+    }
 }
 
 /// A data-only defect in a row's alternate-symbol list.
@@ -219,6 +247,55 @@ mod tests {
             r.alternate_symbols
                 .iter()
                 .all(|a| a.symbol_ref != old_default)
+        );
+        assert!(alternate_symbol_issues(&r).is_empty());
+    }
+
+    #[test]
+    fn replacing_a_symbol_moves_the_default_and_the_alternates_off_it() {
+        let lib = Uuid::now_v7();
+        let (iec, new) = (
+            PrimitiveRef::new(lib, Uuid::now_v7()),
+            PrimitiveRef::new(lib, Uuid::now_v7()),
+        );
+        let mut r = crate::component::tests::fixture_row();
+        let old = r.symbol_ref;
+        r.alternate_symbols = vec![AlternateSymbol::new(iec, "", "IEC")];
+        let before = r.clone();
+        assert!(!r.replace_symbol(&new, iec), "the row does not bind it");
+        assert!(!r.replace_symbol(&old, old), "the same symbol");
+        assert_eq!(r, before);
+
+        assert!(r.replace_symbol(&old, new));
+        assert_eq!(r.symbol_ref, new);
+        assert_eq!(r.alternate_symbols, before.alternate_symbols);
+
+        // An alternate keeps its label and its place.
+        let mut r = before.clone();
+        assert!(r.replace_symbol(&iec, new));
+        assert_eq!((r.symbol_ref, r.alternate_symbols.len()), (old, 1));
+        assert_eq!(r.alternate_symbols[0].symbol_ref, new);
+        assert_eq!(r.alternate_symbols[0].label, "IEC");
+        assert!(!r.binds_symbol(&iec));
+    }
+
+    #[test]
+    fn a_replaced_alternate_that_would_repeat_a_binding_is_dropped() {
+        let lib = Uuid::now_v7();
+        let (iec, ansi) = (
+            PrimitiveRef::new(lib, Uuid::now_v7()),
+            PrimitiveRef::new(lib, Uuid::now_v7()),
+        );
+        let mut r = crate::component::tests::fixture_row();
+        let default = r.symbol_ref;
+        r.alternate_symbols = vec![
+            AlternateSymbol::new(iec, "", "IEC"),
+            AlternateSymbol::new(ansi, "", "ANSI"),
+        ];
+        assert!(r.replace_symbol(&iec, default));
+        assert_eq!(
+            r.alternate_symbols,
+            vec![AlternateSymbol::new(ansi, "", "ANSI")]
         );
         assert!(alternate_symbol_issues(&r).is_empty());
     }

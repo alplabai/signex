@@ -751,10 +751,14 @@ impl Signex {
     }
 
     /// "Delete Symbol?" (mockup row 137): shown while the active symbol
-    /// editor holds a current in-use warning, the same one the Esc ladder reads.
+    /// editor holds a current in-use warning, the same one the Esc ladder reads,
+    /// except while its Re-bind's symbol picker is open (#2572).
     pub(in crate::app::view) fn symbol_delete_confirm_overlay(
         &self,
     ) -> Option<Element<'_, Message>> {
+        if self.library.primitive_picker.is_some() {
+            return None;
+        }
         let ctx = &self.document_view.panel_ctx;
         let warning = ctx.symbol_editor.as_ref()?.delete_warning.as_ref()?;
         let card = crate::library::symbol_delete::view(warning, &ctx.tokens, &self.ui_state.i18n)

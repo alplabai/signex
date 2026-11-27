@@ -366,14 +366,13 @@ pub(crate) fn notice_banner<'a>(
 
 /// The facts of a dialog as key / value rows in a bordered box: each key
 /// muted in a fixed column, its value beside it.
-pub(crate) fn key_value_box<'a>(
-    rows: Vec<(signex_i18n::Localized, Element<'a, LibraryMessage>)>,
+pub(crate) fn key_value_box<'a, M: 'a>(
+    rows: Vec<(signex_i18n::Localized, Element<'a, M>)>,
     tokens: &ThemeTokens,
-) -> Element<'a, LibraryMessage> {
+) -> Element<'a, M> {
     let key_ink = tokens::resolve(tokens).ink4;
     let line = ti(tokens.border);
-    let mut grid: Column<Element<'a, LibraryMessage>> =
-        Column::new().spacing(KV_ROW_GAP).width(Length::Fill);
+    let mut grid: Column<Element<'a, M>> = Column::new().spacing(KV_ROW_GAP).width(Length::Fill);
     for (key, value) in rows {
         let key = container(
             text(key)
@@ -532,8 +531,8 @@ mod tests {
                     &tokens,
                 );
             }
-            let _ = key_value_box(Vec::new(), &tokens);
-            let _ = key_value_box(
+            let _ = key_value_box::<LibraryMessage>(Vec::new(), &tokens);
+            let _ = key_value_box::<LibraryMessage>(
                 vec![(
                     t!(i18n, ids::DIALOG_BUTTON_OK),
                     text(t!(i18n, ids::DIALOG_BUTTON_CANCEL)).boxed(),

@@ -16,6 +16,7 @@ define_ids! {
     LIBRARY_SYMBOL_DELETE_CHECKING = "library-symbol-delete-checking";
     LIBRARY_SYMBOL_DELETE_MAY_BE_IN_USE = "library-symbol-delete-may-be-in-use";
     LIBRARY_SYMBOL_DELETE_IN_USE = "library-symbol-delete-in-use";
+    LIBRARY_SYMBOL_DELETE_NOT_IN_USE = "library-symbol-delete-not-in-use";
     LIBRARY_CREATE_OPTIONS_CREATE = "library-create-options-create";
     LIBRARY_EDIT_ROW_RELOAD = "library-edit-row-reload";
     LIBRARY_EDIT_ROW_KEEP_EDITING = "library-edit-row-keep-editing";
@@ -304,6 +305,15 @@ define_ids! {
     LIBRARY_RANGE_FILTER_DONE = "library-range-filter-done";
     // symbol-delete-modal
     LIBRARY_SYMBOL_DELETE_TITLE = "library-symbol-delete-title";
+    LIBRARY_SYMBOL_DELETE_CONSEQUENCE = "library-symbol-delete-consequence";
+    LIBRARY_SYMBOL_DELETE_KEY_ROWS = "library-symbol-delete-key-rows";
+    LIBRARY_SYMBOL_DELETE_KEY_OPEN_SHEETS = "library-symbol-delete-key-open-sheets";
+    LIBRARY_SYMBOL_DELETE_KEY_CLOSED_SHEETS = "library-symbol-delete-key-closed-sheets";
+    LIBRARY_SYMBOL_DELETE_KEY_NOT_CHECKED = "library-symbol-delete-key-not-checked";
+    LIBRARY_SYMBOL_DELETE_CHECKING_CLOSED = "library-symbol-delete-checking-closed";
+    LIBRARY_SYMBOL_DELETE_REBIND_ROW = "library-symbol-delete-rebind-row";
+    LIBRARY_SYMBOL_DELETE_REBIND_ALL = "library-symbol-delete-rebind-all";
+    LIBRARY_SYMBOL_DELETE_SHOW_ALL = "library-symbol-delete-show-all";
     // picker-and-change-component
     LIBRARY_CHANGE_COMPONENT_NOTE = "library-change-component-note";
     LIBRARY_CHANGE_COMPONENT_SEARCH = "library-change-component-search";

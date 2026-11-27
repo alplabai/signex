@@ -34,6 +34,7 @@ impl Signex {
         // The library's path now: a relocation may have moved it while the
         // read ran.
         let path = finish.root;
+        let applied = matches!(finish.applied, Some(Ok(())));
         let failure = match finish.applied {
             Some(Err(error)) => Some(error),
             Some(Ok(())) => None,
@@ -63,6 +64,10 @@ impl Signex {
                     "[library] refresh of {name} failed ({error}); its cache may be stale"
                 ));
             }
+        }
+        if applied {
+            // An in-use symbol Delete counts its rows again (#2572).
+            self.recount_symbol_delete();
         }
         let mut tasks = Vec::new();
         for follow_up in finish.follow_ups {

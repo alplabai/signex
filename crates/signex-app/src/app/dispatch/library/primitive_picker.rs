@@ -22,8 +22,10 @@ impl Signex {
         // `update_row` on the target's library; a read-only mount
         // refuses up front with the plain-language card instead of
         // opening a picker whose result could only fail silently.
-        if let Some(library_path) = target.library_path()
-            && self.refuse_read_only_write(library_path)
+        if target
+            .library_paths()
+            .into_iter()
+            .any(|library_path| self.refuse_read_only_write(library_path))
         {
             return Task::none();
         }
@@ -125,8 +127,11 @@ impl Signex {
         let Some(picker) = self.library.primitive_picker.take() else {
             return Task::none();
         };
-        if let Some(library_path) = picker.target.library_path()
-            && self.refuse_read_only_write(library_path)
+        if picker
+            .target
+            .library_paths()
+            .into_iter()
+            .any(|library_path| self.refuse_read_only_write(library_path))
         {
             return Task::none();
         }
@@ -160,6 +165,15 @@ impl Signex {
                     picker.kind,
                     primitive_ref,
                 );
+            }
+            PrimitivePickerTarget::BrowserRows { rows, replacing } => {
+                let binds: Vec<_> = rows
+                    .into_iter()
+                    .map(|address| {
+                        self.replace_symbol_in_browser_row(address, replacing, primitive_ref)
+                    })
+                    .collect();
+                return Task::batch(binds);
             }
             PrimitivePickerTarget::PreviewAlternate(address) => {
                 return self.add_alternate_symbol_from_pick(address, primitive_ref);
@@ -247,27 +261,8 @@ impl Signex {
         primitive_ref: PrimitiveRef,
     ) -> Task<Message> {
         // 1. Read the row from the library cache.
-        let mut row = match self
-            .library
-            .library_at(&address.library_path)
-            .and_then(|lib| lib.tables.get(&address.table))
-            .and_then(|rows| {
-                rows.iter()
-                    .find(|r| RowId::from_uuid(r.row_id) == address.row_id)
-            })
-            .cloned()
-        {
-            Some(r) => r,
-            None => {
-                tracing::warn!(
-                    target: "signex::library",
-                    library = %address.library_path.display(),
-                    table = %address.table,
-                    row_id = %address.row_id,
-                    "primitive pick: row not found in cache"
-                );
-                return Task::none();
-            }
+        let Some(mut row) = self.cached_browser_row(&address) else {
+            return Task::none();
         };
         // 2. Apply.
         match kind {
@@ -309,6 +304,74 @@ impl Signex {
             message: commit_msg,
         };
         row_edit_task(&mut self.library, &library_path, kind_done, edit)
+    }
+
+    /// The row at `address` as the library cache holds it.
+    fn cached_browser_row(&self, address: &EditorAddress) -> Option<signex_library::ComponentRow> {
+        let row = self
+            .library
+            .library_at(&address.library_path)
+            .and_then(|lib| lib.tables.get(&address.table))
+            .and_then(|rows| {
+                rows.iter()
+                    .find(|r| RowId::from_uuid(r.row_id) == address.row_id)
+            })
+            .cloned();
+        if row.is_none() {
+            tracing::warn!(
+                target: "signex::library",
+                library = %address.library_path.display(),
+                table = %address.table,
+                row_id = %address.row_id,
+                "primitive pick: row not found in cache"
+            );
+        }
+        row
+    }
+
+    /// The in-use symbol Delete's Re-bind (#2572): `new` takes the place of
+    /// `old` in the row at `address`, as default and as alternate
+    /// (`ComponentRow::replace_symbol`), written like a browser row's bind.
+    /// A row that no longer binds `old` is not written.
+    fn replace_symbol_in_browser_row(
+        &mut self,
+        address: EditorAddress,
+        old: PrimitiveRef,
+        new: PrimitiveRef,
+    ) -> Task<Message> {
+        let Some(mut row) = self.cached_browser_row(&address) else {
+            return Task::none();
+        };
+        if !row.replace_symbol(&old, new) {
+            return Task::none();
+        }
+        match signex_library::hash_row_content(&row) {
+            Ok(h) => row.content_hash = h,
+            Err(e) => {
+                crate::diagnostics::log_warning(format!(
+                    "Row {} was not re-bound: its content could not be hashed ({e}).",
+                    address.row_id
+                ));
+                return Task::none();
+            }
+        }
+        let library_path = address.library_path.clone();
+        let patch: RowPatch = Box::new(move |stored| {
+            stored.replace_symbol(&old, new);
+        });
+        let edit = RowEdit {
+            table: address.table.clone(),
+            row_id: address.row_id,
+            start: RowStart::Full(Box::new(row)),
+            patch: Some(patch),
+            assets: Vec::new(),
+            message: bind_message(PrimitiveKind::Symbol),
+        };
+        let done = WriteKind::BrowserRowBound {
+            address,
+            kind: PrimitiveKind::Symbol,
+        };
+        row_edit_task(&mut self.library, &library_path, done, edit)
     }
 
     /// The browser row's primitive bind finished.

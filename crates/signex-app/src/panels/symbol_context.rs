@@ -435,14 +435,60 @@ pub struct SymbolDeleteWarning {
     pub only_unknown: bool,
     /// The closed sheets of the project are still being read from disk.
     pub checking: bool,
-    /// One line per kind of user (component rows, open sheets).
-    pub lines: Vec<String>,
+    /// The in-use details as key / value rows (mockup row 137), in key order.
+    pub entries: Vec<SymbolUsageEntry>,
+    /// Component rows that bind the symbol; the consequence line counts them.
+    pub rows: usize,
+    /// The Component rows cell lists every row, not only the first ones.
+    pub show_all_rows: bool,
+}
+
+/// One key / value row of the in-use box: the kind of user and its names.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SymbolUsageEntry {
+    pub key: SymbolUsageKey,
+    /// English names worded by the delete check (#2060).
+    pub items: Vec<String>,
+}
+
+/// The kinds of user the in-use box names, in the order it lists them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SymbolUsageKey {
+    ComponentRows,
+    OpenSheets,
+    ClosedSheets,
+    NotChecked,
+}
+
+/// Which affected rows a Re-bind from the in-use warning picks a symbol for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SymbolDeleteRebind {
+    /// Every row the warning lists, to one picked symbol.
+    AllRows,
+    /// The row at this index of the Component rows cell.
+    Row(usize),
 }
 
 impl SymbolDeleteWarning {
+    /// The names listed under `key`; empty when nothing of that kind uses it.
+    pub fn items(&self, key: SymbolUsageKey) -> &[String] {
+        self.entries
+            .iter()
+            .find(|e| e.key == key)
+            .map_or(&[], |e| e.items.as_slice())
+    }
+
+    /// Nothing uses the symbol any more and nothing is left to check: after
+    /// a Re-bind the confirm offers a plain Delete.
+    pub fn is_clear(&self) -> bool {
+        self.entries.is_empty() && !self.checking
+    }
+
     pub fn heading(&self, i18n: &signex_i18n::I18n) -> signex_i18n::Localized {
         use signex_i18n::{ids, t};
-        let id = if self.checking && self.only_unknown {
+        let id = if self.is_clear() {
+            ids::LIBRARY_SYMBOL_DELETE_NOT_IN_USE
+        } else if self.checking && self.only_unknown {
             ids::LIBRARY_SYMBOL_DELETE_CHECKING
         } else if self.only_unknown {
             ids::LIBRARY_SYMBOL_DELETE_MAY_BE_IN_USE
