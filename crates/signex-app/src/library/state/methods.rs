@@ -122,6 +122,8 @@ impl Default for LibraryState {
             stock_copy_target: None,
             stock_copies_in_flight: Default::default(),
             import: Default::default(),
+            import_dialog: None,
+            import_menu: None,
             symbol_props: HashMap::new(),
             mirror_cards: HashMap::new(),
         }

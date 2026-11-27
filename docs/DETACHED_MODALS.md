@@ -27,6 +27,25 @@ Graphite close sends `WindowMsg::DialogCloseClicked`, which is handled as
 `WindowCloseRequested` for that window, so it takes the same path (and the
 Preferences dirty guard still applies).
 
+## Esc in a dialog's own window
+
+`detached_modal_escape_message` answers an Esc typed in a dialog's own window
+with exactly what Esc over that dialog's in-window card does (#547). The Esc
+ladder is not walked there: it ranks overlays by where they paint in the main
+window, and none of that stack covers a separate OS window, so walking it
+would let a dialog in another window outrank the one being typed into. The
+answer is the single rung of that dialog, looked up by id; the dialog's own
+detachment is passed to `open_overlays` so its flag reads open (it is
+normally forced false because the in-window card is not painted, which is
+right for an Esc in the main window and wrong here).
+
+The Parameter Manager and Import Parameters have no `OverlayId`: they have no
+in-window card and only open as their own windows, so they answer directly,
+with their Close (typed cells are already in the document) and their Cancel.
+`None` means the dialog has no Esc at all: no `OverlayId` (Move Selection,
+the net-color palette) or a rung that is `None` by design. Its in-window card
+ignores Esc too, so the detached form invents no dismissal of its own.
+
 ## Graphite title bar
 
 `Signex::dialog_windows_borderless` decides once per window, when it opens
@@ -166,6 +185,7 @@ Confirm and warning dialogs lock the main window; tool windows do not.
 | Copy to Library (opening a stock symbol or footprint) | tool | Cancel; the stock original is never changed | `detached_modals` |
 | Library picker, primitive picker, document options, New Library (create options), updates, custom net colour | tool | Cancel, no write | `detached_modals` generic loops, `detached_library_tests` (net colour) |
 | Library edit row (per browser) | tool | Cancel for THAT browser | same code path as delete confirm; no edit-row fixture |
+| Import Library (resizable, `ModalId::LibraryImport`) | tool | Close; a dry run is cancelled and its temp folder removed. While the import runs it is Cancel (stops after the current item, removes what was written) and the dialog stays until the run has stopped; a window that vanishes then comes back | `detached_modals` generic loops, `library::import_dialog::tests` |
 | Find / Replace, Grid Properties, Custom Selection Filter, Enable Version Control, About, Shortcuts, Calculator | tool | close | `detached_modals` |
 
 ## The quit and data-loss path

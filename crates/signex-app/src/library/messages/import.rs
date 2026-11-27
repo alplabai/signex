@@ -19,4 +19,6 @@ pub enum LibraryImportMsg {
     /// The user asked to stop the run; its result still arrives as
     /// [`LibraryImportMsg::Finished`].
     CancelRequested,
+    /// The Import Library dialog (mockup row 211).
+    Dialog(crate::library::import_dialog::ImportDialogMsg),
 }

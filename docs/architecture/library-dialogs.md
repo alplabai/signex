@@ -120,3 +120,137 @@ the Messages panel.
 It is painted by `library_updates_overlay` via `collect_overlays`, which runs
 every frame; the builder's `library_updates.is_some()` guard is the only open
 check. The card itself is in `updates_dialog::view`.
+
+## Import Library dialog
+
+`crates/signex-app/src/library/import_dialog/` (mockup row 211, #3117–#3125),
+opened by File ▸ Import ▸ Library… (`import_library`, also in the command
+palette), by Import… in the Library Browser's LIBRARIES header, and by Import
+library… in a project's Project tab ▸ Libraries section (#3122). Opened from a
+project, Mount for all projects starts off and "This project" means that
+project (`ImportDialogState::project`), whether or not it is the active one;
+an open dialog stays as it is. The user's view of it is USER_GUIDE.md,
+"Importing a library" (#3125). It runs an installed library converter
+([LIBRARY_CONVERTER_CONTRACT.md](../LIBRARY_CONVERTER_CONTRACT.md)) through the
+engine in `crate::library_import`, in three steps under a stepper; the header
+note repeats the step ("Step 2 of 3 · Preview"). Handlers:
+`app/dispatch/library/import_dialog/`. It is a tool window (resizable), and
+`ModalId::LibraryImport` follows `import_dialog` like the other library
+dialogs.
+
+**Step 1, source and options.** Opening the dialog searches for converters on
+a worker (`discovery::discover`, answered from the session's cache when PATH
+and the candidates are unchanged). With none, an info notice gives the install
+hint, lists why candidates were set aside, and offers Look again; Next stays
+off. Signex ships no converter (contract §1), so the mockup's "Install
+converter…" is Look again. The source is several library files, or one
+database link file when a converter reads that kind (a Files / Database
+choice shows only when both are offered); the picker's filters are built from
+every converter's `describe` inputs, so no foreign extension is compiled in.
+Detected shows a chip per input kind the converter matched and "Read by
+<converter> <version>"; when several converters read every picked file, a
+chip per converter chooses one. A file no converter reads, or files no single
+converter reads together, keep Next off. A database input adds the Database
+override (passed as `--db`; empty means the link file's own). Name follows the
+first file's stem until typed; Location is `~/Signex/Libraries/<name>` and
+follows the name until changed by hand. Mount for all projects is on by
+default; off adds the library to the active project only, and with no project
+open it is forced on and greyed. Include 3D models (embedded) passes
+`--models include|skip`. The mockup's "Track with version control" switch is
+not built: every import is a git snapshot (see the 2026-11-26 snapshot row in
+DECISIONS.md).
+
+**Next** checks the folder on a worker (`import_dialog/target.rs`): absent or
+empty is accepted; a link, a file, or a folder that holds anything is refused
+with a banner and nothing runs, except a folder that holds an imported
+library.
+
+**Updating an import (#3123).** A folder with a `.snxlib` in a git repository
+with no uncommitted changes is offered as an update: a banner says what an
+update does (one new commit; only what the converter wrote is deleted or
+overwritten; parts the user added stay), warns when the library has commits
+that are not imports (`UpdateCheck::local_commits`), and offers Update this
+library; Next stays off until it is taken. Taking it runs the check again and
+the preview; the preview's button reads Update with N parts and runs
+`--update` over the folder. A library with no repository, one with
+uncommitted changes, and one with unsaved editors or documents in the app are
+refused with their own reasons and nothing runs; a part-number clash is the
+converter's own refusal (contract §5) and shows as its failure, with the
+library put back to its last import. Any edit of the sources, name or folder
+drops the offer. On step 3 the silence and Cancel lines say a stopped or
+cancelled update puts the library back to its last import, and a failed one
+says whether it was put back (`FolderAfter`).
+
+**What went wrong (#3124).** A picked file no installed converter reads
+shows a warning under Detected with how to get one, why converters were set
+aside (one too new for this Signex says which contract it speaks, from
+`describe`), and Look again. A failed dry run (step 2) or import (step 3)
+names a converter that ended without a result as having crashed or been
+stopped from outside, with its exit status; one that exited 1 with its own
+error as unable to convert the library, with that error; anything else in the
+engine's words (`library_import::error`). Under each, the last 12 non-blank
+lines of the converter's error output, in a mono box
+(`import_dialog::notices`). An import that exited 2 ends on its result card
+with an amber line counting what was dropped or not imported, and the loss
+report lists each.
+
+**Step 2, preview.** A `--dry-run` into a new temp folder
+(`signex-library-preview-<uuid>` under the system temp folder, removed when the
+dialog moves on or closes). It shows the counts (parts, symbols, footprints,
+3D models, skipped), a chip per report severity present (a press hides or
+shows that severity in the list), a filter over the items' source name,
+message and code, the list (first 200 rows), and the selected item's kind,
+source, code, what it was written as and its detail fields. A dry run writes
+only the report (contract §2.2), so no symbol or footprint is drawn here; the
+caption says they can be looked at after the import (a drawn preview is
+follow-up #3171; approved deviation, DECISIONS.md 2026-11-27). The amber strip counts
+what will be skipped. Back cancels a running dry run. A failed dry run is
+shown in the step, not as a notice.
+
+**Import** checks the folder again. The run itself takes the folder
+(`library_import::output::claim_output`): it creates it with its parents,
+adopts an empty folder as it is, and refuses one that holds anything before
+the converter starts. A failed or cancelled run removes only what it
+created: a folder it made and the parents it made while they are empty, or
+what it wrote into an adopted folder, which is kept. Next waits ("The
+previous run is stopping…") while a dry run left by Back or Close has not
+ended; that dry run's temp folder is removed when it does.
+
+**Step 3, import.** The phase name with "done of total" and the percent, the
+bar, "Now: <item>" from the progress stream, every phase so far, and the
+silence rule (no event for 120 s stops the run). Cancel stops after the
+current item: an item is in flight while the last event is a `progress`
+naming one, and the run is stopped on the next event that is not a repeat of
+it; with no item in flight it stops at once. While it waits the button reads
+Stop now: a second Cancel (or Esc, or Close) stops the run at once, so a
+converter stuck on one item, silent, or never exiting is always stopped.
+Quitting kills a running converter's process group. Esc and the close button cancel
+too while the import runs; the dialog stays until it has stopped, then says
+whether the folder was removed, with Back and Close.
+
+**Done: result and loss report (#3121).** A finished import stays on step 3
+("Step 3 of 3 · Done") with two tabs. Result is the result card: the library
+name ("imported" or "updated"), tiles for imported parts, approximated,
+dropped and skipped items, the library folder, where it was mounted (for all
+projects, for the project, "Mounting…" until that is settled, or not mounted
+when an open library has the same id), its history (the import commit, or
+that an unchanged update added none), the libraries its manifest `requires`
+(by name when open, by id when not), for an update the local-commits warning,
+and View loss report with the counts. Loss report is the
+report the run wrote (`import-report.json`), with the same severity chips and
+filter as step 2, grouped by severity (most severe first, each with what it
+means for the item) and then by code (most items first), each row the item's
+name in the source and the converter's message; at most 200 rows, with a
+caption when the filter leaves more. The footer has Save report…, which copies
+the library's `import-report.md` to a file the user picks (an atomic write;
+nothing is written until a file is picked), Open report (the `.md` in the
+system viewer), Close, and Open in Library Browser, on once the library is
+mounted. Model: `library::import_dialog::result`; handlers:
+`app/dispatch/library/import_dialog/report.rs`.
+
+**The stored report.** A right-click on a library in the Library Browser's
+LIBRARIES list opens a menu under it with View import report, which reads the
+library's `import-report.json` on a worker and opens the dialog on that loss
+report alone (no stepper; the header note names the library), or on why there
+is none. An open dialog stays as it is, as File ▸ Import ▸ Library… leaves it.
+The menu's open state is `LibraryState::import_menu`.

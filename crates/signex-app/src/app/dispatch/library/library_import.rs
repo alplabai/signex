@@ -12,9 +12,11 @@ use signex_i18n::{Translatable, ids};
 use super::*;
 use crate::app::state::ErrorNotice;
 use crate::ignore::IgnoreResult as _;
+use crate::library::import_dialog::result::{Mounted, RequiredLibrary};
 use crate::library::messages::LibraryImportMsg;
 use crate::library::mount::{MountIntent, MountRequest, spawn_pending_mounts};
 use crate::library::refresh::{RefreshFollowUp, refresh_task};
+use crate::library::writes::QUIT_WAIT;
 use crate::library_import::run_state::{ImportFinished, ImportRun, MountTarget};
 use crate::library_import::{
     ExitKind, ImportError, ImportJob, ImportJobOutcome, MountScope, RunFailure, RunMode,
@@ -48,25 +50,41 @@ impl Signex {
     /// Start `job`, mounting the result for `scope`. Refused while another
     /// import runs. `ThisProject` with no project open mounts for all
     /// projects instead, and says so.
-    #[cfg_attr(
-        not(all(test, unix)),
-        expect(
-            dead_code,
-            reason = "the entry point of the Import Library dialog (batch D); only the unix tests call it so far"
-        )
-    )]
     pub(crate) fn start_library_import(
         &mut self,
         job: ImportJob,
         scope: MountScope,
     ) -> Task<Message> {
+        if self.refuse_library_import(&job) {
+            return Task::none();
+        }
+        let target = self.mount_target_for(scope);
+        self.run_library_import(job, target)
+    }
+
+    /// Start `job`, mounting the result at `target` (a project the Import
+    /// Library dialog was opened for). Refused as [`Self::start_library_import`].
+    pub(crate) fn start_library_import_into(
+        &mut self,
+        job: ImportJob,
+        target: MountTarget,
+    ) -> Task<Message> {
+        if self.refuse_library_import(&job) {
+            return Task::none();
+        }
+        self.run_library_import(job, target)
+    }
+
+    /// Refuse `job` with a notice while another import runs, or for an
+    /// update while the library has unsaved work in the app.
+    fn refuse_library_import(&mut self, job: &ImportJob) -> bool {
         if let Some(running) = &self.library.import.running {
             self.document_view.error_notice = Some(ErrorNotice::new(
                 ids::LIBRARY_IMPORT_FAILED_TITLE,
                 Translatable::new(ids::LIBRARY_IMPORT_RUNNING)
                     .arg("path", running.output.display().to_string()),
             ));
-            return Task::none();
+            return true;
         }
         if job.request.mode == RunMode::Update
             && let Some(what) = self.unsaved_in_library(&job.request.output)
@@ -75,15 +93,20 @@ impl Signex {
                 ids::LIBRARY_IMPORT_FAILED_TITLE,
                 ImportError::UnsavedInApp { what }.to_translatable(),
             ));
-            return Task::none();
+            return true;
         }
-        let target = self.mount_target_for(scope);
+        false
+    }
+
+    fn run_library_import(&mut self, job: ImportJob, target: MountTarget) -> Task<Message> {
         let cancel = Arc::new(AtomicBool::new(false));
         self.library.import.running = Some(ImportRun {
             output: job.request.output.clone(),
             mode: job.request.mode,
             target: target.clone(),
             cancel: cancel.clone(),
+            group: job.group.clone(),
+            stage: job.stage.clone(),
             progress: None,
         });
         log::info!(
@@ -123,7 +146,7 @@ impl Signex {
 
     /// The first unsaved editor or document inside the library folder
     /// `dir`, named for the refusal; an update would overwrite it.
-    fn unsaved_in_library(&self, dir: &std::path::Path) -> Option<String> {
+    pub(super) fn unsaved_in_library(&self, dir: &std::path::Path) -> Option<String> {
         use crate::app::state::scope::{CaseFold, path_is_under};
         let fold = CaseFold::host_default();
         if let Some(editor) = self
@@ -164,11 +187,18 @@ impl Signex {
     pub(super) fn handle_library_import(&mut self, msg: LibraryImportMsg) -> Task<Message> {
         match msg {
             LibraryImportMsg::ProgressReported(event) => {
-                if let Some(run) = self.library.import.running.as_mut() {
-                    run.progress = Some(event);
+                let previous = self
+                    .library
+                    .import
+                    .running
+                    .as_mut()
+                    .map(|run| run.progress.replace(event.clone()));
+                if let Some(previous) = previous {
+                    self.import_dialog_progress(previous.as_ref(), &event);
                 }
                 Task::none()
             }
+            LibraryImportMsg::Dialog(msg) => self.handle_import_dialog(msg),
             LibraryImportMsg::CancelRequested => {
                 if let Some(run) = &self.library.import.running {
                     run.cancel.store(true, Ordering::Relaxed);
@@ -193,17 +223,92 @@ impl Signex {
         }
     }
 
+    /// A run ended. The Import Library dialog shows the result of a run it
+    /// waits for (a dry run, a failed import, a finished import with its
+    /// report); no notice repeats it.
     fn finish_library_import(&mut self, finished: ImportFinished) -> Task<Message> {
-        self.library.import.running = None;
+        let run = self.library.import.running.take();
+        let mode = run.as_ref().map(|run| run.mode);
+        let shown = self.import_dialog_run_finished(&finished, mode);
+        // A dry run the dialog stopped waiting for (Back, Close) leaves its
+        // temp folder; a failed one was removed by the engine already.
+        let leftover = match (&run, shown) {
+            (Some(run), false) if run.mode == RunMode::Preview => {
+                super::import_dialog::remove_preview_dir(run.output.clone())
+            }
+            _ => Task::none(),
+        };
         let task = match &finished.result {
+            Err(failure) if *failure.error == ImportError::Cancelled => {
+                log::info!("Library import: cancelled");
+                if !shown && mode != Some(RunMode::Preview) {
+                    self.report_library_import_failure(failure);
+                }
+                Task::none()
+            }
+            Err(failure) if shown || mode == Some(RunMode::Preview) => {
+                crate::diagnostics::log_error(
+                    "Library import",
+                    &anyhow::anyhow!("{}\n{}", failure.error, failure.stderr_tail.trim()),
+                );
+                Task::none()
+            }
             Err(failure) => {
                 self.report_library_import_failure(failure);
                 Task::none()
             }
-            Ok(outcome) => self.mount_imported_library(outcome, &finished),
+            Ok(outcome) => {
+                let (task, mounted) = self.mount_imported_library(outcome, &finished, shown);
+                if shown && let Some(mounted) = mounted {
+                    let required = self.required_libraries(&outcome.requires);
+                    self.import_dialog_mounted(mounted, required);
+                }
+                task
+            }
         };
         self.library.import.last = Some(Box::new(finished));
-        task
+        Task::batch([task, leftover])
+    }
+
+    /// Quitting: the worker and its converter would outlive the window, so
+    /// the run is told to stop and the converter's process group is killed
+    /// now. Synchronous: it only sends signals.
+    pub(crate) fn stop_library_import_at_quit(&mut self) {
+        if let Some(run) = &self.library.import.running {
+            log::info!("Library import: stopped by quit ({})", run.output.display());
+            run.cancel.store(true, Ordering::Relaxed);
+            run.group.kill();
+        }
+    }
+
+    /// Quit path, after [`Self::stop_library_import_at_quit`]: wait for the
+    /// stopped run's worker, then run `next`. A cancelled update puts its
+    /// library back to the last import on that worker; the process exiting
+    /// first would leave the library half written. The wait gives up after
+    /// `QUIT_WAIT` only while the worker has not reached its restore or
+    /// commit; one that has is waited for to the end.
+    pub(crate) fn wait_for_library_import_then(&mut self, next: Task<Message>) -> Task<Message> {
+        let Some(run) = &self.library.import.running else {
+            return next;
+        };
+        let stage = run.stage.clone();
+        Task::perform(
+            async move {
+                tokio::task::spawn_blocking(move || stage.wait_at_quit(QUIT_WAIT))
+                    .await
+                    .unwrap_or(false)
+            },
+            |done| {
+                if !done {
+                    crate::diagnostics::log_warning(format!(
+                        "Quit: the library import had not stopped after {} s; exiting anyway.",
+                        QUIT_WAIT.as_secs()
+                    ));
+                }
+                Message::noop()
+            },
+        )
+        .chain(next)
     }
 
     fn report_library_import_failure(&mut self, failure: &RunFailure) {
@@ -226,33 +331,41 @@ impl Signex {
     }
 
     /// Record and mount a written library; refresh it when it is already
-    /// mounted (a re-import). A preview mounts nothing. A library whose id
-    /// another open library has is neither recorded nor mounted.
+    /// mounted (a re-import). A preview mounts nothing (`None`). A library
+    /// whose id another open library has is neither recorded nor mounted;
+    /// the notice saying so is left to the dialog when it shows the result
+    /// (`shown`).
     fn mount_imported_library(
         &mut self,
         outcome: &ImportJobOutcome,
         finished: &ImportFinished,
-    ) -> Task<Message> {
+        shown: bool,
+    ) -> (Task<Message>, Option<Mounted>) {
         let Some(file) = outcome.library_file.clone() else {
-            return Task::none();
+            return (Task::none(), None);
         };
         if let Some(other) = self.library_id_clash(&file, outcome.library_id) {
             let detail = Translatable::new(ids::LIBRARY_IMPORT_ID_CLASH)
                 .arg("path", file.display().to_string())
                 .arg("other", other.display().to_string());
             crate::diagnostics::log_warning(detail.render_en_us());
-            self.document_view.error_notice =
-                Some(ErrorNotice::new(ids::LIBRARY_IMPORT_FAILED_TITLE, detail));
-            return Task::none();
-        }
-        let mut tasks = vec![self.mount_required_libraries(&[])];
-        match &finished.target {
-            MountTarget::Global => tasks.push(record_global_task(file.clone())),
-            MountTarget::Project(project) => {
-                self.add_imported_library_to_project(project, &file, outcome.library_id)
+            if !shown {
+                self.document_view.error_notice =
+                    Some(ErrorNotice::new(ids::LIBRARY_IMPORT_FAILED_TITLE, detail));
             }
+            return (Task::none(), Some(Mounted::Clash(other)));
         }
-        self.log_import_result(outcome, &file);
+        let mut tasks = vec![self.mount_required_libraries(&outcome.requires)];
+        let mounted = match &finished.target {
+            MountTarget::Global => {
+                tasks.push(record_global_task(file.clone()));
+                Mounted::AllProjects
+            }
+            MountTarget::Project(project) => self
+                .add_imported_library_to_project(project, &file, outcome.library_id)
+                .map_or(Mounted::Unrecorded, Mounted::Project),
+        };
+        self.log_import_result(outcome, &file, shown);
         tasks.push(
             match self.library.request_mount(&file, MountIntent::Silent) {
                 MountRequest::Spawn => spawn_pending_mounts(vec![file]),
@@ -263,7 +376,24 @@ impl Signex {
             },
         );
         self.refresh_panel_ctx();
-        Task::batch(tasks)
+        (Task::batch(tasks), Some(mounted))
+    }
+
+    /// Each of `library_ids` with the name of the open library that has
+    /// it, if one does.
+    fn required_libraries(&self, library_ids: &[uuid::Uuid]) -> Vec<RequiredLibrary> {
+        library_ids
+            .iter()
+            .map(|&id| RequiredLibrary {
+                id,
+                open_as: self
+                    .library
+                    .open_libraries
+                    .iter()
+                    .find(|lib| lib.library_id == id)
+                    .map(|lib| lib.display_name.clone()),
+            })
+            .collect()
     }
 
     /// Another open library with `library_id`; a re-import of the same
@@ -282,16 +412,17 @@ impl Signex {
     }
 
     /// Put `file` on the project's library list (once), so the next save
-    /// records it in the `.snxprj`.
+    /// records it in the `.snxprj`. The project's name, or `None` when the
+    /// library has no readable id or the project closed meanwhile.
     fn add_imported_library_to_project(
         &mut self,
         project: &std::path::Path,
         file: &std::path::Path,
         library_id: Option<uuid::Uuid>,
-    ) {
+    ) -> Option<String> {
         let Some(library_id) = library_id else {
             log::warn!("Library import: {} has no readable id", file.display());
-            return;
+            return None;
         };
         let Some(loaded) = self
             .document_state
@@ -303,23 +434,32 @@ impl Signex {
                 "Library import: project {} closed before the import finished",
                 project.display()
             );
-            return;
+            return None;
         };
+        let name = loaded.data.name.clone();
         if loaded
             .data
             .libraries
             .iter()
             .any(|entry| entry.library_id == Some(library_id))
         {
-            return;
+            return Some(name);
         }
         let fold = loaded.case_fold;
         crate::library::commands::register_library_entry(&mut loaded.data, file, library_id, fold);
         let project_path = loaded.path.clone();
         self.document_state.mark_document_dirty(&project_path);
+        Some(name)
     }
 
-    fn log_import_result(&mut self, outcome: &ImportJobOutcome, file: &std::path::Path) {
+    /// Log a written library; a partial import raises a notice unless the
+    /// dialog shows its result (`shown`).
+    fn log_import_result(
+        &mut self,
+        outcome: &ImportJobOutcome,
+        file: &std::path::Path,
+        shown: bool,
+    ) {
         let summary = &outcome.run.summary;
         let name = file
             .file_stem()
@@ -341,20 +481,28 @@ impl Signex {
                     .render_en_us(),
             );
         }
-        if outcome.run.exit == ExitKind::Partial {
+        if outcome.run.exit == ExitKind::Partial && !shown {
             self.document_view.error_notice =
                 Some(ErrorNotice::new(ids::LIBRARY_IMPORT_DONE_TITLE, done));
         }
     }
 
-    /// HOOK (A8, manifest `requires`): mount the libraries an imported
-    /// library requires, by library id. The manifest's `requires` is not
-    /// read yet (it lands with A8 on another branch), so every caller
-    /// passes an empty list today; once it is read, pass its ids here and
-    /// resolve each against the known libraries.
+    /// The libraries an imported library's manifest `requires` (contract
+    /// §6, step 4), by library id. One already open needs nothing; one that
+    /// is not is noted here, named in the dialog's result card, and listed
+    /// in Messages once the mount settles (`library::requires`). Finding a
+    /// library that is not open by its id is not done: nothing records the
+    /// ids of libraries that are not mounted.
     pub(crate) fn mount_required_libraries(&mut self, library_ids: &[uuid::Uuid]) -> Task<Message> {
         for id in library_ids {
-            log::warn!("Library import: required library {id} is not resolved yet (A8)");
+            if !self
+                .library
+                .open_libraries
+                .iter()
+                .any(|lib| lib.library_id == *id)
+            {
+                log::info!("Library import: required library {id} is not open");
+            }
         }
         Task::none()
     }

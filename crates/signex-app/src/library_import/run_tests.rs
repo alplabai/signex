@@ -19,12 +19,12 @@ pub(super) const FAST: RunLimits = RunLimits {
     poll: Duration::from_millis(10),
 };
 
-/// Finds `--output`'s value and sets `$out`.
-pub(super) const PREAMBLE: &str = r#"out=""; prev=""
-for a in "$@"; do [ "$prev" = "--output" ] && out="$a"; prev="$a"; done
+/// Finds `--output=`'s value and sets `$out`.
+pub(crate) const PREAMBLE: &str = r#"out=""
+for a in "$@"; do case "$a" in --output=*) out="${a#--output=}";; esac; done
 "#;
 
-pub(super) fn sh(dir: &Path, body: &str) -> ConverterCommand {
+pub(crate) fn sh(dir: &Path, body: &str) -> ConverterCommand {
     let script = dir.join("fake-converter.sh");
     std::fs::write(&script, format!("{PREAMBLE}{body}")).unwrap();
     ConverterCommand {
@@ -33,7 +33,7 @@ pub(super) fn sh(dir: &Path, body: &str) -> ConverterCommand {
     }
 }
 
-pub(super) fn request(output: PathBuf, mode: RunMode) -> LibraryRunRequest {
+pub(crate) fn request(output: PathBuf, mode: RunMode) -> LibraryRunRequest {
     LibraryRunRequest {
         inputs: vec![PathBuf::from("/in/Passives.lib1")],
         output,
@@ -46,7 +46,7 @@ pub(super) fn request(output: PathBuf, mode: RunMode) -> LibraryRunRequest {
 }
 
 /// A summary line for a library written to `$out`.
-pub(super) fn summary(exit: &str, ok: bool) -> String {
+pub(crate) fn summary(exit: &str, ok: bool) -> String {
     format!(
         r#"echo '{{"event":"summary","ok":{ok},"error":null,"exit":"{exit}","library":"'"$out"'","report":"'"$out"'/import-report.json","files":[],"counts":{{"parts":3}},"warnings":[]}}'"#
     )
@@ -54,7 +54,7 @@ pub(super) fn summary(exit: &str, ok: bool) -> String {
 
 const REPORT: &str = include_str!("../../../../docs/fixtures/library-converter/import-report.json");
 
-pub(super) fn write_report_line() -> String {
+pub(crate) fn write_report_line() -> String {
     format!("mkdir -p \"$out\" && cat > \"$out/import-report.json\" <<'EOF'\n{REPORT}\nEOF\n")
 }
 
@@ -100,7 +100,8 @@ fn the_silence_rule_counts_from_the_last_event() {
 #[test]
 fn arguments_follow_the_contract() {
     let mut req = request(PathBuf::from("/o/P"), RunMode::Update);
-    req.db = Some("Driver=x".into());
+    // A value starting with "-" stays joined to its option.
+    req.db = Some("-Driver=x".into());
     req.search_paths = vec![PathBuf::from("/s1"), PathBuf::from("/s2")];
     req.models = ModelsMode::Skip;
     let args: Vec<String> = req
@@ -113,18 +114,12 @@ fn arguments_follow_the_contract() {
         [
             "library",
             "/in/Passives.lib1",
-            "--output",
-            "/o/P",
-            "--name",
-            "Passives",
-            "--db",
-            "Driver=x",
-            "--search-path",
-            "/s1",
-            "--search-path",
-            "/s2",
-            "--models",
-            "skip",
+            "--output=/o/P",
+            "--name=Passives",
+            "--db=-Driver=x",
+            "--search-path=/s1",
+            "--search-path=/s2",
+            "--models=skip",
             "--update",
             "--progress"
         ]
@@ -234,6 +229,42 @@ fn a_failed_new_import_removes_its_folder() {
     let failure = result.unwrap_err();
     assert!(failure.removed_output);
     assert!(!out.exists());
+}
+
+/// #3123: a failed new import settles before it removes its folder, so a
+/// quit waits for the removal past its bound instead of leaving half of it.
+#[test]
+fn quit_waits_for_a_failed_new_imports_cleanup() {
+    use super::process::ProcessGroup;
+    use super::run::run_library_in;
+    use super::run_state::JobStage;
+    let dir = tempfile::tempdir().unwrap();
+    let out = dir.path().join("Passives");
+    let body = format!(
+        "echo x > \"$out/half.snxsym\"\n{}\nexit 1\n",
+        summary("failed", false)
+    );
+    let stage = JobStage::default();
+    let failure = run_library_in(
+        &sh(dir.path(), &body),
+        &request(out.clone(), RunMode::Import),
+        FAST,
+        &AtomicBool::new(false),
+        &ProcessGroup::default(),
+        &stage,
+        &mut |_| {},
+    )
+    .unwrap_err();
+    assert!(failure.removed_output && !out.exists());
+    // Zero bound: a worker still working would be given up on at once.
+    let waiter = {
+        let stage = stage.clone();
+        std::thread::spawn(move || stage.wait_at_quit(Duration::ZERO))
+    };
+    std::thread::sleep(Duration::from_millis(100));
+    assert!(!waiter.is_finished(), "the cleanup is waited for");
+    drop(stage.done_on_drop());
+    assert!(waiter.join().unwrap());
 }
 
 #[test]
@@ -423,5 +454,177 @@ fn a_library_run_works_in_the_outputs_parent_folder() {
     assert_eq!(
         PathBuf::from(cwd.trim()).canonicalize().unwrap(),
         dir.path().canonicalize().unwrap()
+    );
+}
+
+/// Run `body` as a new import on a thread, set cancel after a moment, and
+/// return the result, how long it took, and the output folder.
+fn cancel_after_a_moment(body: &str) -> (Result<RunOutcome, RunFailure>, Duration, PathBuf) {
+    let dir = tempfile::tempdir().unwrap();
+    let command = sh(dir.path(), body);
+    let out = dir.path().join("P");
+    let cancel = AtomicBool::new(false);
+    let limits = RunLimits {
+        silence: Duration::from_secs(60),
+        ..FAST
+    };
+    let started = Instant::now();
+    let result = std::thread::scope(|scope| {
+        let handle = scope.spawn(|| {
+            run_library(
+                &command,
+                &request(out.clone(), RunMode::Import),
+                limits,
+                &cancel,
+                &mut |_| {},
+            )
+        });
+        std::thread::sleep(Duration::from_millis(300));
+        cancel.store(true, Ordering::Relaxed);
+        handle.join().unwrap()
+    });
+    let gone = !out.exists();
+    assert!(gone, "the folder the run made is removed");
+    (result, started.elapsed(), out)
+}
+
+/// Cancel ends a run whatever the converter does: repeat one event
+/// forever, say nothing, or ignore termination and never exit.
+#[test]
+fn cancel_ends_a_converter_that_repeats_is_silent_or_never_exits() {
+    let heartbeat = "while :; do echo '{\"event\":\"progress\",\"done\":1,\"total\":3,\"item\":\"A\"}'; sleep 0.05; done\n";
+    let silent = "mkdir -p \"$out\"; echo x > \"$out/half.snxsym\"; sleep 30\n";
+    let stubborn = "trap '' TERM INT HUP; while :; do sleep 0.1; done\n";
+    for body in [heartbeat, silent, stubborn] {
+        let (result, took, _out) = cancel_after_a_moment(body);
+        assert_eq!(*result.unwrap_err().error, ImportError::Cancelled, "{body}");
+        assert!(took < Duration::from_secs(5), "{body}: took {took:?}");
+    }
+}
+
+/// #3123: an empty folder that was there is the user's (made by hand or
+/// picked with Browse), so a failed run empties it and keeps it.
+#[test]
+fn a_failed_run_into_an_empty_folder_empties_it_and_a_full_one_never_runs() {
+    let dir = tempfile::tempdir().unwrap();
+    let out = dir.path().join("P");
+    std::fs::create_dir(&out).unwrap();
+    let ran = dir.path().join("ran");
+    let body = format!(
+        ": > '{}'\necho x > \"$out/half.snxsym\"\n{}\nexit 1\n",
+        ran.display(),
+        summary("failed", false)
+    );
+    let command = sh(dir.path(), &body);
+    let failure = run_library(
+        &command,
+        &request(out.clone(), RunMode::Import),
+        FAST,
+        &AtomicBool::new(false),
+        &mut |_| {},
+    )
+    .unwrap_err();
+    assert!(failure.removed_output);
+    assert!(out.is_dir(), "the folder itself is kept");
+    assert_eq!(
+        std::fs::read_dir(&out).unwrap().count(),
+        0,
+        "what the run wrote is gone"
+    );
+    // A folder that holds something is refused before the converter runs.
+    std::fs::write(out.join("mine.txt"), "keep").unwrap();
+    std::fs::remove_file(&ran).unwrap();
+    let failure = run_library(
+        &command,
+        &request(out.clone(), RunMode::Import),
+        FAST,
+        &AtomicBool::new(false),
+        &mut |_| {},
+    )
+    .unwrap_err();
+    assert!(matches!(*failure.error, ImportError::OutputNotEmpty { .. }));
+    assert!(
+        failure.refused && !failure.removed_output,
+        "nothing changed"
+    );
+    assert!(!ran.exists(), "not run");
+    assert!(out.join("mine.txt").exists());
+}
+
+/// Quitting kills the converter through its published process group,
+/// without the run's own stop.
+#[test]
+fn the_published_group_kills_a_converter_that_never_exits() {
+    use super::process::ProcessGroup;
+    let dir = tempfile::tempdir().unwrap();
+    let command = sh(dir.path(), "trap '' TERM; while :; do sleep 0.1; done\n");
+    let group = ProcessGroup::default();
+    let limits = RunLimits {
+        silence: Duration::from_secs(60),
+        ..FAST
+    };
+    let started = Instant::now();
+    let result = std::thread::scope(|scope| {
+        let handle = scope.spawn(|| {
+            super::run::run_library_in(
+                &command,
+                &request(dir.path().join("P"), RunMode::Import),
+                limits,
+                &AtomicBool::new(false),
+                &group,
+                &super::run_state::JobStage::default(),
+                &mut |_| {},
+            )
+        });
+        while group.current().is_none() && started.elapsed() < Duration::from_secs(5) {
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        group.kill();
+        handle.join().unwrap()
+    });
+    assert!(result.is_err(), "killed, so no library");
+    assert!(started.elapsed() < Duration::from_secs(10));
+    assert!(group.current().is_none(), "cleared once it ended");
+}
+
+/// The published group id is cleared as soon as the converter is reaped,
+/// not after the pipe drain that may follow for `PIPE_GRACE`: a quit in
+/// that window must not signal a group id the system handed out again.
+#[test]
+fn the_published_group_is_cleared_once_the_converter_is_reaped() {
+    use super::process::{PIPE_GRACE, ProcessGroup};
+    let dir = tempfile::tempdir().unwrap();
+    // The shell exits after a moment; the sleep it leaves holds stdout
+    // open, so the run drains for the whole grace period.
+    let command = sh(dir.path(), "sleep 5 &\nsleep 0.3\nexit 0\n");
+    let group = ProcessGroup::default();
+    let started = Instant::now();
+    let (cleared_at, ended_at) = std::thread::scope(|scope| {
+        let handle = scope.spawn(|| {
+            let result = super::run::run_library_in(
+                &command,
+                &request(dir.path().join("P"), RunMode::Import),
+                FAST,
+                &AtomicBool::new(false),
+                &group,
+                &super::run_state::JobStage::default(),
+                &mut |_| {},
+            );
+            (result, Instant::now())
+        });
+        while group.current().is_none() && started.elapsed() < Duration::from_secs(5) {
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        while group.current().is_some() && started.elapsed() < Duration::from_secs(10) {
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        let cleared_at = Instant::now();
+        let (result, ended_at) = handle.join().unwrap();
+        assert!(result.is_err(), "no summary, so no library");
+        (cleared_at, ended_at)
+    });
+    assert!(
+        ended_at.saturating_duration_since(cleared_at) >= PIPE_GRACE / 2,
+        "the id was published until the drain ended"
     );
 }

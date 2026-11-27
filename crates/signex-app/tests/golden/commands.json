@@ -900,6 +900,11 @@
     "category": "place"
   },
   {
+    "id": "import_library",
+    "group": "General",
+    "category": "file"
+  },
+  {
     "id": "import_parameters",
     "group": "Schematic",
     "category": "design"

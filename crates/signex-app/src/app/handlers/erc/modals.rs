@@ -308,6 +308,9 @@ impl Signex {
                 crate::library::stock_copy::StockCopyMsg::Cancelled,
             ))),
             ModalId::LibraryUpdates => Some(Message::Library(LibraryMessage::LibraryUpdatesCancel)),
+            ModalId::LibraryImport => Some(Message::Library(crate::library::import_dialog::msg(
+                crate::library::import_dialog::ImportDialogMsg::Closed,
+            ))),
             ModalId::LibraryCloseConfirm => {
                 Some(Message::Library(LibraryMessage::CloseLibraryConfirm(
                     crate::library::messages::CloseLibraryChoice::Cancel,
@@ -524,6 +527,10 @@ pub(crate) fn modal_size(modal: ModalId) -> iced::Size {
         ModalId::LibraryCreateOptions => iced::Size::new(600.0, 310.0),
         ModalId::LibraryStockCopy => iced::Size::new(520.0, 301.0),
         ModalId::LibraryUpdates => iced::Size::new(800.0, 500.0),
+        ModalId::LibraryImport => iced::Size::new(
+            crate::library::import_dialog::CARD_W,
+            crate::library::import_dialog::CARD_H,
+        ),
         ModalId::LibraryCloseConfirm => iced::Size::new(500.0, 234.0),
         ModalId::LibraryDeleteConfirm => iced::Size::new(520.0, 100.0),
         ModalId::LibraryRecovery => iced::Size::new(560.0, 194.0),
@@ -578,7 +585,8 @@ pub(crate) fn modal_is_fixed(modal: ModalId) -> bool {
         | ModalId::PassiveCalculator
         | ModalId::FirstRunTour
         | ModalId::LibraryEditRow
-        | ModalId::LibraryUpdates => false,
+        | ModalId::LibraryUpdates
+        | ModalId::LibraryImport => false,
     }
 }
 

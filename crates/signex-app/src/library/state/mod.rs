@@ -783,6 +783,10 @@ pub struct LibraryState {
     pub stock_copies_in_flight: std::collections::HashSet<PathBuf>,
     /// The library import running, and the last one finished (#3114).
     pub import: crate::library_import::run_state::ImportState,
+    /// The open Import Library dialog (mockup row 211).
+    pub import_dialog: Option<Box<super::import_dialog::ImportDialogState>>,
+    /// The Library Browser library whose import menu is open, by `.snxlib`.
+    pub import_menu: Option<PathBuf>,
     /// The Properties panel state of each symbol editor (mockup rows 122
     /// and 123): its tab, Pins filter, part chip and illustration hover, by
     /// `.snxsym` path. Session only; an entry outlives its tab so a

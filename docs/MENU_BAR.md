@@ -154,7 +154,12 @@ project open. **File ▸
 Import** adds DXF to Current Layer... (`import_dxf`) and DXF as Board
 Outline... (`import_dxf_outline`), greyed without a board in view; each asks
 for the file and imports it as one undo step (#2410, see
-[BOARD_IMPORT_AND_REUSE.md](BOARD_IMPORT_AND_REUSE.md)). **File ▸
+[BOARD_IMPORT_AND_REUSE.md](BOARD_IMPORT_AND_REUSE.md)). Library…
+(`import_library`, also in the command palette as "import library") sits
+after the project import row and is always enabled: it opens the Import
+Library dialog, which turns a library made in another tool into a native
+library through an installed library converter (mockup row 211, #3117; see
+[LIBRARY_CONVERTER_CONTRACT.md](LIBRARY_CONVERTER_CONTRACT.md)). **File ▸
 Export** has PDF…, Export BOM… (the BOM export dialog, named by its result,
 greyed without a schematic; mockup row 112, Caner 2026-11-20), STEP 3D
 Model… and Design Notebook PDF… (see

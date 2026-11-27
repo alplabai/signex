@@ -139,6 +139,8 @@ cmd-save-all = Save all unsaved documents
 # File ▸ Save Project As… (#2908): a copy of the project in a new folder.
 cmd-save-project-as = Save the project to a new folder
 cmd-menu-save-project-as = Save Project As…
+cmd-import-library = Import a library made in another tool
+cmd-menu-import-library = Library…
 cmd-select-all = Select all
 cmd-menu-select-all = Select All
 cmd-select-expand-connection = Select / expand connection
