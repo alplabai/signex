@@ -4,14 +4,16 @@
 # scripts/check_arch_guard.sh do no IO and read no clock or randomness, so the
 # same core runs on the desktop, in a server and in a browser. Clippy's
 # `disallowed-methods` with the ban list in scripts/domain-clippy/clippy.toml
-# (std::fs, Path probes, Instant/SystemTime::now, Uuid::now_v7/new_v4) runs
-# over their lib and bin targets only, so tests are exempt.
+# (std::fs, Path probes, Instant/SystemTime/chrono ::now, Uuid::now_v7/new_v4)
+# runs over their lib and bin targets only, so tests are exempt.
 #
 # Sites not moved yet are listed in scripts/domain-io-allowlist.txt as
 # `<file> <hits>  # reason`. The gate fails on a hit in a file not listed, and
 # on a listed count that differs from the tree (higher: new IO; lower: lower
 # the number), so the list only shrinks. Uuid hits in signex-engine belong to
 # scripts/check_engine_ids.sh (#2429) and are not counted here.
+# Blind spot: the count is per file, so swapping one banned call for another in
+# an allowlisted file passes; review catches that.
 #
 # Usage: scripts/check_domain_io.sh
 # DOMAIN_IO_CLIPPY_JSON=<file> reads clippy's JSON from a file and

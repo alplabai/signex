@@ -42,6 +42,8 @@ disallowed-methods = [
     { path = "std::path::Path::read_link", reason = "a domain crate does no IO (#2431)" },
     { path = "std::time::Instant::now", reason = "a domain crate reads no clock; the host times the call (#2431)" },
     { path = "std::time::SystemTime::now", reason = "a domain crate reads no clock; time comes in as a value (#2431)" },
+    { path = "chrono::Utc::now", reason = "a domain crate reads no clock; time comes in as a value (#2431)", allow-invalid = true },
+    { path = "chrono::Local::now", reason = "a domain crate reads no clock; time comes in as a value (#2431)", allow-invalid = true },
     { path = "uuid::Uuid::now_v7", reason = "ids are minted by the caller through an IdSource (#2429)", allow-invalid = true },
     { path = "uuid::Uuid::new_v4", reason = "ids are minted by the caller through an IdSource (#2429)", allow-invalid = true },
 ]

@@ -48,7 +48,9 @@ fn empty_folder_matches_disk() {
 fn in_memory_listing_never_reads_the_disk() {
     // The folder holds nothing; the listing alone names the files.
     let path = Path::new("/nowhere/Legacy.snxprj");
-    let data = parse_project_bytes(path, b"", |name| name == "Legacy.snxpcb").unwrap();
+    let listed = ["Legacy.snxsch", "Legacy.snxpcb"];
+    let data = parse_project_bytes(path, b"", |name| listed.contains(&name)).unwrap();
+    assert_eq!(data.schematic_root.as_deref(), Some("Legacy.snxsch"));
+    assert_eq!(data.sheets.len(), 1);
     assert_eq!(data.pcb_file.as_deref(), Some("Legacy.snxpcb"));
-    assert_eq!(data.schematic_root, None);
 }
