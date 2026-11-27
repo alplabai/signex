@@ -429,6 +429,7 @@ set_active_layer
 set_board_graphic
 set_board_origin
 set_board_panel
+set_dock_panel
 set_footprint_position
 set_footprint_rotation
 set_footprint_side

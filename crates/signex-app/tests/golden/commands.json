@@ -2140,6 +2140,11 @@
     "category": "pcb"
   },
   {
+    "id": "set_dock_panel",
+    "group": "General",
+    "category": "panels"
+  },
+  {
     "id": "set_footprint_position",
     "group": "Pcb",
     "category": "edit"

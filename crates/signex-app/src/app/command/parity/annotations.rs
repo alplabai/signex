@@ -610,10 +610,20 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "tile_windows_horizontally",
             "tile_windows_vertically",
             "untile_documents",
+            // #2470: Fit frames the main window's active document.
+            "zoom_to_fit",
         ],
         AgentWindowLayout,
         &[Window, ActiveDocument],
     ),
+    // #2470: the main window's dock; opening Net Classes on a board opens
+    // the PCB panel (`show_panel`), so the active tab is read too.
+    (
+        &["set_dock_panel"],
+        AgentWindowLayout,
+        &[Window, ActiveDocument],
+    ),
+    (&["set_dock_panel"], Operand, &[Window, ActiveDocument]),
     // The listings narrow to an agent's documents (`document_entries`).
     (&["list_documents", "resolve"], Query, &[Origin]),
     // The grid the copy is stored on (`copy_selection`).

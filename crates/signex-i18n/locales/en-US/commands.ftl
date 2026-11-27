@@ -156,6 +156,7 @@ cmd-tile-windows-vertically = Tile windows side by side
 cmd-menu-tile-windows-vertically = Tile Vertically
 cmd-untile-documents = Untile documents
 cmd-menu-untile-documents = Untile
+cmd-set-dock-panel = Open, close, collapse or expand a dock panel
 # Workspace layouts (mockup row 166): View ▸ Window ▸ Layouts.
 cmd-apply-layout-schematic = Workspace layout: Schematic
 cmd-menu-apply-layout-schematic = Schematic

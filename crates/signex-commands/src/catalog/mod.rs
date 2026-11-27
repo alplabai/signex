@@ -432,6 +432,7 @@ const GLOBAL_COMMANDS: &[&str] = &[
     "tile_windows_horizontally",
     "tile_windows_vertically",
     "untile_documents",
+    "set_dock_panel",
     "apply_layout_schematic",
     "apply_layout_board",
     "apply_layout_review",

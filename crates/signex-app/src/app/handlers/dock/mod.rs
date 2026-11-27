@@ -27,6 +27,7 @@ mod net_classes;
 mod note_draft_persist_tests;
 #[cfg(test)]
 mod note_draft_window_close_tests;
+pub(crate) mod panel_command;
 mod panel_controls;
 mod panel_open;
 mod part_actions;
