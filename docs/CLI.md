@@ -617,6 +617,13 @@ set_symbol_parameter id=<uuid> name=Manufacturer [value=..] [document=..]
   or empty `value`: the parameter stays, with no value). `reference`, `value`
   and `footprint` have their own rows and commands and are refused here.
 
+`set_text_note_format id=<uuid> format=plain|typst [document=..]` sets how a
+text note's text is read, as the Format row of the note in Properties does
+(Plain / Rich text, mockup row 203), in one undo step; none when the note
+already has that format. The text is never changed, so switching back keeps
+the source as it is. Any other kind, or another word, is refused with the
+reason. The answer is the placed-object answer above plus `format`.
+
 `set_sheet_variable name=<NAME> [value=..] [remove=true] [document=..]` sets
 one variable of the sheet (what `${NAME}` and expressions on it resolve), as
 the Sheet Variables rows in Properties do, in one undo step. A left-out or

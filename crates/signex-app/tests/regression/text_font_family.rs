@@ -30,6 +30,7 @@ fn note(id: uuid::Uuid) -> TextNote {
         justify_h: HAlign::Left,
         justify_v: VAlign::Bottom,
         locked: false,
+        format: Default::default(),
     }
 }
 

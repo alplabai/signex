@@ -688,6 +688,7 @@ const OPERAND_DOCUMENT: &[&str] = &[
     "set_sheet_symbol_size",
     "set_sheet_variable",
     "set_symbol_parameter",
+    "set_text_note_format",
     "set_via_span",
     "stitch_vias",
     "swap_gates",

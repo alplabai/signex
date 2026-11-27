@@ -459,6 +459,8 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
         "set_sheet_symbol_size",
         "set_symbol_parameter",
         "set_sheet_variable",
+        // #1114: a text note's Format row.
+        "set_text_note_format",
         "repair_pin_junctions",
         "place_design_block",
         "import_graphics",

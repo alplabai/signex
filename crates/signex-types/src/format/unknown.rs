@@ -107,6 +107,11 @@ pub struct SheetUnknown {
     /// unsaved document takes it as the save's disk baseline (#2760).
     #[serde(skip)]
     pub source_hash: Option<Box<[u8; 32]>>,
+    /// Entries of `[extras.sheet.note_formats]` whose value this build does
+    /// not know, by note uuid (#1114). The note reads as plain and the entry
+    /// is written back while the note exists and stays plain.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub note_formats: BTreeMap<String, String>,
 }
 
 impl SheetUnknown {
@@ -119,6 +124,7 @@ impl SheetUnknown {
             && self.sheets.is_empty()
             && self.extras_root.is_empty()
             && self.newer_minor_source.is_none()
+            && self.note_formats.is_empty()
     }
 }
 

@@ -376,6 +376,7 @@ mod special_string_tests {
                 justify_h: Default::default(),
                 justify_v: Default::default(),
                 locked: false,
+                format: Default::default(),
             });
         let sheet = SheetSnapshot {
             path: std::path::PathBuf::from("/p/power.snxsch"),

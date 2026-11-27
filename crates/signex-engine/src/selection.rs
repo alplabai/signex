@@ -28,6 +28,8 @@ pub mod info_keys {
     /// Prefix of a pin's geometry row, `Pin Geometry: <number>`: the length
     /// in mm and the library rotation in whole degrees, tab-separated.
     pub const PIN_GEOMETRY_PREFIX: &str = "Pin Geometry: ";
+    /// A text note's format word (`typst`, #1114); absent on a plain note.
+    pub const NOTE_FORMAT: &str = "Note Format";
 }
 
 // ---------------------------------------------------------------------------
@@ -410,6 +412,10 @@ impl Engine {
                     info_keys::JUSTIFY_V.into(),
                     v_align_label(text_note.justify_v).into(),
                 ));
+                if !text_note.format.is_plain() {
+                    let word = text_note.format.as_str();
+                    info.push((info_keys::NOTE_FORMAT.into(), word.into()));
+                }
             }
             SelectedKind::ChildSheet => {
                 let child_sheet = self
@@ -905,6 +911,7 @@ mod tests {
             justify_h: HAlign::Left,
             justify_v: VAlign::Top,
             locked: false,
+            format: Default::default(),
         };
         let engine = Engine::new(SchematicSheet {
             text_notes: vec![note],

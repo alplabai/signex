@@ -71,6 +71,7 @@ fn sheet_with_note() -> SchematicSheet {
             justify_h: HAlign::Left,
             justify_v: VAlign::Top,
             locked: false,
+            format: Default::default(),
         }],
         ..Default::default()
     }

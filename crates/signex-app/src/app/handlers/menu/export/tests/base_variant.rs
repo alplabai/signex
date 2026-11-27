@@ -35,6 +35,7 @@ fn project(active: Option<&str>, note: &str) -> Signex {
         justify_h: HAlign::Left,
         justify_v: VAlign::Bottom,
         locked: false,
+        format: Default::default(),
     });
     open_with(&mut app.document_state, &top, sheet);
     app
