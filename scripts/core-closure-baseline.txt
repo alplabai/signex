@@ -1,0 +1,43 @@
+# Core closure baseline (scripts/check_core_closure.sh, #2326). Unreachable core types
+# known today, `path Name`. It may only shrink; delete a line when its type moves out.
+# Regenerate with: bash scripts/check_core_closure.sh --generate
+crates/signex-app/src/app/core/block_diagram_editor.rs Camera
+crates/signex-app/src/app/core/block_diagram_editor.rs DiagramTool
+crates/signex-app/src/app/core/block_diagram_editor.rs PropertyField
+crates/signex-app/src/app/core/block_diagram_panes.rs DiagramView
+crates/signex-app/src/app/core/block_diagram_panes.rs ExportDraft
+crates/signex-app/src/app/core/block_diagram_panes.rs ExportKind
+crates/signex-app/src/app/core/block_diagram_panes.rs ExportPage
+crates/signex-app/src/app/core/block_diagram_panes.rs ExportPaper
+crates/signex-app/src/app/core/block_diagram_panes.rs PowerTreeRead
+crates/signex-app/src/app/core/block_diagram_panes.rs PowerTreeView
+crates/signex-app/src/app/core/block_diagram_panes.rs ResyncReview
+crates/signex-app/src/app/core/block_diagram_panes.rs UnlinkRow
+crates/signex-app/src/app/core/block_diagram_view.rs BlockDiagramViewState
+crates/signex-app/src/app/core/branch_switch.rs SwitchRequest
+crates/signex-app/src/app/core/branch_switch.rs SwitchSurface
+crates/signex-app/src/app/core/command_log.rs CommandLog
+crates/signex-app/src/app/core/command_log.rs JumpTarget
+crates/signex-app/src/app/core/command_log.rs LogCounts
+crates/signex-app/src/app/core/command_log.rs LogFilters
+crates/signex-app/src/app/core/command_log.rs LogOutcome
+crates/signex-app/src/app/core/command_log.rs LogRow
+crates/signex-app/src/app/core/command_log.rs LogSource
+crates/signex-app/src/app/core/command_log.rs RecordedTargets
+crates/signex-app/src/app/core/command_log.rs ResultFilter
+crates/signex-app/src/app/core/command_log.rs SourceKind
+crates/signex-app/src/app/core/component_class.rs ComponentClassEntry
+crates/signex-app/src/app/core/drawing_field.rs DrawingFieldId
+crates/signex-app/src/app/core/drawing_field.rs LiveDrawingEdit
+crates/signex-app/src/app/core/new_library_defaults.rs NewLibraryDefaults
+crates/signex-app/src/app/core/parts_read_error.rs PartsReadError
+crates/signex-app/src/app/core/pin_selection_mode.rs PinSelectionMode
+crates/signex-app/src/app/core/row_drag.rs RowDrag
+crates/signex-app/src/app/core/row_drag.rs RowKey
+crates/signex-app/src/app/core/rule_list_filter.rs RuleListFilter
+crates/signex-app/src/app/core/rule_profile_page.rs ProfileEditorTab
+crates/signex-app/src/app/core/rule_profile_page.rs ProfileNameAction
+crates/signex-app/src/app/core/variant_cell.rs CompareSides
+crates/signex-app/src/app/core/variant_cell.rs OverrideDraft
+crates/signex-app/src/app/core/variant_cell.rs VariantCell
+crates/signex-app/src/app/core/variant_cell.rs VariantManagerUi
