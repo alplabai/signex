@@ -448,7 +448,7 @@ Two items wait for a maintainer decision. One: component row drafts (unsaved row
 
 **Stage C** (*amended 2026-11-27*, [maintainer decision](https://github.com/alplabai/signex/issues/2326#issuecomment-7219395928)). Four items are decided by the classification test under "Core and adapter state":
 - **`tabs` and `active_tab` are GUI state.** They are layout (H7). A port call that needs the active document gets it as an argument (epic D1, "Driving ports").
-- **The footprint selection leaves undo history,** as the symbol editor's already does (its undo clears the selection; #2974 split the view out). Undo and redo no longer restore it. This is a behaviour change, so it lands in its own PR, test first.
+- **The footprint selection leaves the draft's undo history** (H7). Behaviour does not change: undo and redo still restore the selection, because the GUI adapter keeps its own selection record per history step and restores it, a projection of the history steps. It lands test first, with characterization tests that pin today's behaviour.
 - **"Private to the core" (slice 4) means ownership.** The moved fields live only on the core-bound struct. Writes from outside the core are on a shrink-only count that reaches 0 at the end of slice 6. Real Rust privacy comes at the end of slice 6.
 - **The seam modules lift into `app/core/` together with `DocumentState`**, not at 4a. `app/state/sheet_change/` (slice 2) and `app/state/document_load/` (slice 3) keep their caller guards where they are until that move.
 
