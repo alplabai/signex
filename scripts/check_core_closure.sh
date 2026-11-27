@@ -229,13 +229,14 @@ feed() {
 
 input="$(feed)" || exit 2
 
-# The crates a `use` path can start from: std's and signex-app's dependencies.
+# The crates a `use` path can start from: std's and signex-app's dependencies
+# (not signex-app itself, a dev-dependency of its own tests).
 # shortcut: a `[dependencies.name]` table header is not read; none exists today.
 crates="std core alloc"
 if [[ -f "$CARGO" ]]; then
   crates="$crates $(tr -d '\r' < "$CARGO" | "$AWK" '
     /^\[/ { dep = $0 ~ /dependencies\]$/; next }
-    dep && /^[A-Za-z0-9_-]+[[:space:]]*[=.]/ { sub(/[[:space:]]*[=.].*$/, ""); gsub(/-/, "_"); printf " %s", $0 }')"
+    dep && /^[A-Za-z0-9_-]+[[:space:]]*[=.]/ { sub(/[[:space:]]*[=.].*$/, ""); gsub(/-/, "_"); if ($0 != "signex_app") printf " %s", $0 }')"
 fi
 if ! "$AWK" -F'\t' -v s="$STATE" '$1 == "state-type" && $2 == s && $5 == "DocumentState" { f = 1 } END { exit !f }' <<<"$input"; then
   echo "Core closure: FAIL — no struct DocumentState in $STATE."
@@ -268,20 +269,29 @@ result="$("$AWK" -F'\t' -v state="$STATE" -v state_dir="$STATE_DIR" -v core_rel=
     for (i = 2; i <= n; i++) { dn++; dt += inrange(parent, ls[i]) }
   }
   # imp[name]: where a non-test `use` binds name to a path in another crate
-  # (a dependency of signex-app, or std/core/alloc). A `crate::` path may be a
-  # re-export of the core type itself, so it is not judged.
-  function imports(   i, n, w, ext, p, name) {
+  # (a dependency of signex-app, or std/core/alloc), also through a name an
+  # earlier such `use` or an `extern crate x as y` bound in the same file
+  # (`use signex_types::m; use m::T;`), to a fixed point. A `crate::` path may
+  # be a re-export of the core type itself, so it is not judged.
+  function imports(   i, n, w, ext, loc, done, more, p, name) {
     n = split(crates, w, " ")
     for (i = 1; i <= n; i++) ext[w[i]] = 1
-    for (i = 1; i <= nu; i++) {
-      if (inrange(uf[i], ul[i])) continue
-      p = up[i]; name = ""
-      if (match(p, / as [A-Za-z_][A-Za-z0-9_]*$/)) { name = substr(p, RSTART + 4); p = substr(p, 1, RSTART - 1) }
-      sub(/^::/, "", p); sub(/::self$/, "", p)
-      if (name == "") { name = p; sub(/^.*::/, "", name) }
-      w[1] = p; sub(/::.*$/, "", w[1])
-      if (name == "*" || name == "_" || !(w[1] in ext) || (name in imp)) continue
-      imp[name] = p " (" uf[i] ":" ul[i] ")"
+    for (i = 1; i <= nec; i++) if (!intest(ecf[i], ecl[i])) loc[ecf[i], eca[i]] = 1
+    for (more = 1; more; ) {
+      more = 0
+      for (i = 1; i <= nu; i++) {
+        if ((i in done) || intest(uf[i], ul[i])) continue
+        p = up[i]; name = ""
+        if (match(p, / as [A-Za-z_][A-Za-z0-9_]*$/)) { name = substr(p, RSTART + 4); p = substr(p, 1, RSTART - 1) }
+        sub(/^::/, "", p); sub(/::self$/, "", p)
+        if (name == "") { name = p; sub(/^.*::/, "", name) }
+        w[1] = p; sub(/::.*$/, "", w[1])
+        if (!(w[1] in ext) && !((uf[i], w[1]) in loc)) continue
+        done[i] = 1; more = 1
+        if (name == "*" || name == "_") continue
+        loc[uf[i], name] = 1
+        if (!(name in imp)) imp[name] = p " (" uf[i] ":" ul[i] ")"
+      }
     }
   }
   # Split f into the module stem and the directory its parent file names.
@@ -379,9 +389,17 @@ result="$("$AWK" -F'\t' -v state="$STATE" -v state_dir="$STATE_DIR" -v core_rel=
     code[file, l] = substr(rest, p + 1)
     # The lexer flattens each use tree into `use path;` records.
     if (code[file, l] ~ /^use .*;$/) { nu++; uf[nu] = file; ul[nu] = l; up[nu] = substr(code[file, l], 5, length(code[file, l]) - 5) }
+    c = code[file, l]
+    while (match(c, /(^|[^A-Za-z0-9_])extern[[:space:]]+crate[[:space:]]+[A-Za-z_][A-Za-z0-9_]*([[:space:]]+as[[:space:]]+[A-Za-z_][A-Za-z0-9_]*)?[[:space:]]*;/)) {
+      x = substr(c, RSTART, RLENGTH); c = substr(c, RSTART + RLENGTH)
+      sub(/[[:space:]]*;$/, "", x); n = split(x, w, /[[:space:]]+/)
+      if (x ~ /crate[[:space:]]+self([^A-Za-z0-9_]|$)/) continue
+      nec++; ecf[nec] = file; ecl[nec] = l; eca[nec] = w[n]
+    }
     next
   }
-  $1 == "mod-decl" { mdecl[$2, $5] = mdecl[$2, $5] SUBSEP $3; next }
+  # A raw identifier `r#x` declares module x.
+  $1 == "mod-decl" { name = $5; sub(/^r#/, "", name); mdecl[$2, name] = mdecl[$2, name] SUBSEP $3; next }
   $1 == "core-fmt-skip" { nk++; kf[nk] = $2; ks[nk] = $3; next }
   $1 == "F" { isfile[$2] = 1; next }
   $1 == "uifree-test-item" { nt++; tf[nt] = $2; ts[nt] = $3; te[nt] = $4; next }
@@ -396,7 +414,7 @@ result="$("$AWK" -F'\t' -v state="$STATE" -v state_dir="$STATE_DIR" -v core_rel=
     for (i = 1; i <= nk; i++) if (!intest(kf[i], ks[i])) print "K\t" kf[i] ":" ks[i]
     imports()
     for (i = 1; i <= ns2; i++)
-      if (!inrange(sf[i], ss[i]) && !(sname[i] in imp)) imp[sname[i]] = "the app/state type in " sf[i]
+      if (!intest(sf[i], ss[i]) && !(sname[i] in imp)) imp[sname[i]] = "the app/state type in " sf[i]
     for (i = 1; i <= nn; i++) {
       if (intest(nf[i], ns[i])) continue
       id = nf[i] " " nname[i]

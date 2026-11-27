@@ -80,6 +80,7 @@ run_case() {
   printf '%s\n' 'pub(crate) mod a;' "${CORE_RS:-}" > "$t/$CORE_REL.rs"
   printf '%s\n' '# roots' "${5:-$BASE_ROOTS}" > "$t/scripts/core-closure-roots.txt"
   printf '%s\n' '[package]' 'name = "signex-app"' '[dependencies]' 'signex-types = { workspace = true }' \
+    '[dev-dependencies]' 'signex-app = { path = "." }' \
     > "$t/crates/signex-app/Cargo.toml"
   for n in 1 2 3; do
     f="XF$n" b="XB$n"
@@ -152,6 +153,15 @@ use super::a::Payload;
 use signex_types::*;
 #[cfg(test)]
 use signex_types::Event;'
+# signex-app names itself only as its own tests' dev-dependency.
+run_case own_crate_import_is_no_collision pass 'use signex_app::Payload;'
+# A test-only file imports and defines what it likes.
+CORE_RS='#[cfg(test)]
+mod zz_tests;' XF1="$CORE_REL/zz_tests.rs" XB1='use signex_types::Sheet;' \
+  STATE_RS='#[cfg(test)]
+mod zz_tests;' XF2="$APP/state/zz_tests.rs" XB2='pub struct Sheet;' \
+  run_case test_file_import_is_no_collision pass 'pub struct Sheet;
+impl Inner { pub fn sheet(&self) -> Sheet { Sheet } }'
 
 # --- positive controls: the gate must flag these ---------------------------
 
@@ -235,6 +245,11 @@ mod zz_evil;
 pub(crate) mod
     zz_evil;' XF1="$CORE_REL/zz_evil.rs" XB1="$EVIL" \
   run_case split_production_mount fail '' "    $CORE_REL/zz_evil.rs EvilView"
+CORE_RS='#[cfg(test)]
+mod zz_evil;
+#[cfg(not(test))]
+pub(crate) mod r#zz_evil;' XF1="$CORE_REL/zz_evil.rs" XB1="$EVIL" \
+  run_case raw_ident_production_mount fail '' "    $CORE_REL/zz_evil.rs EvilView"
 CORE_RS='#[rustfmt::skip]
 // one line
 mod b;' XF1="$CORE_REL/b.rs" XB1='' \
@@ -246,6 +261,19 @@ XF1="$CORE_REL/zz_evil.rs" XB1="$BLOCK" \
   run_case core_type_named_like_import fail 'use signex_types::block_diagram::{BlockDiagram, Endpoint};
 impl Inner { pub fn diagram(&self) -> Option<BlockDiagram> { None } }' \
   "$CORE_REL/zz_evil.rs BlockDiagram shares its name with signex_types::block_diagram::BlockDiagram"
+DIAGRAM='impl Inner { pub fn diagram(&self) -> Option<BlockDiagram> { None } }'
+XF1="$CORE_REL/zz_evil.rs" XB1="$BLOCK" \
+  run_case import_through_module_import fail "use signex_types::block_diagram;
+use block_diagram::{BlockDiagram, ReadBlockDiagram};
+$DIAGRAM" "$CORE_REL/zz_evil.rs BlockDiagram shares its name with block_diagram::BlockDiagram"
+XF1="$CORE_REL/zz_evil.rs" XB1="$BLOCK" \
+  run_case import_through_self_alias fail "use signex_types::block_diagram::{self as bd, ReadBlockDiagram};
+use bd::BlockDiagram;
+$DIAGRAM" "$CORE_REL/zz_evil.rs BlockDiagram shares its name with bd::BlockDiagram"
+XF1="$CORE_REL/zz_evil.rs" XB1="$BLOCK" \
+  run_case import_through_extern_crate_alias fail "extern crate signex_types as st;
+use st::block_diagram::{BlockDiagram, ReadBlockDiagram};
+$DIAGRAM" "$CORE_REL/zz_evil.rs BlockDiagram shares its name with st::block_diagram::BlockDiagram"
 STATE_RS='use ::signex_types::Sheet as BlockDiagram;' DOC_FIELDS='    pub diagram: BlockDiagram,' \
   XF1="$CORE_REL/zz_evil.rs" XB1="$BLOCK" \
   run_case core_type_named_like_state_import_alias fail '' \
