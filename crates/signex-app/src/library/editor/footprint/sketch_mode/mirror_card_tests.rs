@@ -8,11 +8,12 @@ use std::path::PathBuf;
 
 use signex_library::{Footprint, FootprintFile, RowId};
 use signex_sketch::SketchData;
+use signex_sketch::array::{Array, ArrayId, ArrayKind, NumberingScheme};
 use signex_sketch::entity::{Entity, EntityKind};
 use signex_sketch::id::SketchEntityId;
 use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
 
-use super::{MirrorCardMsg, MirrorField, MirrorObject, shown};
+use super::{MirrorCard, MirrorCardMsg, MirrorField, MirrorObject, shown};
 use crate::app::{FootprintDocument, Message, Signex};
 use crate::library::component_preview::test_row;
 use crate::library::component_preview::updates::apply_inline_edit;
@@ -88,6 +89,61 @@ fn arming_mirror_shows_the_card_with_the_selection_and_the_centerline() {
     assert_eq!(card.field, MirrorField::Objects);
     let sketch = editor.primitive().sketch.as_ref().expect("sketch");
     assert!(card.request(sketch).is_some(), "OK is ready");
+}
+
+/// A linear pattern of `source` added to the sketch of `editor`.
+fn add_row(editor: &mut FootprintDocument, source: SketchEntityId) -> ArrayId {
+    let id = ArrayId::new();
+    let sketch = editor.primitive_mut().sketch.as_mut().expect("sketch");
+    sketch.arrays.push(Array {
+        id,
+        kind: ArrayKind::Linear {
+            source,
+            count_expr: "2".into(),
+            dx_expr: "0mm".into(),
+            dy_expr: "2mm".into(),
+            depopulation: None,
+        },
+        numbering: NumberingScheme::default(),
+    });
+    id
+}
+
+/// #2859 (decision 16): a glyph click selects the pattern and its source;
+/// the card arming next takes the pattern in place of the source, since
+/// the pattern's mirror already holds the source's image.
+#[test]
+fn the_card_takes_a_selected_pattern_in_place_of_its_source() {
+    let (mut editor, centerline, line) = sketch_editor();
+    let row = add_row(&mut editor, line);
+    editor.state.sketch_overlay.selected_pattern = Some(row);
+    editor.state.active_tool = SketchTool::Mirror;
+
+    let card = MirrorCard::opened(&editor);
+
+    assert_eq!(card.objects, vec![MirrorObject::Pattern(row)]);
+    assert_eq!(card.line, Some(centerline));
+}
+
+/// #2859: with a pattern among the objects, picking its source leaves the
+/// objects alone; a pattern picked after its source replaces it.
+#[test]
+fn the_card_leaves_out_the_source_of_a_pattern_it_holds() {
+    let (mut editor, _, line) = sketch_editor();
+    let row = add_row(&mut editor, line);
+    editor.state.selected_sketch = None;
+    editor.state.selected_sketch_secondary = None;
+    let sketch = editor.primitive().sketch.clone().expect("sketch");
+
+    let mut card = MirrorCard::opened(&editor);
+    card.pick(&sketch, line);
+    assert_eq!(card.objects, vec![MirrorObject::Entity(line)]);
+    card.add_pattern(&sketch, row);
+    assert_eq!(card.objects, vec![MirrorObject::Pattern(row)]);
+
+    card.field = MirrorField::Objects;
+    card.pick(&sketch, line);
+    assert_eq!(card.objects, vec![MirrorObject::Pattern(row)]);
 }
 
 #[test]

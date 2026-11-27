@@ -14,6 +14,7 @@ use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
 use signex_sketch::sketch::{OverrideValue, PadAttrOverride, PatternMirror};
 use signex_types::format_version::{FormatVersion, MissingToken, NewerMinor};
 
+use super::format_token::SNXFPT_FORMAT_V1_5;
 use super::*;
 
 /// The `.snxfpt` policy of a build that knows only 1.1.
@@ -95,6 +96,7 @@ fn fixture() -> Fixture {
             count_expr: "2".into(),
             dx_expr: "20mm".into(),
             dy_expr: "0mm".into(),
+            depopulation: None,
         },
         numbering: NumberingScheme::default(),
     });
@@ -384,4 +386,100 @@ fn a_1_2_build_refuses_a_numbering_sweep_by_name() {
         .read(Some(file.format_token()))
         .expect_err("a 1.2 build refuses 1.3");
     assert_eq!(refused.found(), Some("snxfpt/1.3"));
+}
+
+/// #2688: the fixture's sketch with instance `(1, 0)` of its linear array
+/// suppressed.
+fn with_linear_suppressed(f: &Fixture) -> SketchData {
+    let mut sketch = f.sketch.clone();
+    if let Some(array) = sketch.arrays.iter_mut().find(|a| a.id == f.linear) {
+        assert!(array.kind.set_instance_suppressed(1, 0, true));
+    }
+    sketch
+}
+
+#[test]
+fn a_linear_suppression_round_trips_as_snxfpt_1_5() {
+    let sketch = with_linear_suppressed(&fixture());
+    let (text, back) = round_trip(sketch.clone());
+    assert!(
+        text.starts_with(&format!("format = \"{SNXFPT_FORMAT_V1_5}\"\n")),
+        "{text}"
+    );
+    assert_eq!(back, sketch, "the suppression list survives");
+    let again = FootprintFile::from_toml_str(&text)
+        .expect("reads back")
+        .to_toml_string()
+        .expect("serialise");
+    assert_eq!(again, text, "a re-save is byte-identical");
+}
+
+/// The 1.5 token wins over the content of every lower one.
+#[test]
+fn a_linear_suppression_with_a_numbering_sweep_writes_1_5() {
+    let mut sketch = with_linear_suppressed(&fixture());
+    for array in &mut sketch.arrays {
+        array.numbering = NumberingScheme::LinearIncrement {
+            start_expr: "1".into(),
+            step_expr: "1".into(),
+            sweep: GridSweep::ColumnByColumn,
+        };
+    }
+    assert_eq!(file_of(sketch).format_token(), SNXFPT_FORMAT_V1_5);
+}
+
+/// Restoring the last suppressed instance writes the bytes the file had
+/// before the suppression.
+#[test]
+fn a_footprint_whose_last_linear_suppression_goes_saves_as_before() {
+    let f = fixture();
+    let before = file_of(f.sketch.clone())
+        .to_toml_string()
+        .expect("serialise");
+    let text = file_of(with_linear_suppressed(&f))
+        .to_toml_string()
+        .expect("serialise");
+    let mut file = FootprintFile::from_toml_str(&text).expect("1.5 reads");
+    assert_eq!(
+        file.format, SNXFPT_FORMAT_V1_5,
+        "the token it was read with"
+    );
+    if let Some(sketch) = file.footprints[0].sketch.as_mut() {
+        for array in &mut sketch.arrays {
+            array.kind.set_instance_suppressed(1, 0, false);
+        }
+    }
+    let saved = file.to_toml_string().expect("serialise");
+    assert_eq!(saved, before, "the lower token, byte for byte");
+}
+
+#[test]
+fn a_1_4_build_refuses_a_linear_suppression_by_name() {
+    const SNXFPT_1_4_ONLY: FormatVersion = FormatVersion {
+        current: "snxfpt/1.4",
+        readable: &[
+            "snxfpt/1",
+            "snxfpt/1.1",
+            "snxfpt/1.2",
+            "snxfpt/1.3",
+            "snxfpt/1.4",
+        ],
+        newer_minor: NewerMinor::Refused,
+        missing: MissingToken::Refused,
+    };
+    let file = file_of(with_linear_suppressed(&fixture()));
+    let refused = SNXFPT_1_4_ONLY
+        .read(Some(file.format_token()))
+        .expect_err("a 1.4 build refuses 1.5");
+    assert_eq!(refused.found(), Some(SNXFPT_FORMAT_V1_5));
+    let message = refused.to_string();
+    assert!(message.contains(SNXFPT_FORMAT_V1_5), "{message}");
+    assert!(message.contains("newer Signex"), "{message}");
+    assert_eq!(
+        FOOTPRINT_FILE_VERSION
+            .read(Some(SNXFPT_FORMAT_V1_5))
+            .as_deref(),
+        Ok(SNXFPT_FORMAT_V1_5),
+        "this build reads it"
+    );
 }

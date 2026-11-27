@@ -1,20 +1,19 @@
-//! The instances of one array: where each sits relative to the source,
-//! which number it gets and whether depopulation drops it. The bake
-//! ([`super::bake_one_array`]) and the Properties preview
-//! ([`super::preview`]) both walk an array through here, so the preview
-//! shows the numbers and positions the bake produces.
+//! The instances of one array for the Properties preview
+//! ([`super::preview`]): where each sits relative to the source, which
+//! number it gets and whether depopulation drops it. The preview has no
+//! solve, so it walks the counts, steps and masks here, by the rules the
+//! bake's walk (`super::layout`) lays them out with.
 
 use std::collections::BTreeMap;
 
-use signex_expr::ExprNode;
-use signex_expr::parse;
+use signex_expr::{ExprNode, LiteralContext, parse};
 use signex_sketch::SketchError;
 use signex_sketch::array::{GridDepopulation, NumberingScheme};
 use signex_sketch::expr::eval::{EvalContext, eval};
 use signex_sketch::id::SketchEntityId;
 
 use super::numbering::{derive_pad_number, derive_swept_pad_number};
-use crate::eval_util::strip_eq_prefix;
+use crate::eval_util::{parse_in, strip_eq_prefix};
 
 /// One instance of an array.
 #[derive(Debug, Clone, PartialEq)]
@@ -48,11 +47,9 @@ pub(super) struct Walk<'a> {
     pub source: SketchEntityId,
     pub numbering: &'a NumberingScheme,
     pub params_ast: &'a BTreeMap<String, ExprNode>,
-    /// Most instances the walk visits.
+    /// Most instances the walk visits. Dropped instances are visited too:
+    /// the preview draws them.
     pub limit: usize,
-    /// Visit dropped instances too (the preview draws them). The bake
-    /// passes `false` and never evaluates anything for a dropped cell.
-    pub visit_skipped: bool,
 }
 
 /// The visitor gets each instance, the context bound to its index and the
@@ -68,20 +65,27 @@ impl Walk<'_> {
         }
     }
 
-    /// `count` instances stepped by (`dx`, `dy`).
+    /// `count` instances stepped by (`dx`, `dy`), with an optional
+    /// depopulation whose list holds `(i, 0)` entries.
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "a linear array is three expressions, its depopulation and the visitor"
+    )]
     pub fn linear(
         &self,
         count_expr: &str,
         dx_expr: &str,
         dy_expr: &str,
+        depopulation: Option<&GridDepopulation>,
         warnings: &mut Vec<String>,
         visit: &mut Visit<'_>,
     ) -> Result<Walked, SketchError> {
         let source = self.source;
         // Parse once; only `array_index` changes between instances.
-        let count_ast = parse(strip_eq_prefix(count_expr)).map_err(SketchError::Expr)?;
-        let dx_ast = parse(strip_eq_prefix(dx_expr)).map_err(SketchError::Expr)?;
-        let dy_ast = parse(strip_eq_prefix(dy_expr)).map_err(SketchError::Expr)?;
+        let count_ast = parse_in(count_expr, LiteralContext::Count)?;
+        let dx_ast = parse_in(dx_expr, LiteralContext::Length)?;
+        let dy_ast = parse_in(dy_expr, LiteralContext::Length)?;
+        let mask_ast = mask_ast(depopulation)?;
         let mut ctx = self.context();
         let Some(count) =
             super::eval_count("linear", "count_expr", source, &count_ast, &ctx, warnings)?
@@ -100,16 +104,37 @@ impl Walk<'_> {
         }
         for i in 0..count {
             ctx.array_index = Some((i, 0));
-            let dx_mm = crate::params::eval_length_mm(&dx_ast, &ctx)?;
-            let dy_mm = crate::params::eval_length_mm(&dy_ast, &ctx)?;
-            let number = derive_pad_number(self.numbering, i, &mut ctx, warnings, source);
+            let is_skipped = is_suppressed(depopulation, i, 0)
+                || !mask_keeps(
+                    mask_ast.as_ref(),
+                    &ctx,
+                    warnings,
+                    || format!("linear array source {source}: depopulation eval failed at i={i}"),
+                    "keeping instance",
+                );
+            let offset_mm = if is_skipped {
+                let dx = crate::params::eval_length_mm(&dx_ast, &ctx).ok();
+                let dy = crate::params::eval_length_mm(&dy_ast, &ctx).ok();
+                dx.zip(dy).map(|(dx, dy)| [i as f64 * dx, i as f64 * dy])
+            } else {
+                let dx = crate::params::eval_length_mm(&dx_ast, &ctx)?;
+                let dy = crate::params::eval_length_mm(&dy_ast, &ctx)?;
+                Some([i as f64 * dx, i as f64 * dy])
+            };
+            let mut dropped_warnings = Vec::new();
+            let number_warnings = if is_skipped {
+                &mut dropped_warnings
+            } else {
+                &mut *warnings
+            };
+            let number = derive_pad_number(self.numbering, i, &mut ctx, number_warnings, source);
             ctx.array_index = Some((i, 0));
             let instance = Instance {
                 i,
                 j: 0,
-                offset_mm: Some([i as f64 * dx_mm, i as f64 * dy_mm]),
+                offset_mm,
                 number,
-                is_skipped: false,
+                is_skipped,
             };
             visit(instance, &ctx, warnings)?;
         }
@@ -132,10 +157,10 @@ impl Walk<'_> {
         visit: &mut Visit<'_>,
     ) -> Result<Walked, SketchError> {
         let source = self.source;
-        let nx_ast = parse(strip_eq_prefix(nx_expr)).map_err(SketchError::Expr)?;
-        let ny_ast = parse(strip_eq_prefix(ny_expr)).map_err(SketchError::Expr)?;
-        let dx_ast = parse(strip_eq_prefix(dx_expr)).map_err(SketchError::Expr)?;
-        let dy_ast = parse(strip_eq_prefix(dy_expr)).map_err(SketchError::Expr)?;
+        let nx_ast = parse_in(nx_expr, LiteralContext::Count)?;
+        let ny_ast = parse_in(ny_expr, LiteralContext::Count)?;
+        let dx_ast = parse_in(dx_expr, LiteralContext::Length)?;
+        let dy_ast = parse_in(dy_expr, LiteralContext::Length)?;
         let mask_ast = mask_ast(depopulation)?;
         let mut ctx = self.context();
         let Some(nx) = super::eval_count("grid", "nx_expr", source, &nx_ast, &ctx, warnings)?
@@ -173,9 +198,6 @@ impl Walk<'_> {
                         },
                         "keeping cell",
                     );
-                if is_skipped && !self.visit_skipped {
-                    continue;
-                }
                 let offset_mm = if is_skipped {
                     let dx = crate::params::eval_length_mm(&dx_ast, &ctx).ok();
                     let dy = crate::params::eval_length_mm(&dy_ast, &ctx).ok();
@@ -235,8 +257,8 @@ impl Walk<'_> {
     ) -> Result<Walked, SketchError> {
         let source = self.source;
         let ((sx, sy), (cx, cy)) = (source_mm, center_mm);
-        let count_ast = parse(strip_eq_prefix(count_expr)).map_err(SketchError::Expr)?;
-        let sweep_ast = parse(strip_eq_prefix(sweep_angle_expr)).map_err(SketchError::Expr)?;
+        let count_ast = parse_in(count_expr, LiteralContext::Count)?;
+        let sweep_ast = parse_in(sweep_angle_expr, LiteralContext::Angle)?;
         let mut ctx = self.context();
         let Some(count) =
             super::eval_count("polar", "count_expr", source, &count_ast, &ctx, warnings)?
@@ -283,9 +305,6 @@ impl Walk<'_> {
                         "keeping instance",
                     )
                 });
-            if is_skipped && !self.visit_skipped {
-                continue;
-            }
             let theta = (i as f64) * sweep_rad / denom;
             let (sin_t, cos_t) = theta.sin_cos();
             let rx = cx + dx_src * cos_t - dy_src * sin_t;

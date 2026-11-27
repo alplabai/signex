@@ -2,12 +2,13 @@
 //! (reference dimensions, pattern sources and mirrors, per-instance pad
 //! overrides) are lost on a re-save by a build that does not know them, so
 //! a sketch holding any of them asks for the newer token. A numbering sweep
-//! and a pattern a board bake expands ask for a newer one still. Policy:
+//! and a pattern a board bake expands ask for a newer one still, and a
+//! linear pattern's suppression list or a pour's corners the newest. Policy:
 //! `docs/FORMAT_VERSIONS.md`.
 
 use std::collections::{HashMap, HashSet};
 
-use crate::sketch::array::NumberingScheme;
+use crate::sketch::array::{ArrayKind, NumberingScheme};
 use crate::sketch::data::SketchData;
 use crate::sketch::entity::{Entity, EntityKind};
 use crate::sketch::id::SketchEntityId;
@@ -32,6 +33,33 @@ impl SketchData {
                 NumberingScheme::LinearIncrement { sweep, .. } if !sweep.is_row_by_row()
             )
         })
+    }
+
+    /// Whether a linear array has a depopulation (#2688): an older build
+    /// does not know the key, would bake the suppressed pads and drop the
+    /// list on save. One of the triggers of `SNXFPT_FORMAT_V1_5` and
+    /// `SNXPCB_FORMAT_V1_13`.
+    pub fn has_linear_suppression(&self) -> bool {
+        self.arrays.iter().any(|array| {
+            matches!(
+                &array.kind,
+                ArrayKind::Linear {
+                    depopulation: Some(_),
+                    ..
+                }
+            )
+        })
+    }
+
+    /// Whether a pour has corners other than Sharp (#2598): an older build,
+    /// which does not know the keys, would bake the outline sharp and drop
+    /// them on save. A trigger of `SNXFPT_FORMAT_V1_5` and
+    /// `SNXPCB_FORMAT_V1_13`.
+    pub fn has_pour_corners(&self) -> bool {
+        self.entities
+            .iter()
+            .filter_map(|entity| entity.pour.as_ref())
+            .any(|pour| pour.has_corner_shape())
     }
 
     /// Whether a pattern may repeat a board bake target, so the board holds

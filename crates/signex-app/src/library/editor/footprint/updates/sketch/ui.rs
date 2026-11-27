@@ -37,6 +37,7 @@ fn select_many(
         editor.state.selected_sketch = Some(ids[0]);
         editor.state.selected_sketch_secondary = ids.get(1).copied();
         editor.state.selected_sketch_extra = ids.iter().skip(2).copied().collect();
+        drop_selected_pattern(editor);
     }
     editor.canvas_cache.clear();
 }
@@ -96,6 +97,7 @@ fn select(
         (Some(new_id), false) => {
             editor.state.selected_sketch = Some(new_id);
             editor.state.selected_sketch_secondary = None;
+            drop_selected_pattern(editor);
         }
         (Some(new_id), true) => {
             if editor.state.selected_sketch.is_none() {
@@ -103,9 +105,17 @@ fn select(
             } else if editor.state.selected_sketch != Some(new_id) {
                 editor.state.selected_sketch_secondary = Some(new_id);
             }
+            drop_selected_pattern(editor);
         }
     }
     editor.canvas_cache.clear();
+}
+
+/// Selecting an entity drops the selected pattern (#2859), so a tool armed
+/// next (Mirror, a pattern tool) never takes a pattern picked earlier. A
+/// glyph click selects its pattern after its source.
+fn drop_selected_pattern(editor: &mut crate::app::FootprintDocument) {
+    editor.state.sketch_overlay.selected_pattern = None;
 }
 
 fn dimension_input(editor: &mut crate::app::FootprintDocument, s: String) {

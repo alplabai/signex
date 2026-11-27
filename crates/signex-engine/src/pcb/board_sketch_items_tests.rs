@@ -57,6 +57,8 @@ fn sketch() -> SketchData {
         clearance_expr: None,
         min_thickness_expr: None,
         priority: 0,
+        corners: Default::default(),
+        corner_size: 0.0,
     });
     let mut drawing = edge(DRAWING);
     drawing.mechanical = Some(MechanicalAttr::default());
@@ -345,4 +347,85 @@ fn without_items_it_writes_what_the_plain_command_writes() {
         .iter()
         .find(|fp| fp.uuid == id(FP_B));
     assert_eq!(r1.unwrap().position, p(0.30000000000000004, 7.0));
+}
+
+/// The board after a first bake, with the baked pour set by `edit` as a
+/// board edit would (shelve, unfill), in a fresh engine.
+fn baked_then(edit: impl FnOnce(&mut Zone)) -> BoardEngine {
+    let mut engine = engine();
+    engine.execute(bake(sketch(), items(2.0))).unwrap();
+    let mut board = engine.board().clone();
+    edit(board.zones.iter_mut().find(|z| z.uuid == POUR).unwrap());
+    BoardEngine::new(board, 1)
+}
+
+fn pour(engine: &BoardEngine) -> &Zone {
+    engine
+        .board()
+        .zones
+        .iter()
+        .find(|z| z.uuid == POUR)
+        .unwrap()
+}
+
+/// #2706 (Caner, 2026-11-21): a re-bake keeps a shelved pour shelved and
+/// takes the new outline; undo puts the old zone back.
+#[test]
+fn a_re_bake_keeps_a_shelved_pour_shelved() {
+    let mut engine = baked_then(|z| z.shelved = true);
+    let before = snapshot(engine.board());
+    engine.execute(bake(sketch(), items(7.0))).unwrap();
+    assert!(pour(&engine).shelved);
+    assert!(!pour(&engine).unfilled);
+    assert_eq!(pour(&engine).outline[0].x, 7.0, "the new outline");
+    engine.undo().unwrap();
+    assert_eq!(snapshot(engine.board()), before);
+}
+
+/// #2706, decision 8 (Caner, 2026-11-27): the shelved pour keeps its
+/// `unfilled` flag too.
+#[test]
+fn a_re_bake_keeps_a_shelved_pours_unfilled_flag() {
+    let mut engine = baked_then(|z| {
+        z.shelved = true;
+        z.unfilled = true;
+    });
+    engine.execute(bake(sketch(), items(7.0))).unwrap();
+    assert!(pour(&engine).shelved);
+    assert!(pour(&engine).unfilled);
+}
+
+/// A shelved pour whose entity left the sketch still goes.
+#[test]
+fn a_shelved_pour_removed_from_the_sketch_still_goes() {
+    let mut engine = baked_then(|z| z.shelved = true);
+    let mut without = engine.board().sketch.as_ref().unwrap().sketch.clone();
+    without.entities.retain(|e| e.id.0 != POUR);
+    let mut rest = items(2.0);
+    rest.zones.clear();
+    engine.execute(bake(without, rest)).unwrap();
+    assert!(engine.board().zones.iter().all(|z| z.uuid != POUR));
+    assert!(engine.board().zones.iter().any(|z| z.uuid == id(ZONE_1)));
+}
+
+/// #2706, decision 8 (Caner, 2026-11-27, answer (a)): a pour that is not
+/// shelved keeps its `unfilled` flag too, and stays live.
+#[test]
+fn a_re_bake_keeps_an_unshelved_pours_unfilled_flag() {
+    let mut engine = baked_then(|z| z.unfilled = true);
+    engine.execute(bake(sketch(), items(7.0))).unwrap();
+    assert!(!pour(&engine).shelved);
+    assert!(pour(&engine).unfilled);
+    assert_eq!(pour(&engine).outline[0].x, 7.0, "the new outline");
+}
+
+/// A pour neither shelved nor unfilled re-bakes as before: exactly what
+/// the bake wrote, and a pour new in a bake starts unshelved and filled.
+#[test]
+fn an_unshelved_pour_re_bakes_as_before() {
+    let mut engine = baked_then(|_| {});
+    assert!(!pour(&engine).shelved, "a new pour starts unshelved");
+    assert!(!pour(&engine).unfilled, "and filled");
+    engine.execute(bake(sketch(), items(7.0))).unwrap();
+    assert_eq!(*pour(&engine), zone(POUR, 7.0));
 }

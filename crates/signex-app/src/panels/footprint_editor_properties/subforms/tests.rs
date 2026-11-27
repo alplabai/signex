@@ -336,15 +336,28 @@ fn a_grid_shows_its_sweep_in_the_numbers() {
     assert_eq!(ctx.selected_array.as_ref().unwrap().sweep, None);
 }
 
+/// #2596: the kind segment lights the pattern's kind and every kind picks
+/// a switch (the lit one cancels a centre pick still waiting).
 #[test]
-fn the_kind_segment_shows_the_kind_and_offers_no_other() {
+fn the_kind_segment_shows_the_kind_and_offers_every_kind() {
+    use signex_bake::array::PatternKind;
     let ctx = grid_ctx(NumberingScheme::default());
     let pattern = ctx.selected_array.as_ref().expect("a pattern");
     let i18n = signex_i18n::I18n::en_us();
     let segments = pattern::kind_segments(pattern, &i18n);
     let active: Vec<bool> = segments.iter().map(|s| s.active).collect();
     assert_eq!(active, vec![false, true, false]);
-    assert!(segments.iter().all(|s| s.msg.is_none()));
+    let picked: Vec<PatternKind> = segments
+        .iter()
+        .map(|s| match &s.msg {
+            Some(PanelMsg::FpEditorPatternKindPicked { array_id, kind }) => {
+                assert_eq!(*array_id, pattern.array_id);
+                *kind
+            }
+            other => panic!("a kind pick, not {other:?}"),
+        })
+        .collect();
+    assert_eq!(picked, PatternKind::ALL.to_vec());
 }
 
 #[test]

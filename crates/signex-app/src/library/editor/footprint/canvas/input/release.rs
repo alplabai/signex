@@ -19,6 +19,32 @@ use super::super::hit_test::{sketch_glyph_at, sketch_hit_other, sketch_snap};
 use super::super::{DragState, FootprintCanvas, FootprintCanvasState};
 
 impl FootprintCanvas<'_> {
+    /// A bare click (no drag) on a pad of a multi-pad selection: the press
+    /// kept the selection for a drag, so the click now selects that pad
+    /// alone (#2726). `None` for a held Ctrl/Cmd or Shift, which edited the
+    /// selection on the press.
+    pub(in crate::library::editor::footprint::canvas) fn released_on_group_pad(
+        &self,
+        cstate: &FootprintCanvasState,
+        pad_idx: usize,
+    ) -> Option<canvas::Action<LibraryMessage>> {
+        let modifiers = cstate.current_modifiers;
+        let selected = self.state.selected_pad_indices();
+        if modifiers.command()
+            || modifiers.shift()
+            || selected.len() < 2
+            || !selected.contains(&pad_idx)
+        {
+            return None;
+        }
+        Some(canvas::Action::publish(LibraryMessage::EditorEvent {
+            library_path: self.address.library_path.clone(),
+            table: self.address.table.clone(),
+            row_id: self.address.row_id,
+            msg: EditorMsg::Footprint(FootprintEditorMsg::SelectPad(Some(pad_idx))),
+        }))
+    }
+
     /// A right-click that did not pan, in sketch mode with the Select tool
     /// (mockup row 188): on a constraint glyph or value it opens the constraint menu,
     /// on a pattern glyph or value the pattern menu, at the click. `None`
@@ -333,11 +359,19 @@ impl FootprintCanvas<'_> {
             Some(SketchInference::Off) | None if !snapped_off_point => snap_id,
             _ => None,
         };
+        // A centre pick from the Pattern form takes the click under any
+        // tool, Select included (#2596).
+        let picks_centre = matches!(
+            self.state.tool_pending,
+            crate::library::editor::footprint::state::ToolPending::RepickPolarCenter { .. }
+        );
         let msg = match self.state.active_tool {
-            SketchTool::Select => EditorMsg::Footprint(FootprintEditorMsg::SketchSelect {
-                id: select_id,
-                shift: false,
-            }),
+            SketchTool::Select if !picks_centre => {
+                EditorMsg::Footprint(FootprintEditorMsg::SketchSelect {
+                    id: select_id,
+                    shift: false,
+                })
+            }
             // #361 — Drag Track End arms its endpoint grab on PRESS
             // (`try_drag_track_end_grab`); a release reaching here means
             // the press missed every line, so an un-moved empty click is
@@ -372,6 +406,7 @@ impl FootprintCanvas<'_> {
             | SketchTool::Chamfer
             | SketchTool::Extend
             | SketchTool::LinearPattern
+            | SketchTool::Select
             // #372 — Break Track routes its single click through the
             // same SketchToolClick path as Trim; the dispatcher's edit
             // arm hit-tests the Line and hands off to `split_line`.

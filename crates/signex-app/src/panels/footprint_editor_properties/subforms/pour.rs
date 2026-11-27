@@ -1,20 +1,26 @@
 //! Pour role sub-form (mockup row 126): header, the pour illustration (region, fill
-//! style, net, priority) and the Pour properties section.
+//! style, net, priority) and the Pour properties section, with Corners and
+//! Corner size, the board pour's rows, in both sketch hosts (#2598).
 
 use iced::{Element, Point};
 use signex_i18n::{I18n, Localized, UserText, ids, t};
 use signex_sketch::attr::PourFillType;
 use signex_sketch::id::SketchEntityId;
 use signex_types::theme::ThemeTokens;
+use signex_types::zone_pour_shape::PourCorners;
 use signex_widgets::property_illustration::{
     Anchor, FieldId, Illustration, Paint, Part, Primitive, Style, TextRole, Tint,
 };
 
-use super::super::super::{CollapsedSections, FootprintEditorPanelContext, PanelMsg, PourSummary};
+use super::super::super::{
+    CollapsedSections, FootprintEditorPanelContext, FpSubformMsg, PanelMsg, PourSummary,
+    pour_corner_size_buffer_key,
+};
+use super::super::pad::{Shown, number_input, with_refusals};
 use super::drawing::{canvas, centred, corner_note, hatch, label};
 use super::helpers::{
     Segment, caption, example_input, field_row, form, header, illustration, input, is_open,
-    section_header, segmented,
+    section_header, segmented, value_box,
 };
 use crate::pcb_canvas::layer_style::layer_name;
 use crate::styles::board_palette::BoardPalette;
@@ -97,7 +103,52 @@ pub(super) fn view<'a>(
         segmented(fills),
         tokens,
     ));
+    parts.extend(corner_rows(fp, pour, id, tokens, i18n));
     form(parts)
+}
+
+/// Corners (Sharp, Rounded, Chamfer) and Corner size, as the board pour's
+/// panel shows them: a typed size from 0 while Rounded or Chamfer, greyed
+/// at 0 while Sharp.
+fn corner_rows<'a>(
+    fp: &'a FootprintEditorPanelContext,
+    pour: &'a PourSummary,
+    id: SketchEntityId,
+    tokens: &'a ThemeTokens,
+    i18n: &I18n,
+) -> [Element<'a, PanelMsg>; 2] {
+    let cells = [
+        (PourCorners::Sharp, ids::EDITORS_ROLE_POUR_CORNER_SHARP),
+        (PourCorners::Rounded, ids::EDITORS_ROLE_POUR_CORNER_ROUNDED),
+        (PourCorners::Chamfer, ids::EDITORS_ROLE_POUR_CORNER_CHAMFER),
+    ]
+    .into_iter()
+    .map(|(corners, label)| Segment {
+        label: t!(i18n, label),
+        active: corners == pour.corners,
+        msg: Some(PanelMsg::FpSubform(FpSubformMsg::PourCornersPicked {
+            id,
+            corners,
+        })),
+    })
+    .collect();
+    let shapes = field_row(
+        t!(i18n, ids::EDITORS_ROLE_POUR_CORNERS),
+        segmented(cells),
+        tokens,
+    );
+    let label = t!(i18n, ids::EDITORS_ROLE_POUR_CORNER_SIZE);
+    if pour.corners == PourCorners::Sharp {
+        // A number, written as the size field writes one.
+        let zero = value_box(UserText::new(0.0_f64.to_string()));
+        return [shapes, field_row(label, zero, tokens)];
+    }
+    let buffer = fp.numeric_buffers.get(&pour_corner_size_buffer_key(id));
+    let shown = Shown::non_negative(buffer, pour.corner_size.to_string());
+    let on_input =
+        move |value| PanelMsg::FpSubform(FpSubformMsg::PourCornerSizeEdited { id, value });
+    let size = field_row(label, number_input(&shown, on_input, tokens), tokens);
+    [shapes, with_refusals(size, &[shown.refusal], tokens, i18n)]
 }
 
 /// The pour region in its layer colour with its fill style, the net in the

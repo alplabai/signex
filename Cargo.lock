@@ -6556,6 +6556,7 @@ dependencies = [
 name = "signex-bake"
 version = "26.11.1"
 dependencies = [
+ "pcb-geom",
  "serde",
  "serde_json",
  "signex-expr",

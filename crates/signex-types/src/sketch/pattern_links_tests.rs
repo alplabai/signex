@@ -80,6 +80,7 @@ fn fixture() -> Fixture {
             count_expr: "3".into(),
             dx_expr: "5mm".into(),
             dy_expr: "0mm".into(),
+            depopulation: None,
         },
         numbering: NumberingScheme::default(),
     });
@@ -197,6 +198,7 @@ fn a_mirror_of_a_pattern_of_a_pattern_is_allowed() {
             count_expr: "2".into(),
             dx_expr: "0mm".into(),
             dy_expr: "20mm".into(),
+            depopulation: None,
         },
         numbering: NumberingScheme::default(),
     });

@@ -21,6 +21,8 @@ mod obstacles;
 mod relief;
 mod shape;
 
+pub use shape::shaped_outline_mm;
+
 use std::cmp::Reverse;
 
 use signex_types::pcb::{PcbBoard, Zone};

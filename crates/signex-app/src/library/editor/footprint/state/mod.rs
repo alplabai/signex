@@ -217,6 +217,10 @@ pub struct FootprintEditorState {
     pub sketch_solver: signex_sketch::solver::Solver,
     /// Output of the most recent solve.
     pub last_solve: Option<signex_sketch::solver::FullSolveOutput>,
+    /// The solve a failed one cleared from `last_solve`, kept for the
+    /// parameters preview to draw dimmed as the last good bake (#2856).
+    /// Nothing else reads it; a successful bake drops it.
+    pub last_good_solve: Option<signex_sketch::solver::FullSolveOutput>,
     /// Bookkeeping for the off-thread drag solve (#1047).
     pub sketch_solve: super::sketch_solve_task::SketchSolveSlot,
     /// Last solve's audit / over-constraint warnings.
@@ -224,6 +228,10 @@ pub struct FootprintEditorState {
     /// Bake warnings already sent to the Messages panel, so a re-solve
     /// during a drag does not repeat the same line on every frame.
     pub logged_solve_warnings: Vec<String>,
+    /// Centre Points a switch to Polar minted (#2596), removed again when
+    /// the pattern leaves Polar and nothing uses them. Session only: after a
+    /// reload such a centre counts as drawn and stays.
+    pub switch_minted_centres: std::collections::HashSet<signex_sketch::id::SketchEntityId>,
     /// #1073 — set on open when every sketch pad carries the pre-#1052
     /// all-false pad stack, so the Properties panel offers to restore it.
     /// Cleared when the user dismisses the offer; whether the offer still
@@ -433,9 +441,11 @@ impl FootprintEditorState {
             mode: EditorMode::Normal,
             sketch_solver: signex_sketch::solver::Solver::default(),
             last_solve: None,
+            last_good_solve: None,
             sketch_solve: super::sketch_solve_task::SketchSolveSlot::default(),
             solve_warnings: Vec::new(),
             logged_solve_warnings: Vec::new(),
+            switch_minted_centres: std::collections::HashSet::new(),
             legacy_pad_stack_offered: false,
             conflict: conflict::ConflictHighlight::default(),
             conflicts_row_hovered: None,

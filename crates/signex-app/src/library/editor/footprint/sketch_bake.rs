@@ -183,6 +183,7 @@ pub(super) fn bake_solution_with(
         .sketch_solve
         .set_redundancy_owed(out.redundancy_pending);
     state.last_solve = Some(out);
+    state.last_good_solve = None;
     Ok(())
 }
 
@@ -203,7 +204,11 @@ pub(super) fn discard_failed_solve(
     // A conflict makes the solver return `OverConstrained`
     // (no output), so `entity_colours` never runs; without
     // this the stale DoF colours stayed on screen.
-    state.last_solve = None;
+    // The parameters preview still draws it, dimmed, as the last good
+    // bake (#2856); a run of failures keeps the first one's predecessor.
+    if let Some(previous) = state.last_solve.take() {
+        state.last_good_solve = Some(previous);
+    }
     state.sketch_solve.clear_redundancy_owed();
     // `debug!`, not `warn!`: a drag fails on every pointer tick and a
     // warning here would flush the 200-entry Messages ring. The user hears

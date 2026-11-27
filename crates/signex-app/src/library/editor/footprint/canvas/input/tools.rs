@@ -118,6 +118,7 @@ impl FootprintCanvas<'_> {
                         last_world: world,
                         press_screen: cursor_pos,
                         moved: false,
+                        with_selection: false,
                     });
                     return Some(canvas::Action::capture());
                 }
@@ -243,6 +244,7 @@ impl FootprintCanvas<'_> {
             last_world: anchor,
             press_screen: cursor_pos,
             moved: false,
+            with_selection: false,
         });
         Some(
             canvas::Action::publish(LibraryMessage::EditorEvent {
@@ -285,6 +287,7 @@ impl FootprintCanvas<'_> {
                 last_world: anchor,
                 press_screen: cursor_pos,
                 moved: false,
+                with_selection: false,
             });
             return Some(
                 canvas::Action::publish(LibraryMessage::EditorEvent {
@@ -374,6 +377,7 @@ impl FootprintCanvas<'_> {
                     last_world: foot,
                     press_screen: cursor_pos,
                     moved: false,
+                    with_selection: false,
                 });
                 return Some(
                     canvas::Action::publish(LibraryMessage::EditorEvent {
@@ -440,7 +444,8 @@ impl FootprintCanvas<'_> {
         world: (f64, f64),
     ) -> Option<canvas::Action<LibraryMessage>> {
         // A graphic tool's click on a pad places there (a track from a pad
-        // centre); it does not grab the pad.
+        // centre); it does not grab the pad. A pad, via or hole tool stacks
+        // a new one on it, and Shift grabs the pad instead (#2726).
         let places_graphic = matches!(
             self.state.pads_tool,
             PadsTool::PlaceString
@@ -450,8 +455,15 @@ impl FootprintCanvas<'_> {
                 | PadsTool::PlacePolygon
                 | PadsTool::PlaceRegion
         );
+        let places_pad = matches!(
+            self.state.pads_tool,
+            PadsTool::PlacePad | PadsTool::PlaceVia | PadsTool::PlaceHole
+        );
+        let modifiers = cstate.current_modifiers;
+        let stacks = places_pad && !modifiers.shift() && !self.state.placement_paused;
         if matches!(self.state.mode, EditorMode::Normal)
             && !places_graphic
+            && !stacks
             && self.state.selection_filter.pads
             && let Some(pad_idx) = self.state.pad_at(world.0, world.1)
         {
@@ -472,28 +484,12 @@ impl FootprintCanvas<'_> {
                 last_world: world,
                 press_screen: cursor_pos,
                 moved: false,
+                // The drag carries the selection; Alt drags this pad alone
+                // (#2726).
+                with_selection: !modifiers.alt(),
             });
-            // v0.27 — Altium-parity modifier handling on the
-            // pad-hit branch. Ctrl/Cmd toggles the pad in/out of
-            // the multi-select set; Shift extends without removal;
-            // bare click replaces the selection.
-            let cmd = cstate.current_modifiers.command();
-            let shift = cstate.current_modifiers.shift();
-            let select_msg = if cmd || shift {
-                let mut current: Vec<usize> = self.state.selected_pad.into_iter().collect();
-                current.extend(self.state.selected_pads_extra.iter().copied());
-                if cmd {
-                    if let Some(pos) = current.iter().position(|&i| i == pad_idx) {
-                        current.remove(pos);
-                    } else {
-                        current.push(pad_idx);
-                    }
-                } else if !current.contains(&pad_idx) {
-                    current.push(pad_idx);
-                }
-                EditorMsg::Footprint(FootprintEditorMsg::SelectPads(current))
-            } else {
-                EditorMsg::Footprint(FootprintEditorMsg::SelectPad(Some(pad_idx)))
+            let Some(select_msg) = self.pad_press_selection(pad_idx, places_pad, modifiers) else {
+                return Some(canvas::Action::capture());
             };
             return Some(
                 canvas::Action::publish(LibraryMessage::EditorEvent {
@@ -506,6 +502,40 @@ impl FootprintCanvas<'_> {
             );
         }
         None
+    }
+
+    /// What a press on pad `pad_idx` does to the selection. Ctrl/Cmd
+    /// toggles the pad in or out of the multi-select set, Shift extends it
+    /// (under a pad tool Shift is the grab, so it does not), a bare press
+    /// replaces the selection. A bare press on a pad of a multi-pad
+    /// selection keeps it, so the drag carries it (#2726): `None`.
+    fn pad_press_selection(
+        &self,
+        pad_idx: usize,
+        places_pad: bool,
+        modifiers: iced::keyboard::Modifiers,
+    ) -> Option<EditorMsg> {
+        let cmd = modifiers.command();
+        let shift = modifiers.shift() && !places_pad;
+        let mut current = self.state.selected_pad_indices();
+        if !cmd && !shift {
+            let keeps_group = current.len() > 1 && current.contains(&pad_idx);
+            return (!keeps_group).then_some(EditorMsg::Footprint(FootprintEditorMsg::SelectPad(
+                Some(pad_idx),
+            )));
+        }
+        if cmd {
+            if let Some(pos) = current.iter().position(|&i| i == pad_idx) {
+                current.remove(pos);
+            } else {
+                current.push(pad_idx);
+            }
+        } else if !current.contains(&pad_idx) {
+            current.push(pad_idx);
+        }
+        Some(EditorMsg::Footprint(FootprintEditorMsg::SelectPads(
+            current,
+        )))
     }
 
     /// v0.18.18/v0.21 — Silk-front graphic hit, filter-gated per kind.

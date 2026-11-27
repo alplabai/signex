@@ -431,6 +431,10 @@ impl Signex {
             .tabs
             .iter()
             .any(|tab| tab.path == closing_path);
+        // A Mirror card is session state of the tab's editor (#2859).
+        if no_tab_left {
+            self.library.mirror_cards.remove(&closing_path);
+        }
         // Nothing of the document is left: its save failure or queued save
         // must not name a later document at the same path.
         if no_tab_left && !self.document_state.is_document_dirty(&closing_path) {

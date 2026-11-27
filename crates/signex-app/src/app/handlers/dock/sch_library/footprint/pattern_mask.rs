@@ -51,12 +51,7 @@ impl Signex {
                 .insert(number_mask_buffer_key(array_id), value.clone());
             let cells = editor.primitive().sketch.as_ref().and_then(|sketch| {
                 let array = sketch.arrays.iter().find(|a| a.id == array_id)?;
-                let preview = pattern_preview(sketch, array);
-                array
-                    .kind
-                    .has_suppression_model()
-                    .then(|| instances_numbered(&preview, &value).ok())
-                    .flatten()
+                instances_numbered(&pattern_preview(sketch, array), &value).ok()
             });
             if let Some(cells) = cells {
                 // Keyed, so typing a mask out is one undo step.

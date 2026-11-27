@@ -38,6 +38,7 @@ fn fixture_footprint_with_bga_array(stem: &str) -> (Signex, signex_sketch::array
             count_expr: "4".into(),
             dx_expr: "1mm".into(),
             dy_expr: "0mm".into(),
+            depopulation: None,
         },
         numbering: NumberingScheme::BgaRowCol {
             skip_letters: true,

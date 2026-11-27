@@ -574,7 +574,7 @@ fn mirror_glyphs(l: &Lookup<'_>, cstate: &FootprintCanvasState, out: &mut Vec<Gl
     }
 }
 
-/// The instance slots of a selected grid or polar pattern, the source's
+/// The instance slots of a selected pattern, the source's
 /// own slot left out (it is the source pad, edited as such). The slots
 /// come from the bake's own walk (`signex_bake::pattern_slots`), so a ring
 /// sits where the bake puts the pad; a slot the mask drops has no ring.
@@ -585,9 +585,6 @@ fn instance_glyphs(
     cstate: &FootprintCanvasState,
     out: &mut Vec<Glyph>,
 ) {
-    if !array.kind.has_suppression_model() {
-        return;
-    }
     let Some(solve) = l.state.last_solve.as_ref() else {
         return;
     };

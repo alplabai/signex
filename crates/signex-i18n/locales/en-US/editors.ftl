@@ -921,6 +921,12 @@ editors-role-pour-fill-outline = Outline
 # Drawing label; $fill is one of the fill names above.
 editors-role-pour-fill-callout = Fill: { $fill }
 editors-role-pour-priority-callout = Priority { $priority }
+# Corners and Corner size of a footprint pour, the board pour's model (#2598).
+editors-role-pour-corners = Corners
+editors-role-pour-corner-sharp = Sharp
+editors-role-pour-corner-rounded = Rounded
+editors-role-pour-corner-chamfer = Chamfer
+editors-role-pour-corner-size = Corner size (mm)
 editors-role-keepout-title = Keepout
 editors-role-keepout-kinds = Keepout kinds
 editors-role-keepout-no-copper = No copper
@@ -1247,3 +1253,9 @@ editors-pin-table-length-refused = Pin length { $value } was not applied: a pin 
 # The header of the symbol editor's Place Pin dropdown (mockup row 141): the
 # type picked under it stays for every following pin.
 editors-symbol-bar-pin-type = Pin type
+# #2596 Messages panel: a pattern switched kind and some of its skipped
+# instances have no place in the new kind. $kind is Linear, Grid or Polar;
+# $instances lists the dropped instances as (column, row).
+editors-role-pattern-kind-dropped-skips = Pattern switched to { $kind }: the skip on instances { $instances } was dropped; the new pattern has no such instance.
+# Same, for the per-pad overrides of those instances.
+editors-role-pattern-kind-dropped-overrides = Pattern switched to { $kind }: the pad overrides of instances { $instances } were dropped; the new pattern has no such instance.

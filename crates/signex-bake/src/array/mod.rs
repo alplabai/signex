@@ -1,20 +1,15 @@
 //! Sketch-array expansion — bakes all three `ArrayKind` variants.
 //!
-//! Phase 7 Task 7.2 of the v0.13 sketch-mode plan. Walks every
-//! `Array` in the sketch and produces baked
+//! Walks every `Array` and live mirror in the sketch and produces baked
 //! [`signex_library::primitive::footprint::Pad`]s by re-using the
-//! per-pad bake body from `crate::pad::bake_one_pad`.
+//! per-pad bake body from `crate::pad::bake_one_pad`. Every pattern, plain
+//! or linked, places its instances through one walk (`links`, with each
+//! array's own layout in `layout`); the Properties preview walks the same
+//! counts and steps without a solve (`walk`).
 //!
 //! Cleanroom: derived from first principles + the Phase 4 expression
 //! machinery. No third-party constraint-solver, footprint-generator,
 //! or numerical-library source consulted.
-//!
-//! # Scope
-//!
-//! - `ArrayKind::Linear { source, count_expr, dx_expr, dy_expr }` —
-//!   bakes natively (`array::linear`).
-//! - `ArrayKind::Grid { .. }` — bakes natively (`array::grid`).
-//! - `ArrayKind::Polar { .. }` — bakes natively (`array::polar`).
 //!
 //! Numbering:
 //! - `LinearIncrement { start, step }` — pad number =
@@ -29,20 +24,25 @@ use std::collections::HashMap;
 
 use signex_library::primitive::footprint::Pad as LibPad;
 use signex_sketch::SketchError;
-use signex_sketch::array::ArrayKind;
 use signex_sketch::sketch::SketchData;
 use signex_sketch::solver::FullSolveOutput;
 
-mod grid;
 mod instance_at;
-mod linear;
+mod kind_switch;
+#[cfg(test)]
+mod kind_switch_tests;
+mod layout;
 mod links;
 #[cfg(test)]
 mod links_tests;
+#[cfg(test)]
+mod literal_context_tests;
 mod numbering;
+#[cfg(test)]
+mod one_walk_tests;
 mod overrides;
+mod place;
 mod placements;
-mod polar;
 #[cfg(test)]
 mod polar_tests;
 mod preview;
@@ -50,6 +50,10 @@ mod slots;
 mod walk;
 
 pub use instance_at::instance_at;
+pub use kind_switch::{
+    KindSwitchRefused, KindSwitched, KindTarget, PatternKind, remove_unused_point,
+    switch_pattern_kind,
+};
 pub use numbering::{
     NumberMaskRefusal, instances_numbered, number_mask_entries, suppressed_numbers,
 };
@@ -58,39 +62,6 @@ pub(crate) use placements::{
 };
 pub use preview::{ArrayPreview, InstancePreview, preview_array};
 pub use slots::{PatternSlot, pattern_slots};
-
-/// Bake one kept instance of an array: the source pad moved by the
-/// instance offset and given its number.
-#[expect(
-    clippy::too_many_arguments,
-    reason = "one instance needs the source pad, its context and the bake outputs"
-)]
-fn bake_instance(
-    source: signex_sketch::id::SketchEntityId,
-    pad_attr: &signex_sketch::attr::PadAttr,
-    instance: walk::Instance,
-    ctx: &signex_sketch::expr::eval::EvalContext,
-    sketch: &SketchData,
-    solve: &FullSolveOutput,
-    out: &mut Vec<LibPad>,
-    warnings: &mut Vec<String>,
-) -> Result<(), SketchError> {
-    // A kept instance always has an offset; only a dropped one may not.
-    let [dx, dy] = instance.offset_mm.unwrap_or_default();
-    let pad = crate::pad::bake_one_pad(
-        source,
-        pad_attr,
-        ctx,
-        dx,
-        dy,
-        Some(instance.number),
-        sketch,
-        solve,
-        warnings,
-    )?;
-    out.push(pad);
-    Ok(())
-}
 
 /// How a bake warning names a pattern source: its kind and where it sits,
 /// not its id (mockup row 179e, #2772).
@@ -186,12 +157,10 @@ fn eval_count(
     Ok(Some(q.value.round() as i64))
 }
 
-use grid::{GridSpec, bake_grid};
-use linear::bake_linear;
-use polar::bake_polar;
+pub(crate) use links::bake_pattern;
 
-/// Walk every [`signex_sketch::array::Array`] and append baked pads
-/// to `out`. Bakes `ArrayKind::Linear`, `Grid`, and `Polar` natively.
+/// Walk every [`signex_sketch::array::Array`] and live mirror and append
+/// the pads they place to `out`.
 pub fn bake_arrays(
     sketch: &SketchData,
     solve: &FullSolveOutput,
@@ -200,88 +169,9 @@ pub fn bake_arrays(
     warnings: &mut Vec<String>,
 ) -> Result<(), SketchError> {
     let params_ast = crate::params::params_ast(sketch, params_canonical);
-
     for array in &sketch.arrays {
-        // A pattern link or an override bakes through the instance walk.
-        if links::bakes_through_links(sketch, array.id) {
-            links::bake_pattern(array.id, sketch, solve, &params_ast, out, warnings)?;
-            continue;
-        }
-        bake_one_array(array, &params_ast, sketch, solve, out, warnings)?;
+        bake_pattern(array.id, sketch, solve, &params_ast, out, warnings)?;
     }
     links::bake_mirrors(sketch, solve, &params_ast, out, warnings)?;
-
-    Ok(())
-}
-
-/// Bake one array's instances into `out`.
-pub(crate) fn bake_one_array(
-    array: &signex_sketch::array::Array,
-    params_ast: &std::collections::BTreeMap<String, signex_expr::ExprNode>,
-    sketch: &SketchData,
-    solve: &FullSolveOutput,
-    out: &mut Vec<LibPad>,
-    warnings: &mut Vec<String>,
-) -> Result<(), SketchError> {
-    match &array.kind {
-        ArrayKind::Linear {
-            source,
-            count_expr,
-            dx_expr,
-            dy_expr,
-        } => {
-            bake_linear(
-                *source,
-                count_expr,
-                dx_expr,
-                dy_expr,
-                &array.numbering,
-                params_ast,
-                sketch,
-                solve,
-                out,
-                warnings,
-            )?;
-        }
-        ArrayKind::Grid {
-            source,
-            nx_expr,
-            ny_expr,
-            dx_expr,
-            dy_expr,
-            depopulation,
-        } => {
-            let spec = GridSpec {
-                nx_expr,
-                ny_expr,
-                dx_expr,
-                dy_expr,
-                depopulation: depopulation.as_ref(),
-                numbering: &array.numbering,
-            };
-            bake_grid(*source, &spec, params_ast, sketch, solve, out, warnings)?;
-        }
-        ArrayKind::Polar {
-            source,
-            center,
-            count_expr,
-            sweep_angle_expr,
-            depopulation,
-        } => {
-            bake_polar(
-                *source,
-                *center,
-                count_expr,
-                sweep_angle_expr,
-                depopulation.as_ref(),
-                &array.numbering,
-                params_ast,
-                sketch,
-                solve,
-                out,
-                warnings,
-            )?;
-        }
-    }
     Ok(())
 }

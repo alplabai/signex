@@ -34,6 +34,8 @@ mod pad_shape_check;
 #[cfg(test)]
 mod pad_thermal_tests;
 mod pitch;
+#[cfg(test)]
+mod pour_corner_format_tests;
 mod serde_tsv;
 mod silk_marker;
 #[cfg(test)]

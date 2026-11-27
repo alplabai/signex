@@ -29,6 +29,7 @@ signex-app -> signex-req
 signex-app -> signex-sketch
 signex-app -> signex-types
 signex-app -> signex-widgets
+signex-bake -> pcb-geom
 signex-bake -> signex-expr
 signex-bake -> signex-library
 signex-bake -> signex-sketch

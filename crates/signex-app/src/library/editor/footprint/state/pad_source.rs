@@ -349,6 +349,7 @@ mod tests {
                 count_expr: "3".into(),
                 dx_expr: "2mm".into(),
                 dy_expr: "0mm".into(),
+                depopulation: None,
             },
             numbering: NumberingScheme::default(),
         });

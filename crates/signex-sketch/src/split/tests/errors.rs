@@ -275,6 +275,7 @@ fn failed_split_leaves_sketch_byte_identical() {
             count_expr: "2".into(),
             dx_expr: "1".into(),
             dy_expr: "0".into(),
+            depopulation: None,
         },
         numbering: NumberingScheme::default(),
     });

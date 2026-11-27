@@ -363,6 +363,8 @@ pub(super) fn build_footprint_editor_panel_ctx(
                         fill_type: p.fill_type,
                         priority: p.priority,
                         layer: p.layer,
+                        corners: p.corners,
+                        corner_size: p.corner_size,
                     });
                     let keepout = e.keepout.as_ref().map(|k| crate::panels::KeepoutSummary {
                         no_routing: k.kinds.no_routing,
@@ -465,12 +467,19 @@ pub(super) fn build_footprint_editor_panel_ctx(
                 count_expr,
                 dx_expr,
                 dy_expr,
+                depopulation,
                 ..
-            } => crate::panels::ArrayKindSummary::Linear {
-                count_expr: count_expr.clone(),
-                dx_expr: dx_expr.clone(),
-                dy_expr: dy_expr.clone(),
-            },
+            } => {
+                let (mask_expr, suppressed_instances) = suppressed_indices(depopulation.as_ref());
+                crate::panels::ArrayKindSummary::Linear {
+                    count_expr: count_expr.clone(),
+                    dx_expr: dx_expr.clone(),
+                    dy_expr: dy_expr.clone(),
+                    mask_expr,
+                    suppressed_instances,
+                    count_value: count_expr.trim().parse::<u32>().ok(),
+                }
+            }
             ArrayKind::Grid {
                 nx_expr,
                 ny_expr,
@@ -510,19 +519,7 @@ pub(super) fn build_footprint_editor_panel_ctx(
                             signex_sketch::entity::EntityKind::Point { x, y } => Some([x, y]),
                             _ => None,
                         });
-                let (mask_expr, suppressed_instances): (String, Vec<u32>) = depopulation
-                    .as_ref()
-                    .map(|d| {
-                        // Polar entries are (i, 0); flatten to a single
-                        // index per row.
-                        let suppressed = d
-                            .suppressed_instances
-                            .iter()
-                            .filter_map(|(si, sj)| if *sj == 0 { Some(*si) } else { None })
-                            .collect();
-                        (d.mask_expr.clone(), suppressed)
-                    })
-                    .unwrap_or_default();
+                let (mask_expr, suppressed_instances) = suppressed_indices(depopulation.as_ref());
                 crate::panels::ArrayKindSummary::Polar {
                     count_expr: count_expr.clone(),
                     sweep_angle_expr: sweep_angle_expr.clone(),
@@ -557,7 +554,7 @@ pub(super) fn build_footprint_editor_panel_ctx(
         };
         let repicking_polar_center = matches!(
             editor.state.tool_pending,
-            ToolPending::RepickPolarCenter { array_id } if array_id == array.id
+            ToolPending::RepickPolarCenter { array_id, .. } if array_id == array.id
         );
         let source = sketch.entities.iter().find(|e| e.id == sel_id);
         let source_position_mm = source.and_then(|e| match e.kind {
@@ -806,4 +803,21 @@ fn editor_pad_size_mm(
         .iter()
         .find(|pad| pad.sketch_entity_id == Some(id))
         .map(|pad| [pad.size_mm.0, pad.size_mm.1])
+}
+
+/// A linear or polar pattern's mask and suppressed instances, each entry
+/// `(i, 0)` flattened to its index `i`.
+fn suppressed_indices(
+    depopulation: Option<&signex_sketch::array::GridDepopulation>,
+) -> (String, Vec<u32>) {
+    depopulation
+        .map(|d| {
+            let suppressed = d
+                .suppressed_instances
+                .iter()
+                .filter_map(|&(i, j)| (j == 0).then_some(i))
+                .collect();
+            (d.mask_expr.clone(), suppressed)
+        })
+        .unwrap_or_default()
 }

@@ -433,7 +433,9 @@ sketch holding any of them, or a reference dimension, is saved as
 `snxpcb/1.7`, so an older build opens it read-only instead of dropping them.
 A pattern that repeats a baked target, or a numbering sweep other than row by
 row, writes `snxpcb/1.8`: a build before the expansion would lose the
-instances on its next bake (`docs/FORMAT_VERSIONS.md`).
+instances on its next bake. A linear pattern with a suppression list writes
+`snxpcb/1.13` (#2688): a 1.12 build would bake the suppressed instances and
+drop the list on save (`docs/FORMAT_VERSIONS.md`).
 
 ## Patterned board items {#patterned-board-items}
 
@@ -509,7 +511,12 @@ plain Cutout on the same loop is not checked.
 The board pour is its own `BakedKind::BoardPours` (token `board_pours`), not
 the footprint's `Pours`: a board bake answers for exactly
 `SketchHost::Board.bake_targets()`, and `Pours` is a footprint field. A
-pour's net is a name the board's net table must hold (`UnknownNet`), an
+pour's Corners and Corner size (#2598, the footprint Pour form's rows) bake
+into the zone's `corners` and `corner_size` as they are (a size that is no
+number from 0 bakes as 0), so the board fill shapes the corners by its own
+rule (`docs/PCB_TOOLS.md`, "Corners and hatched fill"); a re-bake takes them
+from the sketch, never from the old zone. A pour's net is a name the board's
+net table must hold (`UnknownNet`), an
 anchor's component a footprint the board holds (`UnknownComponent`; no
 component picked is `AnchorWithoutComponent`).
 
@@ -521,7 +528,11 @@ its seed edge and a drawing that of its edge. The board command
 `SetBoardSketch` does and, in the same step, replaces every zone and drawing
 whose uuid is an entity of the board sketch before or after, or a pattern
 instance of one ([Patterned board items](#patterned-board-items)), and moves each
-anchored footprint that is not locked (Messages names a locked one). Its
+anchored footprint that is not locked (Messages names a locked one). A
+pour the sketch re-bakes under the same uuid keeps its board edits: a
+shelved pour stays shelved and an unfilled pour, shelved or not, stays
+unfilled. A new pour takes what the bake writes (live and filled), and a
+pour whose entity is gone is removed as before (#2706). Its
 inverse `RestoreBoardSketchBake` puts back the zone and drawing lists and the
 old positions bit for bit. The app uses it only when the sketch owns one of
 the three kinds now or did before (`SketchData::owns_board_items`), so a
@@ -531,5 +542,6 @@ The `.snxpcb` token is `snxpcb/1.7` while the board sketch carries any of
 `board_slot`, `pour`, `mechanical` or `component_anchor`
 (`SketchData::carries_board_targets`), `snxpcb/1.8` when a pattern repeats a
 target (`SketchData::repeats_baked_target`), else what it was (1.4, or 1.5
-with layer colours), byte for byte. Still to do: the drill and route output emits a
+with layer colours), byte for byte; `snxpcb/1.13` while a board sketch pour
+has corners other than Sharp (`docs/FORMAT_VERSIONS.md`). Still to do: the drill and route output emits a
 Slot cutout as a stadium cutout, not a routed slot.

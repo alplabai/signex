@@ -65,6 +65,7 @@ fn fixture() -> Fixture {
             count_expr: "rows".into(),
             dx_expr: "pitch".into(),
             dy_expr: "0mm".into(),
+            depopulation: None,
         },
         numbering: NumberingScheme::default(),
     });
@@ -85,6 +86,8 @@ fn fixture() -> Fixture {
         clearance_expr: Some("pitch".into()),
         min_thickness_expr: None,
         priority: 0,
+        corners: Default::default(),
+        corner_size: 0.0,
     });
     Fixture {
         sketch,

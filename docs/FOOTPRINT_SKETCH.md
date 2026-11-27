@@ -165,6 +165,20 @@ then a line-art illustration, then its sections. The forms live in
 `app/handlers/dock/sch_library/footprint/role.rs`. Every edit is one undo
 step, re-solves and re-bakes the sketch, and dirties the tab.
 
+- **Pour.** Net, Priority and Fill, then **Corners** (Sharp, Rounded,
+  Chamfer) and **Corner size (mm)**, the rows of a board pour (#2598): the
+  model is the board pour's, used as is (`PourAttr::corners` and
+  `PourAttr::corner_size`, as `Zone::corners` and `Zone::corner_size`,
+  #2578). A new pour is Sharp. Corner size takes a number from 0; other
+  text is kept in the editor's field buffers, outlined in red, without
+  touching the pour, and the field is greyed at 0 while Sharp. The bake
+  shapes the pour's convex corners with the rule a board pour fills with
+  (`pcb_geom::shaped_outline_mm`, `docs/PCB_TOOLS.md`, "Corners and hatched
+  fill"), so the canvas and the baked `pours` show the shaped outline;
+  Sharp, or a size of 0, bakes the outline as drawn. A board sketch pour
+  shows the same rows and bakes them into its board zone
+  (`docs/PCB_SKETCH.md`). A pour with corners other than Sharp saves as
+  `snxfpt/1.5`, or `snxpcb/1.13` on a board (`docs/FORMAT_VERSIONS.md`).
 - **Keepout.** The **Layer** dropdown writes `KeepoutAttr::layer`. It offers
   Top Layer and Bottom Layer, plus the stored layer when a file names
   another one. A keepout on all layers or on the inner layers only cannot
@@ -183,9 +197,9 @@ step, re-solves and re-bakes the sketch, and dirties the tab.
   (`PadAttr::side`; both sides for a pad on every side), which are the
   layers the bake gives it; a drilled pad shows both sides and the hole
   details.
-- **Pattern.** The kind segment shows the pattern's kind; a pattern keeps
-  the kind it was made with. Start row / col and the letter skip apply to
-  BGA numbering and grey otherwise.
+- **Pattern.** The kind segment shows the pattern's kind and switches it
+  (see [Switching a pattern's kind](#switching-a-patterns-kind)). Start
+  row / col and the letter skip apply to BGA numbering and grey otherwise.
 
 The pattern illustration draws `signex_bake::array::preview_array`: the
 same walk the bake runs (`signex-bake/src/array/walk.rs`) gives each
@@ -193,6 +207,45 @@ instance its offset, number and dropped flag, so the drawing shows what the
 bake produces. Dropped instances are drawn dashed. When a count, spacing or
 mask does not evaluate, or the pattern has more than 256 instances, the
 drawing shows the source pad only, with a note.
+
+## Switching a pattern's kind {#switching-a-patterns-kind}
+
+The Pattern form's kind segment (Linear, Grid, Polar) switches the selected
+pattern to another kind (#2596, DECISIONS 2026-11-27). The reshaping is
+`signex_bake::array::switch_pattern_kind`; the segment and the centre pick
+are `updates/sketch/pattern_kind.rs`.
+
+- **Count.** The instance count carries over. A linear or polar pattern
+  becomes one grid row (`ny = 1`), or one column (`nx = 1`) when it steps
+  along Y only. A grid becomes a linear or polar pattern of `nx × ny`
+  instances: the side that is not 1 as written, else the product (a number
+  when both sides resolve, `(nx) * (ny)` when they do not). A polar pattern
+  takes the count over a full 360° sweep.
+- **Spacing.** dX and dY carry over between Linear and Grid as written. A
+  grid of several rows becomes a line along its row (dY 0), a one-column
+  grid a line down its column (dX 0). Polar has no spacing, so a polar
+  pattern switched away gets a 5 mm step along X, the Rectangular Pattern
+  default. The polar centre Point stays in the sketch, unless the switch
+  to Polar placed it (the centre click minted it) and nothing else uses it:
+  no entity, constraint, pattern or mirror names it and it has no role.
+  Such a centre goes in the same undo step. Which centres the switch
+  minted is known for the session only (`switch_minted_centres` in the
+  editor state); after a reload a centre counts as drawn and stays.
+- **Centre.** Linear and Grid switch at once. Polar first asks for a centre
+  through the Re-pick flow: the form shows "Click a Point… (Esc to
+  cancel)", and the next click on the canvas, under any tool, picks or
+  places the centre and switches the pattern. Esc, or the pattern's own
+  kind segment, cancels and leaves the pattern as it was.
+- **Instances.** The suppression list and the pattern's per-pad overrides
+  follow their instance in the row-by-row walk: cell `(i, j)` of a grid
+  `nx` wide is instance `j × nx + i` of a line. An entry with no place in
+  the new kind (past the count, past the last row such as a mirrored
+  instance, or in a later row of a grid whose width does not resolve) is
+  dropped, and a Messages line names the dropped instances. The mask
+  expression carries over as written (the bake warns where it does not
+  fit) and the numbering scheme is kept; the numbers follow the new walk.
+- **Undo.** The switch is one undo step; for Polar it is the step of the
+  click, centre Point included.
 
 ## Switching modes {#switching-modes}
 
@@ -246,7 +299,12 @@ control stays in reach:
   `board_layer_colour`), with the sketch faint on top. The pads, silk and
   courtyard are the editor's own (the footprint bakes on every solve); the
   other fields are baked from the same solve when the canvas redraws
-  (`canvas/draw/sketch/bake_overlay.rs`). The card is in Properties, not
+  (`canvas/draw/sketch/bake_overlay.rs`). A legend at the canvas's top
+  right names the layers the preview draws on, with their colours: Top,
+  Bottom, Paste, Bottom paste, Mask, Bottom mask, Silk, Bottom silk,
+  Courtyard and Bottom courtyard, each only when something is drawn on it,
+  so a layer hidden in the layer visibility is not listed (Caner,
+  2026-11-27, mockup row 190). The card is in Properties, not
   over the canvas: while the preview is open Properties shows the Bake
   panel, whatever is selected: the Roles section, the card, then Back to
   sketch and Bake (mockup row 190). The card also lists the last
@@ -298,8 +356,17 @@ Under the table's rows, a live bake preview (Caner, 2026-11-24) draws the
 edges that bake, a footprint's baked pads and the driving dimensions, from
 the current solve without solving again; it redraws on each keystroke.
 While an expression does not read, it keeps the last good bake, marked,
-and hides the pads, since their angles cannot be read, saying so. Live
-checks sits beside it, parameter errors first.
+and hides the pads, since their angles cannot be read, saying so. When a
+solve fails (the canvas then shows the sketch unsolved), the preview keeps
+the last solve that succeeded, dimmed, under "The sketch does not solve:
+this is the last good bake.", with its pads hidden until the sketch solves
+(Caner, 2026-11-27, #2856). The next successful solve replaces it; the
+copy lives in the editor tab and goes with it. Between an edit and the solve
+that lands for it (a drag solves off the UI thread), the preview hides
+the pads, saying "Pads are hidden until the sketch solves.": the last
+solve's numbers would be read with the table's new units (Caner,
+2026-11-27, #2859). Live checks sits beside it,
+parameter errors first.
 
 **The table** is a card over the canvas with one row per parameter:
 
@@ -400,18 +467,22 @@ A selected pattern shows its values under its glyph (`count = rows · 4`,
 `spacing X · 0.65 mm`); they edit on the drawing like a dimension and
 write the pattern's expression as typed.
 
-While a rectangular or circular pattern is selected, each of its instance
-slots draws a ring; a click suppresses that instance (one undo step) and a
-second click brings it back. The suppression list is the one the
-Properties pattern form ticks, kept by one helper on the array type
-(`ArrayKind::set_instance_suppressed`). A linear pattern has no
-suppression list, so its instances do not toggle. The pattern form's
+While a pattern is selected, each of its instance slots draws a ring; a
+click suppresses that instance (one undo step) and a second click brings it
+back. The suppression list is the one the Properties pattern form ticks,
+kept by one helper on the array type (`ArrayKind::set_instance_suppressed`).
+A linear pattern keeps its list as a circular one does, as `(i, 0)` entries
+(#2688); its form has the Mask field and per-instance checkboxes of a
+circular one, and a masked instance keeps its number (numbering follows the
+index). A
+footprint with a linear suppression is saved as `snxfpt/1.5` and a board
+sketch with one as `snxpcb/1.13` (`docs/FORMAT_VERSIONS.md`). The pattern form's
 Numbering Mask (mockup row 126, #2845) edits the same list by pad number
 (`4,5`, `A2,B4`; commas or spaces): it shows the numbers of the suppressed
 instances, and a typed list replaces the list in one undo step
 (`signex_bake::array::instances_numbered`, `ArrayKind::set_suppressed_instances`).
-A number the pattern does not have is refused and the text stays in the field;
-on a linear pattern the field is greyed. The source's own slot is
+A number the pattern does not have is refused and the text stays in the field.
+The source's own slot is
 not offered: it is the source pad. The canvas draws no ring on it, and the
 Mask refuses the source pad's number the same way.
 
@@ -439,6 +510,7 @@ badge names the target"; `canvas/draw/sketch/snap.rs`):
 | A Circle's or Arc's centre | ⊙ | Centre · circle / arc (or · pad 1) |
 | Guide | none (the guide is drawn) | Guide |
 | A board feature (board sketch only) | ◻ | Pad · J1-1, Courtyard · J1, Board outline, … |
+| A footprint object, or Axes lining up with one ([Object snap](#object-snap)) | none | none |
 | Grid, or no snap | none | none |
 
 The words come from the message catalog through the editor's canvas text,
@@ -498,8 +570,10 @@ constraint on the click's Point, in the click's undo step (Caner,
 | Intersection of two curves | Point on Line for a Line, Point on Arc for an Arc, zero distance to a Circle, on each of the two |
 
 Priority: a sketch Point first (a Point that is a Circle's or Arc's centre
-reads as Centre), then the board, then Midpoint and Centre within the Point
-snap's 8 px, then guides, intersections, H / V, angle and grid. Snap ▾ in
+reads as Centre), then the board, then the footprint objects the sketch does
+not draw ([Object snap](#object-snap)), then Midpoint and Centre within the
+Point snap's 8 px, then guides (while Guides is on), intersections, H / V,
+angle, Axes and grid. Snap ▾ in
 sketch mode has a **Sketch snaps** group (Line midpoints, Circle and arc
 centres, on by default, not saved, no undo step); intersections keep their
 Objects for snapping row. A Line within ±5° of an axis still gets its
@@ -511,6 +585,43 @@ the cursor skips the Midpoint, Centre, Intersection, H / V and angle snaps
 inferred constraint, the Line's auto H / V included. The code is
 `snap::snap_cursor_with` and `snap::click_inference`; the canvas sends
 `SketchToolClickInferred` / `SketchPlacePointInferred` only when one applies.
+
+## Object snap {#object-snap}
+
+The footprint canvas snaps to its own objects within Snap Distance, each
+kind behind its row of Objects for snapping (#2726; `snap_objects/`). In
+Pads mode every kind counts; in Sketch mode only pads without a sketch
+backing and silk the sketch did not bake, since the sketch's own Points
+snap first. The point is placed only; no constraint lands.
+
+| Switch | Targets |
+|---|---|
+| Footprint Origins | (0, 0), Pads mode only |
+| Pad Centers | each pad's centre |
+| Pad Vertices | the corners of Rect, Chamfered, Trapezoid and Custom pads, turned with the pad |
+| Pad Edges | the nearest point of any pad's outline (round corners in 8 chords per quarter turn) |
+| Track Vertices | silk line ends, rectangle and polygon corners |
+| Track/Arc Lines | the nearest point of a silk line, rectangle or polygon side, circle or arc (within its sweep) |
+| Arc Centers | silk circle and arc centres |
+| Texts | a silk string's anchor |
+| Regions | a filled rectangle's or polygon's corners and the nearest point of its edges |
+| 3D Body Snap Points | the box the 3D preview draws (`preview3d::body_bbox`) seen from above: its four corners, its centre (the vertical axis) and the nearest point of its two horizontal axes, Pads mode only |
+
+Via Centers has no target of its own: a footprint via is a pad. **Axes**
+(off by default) lines the pointer up with a fixed target (not the nearest
+point of a line or edge) within Axis Snap Range: the nearest whose x is
+within Snap Distance of the pointer's x gives the x, the same for y, and an
+axis nothing lines up on takes the grid. It runs after the angle snap and
+before the grid. **Guides** (on by default) gates the guide snap. The Snap
+Options are session state, never saved, as on a board.
+
+A drag of a pad that is part of a multi-pad selection moves the whole
+selection by the grabbed pad's snapped offset, and the carried pads are no
+snap targets; Alt drags the grabbed pad alone. A press on such a pad keeps
+the selection; releasing it without a drag selects that pad alone. Place
+Pad, Place Via and Place Hole over an existing pad place a new one there
+(stacked on the pad's centre when Pad Centers is on); Shift grabs the
+existing pad instead.
 
 ## Modify tools
 
@@ -541,7 +652,11 @@ nothing is selected.
   first; with Mirror line focused, a click takes any Line; other clicks add
   or remove objects. Keep linked (on each time the card opens) keeps every
   copy symmetric to its source; off makes free copies. A selected pattern is
-  always mirrored live. OK writes one undo step and returns to Select;
+  always mirrored live, and takes the place of its source in the Objects:
+  the pattern's mirror already holds the source's image, so a pick of the
+  source is ignored while its pattern is an object. Selecting an entity
+  drops the selected pattern, so the card never takes one picked before the
+  current selection (#2859). OK writes one undo step and returns to Select;
   Cancel writes nothing. The ghost draws the line, the picks and the copies
   OK will write. Mirror is under "Needs a selection", so it is armed with
   something selected.
@@ -643,13 +758,13 @@ another pattern, and a mirror of a pattern stays a pattern.
   onto a removed pattern are dropped; the array that named it stays and
   repeats its own source again.
 
-The bake expands links in `signex_bake::array::links`; a plain array with
-no link and no override still bakes through `bake_one_array`. The canvas's
-instance rings of a selected grid or polar pattern come from the same walk
+Every pattern bakes through one instance walk, `signex_bake::array::links`:
+a plain array, a linked one, one with overrides and a mirror alike (#2689).
+The canvas's instance rings of a selected pattern come from the same walk
 (`signex_bake::pattern_slots`): each ring sits where the bake puts the pad,
 with the per-instance spacing and the sweep's written unit; a slot the
 suppression list holds back draws as suppressed, and a slot the mask drops
-has no ring. One walk for the plain bake as well is a follow-up (#2689).
+has no ring.
 
 ## Per-pad overrides {#per-pad-overrides}
 

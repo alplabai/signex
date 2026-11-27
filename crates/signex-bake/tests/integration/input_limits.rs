@@ -125,6 +125,7 @@ fn linear_array_over_the_cap_is_skipped_with_a_warning() {
             count_expr: "1000000".into(),
             dx_expr: "1mm".into(),
             dy_expr: "0mm".into(),
+            depopulation: None,
         },
         &mut data,
     );
@@ -169,6 +170,7 @@ fn array_count_typed_as_a_length_or_angle_is_skipped_with_a_warning() {
                 count_expr: "5mm".into(),
                 dx_expr: "1mm".into(),
                 dy_expr: "0mm".into(),
+                depopulation: None,
             },
             1 => ArrayKind::Polar {
                 source: src,
@@ -206,6 +208,7 @@ fn array_at_the_cap_still_bakes() {
             count_expr: "8".into(),
             dx_expr: "1mm".into(),
             dy_expr: "0mm".into(),
+            depopulation: None,
         },
         &mut data,
     );
@@ -222,6 +225,7 @@ fn an_array_source_pad_is_baked_once_with_the_arrays_numbering() {
             count_expr: "3".into(),
             dx_expr: "2mm".into(),
             dy_expr: "0mm".into(),
+            depopulation: None,
         },
         numbering: NumberingScheme::LinearIncrement {
             start_expr: "1".into(),
@@ -257,6 +261,7 @@ fn a_skipped_array_leaves_its_source_pad_baked() {
             count_expr: "0".into(),
             dx_expr: "2mm".into(),
             dy_expr: "0mm".into(),
+            depopulation: None,
         },
         numbering: NumberingScheme::default(),
     });

@@ -2,7 +2,7 @@
 //! (decision 2, Caner 2026-11-20): `SetBoardSketchBake` and its inverse
 //! `RestoreBoardSketchBake`. See `docs/PCB_SKETCH.md`, "Targets".
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use serde::Serialize;
 use signex_types::numeric::first_non_finite_path;
@@ -75,12 +75,16 @@ pub(in crate::pcb) fn set(
     }
 
     let owned = OwnedItems::of(board.sketch.as_ref(), sketch.as_deref());
+    let edits: HashMap<Uuid, PourEdits> = (board.zones.iter())
+        .filter(|zone| owned.holds(zone.uuid))
+        .map(|zone| (zone.uuid, PourEdits::of(zone)))
+        .collect();
     let zones = board
         .zones
         .iter()
         .filter(|zone| !owned.holds(zone.uuid))
         .cloned()
-        .chain(items.zones)
+        .chain(items.zones.into_iter().map(|zone| keep_edits(zone, &edits)))
         .collect();
     let graphics = board
         .graphics
@@ -196,6 +200,32 @@ pub(in crate::pcb) fn owned_item_ids(
         .filter(|graphic| owned.holds(graphic.uuid))
         .map(|graphic| BoardItemId::Graphic(graphic.uuid));
     zones.chain(graphics).collect()
+}
+
+/// The board edits of a pour a re-bake keeps (#2706, decision 8).
+#[derive(Clone, Copy)]
+struct PourEdits {
+    shelved: bool,
+    unfilled: bool,
+}
+
+impl PourEdits {
+    fn of(zone: &Zone) -> Self {
+        Self {
+            shelved: zone.shelved,
+            unfilled: zone.unfilled,
+        }
+    }
+}
+
+/// A pour the sketch re-bakes under the same uuid keeps whether it was
+/// shelved and unfilled on the board; a new pour keeps what the bake wrote.
+fn keep_edits(mut zone: Zone, edits: &HashMap<Uuid, PourEdits>) -> Zone {
+    if let Some(kept) = edits.get(&zone.uuid) {
+        zone.shelved |= kept.shelved;
+        zone.unfilled |= kept.unfilled;
+    }
+    zone
 }
 
 fn finite(p: Point) -> bool {

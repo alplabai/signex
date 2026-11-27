@@ -324,6 +324,8 @@ fn pour_attr_round_trip_default() {
         clearance_expr: None,
         min_thickness_expr: None,
         priority: 0,
+        corners: Default::default(),
+        corner_size: 0.0,
     };
     let s = toml::to_string(&a).unwrap();
     let back: PourAttr = toml::from_str(&s).unwrap();
@@ -345,6 +347,8 @@ fn pour_attr_hatched_with_overrides_round_trip() {
         clearance_expr: Some("0.2mm".into()),
         min_thickness_expr: Some("0.15mm".into()),
         priority: 5,
+        corners: Default::default(),
+        corner_size: 0.0,
     };
     let s = toml::to_string(&a).unwrap();
     let back: PourAttr = toml::from_str(&s).unwrap();
@@ -470,6 +474,7 @@ fn linear_array_round_trip() {
             count_expr: "= pin_count / 4".into(),
             dx_expr: "= pad_pitch".into(),
             dy_expr: "0mm".into(),
+            depopulation: None,
         },
         numbering: NumberingScheme::LinearIncrement {
             start_expr: "1".into(),
@@ -670,6 +675,7 @@ fn explicit_numbering_round_trip() {
             count_expr: "5".into(),
             dx_expr: "= pad_pitch".into(),
             dy_expr: "0mm".into(),
+            depopulation: None,
         },
         numbering: NumberingScheme::Explicit {
             names: vec![

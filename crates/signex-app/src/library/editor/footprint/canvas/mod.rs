@@ -52,7 +52,7 @@ use draw::draw_pads_tool_preview;
 pub(crate) use draw::{
     BACKDROP_BG, BACKDROP_GRID, BackdropLook, SketchInk, draw_back_layers, draw_backdrop,
     draw_courtyard, draw_fab, draw_origin, draw_pad_bodies, draw_pad_numbers, draw_silk,
-    graphite_look_for,
+    footprint_bake_layers, graphite_look_for,
 };
 #[cfg(test)]
 pub(crate) use draw::{LayerInput, PadLabels, draw_pads};
@@ -176,6 +176,9 @@ struct DragState {
     /// "did this drag actually move?".
     press_screen: Point,
     moved: bool,
+    /// A pad drag carries the rest of the selection (#2726); `false` for
+    /// an Alt drag and every other drag.
+    with_selection: bool,
 }
 
 impl Default for FootprintCanvasState {
@@ -310,6 +313,9 @@ pub struct FootprintCanvas<'a> {
     /// while Mirror is not armed.
     pub mirror_card:
         Option<crate::library::editor::footprint::sketch_mode::mirror_card::MirrorCard>,
+    /// The footprint's 3D body, a snap target (#2726); `None` where the
+    /// canvas edits no footprint body.
+    pub body_3d: Option<crate::library::editor::footprint::snap_objects::BodyBox>,
 }
 
 impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {

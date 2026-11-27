@@ -14,7 +14,12 @@ pub(super) fn apply(editor: &mut crate::app::FootprintDocument, msg: FootprintEd
         FootprintEditorMsg::ToggleSelectionFilter(kind) => toggle_selection_filter(editor, kind),
         FootprintEditorMsg::SelectSilkF(sel) => select_silk_f(editor, sel),
         FootprintEditorMsg::DeleteSilkF => delete_silk_f(editor),
-        FootprintEditorMsg::MovePad { idx, x_mm, y_mm } => move_pad(editor, idx, x_mm, y_mm),
+        FootprintEditorMsg::MovePad {
+            idx,
+            x_mm,
+            y_mm,
+            with_selection,
+        } => move_pad(editor, idx, (x_mm, y_mm), with_selection),
         FootprintEditorMsg::CursorAt {
             x_mm,
             y_mm,
@@ -128,12 +133,31 @@ fn delete_silk_f(editor: &mut crate::app::FootprintDocument) {
     editor.canvas_cache.clear();
 }
 
-fn move_pad(editor: &mut crate::app::FootprintDocument, idx: usize, x_mm: f64, y_mm: f64) {
+/// Pad `idx` goes to `to`; with `with_selection` and `idx` selected, the
+/// rest of the selection follows by the same offset (#2726).
+fn move_pad(
+    editor: &mut crate::app::FootprintDocument,
+    idx: usize,
+    to: (f64, f64),
+    with_selection: bool,
+) {
+    let Some(from) = editor.state.pads.get(idx).map(|pad| pad.position_mm) else {
+        return;
+    };
+    let selected = editor.state.selected_pad_indices();
+    let followers: Vec<usize> = if with_selection && selected.contains(&idx) {
+        selected.into_iter().filter(|&i| i != idx).collect()
+    } else {
+        Vec::new()
+    };
     editor.with_parts(|state, primitive| {
-        state.move_pad(idx, x_mm, y_mm);
+        state.move_pad(idx, to.0, to.1);
+        state.nudge_pads(&followers, to.0 - from.0, to.1 - from.1);
         // v0.15 — mirror the move into the sketch.
-        if let Some(pad) = state.pads.get(idx) {
-            pad_to_sketch::mirror_move_pad_in_sketch(pad, primitive);
+        for i in std::iter::once(idx).chain(followers.iter().copied()) {
+            if let Some(pad) = state.pads.get(i) {
+                pad_to_sketch::mirror_move_pad_in_sketch(pad, primitive);
+            }
         }
         FootprintEditorState::sync_pads_to_primitive(state, primitive);
     });

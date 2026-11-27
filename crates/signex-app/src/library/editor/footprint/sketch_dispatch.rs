@@ -370,6 +370,8 @@ pub fn set_entity_role(footprint: &mut Footprint, id: SketchEntityId, role: Role
                 clearance_expr: None,
                 min_thickness_expr: None,
                 priority: 0,
+                corners: Default::default(),
+                corner_size: 0.0,
             });
         }
         RoleTag::PourBottom => {
@@ -381,6 +383,8 @@ pub fn set_entity_role(footprint: &mut Footprint, id: SketchEntityId, role: Role
                 clearance_expr: None,
                 min_thickness_expr: None,
                 priority: 0,
+                corners: Default::default(),
+                corner_size: 0.0,
             });
         }
         RoleTag::PasteApertureTop => {
@@ -420,6 +424,8 @@ pub fn set_entity_role(footprint: &mut Footprint, id: SketchEntityId, role: Role
                 clearance_expr: None,
                 min_thickness_expr: None,
                 priority: 0,
+                corners: Default::default(),
+                corner_size: 0.0,
             });
         }
         RoleTag::MechanicalLayer => entity.mechanical = Some(Default::default()),
