@@ -74,6 +74,7 @@ mod tests {
             base_dir: None,
             fold: Default::default(),
             classes: Vec::new(),
+            cross_refs: Default::default(),
         })
     }
 

@@ -13,6 +13,7 @@ use thiserror::Error;
 pub mod assembly;
 pub mod board_report;
 pub mod bom;
+pub mod cross_ref;
 pub mod erc;
 mod expression;
 pub mod fab;
@@ -36,6 +37,7 @@ pub use bom::{
     BomOptions, BomOutput, BomRow, BomRule, BomRuleOptions, BomTable, BomValidationIssue,
     BomValidationReport, rollup,
 };
+pub use cross_ref::{CrossRefTarget, PortCrossRefs, cross_ref_text};
 pub use erc::{
     ErcReportError, ErcReportExporter, ErcReportFormat, ErcReportOptions, ErcReportOutput,
     ErcReportRow, ErcReportRuleSet, ErcReportSeverity, report as erc_report,

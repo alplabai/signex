@@ -224,8 +224,43 @@ the PDF layer groups, so a page with no link writes nothing new.
   run from its ascent to its descent (turned text gets the box round the
   turned run).
 - **Order.** Sheet symbols, then their entries, then parts, then ports and
-  global labels, then text links, so the smaller area wins where two overlap.
+  global labels, then text links, then cross-reference entries (see "Cross
+  references"), so the smaller area wins where two overlap.
 
 The headless and CLI command `export_schematic_pdf` writes the same PDF; its
 `links=false` operand turns them off. The dialog has no switch for them yet
 (no mockup row draws one).
+
+## Cross references
+
+Beside each Global label whose net continues on another page, the canvas,
+the print preview and the PDF print where it continues: `[2/B3, 4/A1]`, the
+page number and frame zone of each partner (#1273).
+
+- A partner is another Global label on the same net of the stitched project
+  (`signex_net::NetIndex::port_cross_refs`), printed on another page. A
+  label on the same page is not a partner. Hierarchical labels, sheet
+  entries and power ports carry no cross reference.
+- The page is the project's page number (#1081), the one the title block
+  prints, so a sheet placed twice is two pages and each copy lists the
+  other.
+- The zone is the partner's frame zone, row letter then column number, on
+  the standard frame with the partner sheet's own zone counts. A partner
+  page that draws no zones prints the page number alone. Two partners in
+  the same zone of one page print once.
+- Entries are ordered by page, then left to right.
+- The text sits past the far end of the label's flag, on the side the flag
+  points to, in the frame's regular face and ink, at 0.8 of the label's
+  size.
+- In the PDF each entry is a link to its page, landing 15 mm above and left
+  of the partner label, written by the rules of "Links": in the page's one
+  `/Annots` array after its other links, and none with `links: false` (the
+  text still prints). An entry whose page is not in the export is printed
+  but not linked.
+- A loose sheet is one page, so its labels have none.
+- The canvas shows the index it has until the rebuild an edit asked for
+  lands; the sheet in view asks for one when it has a Global label.
+
+`query_cross_references document=<sheet>` answers the same table for an
+open sheet: each Global label with, per placement, the printed text and its
+targets (page, zone, position).

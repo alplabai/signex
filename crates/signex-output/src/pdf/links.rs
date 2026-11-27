@@ -249,8 +249,8 @@ impl<'a> LinkPages<'a> {
 }
 
 /// Every page's links, bottom to top: the sheet's own, then the text links
-/// its content drew (taken out of `contents`). None at all with
-/// `opts.links` off.
+/// its content drew (taken out of `contents`), then the entries of its
+/// cross references (#1273). None at all with `opts.links` off.
 pub(crate) fn page_links(
     ctx: &ExportContext,
     opts: &PdfOptions,
@@ -262,12 +262,15 @@ pub(crate) fn page_links(
         return contents.iter().map(|_| Vec::new()).collect();
     }
     let pages = LinkPages::new(ctx, opts, sheet_indices, page_mm);
+    let mut cross_refs =
+        super::cross_ref::page_links(ctx, opts, sheet_indices, page_mm.0, page_mm.1).into_iter();
     contents
         .iter_mut()
         .enumerate()
         .map(|(idx, content)| {
             let mut links = pages.sheet_links(idx);
             links.append(&mut content.links);
+            links.extend(cross_refs.next().unwrap_or_default());
             links
         })
         .collect()

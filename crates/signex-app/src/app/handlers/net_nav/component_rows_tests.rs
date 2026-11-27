@@ -74,6 +74,7 @@ fn data() -> ProjectNetData {
         base_dir: Some(dir.to_path_buf()),
         fold: Default::default(),
         classes: Vec::new(),
+        cross_refs: Default::default(),
     }
 }
 

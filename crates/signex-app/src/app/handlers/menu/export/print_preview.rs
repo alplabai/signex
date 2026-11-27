@@ -376,6 +376,11 @@ impl Signex {
         pdf_opts.net_class_styles =
             super::class_styles::export_class_styles(&self.document_state, &source, &ctx);
         pdf_opts.schematic_defaults = self.document_state.schematic_defaults_for(&source);
+        pdf_opts.port_cross_refs = issues
+            .sheet_numbering
+            .as_ref()
+            .map(|numbering| numbering.cross_refs().clone())
+            .unwrap_or_default();
         // Re-seed the picker from the freshly built context. `sheet_files` was
         // captured once at modal open; if the active document changed while the
         // preview was up, the stale list names paths no longer in `ctx` and the

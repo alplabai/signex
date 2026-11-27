@@ -44,6 +44,10 @@ one board. Rules in [CLI.md](CLI.md), "Checks on demand".
 [baseline=<run>]` runs the project's requirements list as checks and
 answers in the same shape; rules in [CLI.md](CLI.md), "Requirement
 checks".
+`query_cross_references document=<sheet>` lists each Global label of an
+open sheet with the pages and frame zones its net continues on, the
+`[2/B3]` text the canvas and the PDF print beside it; it answers once the
+project's net index is current.
 `measure_board`, `query_board_nets` and `find_similar_items` are board
 queries: a distance on one board, point to point or edge to edge between
 two items; each net's routed length, members and routed state; and the
@@ -169,6 +173,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `project_set_requirement` | Set a field of a project requirement | design | — | — |
 | `project_set_version_control` | Turn commit on save on or off for the project | design | — | — |
 | `project_settings` | Read the settings of the project | design | — | — |
+| `query_cross_references` | Query off-sheet cross references | file | — | — |
 | `query_pins` | Query pins | file | — | — |
 | `read_document` | Read document | file | — | — |
 | `redo` | Redo | edit | `Mod+Shift+Z` (macOS), `Ctrl+Shift+Z`, `Ctrl+Y` | `Ctrl+Shift+Z`, `Mod+Shift+Z` (macOS), `Ctrl+Y` |

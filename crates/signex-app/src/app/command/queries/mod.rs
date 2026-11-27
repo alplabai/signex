@@ -8,7 +8,9 @@
 //! rule profile library, read off the update loop first), and the board
 //! queries `measure_board`, `query_board_nets` and `find_similar_items`
 //! (#2403), `board_panel` (#2410, `app::board_panel`), and the Project tab's
-//! `project_settings` (#1689-#1693, `app::project_tab`). Each
+//! `project_settings` (#1689-#1693, `app::project_tab`), and
+//! `query_cross_references` (#1273), answered once the project's net index
+//! is current. Each
 //! answers with data through [`CommandOutcome::Answered`], never a bare
 //! `Ran`, and reads only the documents (engines, boards, editors, projects,
 //! the library): no active tab, window, selection or panel is looked at, and
@@ -24,6 +26,7 @@ mod check_erc;
 mod check_requirements;
 mod check_run;
 pub use check_run::CheckFinished;
+mod cross_refs;
 mod documents;
 mod elements;
 mod find;
@@ -49,6 +52,7 @@ const QUERY_IDS: &[&str] = &[
     "find_items",
     "read_document",
     "query_pins",
+    "query_cross_references",
     "check_erc",
     "check_drc",
     "check_requirements",
@@ -127,6 +131,8 @@ impl Signex {
             "check_erc" => return Some(self.check_erc(command, args)),
             "check_drc" => return Some(self.check_drc(command, args)),
             "check_requirements" => return Some(self.check_requirements(command, args)),
+            // Waits for the project's net index when it is not current.
+            "query_cross_references" => return Some(self.query_cross_references(command, args)),
             // The Rules manager's reads (#2398).
             "rules_list" | "rules_get" | "rules_effective" | "rules_explain"
             | "rules_conflicts" => {

@@ -115,6 +115,7 @@ pub(crate) use state::volume_case::probe_directory_case;
 // The Library dialogs' window-size tests name the modal they open.
 #[cfg(test)]
 pub(crate) use state::ModalId;
+pub(crate) mod cross_refs;
 #[cfg(test)]
 mod draft_save_point_tests;
 pub(crate) mod stitched_netlist;

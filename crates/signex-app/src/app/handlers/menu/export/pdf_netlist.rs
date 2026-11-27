@@ -70,6 +70,11 @@ impl Signex {
         options.net_class_styles =
             super::class_styles::export_class_styles(&self.document_state, &source, &ctx);
         options.schematic_defaults = self.document_state.schematic_defaults_for(&source);
+        options.port_cross_refs = issues
+            .sheet_numbering
+            .as_ref()
+            .map(|numbering| numbering.cross_refs().clone())
+            .unwrap_or_default();
         // Human-consumed deliverable: a partial PDF beats a refusal — the
         // user may well be printing or reviewing mid-refactor with a child
         // file genuinely absent from disk. So this degrades rather than

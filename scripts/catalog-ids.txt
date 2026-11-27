@@ -290,6 +290,7 @@ project_set_requirement
 project_set_version_control
 project_settings
 query_board_nets
+query_cross_references
 query_pins
 read_document
 reannotate_board

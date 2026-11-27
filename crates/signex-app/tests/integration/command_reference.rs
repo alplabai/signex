@@ -135,6 +135,10 @@ fn render() -> String {
          [baseline=<run>]` runs the project's requirements list as checks and\n\
          answers in the same shape; rules in [CLI.md](CLI.md), \"Requirement\n\
          checks\".\n\
+         `query_cross_references document=<sheet>` lists each Global label of an\n\
+         open sheet with the pages and frame zones its net continues on, the\n\
+         `[2/B3]` text the canvas and the PDF print beside it; it answers once the\n\
+         project's net index is current.\n\
          `measure_board`, `query_board_nets` and `find_similar_items` are board\n\
          queries: a distance on one board, point to point or edge to edge between\n\
          two items; each net's routed length, members and routed state; and the\n\

@@ -30,6 +30,7 @@ use crate::{ExportContext, Exporter, SubstitutionContext};
 pub mod board;
 mod bookmarks;
 mod colour;
+pub(crate) mod cross_ref;
 mod embed;
 mod font;
 pub(crate) mod frame;
@@ -183,6 +184,10 @@ pub struct PdfOptions {
     /// The project's resolved defaults for unset widths and sizes (#2026),
     /// the same value the canvas draws with. Built-in by default.
     pub schematic_defaults: signex_types::schematic::SchematicDefaults,
+    /// Off-sheet cross references beside Global labels (#1273), derived by
+    /// the caller from the stitched project; each entry is a link to its
+    /// page. Empty (the default) prints none.
+    pub port_cross_refs: crate::cross_ref::PortCrossRefs,
 }
 
 /// How the part bookmarks are grouped.
@@ -302,6 +307,7 @@ impl Default for PdfOptions {
             palette: SchematicPalette::classic(),
             net_class_styles: std::collections::HashMap::new(),
             schematic_defaults: Default::default(),
+            port_cross_refs: Default::default(),
         }
     }
 }
@@ -430,7 +436,8 @@ impl Exporter for PdfExporter {
             .collect::<Result<Vec<_>, _>>()?;
         let embedded = write_fonts(&mut pdf, &fonts, font_base)?;
 
-        // Link annotations (#1298), numbered after the layer groups.
+        // Link annotations (#1298) and the cross-reference entries (#1273),
+        // one `/Annots` array per page, numbered after the layer groups.
         let page_links = links::page_links(
             ctx,
             opts,
@@ -496,6 +503,8 @@ impl Exporter for PdfExporter {
 }
 
 mod content;
+#[cfg(test)]
+mod cross_ref_tests;
 #[cfg(test)]
 mod glyph_height_tests;
 #[cfg(test)]

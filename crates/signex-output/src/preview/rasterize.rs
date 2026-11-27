@@ -68,6 +68,11 @@ pub fn rasterize_page(
         .extend(crate::pdf::frame::sheet_frame_elements(
             sheet, &opts.pdf, ctx, page_w_mm, page_h_mm, px_per_mm,
         ));
+    svg_ctx
+        .elements
+        .extend(crate::pdf::cross_ref::cross_ref_elements(
+            sheet, &opts.pdf, page_w_mm, page_h_mm, px_per_mm,
+        ));
     let rgba =
         svg_ctx.rasterize_rgba_with_colour_mode(page_w_px, page_h_px, opts.pdf.colour_mode)?;
     Some(PreviewPage {

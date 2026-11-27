@@ -48,6 +48,12 @@ pub(super) fn build_page_content(
         PdfLayer::TitleBlockAndBorder,
         frame_start..svg_ctx.elements.len(),
     );
+    // Cross references beside Global labels (#1273), in no layer.
+    svg_ctx
+        .elements
+        .extend(super::cross_ref::cross_ref_elements(
+            sheet, opts, page_w_mm, page_h_mm, MM_TO_PT,
+        ));
 
     // Set default colour for all drawings.
     let (r, g, b) = colour_map.map_stroke_bw(0.0, 0.0, 0.0);
