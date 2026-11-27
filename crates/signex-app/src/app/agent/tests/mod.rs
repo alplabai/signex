@@ -16,6 +16,7 @@ mod journal;
 mod layout_plan;
 #[cfg(unix)]
 mod live;
+mod live_drawing_edit;
 mod net_class_membership;
 mod opened;
 mod opened_deferred;
