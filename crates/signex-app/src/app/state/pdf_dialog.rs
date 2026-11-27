@@ -102,6 +102,8 @@ pub struct WatermarkDraft {
     pub opacity_input: String,
     /// The Angle field as typed.
     pub angle_input: String,
+    /// The Colour field as typed (#2609).
+    pub colour_input: String,
     /// The project revision, read by the handler from the export metadata.
     pub revision: String,
     /// The export date (`YYYY-MM-DD`), taken by the handler, never by a view.
@@ -115,6 +117,7 @@ impl Default for WatermarkDraft {
             is_on: false,
             opacity_input: settings.opacity_percent.to_string(),
             angle_input: angle_text(settings.angle_deg),
+            colour_input: colour_hex(settings.colour_rgb),
             settings,
             with_revision: false,
             custom_text: String::new(),
@@ -183,6 +186,22 @@ impl WatermarkDraft {
             .find(|&preset| f64::from(preset) == self.settings.angle_deg)
     }
 
+    /// The Colour field (#2609). Text that is not six hex digits (`#`
+    /// optional) is kept as typed and changes nothing.
+    pub fn set_colour(&mut self, text: String) {
+        if let Some(rgb) = crate::panels::parse_typed_hex(&text) {
+            self.settings.colour_rgb = rgb;
+        }
+        self.colour_input = text;
+    }
+
+    /// A quick swatch was picked, or a remembered colour restored: the field
+    /// shows its code.
+    pub fn pick_colour(&mut self, rgb: [u8; 3]) {
+        self.settings.colour_rgb = rgb;
+        self.colour_input = colour_hex(rgb);
+    }
+
     /// The line printed under the text, such as "Rev B · 2026-11-19"; `None`
     /// while the box is clear or there is neither a revision nor a date.
     /// Fixed English, never the UI language: it is PDF text.
@@ -205,15 +224,34 @@ impl WatermarkDraft {
 /// The angles of the 0 / 45 / 90 switch.
 pub const ANGLE_PRESETS: [i32; 3] = [0, 45, 90];
 
+/// The watermark colour's quick swatches (#2609): the default red, a neutral
+/// grey that prints well in Greyscale, black, and white for dark paper.
+pub const WATERMARK_SWATCHES: [[u8; 3]; 4] = [
+    [0xC0, 0x39, 0x2B],
+    [0x80, 0x80, 0x80],
+    [0x00, 0x00, 0x00],
+    [0xFF, 0xFF, 0xFF],
+];
+
+/// A colour as the dialog shows it: `#RRGGBB`, upper case. A colour code is
+/// design data, the same in every language.
+pub fn colour_hex([r, g, b]: [u8; 3]) -> String {
+    format!("#{r:02X}{g:02X}{b:02X}")
+}
+
 /// Largest angle the Angle field takes, either way round.
 const MAX_ANGLE_DEG: f64 = 360.0;
 
-fn parse_percent(text: &str) -> Option<u8> {
+/// The Opacity field's rule, which `export_schematic_pdf` shares: a whole
+/// percent from 0 to 100, `%` optional.
+pub(crate) fn parse_percent(text: &str) -> Option<u8> {
     let digits = text.trim().trim_end_matches('%').trim();
     digits.parse::<u8>().ok().filter(|p| *p <= 100)
 }
 
-fn parse_angle(text: &str) -> Option<f64> {
+/// The Angle field's rule, which `export_schematic_pdf` shares: a finite
+/// angle from -360 to 360 degrees, `°` optional.
+pub(crate) fn parse_angle(text: &str) -> Option<f64> {
     let digits = text.trim().trim_end_matches('°').trim();
     digits
         .parse::<f64>()
@@ -410,6 +448,31 @@ mod tests {
             draft.set_opacity(bad.into());
             assert_eq!(draft.settings.opacity_percent, 35, "{bad:?}");
         }
+    }
+
+    #[test]
+    fn the_colour_starts_as_the_default_red_and_takes_typed_codes() {
+        let mut draft = WatermarkDraft::default();
+        assert_eq!(draft.settings.colour_rgb, Watermark::default().colour_rgb);
+        assert_eq!(draft.colour_input, "#C0392B");
+        assert_eq!(WATERMARK_SWATCHES[0], Watermark::default().colour_rgb);
+        draft.set_colour("2b5fc0".into());
+        assert_eq!(draft.settings.colour_rgb, [0x2B, 0x5F, 0xC0]);
+        assert_eq!(draft.colour_input, "2b5fc0", "kept as typed");
+        for bad in ["", "#12345", "#GGGGGG", "#11223344", "red"] {
+            draft.set_colour(bad.into());
+            assert_eq!(draft.settings.colour_rgb, [0x2B, 0x5F, 0xC0], "{bad:?}");
+            assert_eq!(draft.colour_input, bad);
+        }
+        draft.pick_colour([0xFF, 0xFF, 0xFF]);
+        assert_eq!(draft.colour_input, "#FFFFFF");
+        draft.is_on = true;
+        let printed = draft.output().expect("on");
+        assert_eq!(
+            printed.colour_rgb,
+            [0xFF, 0xFF, 0xFF],
+            "the export prints it"
+        );
     }
 
     #[test]

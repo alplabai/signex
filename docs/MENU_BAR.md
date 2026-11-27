@@ -463,8 +463,10 @@ Watermark, PDF Layers and Bookmarks (#1298) carry a NEW pill on their
 headings (mockup row 168). "Print a watermark" and "Write PDF layers" are
 toggle switches heading their sections. "Print a watermark" is off by
 default; on, it prints DRAFT, CONFIDENTIAL or a custom text at the chosen
-opacity and angle (0, 45, 90 or typed), in a fixed red (#C0392B, shown as a
-swatch; the dialog has no colour picker), on every page or the first only,
+opacity and angle (0, 45, 90 or typed), in the chosen colour (#2609: four
+quick swatches, the default red #C0392B, a neutral grey, black and white,
+then a field for any `#RRGGBB` code; the colour is remembered for the
+document with its page setup, for the session), on every page or the first only,
 optionally with a "Rev · date" line in English (the revision from the title
 block, the date of the export). The page preview draws it where the PDF
 prints it; switched off, its settings are kept for when it is on again.
@@ -476,7 +478,12 @@ watermark prints. Bookmarks: one per sheet, one per part (grouped by sheet or
 A–Z) and one per net (the nets information the PDF has always carried; it is
 no longer also under Bookmarks and Nets). Part bookmarks follow "One bookmark
 per part" only; Bookmarks and Nets has no Include Component Parameters box
-any more, because the exporter writes no parameter rows yet.
+any more, because the exporter writes no parameter rows yet. The PDF carries
+links (#1298): ports, sheet symbols, global labels, web datasheets and text
+links, as set out in `PDF_EXPORT.md`, "Links"; the dialog has no switch for
+them. The palette names the sheet export `export_schematic_pdf`; headless it
+writes the named sheet's pages with the watermark and links its operands ask
+for.
 
 On a board (#2402) both rows are live and open Board Print / PDF instead: the
 layer sets, one page per set or one composite page, the bottom side mirrored,

@@ -15,6 +15,10 @@ pub enum PdfOptionMsg {
     /// The watermark angle field or the 0 / 45 / 90 switch changed
     /// (degrees, as text).
     WatermarkAngleChanged(String),
+    /// The watermark Colour field was edited (#2609, `#RRGGBB` as text).
+    WatermarkColourChanged(String),
+    /// A watermark colour swatch was picked (#2609).
+    WatermarkColourPicked([u8; 3]),
     /// All pages or the first only was picked for the watermark.
     WatermarkPagesPicked(signex_output::WatermarkPages),
     /// "Add date and revision under the text" was ticked or cleared.

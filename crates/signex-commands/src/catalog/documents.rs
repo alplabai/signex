@@ -1,8 +1,26 @@
 //! Document commands: create, open, save, revert, close and print a
 //! document or project, plus the project options and report dialogs.
 
+use super::operands::{Operand, OperandKind, optional, required};
 use super::{CommandFlags, CommandGroup, CommandMetadata, DocumentKind, Enablement, operands};
 use signex_i18n_ids::{command_ids, menu_ids};
+
+/// A schematic printed to PDF (#1298, #2609): which sheet and the file; the
+/// rest defaults as Export PDF opens on the sheet. `watermark` is `draft`,
+/// `confidential` or the text to print; the other `watermark_*` operands
+/// style it (`watermark_pages` is `all` or `first`). `links=false` writes no
+/// link annotations.
+const SCHEMATIC_PDF: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("path", OperandKind::Path),
+    optional("watermark", OperandKind::Text),
+    optional("watermark_color", OperandKind::Color),
+    optional("watermark_opacity", OperandKind::Text),
+    optional("watermark_angle", OperandKind::Text),
+    optional("watermark_pages", OperandKind::Text),
+    optional("watermark_revision", OperandKind::Bool),
+    optional("links", OperandKind::Bool),
+];
 
 pub(super) const DOCUMENTS: &[CommandMetadata] = &[
     CommandMetadata {
@@ -257,6 +275,19 @@ pub(super) const DOCUMENTS: &[CommandMetadata] = &[
         enable: Enablement::RequiresDocument(DocumentKind::Pcb),
         flags: CommandFlags::NONE,
         operands: super::operands::BOARD_PDF,
+        ..CommandMetadata::DEFAULT
+    },
+    // #1298, #2609: Export PDF on a sheet (File > Export > PDF opens it too);
+    // headless it writes `document`'s pages to `path`. No default key.
+    CommandMetadata {
+        id: "export_schematic_pdf",
+        category: "reports",
+        label: command_ids::CMD_EXPORT_SCHEMATIC_PDF,
+        menu_label: Some(command_ids::CMD_MENU_EXPORT_SCHEMATIC_PDF),
+        group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::NONE,
+        operands: SCHEMATIC_PDF,
         ..CommandMetadata::DEFAULT
     },
     // #2486: the assembly drawings as SVG files in a folder the person

@@ -372,6 +372,8 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "board_report_components" => board_report(signex_output::BoardReportKind::Components),
         "export_board_report" => Message::from(crate::app::BoardOutputMsg::CsvExportRequested),
         "export_board_pdf" => Message::from(crate::app::BoardOutputMsg::PrintRequested),
+        // #1298, #2609: Export PDF on the sheet in view, as File > Export > PDF.
+        "export_schematic_pdf" => Message::Export(crate::app::ExportMsg::PdfOpenDialog),
         // #2486: the assembly drawings as SVG; one drawing opens Board Print /
         // PDF on the assembly set of its `side`.
         "export_assembly_svg" => Message::from(crate::app::BoardOutputMsg::SvgExportRequested),
