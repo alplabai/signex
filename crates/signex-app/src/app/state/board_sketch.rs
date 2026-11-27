@@ -33,9 +33,13 @@ pub struct BoardSketchSession {
     pub board_path: PathBuf,
     /// The sketch editor over the working copy.
     pub editor: Box<FootprintDocument>,
-    /// Why the last commit was refused, shown in the mode's bar until the
-    /// next commit; rendered in the language of the moment it is shown.
+    /// Why the last commit was refused, kept until the next commit for a
+    /// held save's notice card; rendered in the language of the moment it
+    /// is shown.
     pub refusal: Option<signex_i18n::Translatable>,
+    /// The error toast of the last refusal (mockup row 110), until it is
+    /// dismissed or the next commit.
+    pub toast: Option<BoardSketchRefusalToast>,
     /// What a bake of the copy writes, while the bake preview is open: the
     /// Properties Bake panel shows it (mockup row 179).
     pub preview: Option<BoardBakePreview>,
@@ -81,6 +85,7 @@ impl BoardSketchSession {
             board_path: board_path.to_path_buf(),
             editor: Box::new(editor),
             refusal: None,
+            toast: None,
             preview: None,
             preview_error: None,
             dxf_dialog: None,
@@ -229,6 +234,51 @@ impl BoardSketchSession {
         self.editor.canvas_cache.clear();
         self.start = stored;
         self.refusal = None;
+        self.toast = None;
+    }
+}
+
+/// The error toast at the canvas's bottom left after a refused commit
+/// (mockup row 110): its sentence and, for a profile that is not closed,
+/// the place the link zooms to.
+#[derive(Debug, Clone, PartialEq)]
+pub struct BoardSketchRefusalToast {
+    pub sentence: signex_i18n::Translatable,
+    pub gap: Option<RefusedGap>,
+}
+
+/// Where a refused profile is open, in sketch mm: the middle of the gap,
+/// and its width (`None` for an end nothing pairs).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct RefusedGap {
+    pub at: Point,
+    pub gap_mm: Option<f64>,
+}
+
+/// Least half-side of the box the gap link frames, mm.
+const GAP_FRAME_MIN_HALF_MM: f64 = 10.0;
+
+impl RefusedGap {
+    /// The box the gap link zooms to, `(min_x, min_y, max_x, max_y)` mm:
+    /// centred on the gap, wide enough to show both its ends with as much
+    /// again around them, and never under 20 mm a side.
+    pub fn frame(&self) -> (f64, f64, f64, f64) {
+        let half = self.gap_mm.unwrap_or(0.0).max(GAP_FRAME_MIN_HALF_MM);
+        let Point { x, y } = self.at;
+        (x - half, y - half, x + half, y + half)
+    }
+
+    /// The toast link's label: a gap between two ends, or one end nothing
+    /// pairs, at two decimals as Outline checks gives the place.
+    pub fn place_label(&self) -> signex_i18n::Translatable {
+        use crate::library::editor::footprint::format_check_mm as mm;
+        let id = match self.gap_mm {
+            Some(_) => signex_i18n::ids::BOARD_SKETCH_REFUSED_PLACE,
+            None => signex_i18n::ids::BOARD_SKETCH_REFUSED_PLACE_END,
+        };
+        signex_i18n::Translatable::new(id)
+            .arg("x", mm(self.at.x, 2))
+            .arg("y", mm(self.at.y, 2))
     }
 }
 

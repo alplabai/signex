@@ -12,6 +12,7 @@ pub(crate) mod board_3d;
 mod board_3d_screenshot;
 pub(crate) mod board_net_classes;
 mod board_sketch;
+mod board_sketch_refusal;
 pub mod canvas;
 pub mod clipboard_workflows;
 pub(crate) mod command_log;

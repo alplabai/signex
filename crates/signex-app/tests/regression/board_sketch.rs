@@ -450,31 +450,35 @@ fn a_refused_bake_keeps_the_board_and_the_mode_and_says_why() {
     );
     assert!(in_sketch(&f), "a refused commit keeps the mode on");
     assert_eq!(snapshot(&f), before, "the board is unchanged");
-    let notice = f
-        .app
-        .document_state
-        .error_notice
-        .as_ref()
-        .expect("the notice card says why");
+    // Mockup row 110 (#3002): an error toast says why, not a modal card,
+    // and names where the outline is open, not an edge id.
     assert!(
-        notice.detail.render_en_us().contains("closed profile"),
-        "{}",
-        notice.detail.render_en_us()
+        f.app.document_state.error_notice.is_none(),
+        "no notice card for a refusal on the board in view"
     );
     let session = f.app.interaction_state.board_sketch.as_ref().unwrap();
-    assert_eq!(
-        session
-            .refusal
-            .as_ref()
-            .map(RenderTranslatable::render_en_us),
-        Some(notice.detail.render_en_us())
+    let toast = session.toast.as_ref().expect("the error toast says why");
+    assert!(
+        toast
+            .sentence
+            .render_en_us()
+            .contains("the outline is not closed"),
+        "{}",
+        toast.sentence.render_en_us()
     );
-    // The bar holds the message itself, so a language switch re-renders it.
-    assert_eq!(session.refusal.as_ref(), Some(&notice.detail));
+    assert!(toast.gap.is_some(), "the toast places the gap");
+    // The session holds the message itself, so a language switch re-renders it.
+    let why = session
+        .refusal
+        .as_ref()
+        .map(RenderTranslatable::render_en_us)
+        .expect("the refusal");
+    assert!(why.contains("is not closed at ("), "{why}");
+    assert!(!why.contains(&line.to_string()), "no edge id: {why}");
     assert!(
         signex_app::diagnostics::recent_entries()
             .iter()
-            .any(|e| e.message.contains(&notice.detail.render_en_us())),
+            .any(|e| e.message.contains(&why)),
         "Messages says why too"
     );
 

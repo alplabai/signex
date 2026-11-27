@@ -8,9 +8,22 @@ board-sketch-tooltip = Board Sketch: draw the board outline, keepouts, cutouts a
 board-sketch-bake-tooltip = Apply to board
 # Messages panel line when the mode starts.
 board-sketch-entered = Board sketch mode: draw with the sketch tools. Bake applies the changes to the board; Discard changes or Esc drops them, asking first.
-# Notice and Messages line when the board does not take the sketch; the
-# board is unchanged and the mode stays on.
+# Error toast and Messages line when the board does not take the sketch;
+# the board is unchanged and the mode stays on.
 board-sketch-refused = The sketch was not applied to the board: { $reason }
+# The same, for a profile that is not closed (mockup row 110): where it is
+# open, $x and $y in millimetres as Outline checks gives them. The outline,
+# or any other profile (a cutout, keepout or pour).
+board-sketch-refused-outline-open = The sketch was not applied to the board: the outline is not closed at ({ $x }, { $y }) mm.
+board-sketch-refused-profile-open = The sketch was not applied to the board: a profile is not closed at ({ $x }, { $y }) mm.
+# The error toast's sentence for those refusals; the place follows it as a
+# link that zooms the canvas to it.
+board-sketch-refused-outline-not-closed = The sketch was not applied to the board: the outline is not closed.
+board-sketch-refused-profile-not-closed = The sketch was not applied to the board: a profile is not closed.
+board-sketch-refused-place = Gap at ({ $x }, { $y }) mm
+board-sketch-refused-place-end = Open end at ({ $x }, { $y }) mm
+board-sketch-refused-place-tooltip = Zoom to the gap
+board-sketch-refused-dismiss = Dismiss
 # Messages line when a board closes, or is read again from disk, while its
 # sketch has changes that were never applied.
 board-sketch-dropped = The board sketch changes of { $board } were not applied and are discarded: the board was closed or read again from disk.

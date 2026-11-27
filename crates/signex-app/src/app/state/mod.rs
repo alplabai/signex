@@ -75,7 +75,7 @@ pub use crate::app::core::document_times::DocumentTimes;
 pub use agent_edits::AgentEdits;
 pub use board_3d::{Board3dSession, BuiltScene, CaptureResult, MatteBackdrop};
 pub use board_net_classes::BoardNetClassPanelState;
-pub use board_sketch::BoardSketchSession;
+pub use board_sketch::{BoardSketchRefusalToast, BoardSketchSession, RefusedGap};
 pub use board_sketch_dxf::{
     DXF_LAYER_TARGETS, DxfImportMode, DxfLayerTarget, SketchDxfDialog, SketchDxfMsg,
     SketchDxfProblem, SketchDxfResult, SketchDxfStep,

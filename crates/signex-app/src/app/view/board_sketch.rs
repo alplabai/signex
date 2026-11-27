@@ -4,19 +4,18 @@
 //! The PCB Active Bar's Board Sketch button lives in `pcb_active_bar`.
 
 use iced::alignment::{Horizontal, Vertical};
-use iced::widget::{container, stack};
+use iced::widget::{column, container, stack};
 use iced::{Element, Length, Widget as _};
 use signex_i18n::{ids, t};
-use signex_widgets::{text, theme_ext};
 
 use crate::app::state::BoardSketchSession;
 use crate::app::{BoardSketchMsg, Message, PcbMsg, Signex};
 use crate::library::editor::standalone::sketch_exit::{
     MODE_BAR_INSET, ModeBarLook, ModeBarMessages, mode_bar,
 };
-use crate::styles::TypeScale;
+use crate::styles::Spacing;
 
-const TS: TypeScale = TypeScale::DEFAULT;
+const SP: Spacing = Spacing::DEFAULT;
 
 impl Signex {
     /// The main window's body while its board is in sketch mode; `None`
@@ -58,23 +57,16 @@ impl Signex {
         Some(layers.boxed())
     }
 
-    /// The mode bar: the mode's name, the last refusal, then Bake preview,
-    /// Discard changes and Bake ("Apply to board"), which commits one board
-    /// command and leaves.
+    /// The mode bar: the mode's name, then Bake preview, Discard changes and
+    /// Bake ("Apply to board"), which commits one board command and leaves.
+    /// The last refusal is the error toast just above it (mockup row 110).
     fn board_sketch_bar<'a>(&'a self, session: &'a BoardSketchSession) -> Element<'a, Message> {
         let i18n = &self.ui_state.i18n;
         let tokens = &self.document_state.panel_ctx.tokens;
         let sketch = |event| Message::Pcb(PcbMsg::Sketch(event));
-        let status = session.refusal.as_ref().map(|refusal| {
-            use signex_i18n::RenderTranslatable as _;
-            text(refusal.localized(i18n))
-                .size(TS.caption)
-                .color(theme_ext::error_color(tokens))
-                .boxed()
-        });
         let look = ModeBarLook {
             title: t!(i18n, ids::BOARD_SKETCH_TITLE),
-            status,
+            status: None,
             bake_tooltip: t!(i18n, ids::BOARD_SKETCH_BAKE_TOOLTIP),
         };
         let msgs = ModeBarMessages {
@@ -87,7 +79,12 @@ impl Signex {
         // The bake preview is the Properties Bake panel (mockup row 179), not
         // a card over the canvas; this bar's Bake preview button closes it.
         let exit = &session.editor.state.sketch_exit;
-        container(mode_bar(look, exit, msgs, tokens, i18n))
+        let mut layers = column![].spacing(SP.m);
+        if let Some(toast) = session.toast.as_ref() {
+            layers = layers.push(toast::refusal_toast(toast, tokens, i18n));
+        }
+        layers = layers.push(mode_bar(look, exit, msgs, tokens, i18n));
+        container(layers)
             .padding(MODE_BAR_INSET)
             .width(Length::Fill)
             .height(Length::Fill)
@@ -96,6 +93,8 @@ impl Signex {
             .boxed()
     }
 }
+
+mod toast;
 
 #[cfg(test)]
 mod bake_panel_tests;

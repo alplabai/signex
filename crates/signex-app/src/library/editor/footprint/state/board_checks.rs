@@ -92,7 +92,22 @@ impl FootprintEditorState {
     /// this needs no solve: without one that knows every point, the ends are
     /// placed at the sketch's stored coordinates.
     pub fn first_open_end(&self, sketch: Option<&SketchData>) -> Option<OpenEnd> {
-        let sketch = sketch?;
+        self.placed_open_ends(sketch?).into_iter().next()
+    }
+
+    /// The open end of `sketch` on the profile edge `edge`, placed as
+    /// [`Self::first_open_end`] places it: where a bake refused an open
+    /// profile through that edge (mockup row 110). `None` when that edge
+    /// has no open end.
+    pub fn open_end_through(&self, sketch: &SketchData, edge: SketchEntityId) -> Option<OpenEnd> {
+        self.placed_open_ends(sketch)
+            .into_iter()
+            .find(|end| end.edges.contains(&edge))
+    }
+
+    /// Every open profile end of `sketch`, at the last solve when it knows
+    /// every point, else at the stored coordinates.
+    fn placed_open_ends(&self, sketch: &SketchData) -> Vec<OpenEnd> {
         let stored;
         let positions = match self
             .last_solve
@@ -106,8 +121,6 @@ impl FootprintEditorState {
             }
         };
         open_ends(sketch, positions, bakes_a_profile)
-            .into_iter()
-            .next()
     }
 }
 
