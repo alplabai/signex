@@ -60,7 +60,7 @@ pub fn offered_columns<'r>(
         .into_iter()
         .flat_map(|row| row.parameters.keys())
         .map(String::as_str)
-        .filter(|name| *name != DESIGNATOR_PREFIX_PARAM && !covered(*name))
+        .filter(|name| *name != DESIGNATOR_PREFIX_PARAM && !covered(name))
         .collect();
     out.extend(free.into_iter().map(ColumnKey::param));
     out.extend(ColumnKey::ROW_FIELDS.into_iter().skip(1));
