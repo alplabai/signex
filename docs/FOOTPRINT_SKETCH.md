@@ -541,7 +541,11 @@ nothing is selected.
   first; with Mirror line focused, a click takes any Line; other clicks add
   or remove objects. Keep linked (on each time the card opens) keeps every
   copy symmetric to its source; off makes free copies. A selected pattern is
-  always mirrored live. OK writes one undo step and returns to Select;
+  always mirrored live, and takes the place of its source in the Objects:
+  the pattern's mirror already holds the source's image, so a pick of the
+  source is ignored while its pattern is an object. Selecting an entity
+  drops the selected pattern, so the card never takes one picked before the
+  current selection (#2859). OK writes one undo step and returns to Select;
   Cancel writes nothing. The ghost draws the line, the picks and the copies
   OK will write. Mirror is under "Needs a selection", so it is armed with
   something selected.

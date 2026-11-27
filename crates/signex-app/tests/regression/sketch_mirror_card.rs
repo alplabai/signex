@@ -270,9 +270,8 @@ fn ok_without_a_line_writes_nothing() {
     assert_eq!(objects, &vec![MirrorObject::Entity(d.line)]);
 }
 
-#[test]
-fn a_mirrored_pattern_stays_live_with_keep_linked_off() {
-    let mut d = drawing();
+/// A pad on the Line's first end and a two-long row of it; the row's id.
+fn pad_row(d: &mut Drawing) -> ArrayId {
     let pad = d.ends[0];
     d.sketch
         .entities
@@ -300,6 +299,13 @@ fn a_mirrored_pattern_stays_live_with_keep_linked_off() {
     };
     let row_id = row.id;
     d.sketch.arrays.push(row);
+    row_id
+}
+
+#[test]
+fn a_mirrored_pattern_stays_live_with_keep_linked_off() {
+    let mut d = drawing();
+    let row_id = pad_row(&mut d);
     let (mut app, path) = open("mirror-pattern-free", d.sketch);
     send(
         &mut app,
@@ -315,6 +321,52 @@ fn a_mirrored_pattern_stays_live_with_keep_linked_off() {
     assert_eq!(sk.pattern_mirrors.len(), 1, "a live mirror, not copies");
     assert_eq!(sk.pattern_mirrors[0].pattern, row_id);
     assert_eq!(sk.pattern_mirrors[0].line, d.centerline);
+}
+
+/// #2859 (decision 16): a glyph click selects the row and its source pad
+/// Point; Mirror armed next mirrors the row alone, with no bare copy of
+/// the source stacked on the mirrored first instance.
+#[test]
+fn a_pattern_picked_by_its_glyph_is_mirrored_without_its_source() {
+    let mut d = drawing();
+    let row_id = pad_row(&mut d);
+    let (mut app, path) = open("mirror-pattern-glyph", d.sketch);
+    editor_mut(&mut app, &path).state.active_tool = SketchTool::Select;
+    let glyph = SketchCanvasMsg::PatternSelected(Some(row_id));
+    send(&mut app, &path, FootprintEditorMsg::SketchCanvas(glyph));
+    assert_eq!(editor(&app, &path).state.selected_sketch, Some(d.ends[0]));
+    let entities = sketch(&app, &path).entities.len();
+
+    arm(&mut app, &path);
+    click(&mut app, &path, 0.05, 2.0);
+    assert_eq!(card(&app, &path).objects, vec![MirrorObject::Pattern(row_id)]);
+    answer(&mut app, &path, MirrorCardMsg::Confirmed);
+
+    let sk = sketch(&app, &path);
+    assert_eq!(sk.pattern_mirrors.len(), 1);
+    assert_eq!(sk.entities.len(), entities, "no copy of the source");
+}
+
+/// #2859 (decision 16): a pattern picked by its glyph and then left for
+/// another entity is not taken by the card.
+#[test]
+fn a_pattern_left_for_another_entity_is_not_mirrored() {
+    let mut d = drawing();
+    let row_id = pad_row(&mut d);
+    let (mut app, path) = open("mirror-pattern-stale", d.sketch);
+    editor_mut(&mut app, &path).state.active_tool = SketchTool::Select;
+    let glyph = SketchCanvasMsg::PatternSelected(Some(row_id));
+    send(&mut app, &path, FootprintEditorMsg::SketchCanvas(glyph));
+    let select = FootprintEditorMsg::SketchSelect {
+        id: Some(d.line),
+        shift: false,
+    };
+    send(&mut app, &path, select);
+
+    arm(&mut app, &path);
+    click(&mut app, &path, 0.05, 2.0);
+
+    assert_eq!(card(&app, &path).objects, vec![MirrorObject::Entity(d.line)]);
 }
 
 // ─── Board host ─────────────────────────────────────────────────────────────
