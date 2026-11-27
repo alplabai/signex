@@ -10,7 +10,7 @@ use signex_types::quantity::{Quantity, Unit, ValueStyle, format_quantity};
 
 use super::*;
 use crate::library::messages::LibraryMessage;
-use crate::library::state::{ComponentsRowStyle, LibraryState};
+use crate::library::state::LibraryState;
 use crate::panels::components_panel::look;
 use crate::panels::components_panel::tests::{fixture_row, library_with};
 
@@ -251,19 +251,14 @@ fn the_summary_line_lists_values_and_name_matches() {
     assert!(look::match_summary(&empty, &tokens, &i18n).is_none());
 }
 
-/// #2828: the search field spans the dock under Add and Previews, so its
+/// #2828: the search field spans the dock under the tool line, so its
 /// placeholder reads in full even in a narrow dock.
 #[test]
 fn the_search_field_spans_the_dock_and_shows_its_placeholder() {
     let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::GraphiteLight);
     let i18n = i18n();
     let dock = 300.0;
-    let header = look::header_row(
-        look::filter_field("", &tokens, &i18n),
-        ComponentsRowStyle::default(),
-        &tokens,
-        &i18n,
-    );
+    let header = look::filter_field("", &tokens, &i18n);
     let inputs =
         crate::layout_probe::lay_out_inputs::<LibraryMessage>(header, iced::Size::new(dock, 400.0));
     let [field] = inputs.as_slice() else {
@@ -288,4 +283,26 @@ fn the_search_field_spans_the_dock_and_shows_its_placeholder() {
         "the field takes the dock width: {}",
         field.bounds.width
     );
+}
+
+/// A bare number compares with the number a value displays, through the
+/// domain's `Quantity::displayed_number` and `approx_equal` (the search
+/// used its own copies before, #2785): the sign is part of it and the
+/// 0.5 % tolerance applies, so `-40` finds −40 °C, `40` does not, and
+/// `100.4` still finds 100 nF.
+#[test]
+fn a_bare_number_reads_the_displayed_number_with_its_sign() {
+    let row = part(
+        "IF-1",
+        &[
+            ("temp_min", -40.0, "degC"),
+            ("temp_max", 125.0, "degC"),
+            ("capacitance", 100e-9, "F"),
+        ],
+    );
+    assert!(matches(&row, "-40"));
+    assert!(!matches(&row, "40"));
+    assert!(matches(&row, "125"));
+    assert!(matches(&row, "100.4"));
+    assert!(!matches(&row, "101"));
 }

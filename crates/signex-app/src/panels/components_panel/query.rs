@@ -4,7 +4,7 @@
 //! A query is split into words and a part must match every word. A number
 //! with a prefix or unit (`100n`, `0.1u`, `0.1 µF`, `4k7`, `16V`) matches a
 //! measurement parameter of the same base value within
-//! [`EQUALS_RELATIVE_TOLERANCE`]; prefixes are case-sensitive (`m` milli,
+//! [`approx_equal`] (0.5 %); prefixes are case-sensitive (`m` milli,
 //! `M` mega) and a unit limits the match to that unit. Such a word also
 //! matches the part's names and description written exactly so. A bare
 //! number (`100`) matches any measurement that displays that number, in any
@@ -15,7 +15,7 @@ use std::collections::BTreeMap;
 
 use signex_i18n::I18n;
 use signex_library::ComponentRow;
-use signex_library::range_filter::EQUALS_RELATIVE_TOLERANCE;
+use signex_library::range_filter::approx_equal;
 use signex_types::quantity::{Quantity, SiPrefix, Unit, ValueStyle, format_quantity};
 
 /// A number with a prefix or unit, as a base value.
@@ -111,7 +111,7 @@ impl ValueWord {
 
     /// Whether `q` is this value, within the range filter's tolerance.
     pub(crate) fn equals(&self, q: &Quantity) -> bool {
-        self.same_unit(q) && near(q.base(), self.base)
+        self.same_unit(q) && approx_equal(q.base(), self.base)
     }
 }
 
@@ -153,7 +153,7 @@ impl SearchKeys {
         match &word.kind {
             WordKind::Value(v) => {
                 self.measurements.iter().any(|q| {
-                    v.unit.as_ref().is_none_or(|u| u == q.unit()) && near(q.base(), v.base)
+                    v.unit.as_ref().is_none_or(|u| u == q.unit()) && approx_equal(q.base(), v.base)
                 }) || self.written.contains(&word.text)
             }
             WordKind::Bare(n) => {
@@ -169,7 +169,7 @@ impl SearchKeys {
     pub(crate) fn displayed_hits(&self, number: f64) -> impl Iterator<Item = &Quantity> {
         self.measurements
             .iter()
-            .filter(move |q| displayed_number(q).is_some_and(|d| near(d, number)))
+            .filter(move |q| approx_equal(q.displayed_number(), number))
     }
 }
 
@@ -243,16 +243,6 @@ impl Ord for OrderedBase {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.0.total_cmp(&other.0)
     }
-}
-
-/// `=` within the range filter's tolerance; zero equals only zero.
-fn near(a: f64, b: f64) -> bool {
-    a == b || (a - b).abs() <= EQUALS_RELATIVE_TOLERANCE * a.abs().max(b.abs())
-}
-
-/// The number a measurement shows, without its prefix and unit.
-fn displayed_number(q: &Quantity) -> Option<f64> {
-    q.eng_parts().0.parse().ok()
 }
 
 /// The leading `[-]digits[.digits]` of `word` and the rest; `None` when it
