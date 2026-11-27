@@ -84,6 +84,7 @@ struct OpenOverlays {
     library_picker_open: bool,
     library_document_options_open: bool,
     library_updates_open: bool,
+    library_import_open: bool,
     library_primitive_picker_open: bool,
     close_library_confirm_open: bool,
     /// "Delete Symbol?" (mockup row 137): the active symbol editor's warning.
@@ -546,6 +547,11 @@ impl OpenOverlays {
             OverlayId::LibraryUpdates => self.library_updates_open.then(|| {
                 Message::Library(crate::library::messages::LibraryMessage::LibraryUpdatesCancel)
             }),
+            OverlayId::LibraryImport => self.library_import_open.then(|| {
+                Message::Library(crate::library::import_dialog::msg(
+                    crate::library::import_dialog::ImportDialogMsg::Closed,
+                ))
+            }),
         }
     }
 }
@@ -600,6 +606,7 @@ pub(crate) fn modal_overlay_id(modal: crate::app::state::ModalId) -> Option<Over
         ModalId::LibraryCreateOptions => Some(OverlayId::CreateOptions),
         ModalId::LibraryStockCopy => Some(OverlayId::StockCopy),
         ModalId::LibraryUpdates => Some(OverlayId::LibraryUpdates),
+        ModalId::LibraryImport => Some(OverlayId::LibraryImport),
         ModalId::LibraryCloseConfirm => Some(OverlayId::CloseLibraryConfirm),
         ModalId::LibraryDeleteConfirm => Some(OverlayId::DeleteConfirm),
         ModalId::LibraryRecovery => Some(OverlayId::LibraryRecovery),
@@ -624,29 +631,8 @@ impl Signex {
 
     /// What Esc does inside `modal`'s own detached window: exactly what
     /// Esc over that modal's in-window card would do, and nothing else
-    /// (#547).
-    ///
-    /// The ladder is deliberately NOT walked here. It ranks overlays by
-    /// where they paint **in the main window**, and none of that stack
-    /// covers a separate OS window — running it would let a dialog in
-    /// another window outrank the one the user is actually typing into.
-    /// So the answer is a single rung, looked up by id.
-    ///
-    /// `modal`'s own detachment is passed to `open_overlays` so its flag
-    /// reads open: the flag is normally forced false *because* the
-    /// in-window card is not painted, which is the right answer for an
-    /// Esc in the main window and the wrong one here.
-    ///
-    /// The Parameter Manager has no `OverlayId`: it has no in-window card,
-    /// it only ever opens as a detached window, so there is no painted
-    /// stack for it to rank in. It answers here directly, with its Close;
-    /// typed cells are already in the document, so nothing is lost.
-    ///
-    /// `None` means that modal has no Esc at all — either no `OverlayId`
-    /// (Move Selection, the net-colour palette) or an `OverlayId` whose
-    /// rung is `None` by design. Its in-window card ignores Esc too, so
-    /// this stays consistent with it rather than inventing a dismissal
-    /// only the detached form has.
+    /// (#547). Why the ladder is not walked, and what `None` means: see
+    /// docs/DETACHED_MODALS.md, "Esc in a dialog's own window".
     pub(crate) fn detached_modal_escape_message(
         &self,
         modal: crate::app::state::ModalId,
@@ -819,6 +805,8 @@ impl Signex {
                 && !modal_detached(crate::app::state::ModalId::LibraryStockCopy),
             library_updates_open: self.library.library_updates.is_some()
                 && !modal_detached(crate::app::state::ModalId::LibraryUpdates),
+            library_import_open: self.library.import_dialog.is_some()
+                && !modal_detached(crate::app::state::ModalId::LibraryImport),
             library_primitive_picker_open: self.library.primitive_picker.is_some()
                 && !modal_detached(crate::app::state::ModalId::LibraryPrimitivePicker),
             close_library_confirm_open: self.library.close_library_confirm.is_some(),
@@ -1501,6 +1489,16 @@ mod tests {
             ))
         ));
         assert!(matches!(
+            only(|o| o.library_import_open = true),
+            Some(Message::Library(
+                crate::library::messages::LibraryMessage::Import(
+                    crate::library::messages::LibraryImportMsg::Dialog(
+                        crate::library::import_dialog::ImportDialogMsg::Closed
+                    )
+                )
+            ))
+        ));
+        assert!(matches!(
             only(|o| o.close_library_confirm_open = true),
             Some(Message::Library(
                 crate::library::messages::LibraryMessage::CloseLibraryConfirm(
@@ -2036,6 +2034,7 @@ mod tests {
             library_picker_open,
             library_document_options_open,
             library_updates_open,
+            library_import_open,
             library_primitive_picker_open,
             close_library_confirm_open,
             symbol_delete_open,
@@ -2150,6 +2149,7 @@ mod tests {
                 o.library_stock_copy_open = true
             }),
             ("library_updates_open", |o| o.library_updates_open = true),
+            ("library_import_open", |o| o.library_import_open = true),
             ("close_library_confirm_open", |o| {
                 o.close_library_confirm_open = true
             }),

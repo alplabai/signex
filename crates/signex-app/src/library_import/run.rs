@@ -11,8 +11,10 @@ use std::time::{Duration, Instant};
 use super::confine::{ConfineError, confine};
 use super::error::ImportError;
 use super::events::{ExitKind, ProgressEvent, StreamFold, Summary};
-use super::process::{Polled, Running};
+use super::output::{Held, claim_output};
+use super::process::{Polled, ProcessGroup, Running};
 use super::report::{ImportReport, read_report};
+use super::run_state::JobStage;
 use super::stream::Line;
 
 /// How long a run may go without an event before it is stopped (§3.1).
@@ -93,28 +95,25 @@ impl LibraryRunRequest {
         Ok(())
     }
 
-    /// The contract arguments, after `library`.
+    /// The contract arguments, after `library`. Every value is joined to
+    /// its option (`--db=<v>`), so a value starting with `-` is never read
+    /// as an option.
     pub fn args(&self) -> Vec<OsString> {
         let mut args: Vec<OsString> = vec!["library".into()];
         args.extend(self.inputs.iter().map(OsString::from));
-        args.push("--output".into());
-        args.push(self.output.clone().into());
+        args.push(joined("--output", self.output.as_os_str()));
         if let Some(name) = &self.name {
-            args.push("--name".into());
-            args.push(name.into());
+            args.push(joined("--name", name.as_ref()));
         }
         if let Some(db) = &self.db {
-            args.push("--db".into());
-            args.push(db.into());
+            args.push(joined("--db", db.as_ref()));
         }
         for dir in &self.search_paths {
-            args.push("--search-path".into());
-            args.push(dir.into());
+            args.push(joined("--search-path", dir.as_os_str()));
         }
-        args.push("--models".into());
         args.push(match self.models {
-            ModelsMode::Include => "include".into(),
-            ModelsMode::Skip => "skip".into(),
+            ModelsMode::Include => "--models=include".into(),
+            ModelsMode::Skip => "--models=skip".into(),
         });
         match self.mode {
             RunMode::Preview => args.push("--dry-run".into()),
@@ -124,6 +123,14 @@ impl LibraryRunRequest {
         args.push("--progress".into());
         args
     }
+}
+
+/// `--option=value`.
+fn joined(option: &str, value: &std::ffi::OsStr) -> OsString {
+    let mut arg = OsString::from(option);
+    arg.push("=");
+    arg.push(value);
+    arg
 }
 
 /// The timing rules of a run; tests shorten them.
@@ -189,11 +196,14 @@ pub struct RunFailure {
     /// The report, when the run got far enough to write one.
     pub report: Option<Box<ImportReport>>,
     pub stderr_tail: String,
-    /// The output folder this run created was removed.
+    /// Nothing the run wrote into the output folder is left: a folder it
+    /// created was removed, an empty one it adopted was emptied.
     pub removed_output: bool,
     /// For an update over a clean tree: whether the tree was put back to
     /// its last import.
     pub restored: Option<Result<(), String>>,
+    /// Refused before the converter started, so nothing on disk changed.
+    pub refused: bool,
 }
 
 impl RunFailure {
@@ -204,13 +214,23 @@ impl RunFailure {
             stderr_tail: String::new(),
             removed_output: false,
             restored: None,
+            refused: false,
+        }
+    }
+
+    /// A refusal before the converter started: nothing was written.
+    pub fn refused(error: ImportError) -> Self {
+        Self {
+            refused: true,
+            ..Self::new(error)
         }
     }
 }
 
 /// Run the converter's `library` command. `on_event` sees every progress
-/// event as it arrives. A folder this run created is removed when it fails,
-/// is cancelled or goes silent; a folder that existed before never is.
+/// event as it arrives. A new import or a dry run takes `--output`
+/// ([`claim_output`]) and, when it fails, is cancelled or goes silent,
+/// removes what it created there; an update's folder is never removed.
 pub fn run_library(
     command: &ConverterCommand,
     request: &LibraryRunRequest,
@@ -218,23 +238,37 @@ pub fn run_library(
     cancel: &AtomicBool,
     on_event: &mut dyn FnMut(&ProgressEvent),
 ) -> Result<RunOutcome, RunFailure> {
-    request.validate().map_err(RunFailure::new)?;
-    let created_output = !request.output.exists();
+    let group = ProcessGroup::default();
+    let stage = JobStage::default();
+    run_library_in(command, request, limits, cancel, &group, &stage, on_event)
+}
+
+/// [`run_library`], with the converter's process group published in
+/// `group` while it runs, and `stage` settling while a failed run removes
+/// what it wrote, so quit waits for that cleanup to end.
+pub fn run_library_in(
+    command: &ConverterCommand,
+    request: &LibraryRunRequest,
+    limits: RunLimits,
+    cancel: &AtomicBool,
+    group: &ProcessGroup,
+    stage: &JobStage,
+    on_event: &mut dyn FnMut(&ProgressEvent),
+) -> Result<RunOutcome, RunFailure> {
+    request.validate().map_err(RunFailure::refused)?;
+    let claimed = claim_output(request).map_err(RunFailure::refused)?;
     let mut args = command.leading_args.clone();
     args.extend(request.args());
     let cwd = neutral_dir(Some(&request.output));
-    let streamed = stream_run(command, &args, &cwd, limits, cancel, on_event);
+    let streamed = stream_run(command, &args, &cwd, limits, cancel, group, on_event);
     let result = streamed.and_then(|finished| finish(request, finished));
     result.map_err(|mut failure| {
-        if created_output && request.output.exists() {
-            match std::fs::remove_dir_all(&request.output) {
-                Ok(()) => failure.removed_output = true,
-                Err(e) => log::warn!(
-                    "library import: could not remove {}: {e}",
-                    request.output.display()
-                ),
-            }
+        // A large folder takes a while to remove; quit cut it short would
+        // leave half of it, which the next run refuses as not empty.
+        if claimed.held != Held::NotOwned {
+            stage.settling();
         }
+        failure.removed_output = claimed.release_after_failure();
         failure
     })
 }
@@ -261,10 +295,25 @@ fn stream_run(
     cwd: &Path,
     limits: RunLimits,
     cancel: &AtomicBool,
+    group: &ProcessGroup,
     on_event: &mut dyn FnMut(&ProgressEvent),
 ) -> Result<Finished, RunFailure> {
     let mut running =
         Running::spawn(command, args, cwd, RUN_STDOUT_CAP).map_err(RunFailure::new)?;
+    // Cleared by `Running` itself as the converter is reaped, before the
+    // pipe drain that may follow for up to `PIPE_GRACE`.
+    running.publish(group);
+    let result = stream_loop(&mut running, limits, cancel, on_event);
+    group.set(0);
+    result
+}
+
+fn stream_loop(
+    running: &mut Running,
+    limits: RunLimits,
+    cancel: &AtomicBool,
+    on_event: &mut dyn FnMut(&ProgressEvent),
+) -> Result<Finished, RunFailure> {
     let mut fold = StreamFold::default();
     let mut watch = SilenceWatch::new(limits.silence, Instant::now());
     let mut take = |line: Line, watch: &mut SilenceWatch| {
@@ -286,7 +335,7 @@ fn stream_run(
             take(line, &mut watch);
         }
         if cancel.load(Ordering::Relaxed) {
-            return Err(stopped(&mut running, ImportError::Cancelled));
+            return Err(stopped(running, ImportError::Cancelled));
         }
         match running.try_wait() {
             Ok(Some(status)) => break status,
@@ -295,14 +344,14 @@ fn stream_run(
                 let error = ImportError::WaitFailed {
                     detail: e.to_string(),
                 };
-                return Err(stopped(&mut running, error));
+                return Err(stopped(running, error));
             }
         }
         if watch.expired(Instant::now()) {
             let error = ImportError::Silent {
                 seconds: limits.silence.as_secs(),
             };
-            return Err(stopped(&mut running, error));
+            return Err(stopped(running, error));
         }
     };
     // Exited: what is still in the pipes is read for a bounded time; a
@@ -328,6 +377,7 @@ fn finish(request: &LibraryRunRequest, finished: Finished) -> Result<RunOutcome,
         stderr_tail: stderr_tail.clone(),
         removed_output: false,
         restored: None,
+        refused: false,
     };
     let Some(summary) = summary else {
         return Err(fail(

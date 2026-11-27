@@ -69,6 +69,11 @@ pub enum ImportError {
     NotAnImportedLibrary {
         dir: PathBuf,
     },
+    /// An update was asked for a repository whose history holds no Signex
+    /// import commit.
+    NoImportHistory {
+        dir: PathBuf,
+    },
     /// An update was asked while the library has unsaved work in the app.
     UnsavedInApp {
         what: String,
@@ -91,6 +96,20 @@ pub enum ImportError {
     /// The reported library folder holds no `.snxlib`.
     NoLibraryFile {
         dir: PathBuf,
+    },
+    /// A new import's folder already holds something.
+    OutputNotEmpty {
+        path: PathBuf,
+    },
+    /// A new import's folder could not be created.
+    OutputUnusable {
+        path: PathBuf,
+        detail: String,
+    },
+    /// A new import's folder is a symbolic link; the run never writes
+    /// through one.
+    OutputIsLink {
+        path: PathBuf,
     },
 }
 
@@ -157,6 +176,9 @@ impl ImportError {
             Self::NotAnImportedLibrary { dir } => {
                 Translatable::new(ids::LIBRARY_IMPORT_NOT_A_REPOSITORY).arg("path", path(dir))
             }
+            Self::NoImportHistory { dir } => {
+                Translatable::new(ids::LIBRARY_IMPORT_NO_IMPORT_HISTORY).arg("path", path(dir))
+            }
             Self::UnsavedInApp { what } => {
                 Translatable::new(ids::LIBRARY_IMPORT_UNSAVED).arg("what", what.as_str())
             }
@@ -187,6 +209,17 @@ impl ImportError {
             }
             Self::NoLibraryFile { dir } => {
                 Translatable::new(ids::LIBRARY_IMPORT_NO_LIBRARY_FILE).arg("path", path(dir))
+            }
+            Self::OutputNotEmpty { path: p } => {
+                Translatable::new(ids::LIBRARY_IMPORT_DIALOG_TARGET_NOT_EMPTY).arg("path", path(p))
+            }
+            Self::OutputIsLink { path: p } => {
+                Translatable::new(ids::LIBRARY_IMPORT_DIALOG_TARGET_LINK).arg("path", path(p))
+            }
+            Self::OutputUnusable { path: p, detail } => {
+                Translatable::new(ids::LIBRARY_IMPORT_DIALOG_TARGET_UNREADABLE)
+                    .arg("path", path(p))
+                    .arg("error", detail.as_str())
             }
         }
     }

@@ -374,6 +374,7 @@ dialog-title-document-options = Document Options
 dialog-title-library-options = New Library
 dialog-title-copy-to-library = Copy to Library
 dialog-title-library-updates = Library Updates Available
+dialog-title-import-library = Import Library
 dialog-title-close-library = Close Library
 dialog-title-delete-component = Delete Component
 dialog-title-library-recovery = Library Recovery

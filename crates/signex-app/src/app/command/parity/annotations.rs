@@ -993,6 +993,8 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "open_net_inspector",
             "open_preferences",
             "open_schematic_preferences",
+            // #3117: the Import Library dialog.
+            "import_library",
             "show_current_command_hotkeys",
             "show_current_command_shortcuts",
             "new_project_with_profile",

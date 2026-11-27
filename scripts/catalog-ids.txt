@@ -181,6 +181,7 @@ home_view
 import_dxf
 import_dxf_outline
 import_graphics
+import_library
 import_parameters
 keepout_from_selection
 keymap_assign

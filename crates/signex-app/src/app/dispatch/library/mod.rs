@@ -57,6 +57,7 @@ mod editor_reads_tests;
 mod external_edits;
 #[cfg(test)]
 mod grid_window_tests;
+mod import_dialog;
 mod library_import;
 mod lifecycle;
 #[cfg(test)]
@@ -88,6 +89,8 @@ mod row_flows_tests;
 mod row_summary;
 #[cfg(test)]
 mod row_summary_tests;
+#[cfg(test)]
+pub(crate) use import_dialog::check_target as import_dialog_check_target;
 pub(crate) use rename_guard::LIBRARY_BACKGROUND_WRITE_REFUSAL;
 #[cfg(test)]
 mod component_save_point_tests;

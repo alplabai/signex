@@ -931,6 +931,7 @@ library-import-no-project = No project is open to add the library to; it was add
 # $path is the folder the converter reported, $output the one it was given.
 library-import-library-not-output = The converter reported the library at { $path }, not in { $output } where it was asked to write it.
 library-import-not-a-repository = { $path } has no version history, so it is not an imported library that can be updated. Import into a new folder instead.
+library-import-no-import-history = { $path } holds a library with version history, but Signex did not import it, so it is not updated over. Import into a new folder instead.
 # $what names an unsaved document or editor.
 library-import-unsaved = The library has unsaved changes in Signex ({ $what }). Save or close them before updating it.
 # $error is why the update failed.
@@ -939,3 +940,207 @@ library-import-update-restored = The update failed, and the library was restored
 library-import-update-not-restored = The update failed: { $error } The library could not be restored to its last import ({ $reason }); check its folder before using it.
 # $path is the imported library, $other the mounted library with the same id.
 library-import-id-clash = The imported library { $path } has the same library id as { $other }, which is already open, so it was not added. Close the other library first.
+# Import Library dialog (mockup row 211, #3117–#3120).
+# $step is 1, 2 or 3, $name the step's name.
+library-import-dialog-step-note = Step { $step } of 3 · { $name }
+library-import-dialog-step-source = Source and options
+library-import-dialog-step-preview = Preview
+library-import-dialog-step-import = Import
+library-import-dialog-pick-title = Choose the library files to import
+library-import-dialog-database-pick-title = Choose the database
+library-import-dialog-location-pick-title = Choose where to save the library
+library-import-dialog-source = Source
+library-import-dialog-kind-files = Library files
+library-import-dialog-kind-database = Database link
+library-import-dialog-browse = Browse…
+library-import-dialog-no-source = No files chosen
+# $first is a file name, $count how many more files were chosen.
+library-import-dialog-sources-many = { $count ->
+        [one] { $first } and 1 other file
+       *[other] { $first } and { $count } other files
+    }
+library-import-dialog-detected = Detected
+# $converter and $version come from the converter's own description.
+library-import-dialog-read-by = Read by { $converter } { $version }
+library-import-dialog-choose-converter = Several converters read these files; choose one.
+# $file is the file name.
+library-import-dialog-unreadable = No installed converter reads { $file }.
+library-import-dialog-no-common = No one converter reads all of these files; import them separately.
+library-import-dialog-looking = Looking for library converters…
+library-import-dialog-not-installed-title = Library converter not installed.
+library-import-dialog-not-installed-next = Next is available once a converter is installed.
+library-import-dialog-rescan = Look again
+library-import-dialog-database = Database
+library-import-dialog-database-placeholder = The database the link file names
+library-import-dialog-database-change = Change…
+library-import-dialog-database-help = Leave it empty to use the database the link file names. It is read once, during the import; the new library keeps no link to it.
+library-import-dialog-name = Name
+library-import-dialog-name-placeholder = Library name
+library-import-dialog-name-invalid = This name cannot be used as a folder name.
+library-import-dialog-location = Location
+library-import-dialog-location-caption = Default ~/Signex/Libraries/<name> · follows the name until the location is changed by hand
+library-import-dialog-location-empty = Choose where to save the library.
+library-import-dialog-location-not-absolute = The location must be a full path.
+library-import-dialog-mount-all = Mount for all projects
+library-import-dialog-mount-all-help = The library shows in the Library panel of every project. Off: it is added to this project's libraries only.
+library-import-dialog-mount-no-project = No project is open, so it is mounted for all projects.
+library-import-dialog-models = Include 3D models (embedded)
+library-import-dialog-models-help = Each footprint carries its 3D model inside the new library, so it works on any computer.
+library-import-dialog-snapshot = Imported once, as a snapshot. A re-import overwrites it.
+library-import-dialog-next = Next
+library-import-dialog-checking = Checking the folder…
+# $path is the chosen folder.
+library-import-dialog-target-not-empty = { $path } already holds files. Choose an empty or a new folder.
+library-import-dialog-target-not-folder = { $path } is a file, not a folder.
+library-import-dialog-target-unreadable = { $path } cannot be read: { $error }
+library-import-dialog-preview-running = Reading the source; nothing is written yet…
+# $error is why the dry run failed.
+library-import-dialog-preview-failed = The preview failed: { $error }
+library-import-dialog-count-parts = Parts
+library-import-dialog-count-symbols = Symbols
+library-import-dialog-count-footprints = Footprints
+library-import-dialog-count-models = 3D models
+library-import-dialog-count-skipped = Skipped
+library-import-dialog-severity-error = Skipped
+library-import-dialog-severity-dropped = Dropped
+library-import-dialog-severity-approximated = Approximated
+library-import-dialog-severity-info = Info
+library-import-dialog-severity-other = Other
+library-import-dialog-filter-placeholder = Filter by name, message or code
+library-import-dialog-list-empty = Nothing is approximated, dropped or skipped.
+library-import-dialog-list-none-match = No item matches the filter.
+# $shown and $count are whole numbers.
+library-import-dialog-list-more = First { $shown } of { $count } items · narrow the filter to see the rest
+library-import-dialog-detail-kind = Kind
+library-import-dialog-detail-source = Source
+library-import-dialog-detail-code = Code
+library-import-dialog-detail-written = Written as
+library-import-dialog-detail-not-written = Not written
+library-import-dialog-detail-hint = Select an item to see what happens to it.
+library-import-dialog-no-drawing = A preview writes only the report, so the symbols and footprints can be looked at once the library is imported.
+# $count is a whole number.
+library-import-dialog-skipped-banner = { $count ->
+        [one] 1 item will be skipped. It is listed in the loss report after the import.
+       *[other] { $count } items will be skipped. They are listed in the loss report after the import.
+    }
+# $why says what was wrong with the report.
+library-import-dialog-report-missing = The converter left no readable report ({ $why }); only the counts are shown.
+library-import-dialog-nothing-written = Nothing is written until Import.
+# $count is a whole number.
+library-import-dialog-import-parts = { $count ->
+        [one] Import 1 part
+       *[other] Import { $count } parts
+    }
+library-import-dialog-phase-read = Reading the source
+library-import-dialog-phase-convert = Converting
+library-import-dialog-phase-write = Writing the library
+library-import-dialog-phase-models = Embedding 3D models
+library-import-dialog-phase-starting = Starting the converter…
+# $done and $total are whole numbers.
+library-import-dialog-done-of = { $done } of { $total }
+# $percent is a whole number.
+library-import-dialog-percent = { $percent } %
+library-import-dialog-now = Now:
+# $seconds is a whole number, $path the library folder.
+library-import-dialog-silence = No progress for { $seconds } s stops the import. A stopped or cancelled import leaves nothing behind in { $path }.
+library-import-dialog-cancel-rule = Cancel stops after the current item and removes what was written.
+library-import-dialog-cancelling = Cancelling…
+library-import-dialog-cancelled = The import was cancelled.
+# $error is why the import failed.
+library-import-dialog-failed = The import failed: { $error }
+# $path is the library folder.
+library-import-dialog-removed = Nothing was kept in { $path }.
+library-import-dialog-kept = Files it wrote may remain in { $path }; check the folder.
+library-import-dialog-route-arrow = →
+# $label is a severity name, $count a whole number.
+library-import-dialog-severity-chip = { $label } { $count }
+# $key and $value come from the converter's report.
+library-import-dialog-detail-line = { $key }: { $value }
+library-import-dialog-stop-now = Stop now
+library-import-dialog-run-stopping = The previous run is stopping…
+# $path is the library folder.
+library-import-dialog-unchanged = The import was refused before it started, so nothing was changed in { $path }.
+library-import-dialog-other-run = Another library import is running.
+# $path is the chosen folder.
+library-import-dialog-target-link = { $path } is a link to another place. Choose the folder itself, or a new folder.
+# Import Library dialog, the result and loss report (#3121).
+library-import-dialog-step-done = Done
+# $name is the library's name.
+library-import-dialog-stored-note = Loss report · { $name }
+library-import-dialog-tab-result = Result
+library-import-dialog-tab-report = Loss report
+# $name is the library's name.
+library-import-dialog-result-imported = { $name } imported
+library-import-dialog-result-updated = { $name } updated
+library-import-dialog-count-imported = Imported
+# $approximated, $dropped and $skipped are whole numbers.
+library-import-dialog-report-summary = { $approximated } approximated · { $dropped } dropped · { $skipped } skipped
+library-import-dialog-view-report = View loss report
+library-import-dialog-meaning-error = not imported
+library-import-dialog-meaning-dropped = imported without this item
+library-import-dialog-meaning-approximated = imported, drawn as close as Signex can
+library-import-dialog-meaning-info = imported, nothing lost
+library-import-dialog-meaning-other = a kind of loss this Signex does not know
+# $path is the library folder, $why what was wrong with its report.
+library-import-dialog-report-unreadable = { $path } has no readable import report ({ $why }). Only a library made by Import Library has one.
+# $converter and $version come from the report.
+library-import-dialog-report-header = { $name } · converted by { $converter } { $version }
+# $code is the converter's item code, $count a whole number.
+library-import-dialog-code-count = { $code } · { $count }
+# $path is the file the report was saved to.
+library-import-dialog-report-saved = Saved the report to { $path }.
+library-import-dialog-report-save-failed = Could not save the report to { $path }: { $error }
+library-import-dialog-report-open-failed = Could not open { $path }: { $error }
+library-import-dialog-save-report = Save report…
+library-import-dialog-open-report = Open report
+library-import-dialog-open-in-browser = Open in Library Browser
+library-import-dialog-save-report-title = Save the loss report
+library-import-dialog-menu-view-report = View import report
+# Import Library dialog, mounting and updating an import (#3123).
+# $path is the library folder.
+library-import-dialog-restored = { $path } was put back to its last import.
+# $reason is why it could not be put back.
+library-import-dialog-not-restored = { $path } could not be put back to its last import ({ $reason }); check the folder before using it.
+# $path is the chosen folder.
+library-import-dialog-update-offer = { $path } holds an imported library. Update it from the source: the update is one new commit, it deletes and overwrites only what the converter wrote, and parts you added stay.
+library-import-dialog-update-accept = Update this library
+library-import-dialog-update-taken = Next previews the update.
+# $count is a whole number.
+library-import-dialog-update-parts = { $count ->
+        [one] Update with 1 part
+       *[other] Update with { $count } parts
+    }
+# $seconds is a whole number, $path the library folder.
+library-import-dialog-silence-update = No progress for { $seconds } s stops the update. A stopped or cancelled update puts { $path } back to its last import.
+library-import-dialog-cancel-rule-update = Cancel stops after the current item and puts the library back to its last import.
+library-import-dialog-mounted = Mounted
+library-import-dialog-mounted-all = For all projects
+# $project is the project's name.
+library-import-dialog-mounted-project = For { $project }
+library-import-dialog-mounted-unrecorded = For this session only: the project it was meant for closed before the import ended.
+# $other is the open library with the same id.
+library-import-dialog-mounted-clash = Not mounted: { $other } has the same library id. Close it, then open this library.
+library-import-dialog-mounting = Mounting…
+library-import-dialog-history = History
+# $commit is the start of a commit id.
+library-import-dialog-history-commit = Commit { $commit }
+library-import-dialog-history-unchanged = Unchanged since the last import; no commit was added.
+library-import-dialog-requires = Requires
+# $name is an open library.
+library-import-dialog-requires-open = { $name } (open)
+# $id is a library id.
+library-import-dialog-requires-missing = Library { $id } (not open; open it so the parts that use it resolve)
+# Import Library dialog, what went wrong (#3124).
+# $status is the process exit status.
+library-import-dialog-crashed = The converter ended without finishing ({ $status }): it crashed or was stopped from outside Signex.
+# $error is the converter's own message.
+library-import-dialog-fatal = The converter could not convert the library (exit 1): { $error }
+library-import-dialog-stderr = The converter's last error output:
+# $count is a whole number.
+library-import-dialog-partial = { $count ->
+        [one] Imported with losses: 1 item was dropped or not imported. The loss report lists it.
+       *[other] Imported with losses: { $count } items were dropped or not imported. The loss report lists each one.
+    }
+library-import-dialog-unreadable-hint = Install a library converter that reads this kind of file, then press Look again.
+# The Library Browser's LIBRARIES header (#3122).
+library-browser-import = Import…

@@ -129,6 +129,7 @@ signex_standard	hint	-	⌘S	save_document
 signex_standard	hint	-	⇧⌘S	save_document_as
 signex_standard	hint	-	⌥⌘S	save_all
 signex_standard	hint	-	-	save_project_as
+signex_standard	hint	-	-	import_library
 signex_standard	hint	-	-	revert
 signex_standard	hint	-	⌘W	close_active_document
 signex_standard	hint	-	-	close_all_documents
@@ -779,6 +780,7 @@ classic	hint	-	⌘S	save_document
 classic	hint	-	⇧⌘S	save_document_as
 classic	hint	-	⌥⌘S	save_all
 classic	hint	-	-	save_project_as
+classic	hint	-	-	import_library
 classic	hint	-	-	revert
 classic	hint	-	-	close_active_document
 classic	hint	-	-	close_all_documents

@@ -13,7 +13,7 @@ use signex_library::import_snapshot::{
 use super::error::ImportError;
 use super::events::ProgressEvent;
 use super::run::{
-    ConverterCommand, LibraryRunRequest, RunFailure, RunLimits, RunMode, RunOutcome, run_library,
+    ConverterCommand, LibraryRunRequest, RunFailure, RunLimits, RunMode, RunOutcome, run_library_in,
 };
 
 /// Where the library is mounted after the import.
@@ -33,14 +33,22 @@ pub struct UpdateCheck {
     pub local_commits: usize,
 }
 
-/// Before `--update`: refuse a folder with no repository or with
-/// uncommitted changes, and count the commits since the last import.
+/// Before `--update`: refuse a folder with no repository, with no import
+/// commit in its history or with uncommitted changes, and count the
+/// commits since the last import.
 pub fn check_update(library_dir: &Path) -> Result<UpdateCheck, ImportError> {
     let state = read_snapshot_state(library_dir).map_err(|e| ImportError::Git {
         detail: e.to_string(),
     })?;
     if !state.has_repo {
         return Err(ImportError::NotAnImportedLibrary {
+            dir: library_dir.to_path_buf(),
+        });
+    }
+    // Caner (2026-11-27): only a library Signex imported is offered an
+    // update; a repository without an import commit is someone's own.
+    if !state.has_import {
+        return Err(ImportError::NoImportHistory {
             dir: library_dir.to_path_buf(),
         });
     }
@@ -63,6 +71,10 @@ pub struct ImportJob {
     pub converter_version: String,
     pub request: LibraryRunRequest,
     pub limits: RunLimits,
+    /// The converter's process group while it runs, for a kill at quit.
+    pub group: super::process::ProcessGroup,
+    /// How far [`Self::run`] has got, for the quit wait.
+    pub stage: super::run_state::JobStage,
 }
 
 /// A finished import (or preview).
@@ -77,36 +89,49 @@ pub struct ImportJobOutcome {
     pub local_commits: usize,
     /// The library's id, read from its `.snxlib`.
     pub library_id: Option<uuid::Uuid>,
+    /// The library ids its manifest `requires`, to mount with it.
+    pub requires: Vec<uuid::Uuid>,
 }
 
 impl ImportJob {
     /// Run the job. An update is refused before the converter starts unless
     /// the library is a clean repository; it holds the library's write lock
     /// until its commit, and a failed update puts the tree back to its last
-    /// import.
+    /// import. The stage is marked done once everything, the write lock
+    /// included, is released.
     pub fn run(
         &self,
         cancel: &AtomicBool,
         on_event: &mut dyn FnMut(&ProgressEvent),
     ) -> Result<ImportJobOutcome, RunFailure> {
+        // Declared first, so dropped last.
+        let _done = self.stage.done_on_drop();
         let (local_commits, _write_lock) = match self.request.mode {
             RunMode::Update => {
                 let output = &self.request.output;
                 // Lock first: an edit landing after the clean check would
                 // otherwise be wiped by a failed update's reset.
-                let file = find_library_file(output).map_err(RunFailure::new)?;
+                let file = find_library_file(output).map_err(RunFailure::refused)?;
                 let lock = signex_library::hold_library_write_lock(&file).map_err(|e| {
-                    RunFailure::new(ImportError::Git {
+                    RunFailure::refused(ImportError::Git {
                         detail: e.to_string(),
                     })
                 })?;
-                let check = check_update(output).map_err(RunFailure::new)?;
+                let check = check_update(output).map_err(RunFailure::refused)?;
                 (check.local_commits, Some(lock))
             }
             RunMode::Import | RunMode::Preview => (0, None),
         };
-        let run = run_library(&self.command, &self.request, self.limits, cancel, on_event)
-            .map_err(|failure| self.restore_after_failed_update(failure))?;
+        let run = run_library_in(
+            &self.command,
+            &self.request,
+            self.limits,
+            cancel,
+            &self.group,
+            &self.stage,
+            on_event,
+        )
+        .map_err(|failure| self.restore_after_failed_update(failure))?;
         let Some(library_dir) = run.library.clone() else {
             return Ok(ImportJobOutcome {
                 run,
@@ -114,6 +139,7 @@ impl ImportJob {
                 commit: None,
                 local_commits,
                 library_id: None,
+                requires: Vec::new(),
             });
         };
         let keep_run = |error: ImportError, run: &RunOutcome| RunFailure {
@@ -122,24 +148,30 @@ impl ImportJob {
             stderr_tail: run.stderr_tail.clone(),
             removed_output: false,
             restored: None,
+            refused: false,
         };
         let library_file = find_library_file(&library_dir).map_err(|e| keep_run(e, &run))?;
         let message = self.commit_message(&library_file);
+        self.stage.settling();
         let commit = record_snapshot(&library_dir, &message).map_err(|e| keep_run(e, &run))?;
-        let library_id = read_library_id(&library_file);
+        let (library_id, requires) = read_library_identity(&library_file);
         Ok(ImportJobOutcome {
             run,
             library_file: Some(library_file),
             commit,
             local_commits,
             library_id,
+            requires,
         })
     }
 
     /// An update failed after `check_update` found the tree clean: whatever
-    /// the converter wrote is undone. Only reached for an update.
+    /// the converter wrote is undone. Only reached for an update; a refusal
+    /// before the converter started is left as it is.
     fn restore_after_failed_update(&self, mut failure: RunFailure) -> RunFailure {
-        if self.request.mode == RunMode::Update {
+        // A refused run wrote nothing, so there is nothing to undo.
+        if self.request.mode == RunMode::Update && !failure.refused {
+            self.stage.settling();
             let restored = signex_library::import_snapshot::restore_to_head(&self.request.output)
                 .map_err(|e| e.to_string());
             if let Err(why) = &restored {
@@ -210,12 +242,19 @@ pub fn commit_message(
     message
 }
 
-/// The `library_id` of the `.snxlib` at `file`, when it parses.
-fn read_library_id(file: &Path) -> Option<uuid::Uuid> {
-    let text = std::fs::read_to_string(file).ok()?;
-    signex_library::library_file::LibraryFile::parse(&text)
+/// The `library_id` of the `.snxlib` at `file` and the ids its manifest
+/// `requires`; nothing when it does not parse.
+fn read_library_identity(file: &Path) -> (Option<uuid::Uuid>, Vec<uuid::Uuid>) {
+    let parsed = std::fs::read_to_string(file)
         .ok()
-        .map(|library| library.manifest.library_id)
+        .and_then(|text| signex_library::library_file::LibraryFile::parse(&text).ok());
+    match parsed {
+        Some(library) => (
+            Some(library.manifest.library_id),
+            library.manifest.library.required_libraries(),
+        ),
+        None => (None, Vec::new()),
+    }
 }
 
 /// The `.snxlib` directly inside `dir`; the first by name when several.

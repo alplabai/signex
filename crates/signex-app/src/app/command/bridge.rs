@@ -422,6 +422,8 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "save_project_as" => {
             Message::from(crate::app::SaveProjectAsMsg::Requested { project: None })
         }
+        // #3117: the Import Library dialog.
+        "import_library" => crate::library::import_dialog::requested_message(),
         "select_all" => Message::Selection(selection_request::SelectionRequest::SelectAll),
         // An alias of `select_connection`, the Active Bar's Select > Connection (#1668).
         "select_expand_connection" => {

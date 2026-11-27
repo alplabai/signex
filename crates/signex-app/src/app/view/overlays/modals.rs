@@ -597,6 +597,29 @@ impl Signex {
             )
             .map(Message::Library)
             .boxed(),
+            ModalId::LibraryImport => crate::library::import_dialog::view(
+                lib.import_dialog.as_deref()?,
+                crate::library::import_dialog::ImportDialogContext {
+                    running: lib.import.running.as_ref(),
+                    project_open: self.document_state.active_project.is_some()
+                        || lib
+                            .import_dialog
+                            .as_deref()
+                            .and_then(|d| d.project)
+                            .is_some_and(|id| self.document_state.project_by_id(id).is_some()),
+                    library_open: lib
+                        .import_dialog
+                        .as_deref()
+                        .and_then(|d| d.finished())
+                        .and_then(|r| r.library_file.as_deref())
+                        .is_some_and(|file| lib.library_at(file).is_some()),
+                },
+                tokens,
+                &self.ui_state.i18n,
+                windowed,
+            )
+            .map(Message::Library)
+            .boxed(),
             ModalId::LibraryEditRow => {
                 let (path, edit) = self.browser_modal(owner, |b| b.edit_modal.as_ref())?;
                 let context = crate::library::edit_row_modal::EditRowContext::resolve(
@@ -788,5 +811,9 @@ impl Signex {
 
     pub(in crate::app::view) fn library_updates_overlay(&self) -> Option<Element<'_, Message>> {
         self.library_overlay(crate::app::state::ModalId::LibraryUpdates)
+    }
+
+    pub(in crate::app::view) fn library_import_overlay(&self) -> Option<Element<'_, Message>> {
+        self.library_overlay(crate::app::state::ModalId::LibraryImport)
     }
 }

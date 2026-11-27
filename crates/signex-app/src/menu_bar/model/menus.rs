@@ -55,6 +55,9 @@ pub(super) fn file(ctx: &MenuContext) -> Vec<MenuEntry> {
                     menu_ids::MENU_FILE_IMPORT_ALTIUM,
                     MenuMessage::ImportAltium,
                 ),
+                // #3117: a library made in another tool, through the
+                // Import Library dialog.
+                cmd_item(ctx, cmd("import_library", "")),
                 // #2410: a DXF drawing onto the board in view; greyed
                 // without one.
                 cmd_item_gated(ctx, cmd("import_dxf", "")),

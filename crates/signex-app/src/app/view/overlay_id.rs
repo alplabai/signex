@@ -174,6 +174,7 @@ pub(crate) enum OverlayId {
     CommandPalette,
     HoverTooltip,
     LibraryUpdates,
+    LibraryImport,
 }
 
 /// How many leading [`PAINT_ORDER`] entries paint BEFORE the
@@ -191,7 +192,7 @@ const PRE_BLOCKING: usize = 5;
 /// behaviour change to both the paint stack and the Esc precedence, and
 /// `paint_order_is_exhaustive_and_unique` keeps it honest about covering
 /// every [`OverlayId`] exactly once.
-pub(crate) const PAINT_ORDER: [OverlayId; 88] = [
+pub(crate) const PAINT_ORDER: [OverlayId; 89] = [
     OverlayId::ErrorNotice,
     OverlayId::NetlistIncompletePrompt,
     OverlayId::PrintPreview,
@@ -285,6 +286,7 @@ pub(crate) const PAINT_ORDER: [OverlayId; 88] = [
     OverlayId::CommandPalette,
     OverlayId::HoverTooltip,
     OverlayId::LibraryUpdates,
+    OverlayId::LibraryImport,
 ];
 
 /// The overlays that can actually reach the screen right now.
@@ -428,7 +430,8 @@ pub(crate) fn swallows_scroll(id: OverlayId) -> bool {
         | OverlayId::LibraryRecovery
         | OverlayId::SymbolDeleteConfirm
         | OverlayId::CommandPalette
-        | OverlayId::LibraryUpdates => true,
+        | OverlayId::LibraryUpdates
+        | OverlayId::LibraryImport => true,
     }
 }
 
@@ -681,6 +684,7 @@ impl Signex {
             OverlayId::CommandPalette => layers.extend(self.command_palette_overlay(window_id)),
             OverlayId::HoverTooltip => layers.extend(self.view_hover_tooltip(window_id)),
             OverlayId::LibraryUpdates => layers.extend(self.library_updates_overlay()),
+            OverlayId::LibraryImport => layers.extend(self.library_import_overlay()),
         }
     }
 

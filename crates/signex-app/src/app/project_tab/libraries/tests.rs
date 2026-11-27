@@ -44,3 +44,62 @@ fn each_mount_state_has_its_pill_tone() {
     assert_eq!(LibraryMount::Missing.tone(), PillTone::Err);
     assert_eq!(LibraryMount::NotMounted.tone(), PillTone::Neutral);
 }
+
+/// #3122: Import library… in a project's Libraries section opens the
+/// Import Library dialog with "This project" preselected, meaning this
+/// project; an open dialog stays as it is.
+#[test]
+fn import_library_opens_the_dialog_for_this_project() {
+    use crate::app::handlers::menu::export::tests::app_workspace;
+    use crate::app::project_tab::{ProjectSection, ProjectTabMsg};
+    use crate::app::{Message, ProjectMsg};
+    use crate::library::import_dialog::ImportDialogMsg;
+    use crate::library::messages::{LibraryImportMsg, LibraryMessage};
+    const WINDOW: iced::Size = iced::Size::new(1200.0, 800.0);
+    // In memory only: the workspace writes nothing to this folder.
+    let dir = std::env::temp_dir().join(format!("signex-prj-import-{}", uuid::Uuid::now_v7()));
+    let mut app = app_workspace(&dir.to_string_lossy(), &["a.snxsch"]);
+    app.open_project_tab(0);
+    let id = app.document_state.projects[0].id;
+    drop(app.update(Message::Project(ProjectMsg::Tab(
+        ProjectTabMsg::SectionSelected {
+            project_id: id,
+            section: ProjectSection::Libraries,
+        },
+    ))));
+    let texts = crate::layout_probe::lay_out_texts(app.view_project_tab(id), WINDOW);
+    let at = crate::layout_probe::find(&texts, "Import library…")
+        .bounds
+        .center();
+    let click = [
+        iced::Event::Mouse(iced::mouse::Event::ButtonPressed(iced::mouse::Button::Left)),
+        iced::Event::Mouse(iced::mouse::Event::ButtonReleased(
+            iced::mouse::Button::Left,
+        )),
+    ];
+    let messages =
+        crate::layout_probe::messages_for_events(app.view_project_tab(id), WINDOW, at, &click);
+    assert!(
+        messages.iter().any(|m| matches!(
+            m,
+            Message::Library(LibraryMessage::Import(LibraryImportMsg::Dialog(
+                ImportDialogMsg::RequestedForProject(p)
+            ))) if *p == id
+        )),
+        "{messages:?}"
+    );
+    for message in messages {
+        drop(app.update(message));
+    }
+    let state = app.library.import_dialog.as_deref().expect("open");
+    assert_eq!(state.project, Some(id));
+    assert!(!state.mount_for_all, "This project is preselected");
+    // A second request leaves the open dialog as it is.
+    drop(
+        app.update(Message::Library(crate::library::import_dialog::msg(
+            ImportDialogMsg::Requested,
+        ))),
+    );
+    let state = app.library.import_dialog.as_deref().unwrap();
+    assert!(!state.mount_for_all && state.project == Some(id));
+}

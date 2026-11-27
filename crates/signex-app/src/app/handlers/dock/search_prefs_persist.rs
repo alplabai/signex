@@ -109,6 +109,8 @@ impl Signex {
     /// writes), wait for the ones in flight, then run `next`.
     pub(crate) fn flush_quit_writes_then(&mut self, next: Task<Message>) -> Task<Message> {
         self.warn_owed_cascades_at_quit();
+        // A library converter must not outlive the app.
+        self.stop_library_import_at_quit();
         // The agent socket, token and registry entries go just before `next`.
         let next = self.agent_cleanup_then(next);
         // Agent journal lines queued or being written are on disk before the
@@ -119,6 +121,8 @@ impl Signex {
         let next = self.wait_for_pricing_then(next);
         // As must a library edit a worker is still writing (#893).
         let next = self.wait_for_library_writes_then(next);
+        // A stopped import's worker, an update's restore included (#3123).
+        let next = self.wait_for_library_import_then(next);
         // Every `background_pref_write` started so far (Save Preferences,
         // recent projects, filter presets, toggles) must land before exit
         // (#1351).

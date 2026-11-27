@@ -1,6 +1,7 @@
 //! The Libraries section view (mockup row 33): the libraries in list order with
-//! their location, kind and state pill, the move buttons on row hover, and
-//! the line that says where libraries are added and removed.
+//! their location, kind and state pill, the move buttons on row hover, the
+//! line that says where libraries are added and removed, and Import library…,
+//! which opens the Import Library dialog for this project (#3122).
 
 use iced::widget::{Space, row};
 use iced::{Alignment, Element, Length, Widget as _};
@@ -35,7 +36,7 @@ pub(in crate::app::project_tab) fn view<'a>(
     i18n: &I18n,
     tokens: &ThemeTokens,
 ) -> Element<'a, Message> {
-    let body = if rows.is_empty() {
+    let mut body = if rows.is_empty() {
         vec![where_line(ids::PROJECT_LIBRARIES_EMPTY, i18n, tokens)]
     } else {
         vec![
@@ -43,11 +44,29 @@ pub(in crate::app::project_tab) fn view<'a>(
             where_line(ids::PROJECT_LIBRARIES_WHERE, i18n, tokens),
         ]
     };
+    body.push(import_button(project_id, i18n, tokens));
     section(
         ids::PROJECT_SECTION_LIBRARIES,
         ids::PROJECT_LIBRARIES_HELP,
         body,
         i18n,
+        tokens,
+    )
+}
+
+/// Import library…: the Import Library dialog, mounting for this project.
+fn import_button<'a>(
+    project_id: ProjectId,
+    i18n: &I18n,
+    tokens: &ThemeTokens,
+) -> Element<'a, Message> {
+    let open = crate::library::import_dialog::ImportDialogMsg::RequestedForProject(project_id);
+    let message = Message::Library(crate::library::import_dialog::msg(open));
+    text_button(
+        None,
+        t!(i18n, ids::PROJECT_LIBRARIES_IMPORT),
+        Some(message),
+        ButtonKind::Small,
         tokens,
     )
 }
