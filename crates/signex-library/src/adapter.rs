@@ -659,19 +659,26 @@ pub trait LibraryAdapter: Send + Sync {
         Ok(std::collections::BTreeMap::new())
     }
 
-    /// [`Self::store_pricing`] for fetched alternate supply: one save, one
-    /// commit, `cancel` re-checked under the write lock, and each update
-    /// re-checked against the row as it is then. A record never touches the
-    /// alternate's hand-entered values, which live in the row.
-    fn store_alternate_supply(
+    /// [`Self::store_pricing`] for a refresh's prices and its fetched
+    /// alternate supply (#3046) together: one save, one commit, `cancel`
+    /// re-checked under the write lock, and each update re-checked against
+    /// the row as it is then. A record never touches the alternate's
+    /// hand-entered values, which live in the row. The outcome counts both.
+    /// Adapters without the alternate cache store prices only and refuse
+    /// alternate records.
+    fn store_supply(
         &self,
-        _updates: Vec<crate::alternate_supply::AlternateSupplyUpdate>,
-        _cancel: &std::sync::atomic::AtomicBool,
-        _msg: &str,
+        prices: Vec<crate::pricing::PricingUpdate>,
+        alternates: Vec<crate::alternate_supply::AlternateSupplyUpdate>,
+        cancel: &std::sync::atomic::AtomicBool,
+        msg: &str,
     ) -> Result<crate::pricing::StoreOutcome, LibraryError> {
-        Err(LibraryError::Backend(
-            "store_alternate_supply not implemented for this adapter".into(),
-        ))
+        if !alternates.is_empty() {
+            return Err(LibraryError::Backend(
+                "store_supply of alternate stock not implemented for this adapter".into(),
+            ));
+        }
+        self.store_pricing(prices, cancel, msg)
     }
 
     // ── Primitive CRUD (unchanged from v0.9-original) ───────────────────

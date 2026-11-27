@@ -310,9 +310,10 @@ impl LibraryAdapter for ReadOnlyAdapter {
         self.inner.table_alternate_supply(table)
     }
 
-    fn store_alternate_supply(
+    fn store_supply(
         &self,
-        _updates: Vec<crate::alternate_supply::AlternateSupplyUpdate>,
+        _prices: Vec<crate::pricing::PricingUpdate>,
+        _alternates: Vec<crate::alternate_supply::AlternateSupplyUpdate>,
         _cancel: &std::sync::atomic::AtomicBool,
         _msg: &str,
     ) -> Result<crate::pricing::StoreOutcome, LibraryError> {

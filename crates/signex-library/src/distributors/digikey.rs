@@ -845,6 +845,35 @@ fn digikey_path_token(path: &str) -> Option<String> {
 mod tests {
     use super::*;
 
+    /// #3046: `ProductStatus.Status` in a synthetic response of the
+    /// recorded shape (`tests/fixtures/distributors/digikey_lifecycle.json`,
+    /// no real part data): each status DigiKey words and a missing field.
+    /// A distributor-only status and `None` show as Unknown.
+    #[test]
+    fn each_product_status_rides_on_the_price_snapshot() {
+        use crate::manufacturer::ManufacturerLifecycle::*;
+        let json = include_str!("../../tests/fixtures/distributors/digikey_lifecycle.json");
+        let response: DigiKeyResponse = serde_json::from_str(json).unwrap();
+        let got: Vec<(String, Option<ManufacturerLifecycle>)> = response
+            .into_parts("USD", None)
+            .into_iter()
+            .map(|p| (p.mpn, p.pricing.expect("priced").lifecycle))
+            .collect();
+        let want = [
+            ("SYN-D-1", Some(Active)),
+            ("SYN-D-2", Some(Nrnd)),
+            ("SYN-D-3", Some(Eol)),
+            ("SYN-D-4", Some(Eol)),
+            ("SYN-D-5", None),
+            ("SYN-D-6", None),
+        ];
+        assert_eq!(got.len(), want.len());
+        for ((mpn, lifecycle), (want_mpn, want_lifecycle)) in got.iter().zip(want) {
+            assert_eq!(mpn, want_mpn);
+            assert_eq!(*lifecycle, want_lifecycle, "{mpn}");
+        }
+    }
+
     #[test]
     fn a_failed_http_client_build_is_a_config_error() {
         let err = try_build_http_client_with(|| Err("tls init failed".into())).unwrap_err();

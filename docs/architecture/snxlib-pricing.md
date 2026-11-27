@@ -176,14 +176,15 @@ of each of the row's manufacturer alternates, by MPN and manufacturer
 Mouser's `LifecycleStatus` and DigiKey's `ProductStatus`). The answers go to
 a second sidecar, `[tables.<name>.alternate_supply.<row_id>.<distributor>.<mpn>]`
 (`stock`, `lifecycle`, `fetched_at`; `docs/LIBRARY_FORMAT.md` 2.6), stored by
-`LibraryAdapter::store_alternate_supply` under the same rules as prices:
+`LibraryAdapter::store_supply`, in the same save and commit as the prices
+and under the same rules:
 re-checked against the row under the write lock, pruned when the row no
 longer lists the distributor or the alternate. The walk never writes the
 row, so a stock or lifecycle the librarian entered on the alternate
 (`manual_stock`, `manual_lifecycle`, `snxlib/2.1`) is never overwritten; it
 wins wherever the values are shown. A distributor that cannot be asked is
-reported once per listing, not once per alternate. Prices and alternate
-records are stored as two commits.
+reported once per listing, not once per alternate. A refresh is one commit,
+prices and alternate records together.
 
 ## Safety rules added in review
 

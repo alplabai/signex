@@ -228,6 +228,25 @@ fn every_write_entry_point_is_refused_and_disk_is_untouched() {
             "m",
         ),
     );
+    assert_read_only(
+        "store_supply",
+        a.store_supply(
+            Vec::new(),
+            vec![signex_library::AlternateSupplyUpdate {
+                table: "resistors".into(),
+                row_id: row_id.as_uuid(),
+                distributor: "DigiKey".into(),
+                mpn: "ALT-1".into(),
+                fetched: signex_library::FetchedSupply {
+                    stock: Some(1),
+                    lifecycle: None,
+                    fetched_at: chrono::Utc::now(),
+                },
+            }],
+            &std::sync::atomic::AtomicBool::new(false),
+            "m",
+        ),
+    );
 
     assert_eq!(
         before,

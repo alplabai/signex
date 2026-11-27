@@ -468,14 +468,34 @@ mod tests {
         }
     }
 
+    /// #3046: `LifecycleStatus` in a synthetic response of the recorded
+    /// shape (`tests/fixtures/distributors/mouser_lifecycle.json`, no real
+    /// part data): each status Mouser words, `null` and a missing field.
+    /// `None` is what the picker and the Supply tab show as Unknown.
     #[test]
-    fn the_lifecycle_status_rides_on_the_price_snapshot() {
-        let json = r#"{"Errors":[],"SearchResults":{"Parts":[{"MouserPartNumber":"603-X","ManufacturerPartNumber":"X","Manufacturer":"YAGEO","AvailabilityInStock":"12","LifecycleStatus":"Not Recommended for New Designs","PriceBreaks":[{"Quantity":1,"Price":"$0.10","Currency":"USD"}]}]}}"#;
+    fn each_lifecycle_status_rides_on_the_price_snapshot() {
+        use ManufacturerLifecycle::*;
+        let json = include_str!("../../tests/fixtures/distributors/mouser_lifecycle.json");
         let response: MouserResponse = serde_json::from_str(json).unwrap();
-        let parts = response.into_parts().unwrap();
-        let snapshot = parts[0].pricing.as_ref().expect("priced");
-        assert_eq!(snapshot.lifecycle, Some(ManufacturerLifecycle::Nrnd));
-        assert_eq!(snapshot.stock, Some(12));
+        let got: Vec<(String, Option<ManufacturerLifecycle>)> = response
+            .into_parts()
+            .unwrap()
+            .into_iter()
+            .map(|p| (p.mpn, p.pricing.expect("priced").lifecycle))
+            .collect();
+        let want = [
+            ("SYN-M-1", Some(Active)),
+            ("SYN-M-2", Some(Nrnd)),
+            ("SYN-M-3", Some(Eol)),
+            ("SYN-M-4", Some(Eol)),
+            ("SYN-M-5", None),
+            ("SYN-M-6", None),
+        ];
+        assert_eq!(got.len(), want.len());
+        for ((mpn, lifecycle), (want_mpn, want_lifecycle)) in got.iter().zip(want) {
+            assert_eq!(mpn, want_mpn);
+            assert_eq!(*lifecycle, want_lifecycle, "{mpn}");
+        }
     }
 
     #[test]

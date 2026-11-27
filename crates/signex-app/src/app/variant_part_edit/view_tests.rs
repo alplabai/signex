@@ -312,8 +312,13 @@ fn a_library_alternate_shows_its_stock_lifecycle_and_approval() {
                 ..Candidates::default()
             },
         );
+        send(&mut app, VariantPartEditMsg::CandidatePicked(0));
         let shown = texts(&app);
         for words in ["12050", "NRND", "Conditional", "Unknown"] {
+            assert!(has(&shown, words), "{theme:?}: {words} in {shown:?}");
+        }
+        // The compare strip's fourth cell (Caner, 2026-11-27).
+        for words in ["Stock and lifecycle", "Stock 12050", "Lifecycle NRND"] {
             assert!(has(&shown, words), "{theme:?}: {words} in {shown:?}");
         }
         assert!(

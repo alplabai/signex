@@ -325,7 +325,9 @@ before a compile. Code: `crates/signex-app/src/app/variant_part_edit/`.
   NRND, EOL) are the ones entered by hand in the editor's Supply tab, else
   what Refresh All Pricing fetched for its MPN (#3046); hovering either says
   which, from which distributor and when. An alternate approved only as
-  Conditional or Disqualified shows that beside its MPN. Same
+  Conditional or Disqualified shows that beside its MPN. For a picked
+  alternate the compare strip adds a fourth cell, Stock and lifecycle, with
+  the same tooltips. Same
   footprint only hides the rest. The compare strip of the picked row: pins
   (numbers and names), footprint, and what the variant gets: the part
   number, and the value and footprint where they differ from the placed

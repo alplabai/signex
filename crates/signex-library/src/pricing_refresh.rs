@@ -87,7 +87,7 @@ pub struct PricingRefreshReport {
     /// Prices fetched, ready for [`LibraryAdapter::store_pricing`].
     pub updates: Vec<PricingUpdate>,
     /// Alternate stock and lifecycle fetched, ready for
-    /// [`LibraryAdapter::store_alternate_supply`].
+    /// [`LibraryAdapter::store_supply`] with the prices.
     pub alternate_updates: Vec<AlternateSupplyUpdate>,
     pub failures: Vec<RowFailure>,
     /// The cancel flag stopped the run before every row was visited.
@@ -273,26 +273,23 @@ pub fn refresh_library_pricing(
         report.updates.clear();
         report.alternate_updates.clear();
     }
-    if !report.updates.is_empty() {
-        let n = report.updates.len();
-        report.store = adapter.store_pricing(
+    // Prices and alternate records go back as one save and one commit.
+    let (n, m) = (report.updates.len(), report.alternate_updates.len());
+    if n + m > 0 {
+        let msg = if m == 0 {
+            format!("pricing: refresh {n} cached price(s)")
+        } else {
+            format!("pricing: refresh {n} cached price(s) and {m} alternate stock record(s)")
+        };
+        report.store = adapter.store_supply(
             report.updates.clone(),
-            cancel,
-            &format!("pricing: refresh {n} cached price(s)"),
-        )?;
-    }
-    if !report.alternate_updates.is_empty() {
-        let n = report.alternate_updates.len();
-        let alternates = adapter.store_alternate_supply(
             report.alternate_updates.clone(),
             cancel,
-            &format!("pricing: refresh stock of {n} alternate part(s)"),
+            &msg,
         )?;
-        report.store.stored += alternates.stored;
-        report.store.dropped.extend(alternates.dropped);
     }
     // The flag may also have been raised inside the store, under the lock.
-    let fetched = report.updates.len() + report.alternate_updates.len();
+    let fetched = n + m;
     if report.store.stored == 0 && fetched > 0 && cancel.load(Ordering::SeqCst) {
         report.cancelled = true;
     }

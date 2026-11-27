@@ -742,9 +742,15 @@ fn each_alternate_is_asked_by_mpn_and_cached_apart_from_its_manual_values() {
         "DigiKey",
         &[("R-ALT", Ok(0.1)), ("ALT-A", Ok(0.2)), ("ALT-B", Ok(0.3))],
     );
+    let before = commit_count(&adapter);
     let report =
         refresh_library_pricing(&adapter, &mut only(&client), &AtomicBool::new(false)).unwrap();
 
+    assert_eq!(
+        commit_count(&adapter),
+        before + 1,
+        "prices and alternate records are ONE commit"
+    );
     assert_eq!(*client.calls.lock().unwrap(), ["R-ALT", "ALT-A", "ALT-B"]);
     assert!(report.failures.is_empty(), "{:?}", report.failures);
     assert_eq!(
