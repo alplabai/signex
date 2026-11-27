@@ -103,6 +103,7 @@ pub fn stock_library_path() -> Option<PathBuf> {
 /// preparation. Cheap: a few `exists()` probes, no manifest or table reads.
 /// A missing library warns and leaves the Stock section empty.
 pub fn register_stock(library_state: &mut crate::library::LibraryState) -> Option<PathBuf> {
+    library_state.stock_expected = true;
     let Some(path) = stock_library_path() else {
         tracing::warn!(
             target: "signex::library",

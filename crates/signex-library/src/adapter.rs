@@ -646,6 +646,41 @@ pub trait LibraryAdapter: Send + Sync {
         ))
     }
 
+    /// What a distributor refresh fetched for the alternates of the named
+    /// table's rows, keyed by `row_id` (#3046). Adapters without the cache
+    /// report none.
+    fn table_alternate_supply(
+        &self,
+        _table: &str,
+    ) -> Result<
+        std::collections::BTreeMap<Uuid, crate::alternate_supply::RowAlternateSupply>,
+        LibraryError,
+    > {
+        Ok(std::collections::BTreeMap::new())
+    }
+
+    /// [`Self::store_pricing`] for a refresh's prices and its fetched
+    /// alternate supply (#3046) together: one save, one commit, `cancel`
+    /// re-checked under the write lock, and each update re-checked against
+    /// the row as it is then. A record never touches the alternate's
+    /// hand-entered values, which live in the row. The outcome counts both.
+    /// Adapters without the alternate cache store prices only and refuse
+    /// alternate records.
+    fn store_supply(
+        &self,
+        prices: Vec<crate::pricing::PricingUpdate>,
+        alternates: Vec<crate::alternate_supply::AlternateSupplyUpdate>,
+        cancel: &std::sync::atomic::AtomicBool,
+        msg: &str,
+    ) -> Result<crate::pricing::StoreOutcome, LibraryError> {
+        if !alternates.is_empty() {
+            return Err(LibraryError::Backend(
+                "store_supply of alternate stock not implemented for this adapter".into(),
+            ));
+        }
+        self.store_pricing(prices, cancel, msg)
+    }
+
     // ── Primitive CRUD (unchanged from v0.9-original) ───────────────────
     //
     // Symbols, footprints, sim models stay as standalone editable primitive

@@ -33,3 +33,9 @@ unit = "V"
 [[optional_params]]
 name = "package"
 kind = "text"
+
+# Supply voltage shows as one min-to-max cell (mockup row 52).
+[[ranges]]
+name = "supply"
+min = "supply_min"
+max = "supply_max"

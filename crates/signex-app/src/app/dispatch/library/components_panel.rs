@@ -605,8 +605,15 @@ impl Signex {
             row_id,
         };
         let footprint = self.picked_footprint_for(&key);
+        // Only a place that started counts as a use of Recently placed: a
+        // refusal (no sheet, library closed) has already said why.
+        let Some(task) =
+            self.try_place_library_component_with(library_path, table, row_id, footprint)
+        else {
+            return Task::none();
+        };
         self.record_components_placement(key);
-        self.handle_place_library_component_with(library_path, table, row_id, footprint)
+        task
     }
 }
 
@@ -665,6 +672,78 @@ mod tests {
         ));
         app.library.forget_panel_state_of(&key.library_path);
         assert!(app.library.components_panel.footprint_pick.is_none());
+    }
+
+    fn place(app: &mut Signex, key: &ComponentsPanelRowKey) {
+        let _ = app.update(Message::Library(LibraryMessage::ComponentsPanelPlace {
+            library_path: key.library_path.clone(),
+            table: key.table.clone(),
+            row_id: key.row_id,
+        }));
+    }
+
+    fn panel_key() -> ComponentsPanelRowKey {
+        ComponentsPanelRowKey {
+            library_path: std::path::PathBuf::from("placed.snxlib"),
+            table: "parts".into(),
+            row_id: signex_library::RowId::from_uuid(uuid::Uuid::from_u128(7)),
+        }
+    }
+
+    /// A refused Place (Start screen: no sheet; or the library closed)
+    /// adds nothing to Recently placed (#2631; old: every click counted).
+    #[test]
+    fn a_refused_place_is_not_recently_placed() {
+        let (mut app, _boot) = Signex::new();
+        let key = panel_key();
+        place(&mut app, &key);
+        place(&mut app, &key);
+        assert!(app.library.components_panel.recent.parts().is_empty());
+        assert!(
+            app.document_view.error_notice.is_some(),
+            "the refusal says why"
+        );
+
+        app.document_state.active_path = Some(std::path::PathBuf::from("sheet.snxsch"));
+        place(&mut app, &key);
+        assert!(
+            app.library.components_panel.recent.parts().is_empty(),
+            "the library is not open"
+        );
+    }
+
+    /// A Place that starts heads Recently placed, once per Place.
+    #[test]
+    fn a_place_that_starts_is_recently_placed() {
+        let (mut app, _boot) = Signex::new();
+        let key = panel_key();
+        app.document_state.active_path = Some(std::path::PathBuf::from("sheet.snxsch"));
+        app.library
+            .open_libraries
+            .push(crate::library::state::OpenLibrary {
+                root: key.library_path.clone(),
+                display_name: "placed".into(),
+                library_id: uuid::Uuid::from_u128(9),
+                tables: std::collections::HashMap::new(),
+                cached_components: Vec::new(),
+                cached_symbols: Vec::new(),
+                cached_footprints: Vec::new(),
+                cached_sims: Vec::new(),
+                cached_classes: Vec::new(),
+                observed_stamp: None,
+                own_edit_stamp: None,
+                display: crate::library::state::LibraryDisplaySettings::default(),
+                dangling: Default::default(),
+                pricing: Default::default(),
+                alternate_supply: Default::default(),
+                provenance: Default::default(),
+            });
+        place(&mut app, &key);
+        place(&mut app, &key);
+        let recent = app.library.components_panel.recent.parts();
+        assert_eq!(recent.len(), 1);
+        assert_eq!(recent[0].key, key);
+        assert_eq!(recent[0].uses, 2);
     }
 
     #[test]

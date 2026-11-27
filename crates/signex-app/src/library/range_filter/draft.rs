@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 
-use signex_library::{RangeFilter, RangeOp};
+use signex_library::{FilterBound, RangeFilter, RangeOn, RangeOp};
 use signex_types::quantity::{MantissaError, SiPrefix, Unit, parse_mantissa, quantity_from_parts};
 
 use crate::library::messages::{RangeBound, RangeFilterMsg};
@@ -16,6 +16,10 @@ pub struct BoundDraft {
     /// Why the last keystroke was refused; cleared by the next accepted
     /// edit.
     pub refusal: Option<String>,
+    /// "Any prefix": the number is compared with the number a value
+    /// displays, in whatever prefix (mockup row 52). Only the
+    /// Components panel sets it.
+    pub any_prefix: bool,
 }
 
 impl Default for BoundDraft {
@@ -24,6 +28,7 @@ impl Default for BoundDraft {
             text: String::new(),
             prefix: SiPrefix::One,
             refusal: None,
+            any_prefix: false,
         }
     }
 }
@@ -32,6 +37,16 @@ impl BoundDraft {
     fn quantity(&self, unit: &Unit) -> Option<signex_types::quantity::Quantity> {
         let prefix = effective_prefix(unit, self.prefix);
         quantity_from_parts(&self.text, prefix, unit.clone()).ok()
+    }
+
+    /// The bound as the filter compares it: the number as displayed for
+    /// Any prefix, else the base value.
+    fn bound(&self, unit: &Unit) -> Option<FilterBound> {
+        if !self.any_prefix {
+            return self.quantity(unit).map(FilterBound::Base);
+        }
+        let number: f64 = parse_mantissa(&self.text).ok()?;
+        number.is_finite().then_some(FilterBound::Displayed(number))
     }
 
     fn edit(&mut self, text: String) {
@@ -70,6 +85,9 @@ pub struct RangeFilterDraft {
     pub unit: Unit,
     pub low: BoundDraft,
     pub high: BoundDraft,
+    /// What a min-to-max column's filter tests (mockup row 52);
+    /// a plain measurement ignores it.
+    pub on: RangeOn,
 }
 
 impl RangeFilterDraft {
@@ -79,19 +97,27 @@ impl RangeFilterDraft {
             unit,
             low: BoundDraft::default(),
             high: BoundDraft::default(),
+            on: RangeOn::Value,
         }
     }
 
     /// The validated filter, or `None` while a needed number is empty or
     /// unfinished. An inactive filter hides nothing.
     pub fn filter(&self) -> Option<RangeFilter> {
-        let low = self.low.quantity(&self.unit)?;
-        let high = if self.op.is_between() {
-            Some(self.high.quantity(&self.unit)?)
+        let low = self.low.bound(&self.unit)?;
+        // Covers tests one number; the operator and a second bound are not
+        // used.
+        let op = if self.on == RangeOn::Covers {
+            RangeOp::AtLeast
+        } else {
+            self.op
+        };
+        let high = if op.is_between() {
+            Some(self.high.bound(&self.unit)?)
         } else {
             None
         };
-        RangeFilter::new(self.op, low, high)
+        RangeFilter::with_bounds(op, self.unit.clone(), low, high)
     }
 
     fn bound_mut(&mut self, bound: RangeBound) -> &mut BoundDraft {
@@ -133,6 +159,44 @@ impl RangeFilters {
             .iter()
             .filter_map(|(k, d)| Some((k.clone(), d.filter()?)))
             .collect()
+    }
+
+    /// [`Self::active`] with what each filter tests, for a surface with
+    /// min-to-max columns.
+    pub fn active_on(&self) -> Vec<(String, RangeFilter, RangeOn)> {
+        self.drafts
+            .iter()
+            .filter_map(|(k, d)| Some((k.clone(), d.filter()?, d.on)))
+            .collect()
+    }
+
+    /// Start the filter on `key` the Components panel way: both bounds on
+    /// Any prefix when the unit takes prefixes, and a min-to-max column on
+    /// Covers (the mockup's defaults).
+    pub fn start_panel_filter(&mut self, key: &str, min_to_max: bool) {
+        if let Some(d) = self.drafts.get_mut(key) {
+            let any = d.unit.takes_prefix();
+            d.low.any_prefix = any;
+            d.high.any_prefix = any;
+            if min_to_max {
+                d.on = RangeOn::Covers;
+            }
+        }
+    }
+
+    /// Switch one bound of `key`'s filter to or from Any prefix.
+    pub fn set_any_prefix(&mut self, key: &str, high: bool, any: bool) {
+        if let Some(d) = self.drafts.get_mut(key) {
+            let bound = if high { &mut d.high } else { &mut d.low };
+            bound.any_prefix = any;
+        }
+    }
+
+    /// What a min-to-max column's filter on `key` tests.
+    pub fn set_target(&mut self, key: &str, on: RangeOn) {
+        if let Some(d) = self.drafts.get_mut(key) {
+            d.on = on;
+        }
     }
 
     /// Whether the filter on `key` draws as its chip: it is complete and

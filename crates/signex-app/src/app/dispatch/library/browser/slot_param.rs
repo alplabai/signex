@@ -28,6 +28,7 @@ pub(super) fn add_slot_param(
     }
     modal.param_buf.insert(name.to_string(), entry);
     modal.draft.parameters.insert(name.to_string(), value);
+    modal.added_slots.insert(name.to_string(), false);
     modal.error = None;
 }
 

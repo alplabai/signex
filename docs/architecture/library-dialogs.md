@@ -57,8 +57,8 @@ A row click highlights the row and previews it, read off the UI thread; Pick
 confirms (decided 2026-11-22). Pick and the preview follow the highlighted row
 only while the filter shows it. A file named by a uuid lists as `<name>.<ext>`.
 Pick on a symbol outside the row's library opens the copy confirm (below) in
-place of the list. A row of a library that is not open has no button of its
-own: Link without copying and Copy into are on that confirm.
+place of the list. A row of a library that is not open carries a "Library not open" tag and has
+no button of its own: Link without copying and Copy into are on that confirm.
 
 ### Copy into library confirm
 

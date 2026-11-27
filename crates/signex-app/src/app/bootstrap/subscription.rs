@@ -811,12 +811,13 @@ impl Signex {
                 && !modal_detached(crate::app::state::ModalId::LibraryPrimitivePicker),
             close_library_confirm_open: self.library.close_library_confirm.is_some(),
             // The same read `symbol_delete_confirm_overlay` paints from.
-            symbol_delete_open: self
-                .document_view
-                .panel_ctx
-                .symbol_editor
-                .as_ref()
-                .is_some_and(|ctx| ctx.delete_warning.is_some()),
+            symbol_delete_open: self.library.primitive_picker.is_none()
+                && self
+                    .document_view
+                    .panel_ctx
+                    .symbol_editor
+                    .as_ref()
+                    .is_some_and(|ctx| ctx.delete_warning.is_some()),
             recovery_kind: self
                 .library
                 .recovery

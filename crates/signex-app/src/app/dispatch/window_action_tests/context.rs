@@ -105,6 +105,7 @@ fn edit_symbol_fixture(dir: &std::path::Path) -> (Fixture, PathBuf) {
             observed_stamp: None,
             dangling: Default::default(),
             pricing: Default::default(),
+            alternate_supply: Default::default(),
             own_edit_stamp: None,
             display: Default::default(),
             provenance: Default::default(),

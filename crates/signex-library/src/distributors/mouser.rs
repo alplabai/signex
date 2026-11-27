@@ -23,6 +23,7 @@ use crate::distributor::{
 };
 use crate::distributors::cache::DistributorCache;
 use crate::distributors::keyring::{KeyringError, KeyringStore};
+use crate::manufacturer::ManufacturerLifecycle;
 use crate::param::ParamMap;
 
 const MOUSER_PROVIDER_KEY: &str = "mouser";
@@ -307,6 +308,10 @@ struct MouserPartDto {
     availability_in_stock: Option<serde_json::Value>,
     #[serde(default, rename = "PriceBreaks")]
     price_breaks: Vec<MouserPriceBreak>,
+    /// The maker's lifecycle text (`"End of Life"`, ...); absent or `null`
+    /// for most parts.
+    #[serde(default, rename = "LifecycleStatus")]
+    lifecycle_status: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -389,8 +394,15 @@ impl MouserResponse {
                             .and_then(|s| s.split_whitespace().next())
                             .and_then(|n| n.replace(',', "").parse::<u32>().ok())
                     });
+                let lifecycle = p
+                    .lifecycle_status
+                    .as_deref()
+                    .and_then(ManufacturerLifecycle::from_distributor_text);
                 let pricing = match mouser_pricing(&p.price_breaks, stock, mouser_pn.clone()) {
-                    Some(Ok(snapshot)) => Some(snapshot),
+                    Some(Ok(snapshot)) => Some(PricingSnapshot {
+                        lifecycle,
+                        ..snapshot
+                    }),
                     Some(Err(why)) => {
                         extra.insert(super::price::PRICING_ERROR_KEY.into(), why);
                         None
@@ -453,6 +465,36 @@ mod tests {
         match err {
             DistributorError::Auth(_) => {}
             other => panic!("expected Auth, got {other:?}"),
+        }
+    }
+
+    /// #3046: `LifecycleStatus` in a synthetic response of the recorded
+    /// shape (`tests/fixtures/distributors/mouser_lifecycle.json`, no real
+    /// part data): each status Mouser words, `null` and a missing field.
+    /// `None` is what the picker and the Supply tab show as Unknown.
+    #[test]
+    fn each_lifecycle_status_rides_on_the_price_snapshot() {
+        use ManufacturerLifecycle::*;
+        let json = include_str!("../../tests/fixtures/distributors/mouser_lifecycle.json");
+        let response: MouserResponse = serde_json::from_str(json).unwrap();
+        let got: Vec<(String, Option<ManufacturerLifecycle>)> = response
+            .into_parts()
+            .unwrap()
+            .into_iter()
+            .map(|p| (p.mpn, p.pricing.expect("priced").lifecycle))
+            .collect();
+        let want = [
+            ("SYN-M-1", Some(Active)),
+            ("SYN-M-2", Some(Nrnd)),
+            ("SYN-M-3", Some(Eol)),
+            ("SYN-M-4", Some(Eol)),
+            ("SYN-M-5", None),
+            ("SYN-M-6", None),
+        ];
+        assert_eq!(got.len(), want.len());
+        for ((mpn, lifecycle), (want_mpn, want_lifecycle)) in got.iter().zip(want) {
+            assert_eq!(mpn, want_mpn);
+            assert_eq!(*lifecycle, want_lifecycle, "{mpn}");
         }
     }
 

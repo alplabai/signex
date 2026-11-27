@@ -134,6 +134,7 @@ fn a_template_row_still_refuses_a_unit_pick() {
             display_plus_minus: false,
         }],
         optional_params: Vec::new(),
+        ..ParameterTemplate::default()
     };
     let library_id = app.library.library_at(&root).expect("library").library_id;
     std::sync::Arc::make_mut(&mut app.library.template_registry)
@@ -165,6 +166,7 @@ fn app_with_template_kilo_ohm_row() -> (Signex, PathBuf) {
             display_plus_minus: false,
         }],
         optional_params: Vec::new(),
+        ..ParameterTemplate::default()
     };
     let library_id = app.library.library_at(&root).expect("library").library_id;
     std::sync::Arc::make_mut(&mut app.library.template_registry)

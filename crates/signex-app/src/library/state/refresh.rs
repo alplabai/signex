@@ -19,6 +19,7 @@ pub struct LibrarySnapshot {
     tables: HashMap<String, Vec<ComponentRow>>,
     summaries: Vec<ComponentSummary>,
     pricing: HashMap<Uuid, signex_library::RowPricing>,
+    alternate_supply: HashMap<Uuid, signex_library::RowAlternateSupply>,
     unreadable_tables: Vec<String>,
     classes: Vec<signex_library::ClassEntry>,
     symbols: Result<Vec<PrimitiveSummary>, LibraryError>,
@@ -66,6 +67,7 @@ impl LibrarySnapshot {
             tables,
             summaries,
             pricing,
+            alternate_supply,
             unreadable,
         } = scan_tables(
             adapter,
@@ -93,6 +95,7 @@ impl LibrarySnapshot {
             tables,
             summaries,
             pricing,
+            alternate_supply,
             unreadable_tables: unreadable,
             symbols: adapter.list_symbols(),
             symbols_partial: adapter.symbol_listing_is_partial(),
@@ -291,6 +294,7 @@ impl LibraryState {
             lib.dangling.unreadable_tables = snapshot.unreadable_tables;
             lib.dangling.tables_not_listed = false;
             lib.pricing = snapshot.pricing;
+            lib.alternate_supply = snapshot.alternate_supply;
             lib.cached_components = snapshot.summaries;
             lib.cached_classes = snapshot.classes;
             lib.observed_stamp = snapshot.stamp;
@@ -315,6 +319,10 @@ impl LibraryState {
                 apply_primitive_listing(&mut lib.cached_sims, snapshot.sims, &name, "sims"),
             ];
             lib.dangling.listings_complete = listings_complete(ok, snapshot.symbols_partial);
+            let library_id = lib.library_id;
+            // The re-read listing follows a save or an external edit: the
+            // row thumbnails of this library are read again (#2631).
+            self.components_panel.thumbs.mark_library_stale(library_id);
         }
         self.sweep_dangling_refs();
         // The library's symbols may have changed on disk.

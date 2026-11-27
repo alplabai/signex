@@ -8,24 +8,31 @@
 //! - `state.row.supply`             : `Vec<DistributorListing>` — sourcing rows.
 //!
 //! Two grids: **Manufacturer parts** (Role / Manufacturer / MPN / Status /
-//! Notes, the primary row first and marked) and **Distributor listings**
-//! (Distributor / SKU / Link). Every value mutation flows through
+//! Stock / Lifecycle / Notes, the primary row first and marked) and
+//! **Distributor listings** (Distributor / SKU / Link). An alternate's
+//! Stock and Lifecycle are the hand-entered values over the ones a
+//! distributor refresh fetched (#3046), with a line saying which is in
+//! effect. Every value mutation flows through
 //! `EditorMsg::Supply*` → the library dispatcher's `dispatch/library/`
 //! handlers, which write to the editor's draft row and mark it dirty.
 
 use iced::widget::{Column, Widget, column, pick_list, scrollable};
 use iced::{Element, Length};
-use signex_i18n::{I18n, ids, t};
-use signex_library::{AlternateStatus, DistributorSource, ManufacturerPart};
+use signex_i18n::{I18n, UserText, ids, t};
+use signex_library::{
+    AlternateStatus, AlternateSupply, DistributorSource, ManufacturerLifecycle, ManufacturerPart,
+    RowAlternateSupply,
+};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::dropdown_style::GraphiteDropdown as _;
 use signex_widgets::theme_ext;
-use signex_widgets::{raw, text, text_input};
+use signex_widgets::{Label, raw, text, text_input};
 
 use super::super::messages::{EditorMsg, LibraryMessage};
 use super::super::state::{ComponentPreviewState, EditorAddress};
 use super::kit::{self, SP, TS};
 use super::params::editor_event;
+use crate::library::alternate_supply_words::{SupplyValue, lifecycle_words, source_line};
 
 const STATUS_OPTS: [AlternateStatus; 4] = [
     AlternateStatus::Primary,
@@ -94,7 +101,7 @@ pub(crate) fn distributor_source_to_string(s: DistributorSource) -> String {
     distributor_label(s).to_string()
 }
 
-const PART_COLS: [kit::TableColumn; 6] = [
+const PART_COLS: [kit::TableColumn; 8] = [
     (
         Some(ids::EDITORS_COMPONENT_COLUMN_ROLE),
         Length::FillPortion(2),
@@ -109,6 +116,14 @@ const PART_COLS: [kit::TableColumn; 6] = [
     ),
     (
         Some(ids::EDITORS_COMPONENT_COLUMN_STATUS),
+        Length::FillPortion(3),
+    ),
+    (
+        Some(ids::EDITORS_COMPONENT_COLUMN_STOCK),
+        Length::FillPortion(3),
+    ),
+    (
+        Some(ids::EDITORS_COMPONENT_COLUMN_LIFECYCLE),
         Length::FillPortion(3),
     ),
     (
@@ -151,14 +166,17 @@ fn empty_text(listings: bool) -> signex_i18n::MessageId {
     }
 }
 
+/// The tab. `fetched` is what a distributor refresh stored for the row's
+/// alternates (`OpenLibrary::alternate_supply`), `None` when nothing was.
 pub fn view<'a>(
     state: &'a ComponentPreviewState,
+    fetched: Option<&RowAlternateSupply>,
     tokens: &'a ThemeTokens,
     i18n: &I18n,
     address: EditorAddress,
 ) -> Element<'a, LibraryMessage> {
     let body = column![
-        parts_section(state, tokens, i18n, &address),
+        parts_section(state, fetched, tokens, i18n, &address),
         listings_section(state, tokens, i18n, &address),
     ]
     .spacing(SP.xl)
@@ -222,6 +240,7 @@ fn blank<'a>() -> Element<'a, LibraryMessage> {
 
 fn parts_section<'a>(
     state: &'a ComponentPreviewState,
+    fetched: Option<&RowAlternateSupply>,
     tokens: &'a ThemeTokens,
     i18n: &I18n,
     address: &EditorAddress,
@@ -232,7 +251,16 @@ fn parts_section<'a>(
         tokens,
     );
     let primary = &state.row.primary_mpn;
-    let [role_w, mfg_w, mpn_w, status_w, notes_w, action_w] = PART_COLS.map(|(_, w)| w);
+    let [
+        role_w,
+        mfg_w,
+        mpn_w,
+        status_w,
+        stock_w,
+        life_w,
+        notes_w,
+        action_w,
+    ] = PART_COLS.map(|(_, w)| w);
 
     let primary_row = kit::table_row(
         vec![
@@ -259,6 +287,8 @@ fn parts_section<'a>(
                 status_picker(primary.status, address, EditorMsg::SupplyPrimarySetStatus),
                 status_w,
             ),
+            (blank(), stock_w),
+            (blank(), life_w),
             (
                 input(
                     "Preferred vendor, lead time",
@@ -278,7 +308,8 @@ fn parts_section<'a>(
     let mut grid: Column<Element<'a, LibraryMessage>> =
         column![kit::table_header(&PART_COLS, i18n, tokens), primary_row];
     for (idx, alt) in state.row.alternates.iter().enumerate() {
-        grid = grid.push(alternate_row(idx, alt, tokens, address));
+        let supply = AlternateSupply::of(alt, fetched);
+        grid = grid.push(alternate_row(idx, alt, &supply, tokens, i18n, address));
     }
     if state.row.alternates.is_empty() {
         grid = grid.push(kit::empty_state(t!(i18n, empty_text(false)), None, tokens));
@@ -299,10 +330,21 @@ fn parts_section<'a>(
 fn alternate_row<'a>(
     idx: usize,
     alt: &'a ManufacturerPart,
+    supply: &AlternateSupply,
     tokens: &'a ThemeTokens,
+    i18n: &I18n,
     address: &EditorAddress,
 ) -> Element<'a, LibraryMessage> {
-    let [role_w, mfg_w, mpn_w, status_w, notes_w, action_w] = PART_COLS.map(|(_, w)| w);
+    let [
+        role_w,
+        mfg_w,
+        mpn_w,
+        status_w,
+        stock_w,
+        life_w,
+        notes_w,
+        action_w,
+    ] = PART_COLS.map(|(_, w)| w);
     kit::table_row(
         vec![
             (role_cell(role_label(Some(idx)), false, tokens), role_w),
@@ -324,6 +366,8 @@ fn alternate_row<'a>(
                 }),
                 status_w,
             ),
+            (stock_cell(idx, alt, supply, tokens, i18n, address), stock_w),
+            (lifecycle_cell(idx, supply, tokens, i18n, address), life_w),
             (
                 input(
                     "Notes",
@@ -349,6 +393,108 @@ fn alternate_row<'a>(
         None,
         tokens,
     )
+}
+
+/// An alternate's stock: the hand-entered units, with the fetched value as
+/// the placeholder, over the line saying which is in effect.
+fn stock_cell<'a>(
+    idx: usize,
+    alt: &ManufacturerPart,
+    supply: &AlternateSupply,
+    tokens: &ThemeTokens,
+    i18n: &I18n,
+    address: &EditorAddress,
+) -> Element<'a, LibraryMessage> {
+    let typed = alt.manual_stock.map(|n| n.to_string()).unwrap_or_default();
+    // The fetched count is distributor data, shown as it came.
+    let fetched: Label<'a> = match &supply.fetched_stock {
+        Some(f) => UserText::new(f.value.to_string()).into(),
+        None => t!(i18n, ids::VARIANT_EDIT_STOCK_UNKNOWN).into(),
+    };
+    let address = address.clone();
+    let field = text_input(fetched, typed)
+        .on_input(move |value| {
+            editor_event(
+                &address,
+                EditorMsg::SupplyAlternateStockEdited { idx, value },
+            )
+        })
+        .padding([SP.s, SP.m])
+        .size(TS.label);
+    column![
+        field,
+        source_caption(supply, SupplyValue::Stock, tokens, i18n)
+    ]
+    .spacing(SP.xs)
+    .boxed()
+}
+
+/// One entry of the lifecycle picker: no hand-entered value (the fetched
+/// one is used), or one of the maker's lifecycles.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct LifecycleChoice(Option<ManufacturerLifecycle>);
+
+/// An alternate's lifecycle: the hand-entered one, or From distributor,
+/// over the line saying which is in effect.
+fn lifecycle_cell<'a>(
+    idx: usize,
+    supply: &AlternateSupply,
+    tokens: &ThemeTokens,
+    i18n: &I18n,
+    address: &EditorAddress,
+) -> Element<'a, LibraryMessage> {
+    let mut choices = vec![LifecycleChoice(None)];
+    choices.extend(ManufacturerLifecycle::ALL.map(|l| LifecycleChoice(Some(l))));
+    let labels: Vec<(LifecycleChoice, String)> = choices
+        .iter()
+        .map(|c| {
+            let id = match c.0 {
+                None => ids::LIBRARY_SUPPLY_LIFECYCLE_FETCHED,
+                Some(l) => lifecycle_words(Some(l)).0,
+            };
+            (*c, t!(i18n, id).into_string())
+        })
+        .collect();
+    let label = move |c: &LifecycleChoice| {
+        labels
+            .iter()
+            .find(|(k, _)| k == c)
+            .map(|(_, text)| text.clone())
+            .unwrap_or_default()
+    };
+    let address = address.clone();
+    let picker = pick_list(
+        Some(LifecycleChoice(supply.manual_lifecycle)),
+        choices,
+        label,
+    )
+    .graphite()
+    .on_select(move |c: LifecycleChoice| {
+        editor_event(
+            &address,
+            EditorMsg::SupplyAlternateLifecyclePicked { idx, value: c.0 },
+        )
+    })
+    .padding([SP.s, SP.m])
+    .width(Length::Fill);
+    column![
+        picker,
+        source_caption(supply, SupplyValue::Lifecycle, tokens, i18n)
+    ]
+    .spacing(SP.xs)
+    .boxed()
+}
+
+fn source_caption<'a>(
+    supply: &AlternateSupply,
+    which: SupplyValue,
+    tokens: &ThemeTokens,
+    i18n: &I18n,
+) -> Element<'a, LibraryMessage> {
+    text(source_line(supply, which, i18n))
+        .size(TS.caption)
+        .color(theme_ext::text_secondary(tokens))
+        .boxed()
 }
 
 // ──────────────────────── Distributor listings ─────────────────────────
@@ -481,10 +627,18 @@ mod tests {
             |c: &kit::TableColumn| c.0.map_or_else(String::new, |id| t!(en, id).into_string());
         let titles: Vec<String> = PART_COLS.iter().map(render).collect();
         assert_eq!(
-            &titles[..5],
-            ["ROLE", "MANUFACTURER", "MPN", "STATUS", "NOTES"]
+            &titles[..7],
+            [
+                "ROLE",
+                "MANUFACTURER",
+                "MPN",
+                "STATUS",
+                "STOCK",
+                "LIFECYCLE",
+                "NOTES"
+            ]
         );
-        assert_eq!(titles[5], "");
+        assert_eq!(titles[7], "");
         let titles: Vec<String> = LISTING_COLS.iter().map(render).collect();
         assert_eq!(&titles[..3], ["DISTRIBUTOR", "SKU", "LINK"]);
         assert_eq!(titles[3], "");

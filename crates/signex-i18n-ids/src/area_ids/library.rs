@@ -16,13 +16,14 @@ define_ids! {
     LIBRARY_SYMBOL_DELETE_CHECKING = "library-symbol-delete-checking";
     LIBRARY_SYMBOL_DELETE_MAY_BE_IN_USE = "library-symbol-delete-may-be-in-use";
     LIBRARY_SYMBOL_DELETE_IN_USE = "library-symbol-delete-in-use";
+    LIBRARY_SYMBOL_DELETE_NOT_IN_USE = "library-symbol-delete-not-in-use";
     LIBRARY_CREATE_OPTIONS_CREATE = "library-create-options-create";
     LIBRARY_EDIT_ROW_RELOAD = "library-edit-row-reload";
     LIBRARY_EDIT_ROW_KEEP_EDITING = "library-edit-row-keep-editing";
     LIBRARY_EDIT_ROW_RELOAD_SAVED = "library-edit-row-reload-saved";
     LIBRARY_PICKER_NEXT = "library-picker-next";
     LIBRARY_PRIMITIVE_PICKER_BROWSE = "library-primitive-picker-browse";
-    LIBRARY_PRIMITIVE_PICKER_OPEN_LIBRARY = "library-primitive-picker-open-library";
+    LIBRARY_PRIMITIVE_PICKER_LIBRARY_NOT_OPEN = "library-primitive-picker-library-not-open";
     LIBRARY_RECOVERY_REMOVE_FROM_PROJECT = "library-recovery-remove-from-project";
     LIBRARY_RECOVERY_LOCATE = "library-recovery-locate";
     LIBRARY_RECOVERY_RESTORE_REMOTE = "library-recovery-restore-remote";
@@ -177,6 +178,7 @@ define_ids! {
     LIBRARY_PRIMITIVE_PICKER_GROUP_NO_LIBRARY = "library-primitive-picker-group-no-library";    LIBRARY_PRIMITIVE_PICKER_NO_LIBRARIES = "library-primitive-picker-no-libraries";
     LIBRARY_PRIMITIVE_PICKER_NO_MATCH = "library-primitive-picker-no-match";
     LIBRARY_PRIMITIVE_PICKER_THIS_LIBRARY = "library-primitive-picker-this-library";
+    LIBRARY_PRIMITIVE_PICKER_SEVERAL_LIBRARIES = "library-primitive-picker-several-libraries";
     LIBRARY_PRIMITIVE_PICKER_COPY_TITLE = "library-primitive-picker-copy-title";
     LIBRARY_PRIMITIVE_PICKER_COPY_LOOSE = "library-primitive-picker-copy-loose";
     LIBRARY_PRIMITIVE_PICKER_COPY_LOOSE_DETAIL = "library-primitive-picker-copy-loose-detail";
@@ -304,6 +306,15 @@ define_ids! {
     LIBRARY_RANGE_FILTER_DONE = "library-range-filter-done";
     // symbol-delete-modal
     LIBRARY_SYMBOL_DELETE_TITLE = "library-symbol-delete-title";
+    LIBRARY_SYMBOL_DELETE_CONSEQUENCE = "library-symbol-delete-consequence";
+    LIBRARY_SYMBOL_DELETE_KEY_ROWS = "library-symbol-delete-key-rows";
+    LIBRARY_SYMBOL_DELETE_KEY_OPEN_SHEETS = "library-symbol-delete-key-open-sheets";
+    LIBRARY_SYMBOL_DELETE_KEY_CLOSED_SHEETS = "library-symbol-delete-key-closed-sheets";
+    LIBRARY_SYMBOL_DELETE_KEY_NOT_CHECKED = "library-symbol-delete-key-not-checked";
+    LIBRARY_SYMBOL_DELETE_CHECKING_CLOSED = "library-symbol-delete-checking-closed";
+    LIBRARY_SYMBOL_DELETE_REBIND_ROW = "library-symbol-delete-rebind-row";
+    LIBRARY_SYMBOL_DELETE_REBIND_ALL = "library-symbol-delete-rebind-all";
+    LIBRARY_SYMBOL_DELETE_SHOW_ALL = "library-symbol-delete-show-all";
     // picker-and-change-component
     LIBRARY_CHANGE_COMPONENT_NOTE = "library-change-component-note";
     LIBRARY_CHANGE_COMPONENT_SEARCH = "library-change-component-search";
@@ -555,4 +566,13 @@ define_ids! {
     LIBRARY_IMPORT_DIALOG_PARTIAL = "library-import-dialog-partial";
     LIBRARY_IMPORT_DIALOG_UNREADABLE_HINT = "library-import-dialog-unreadable-hint";
     LIBRARY_BROWSER_IMPORT = "library-browser-import";
+    LIBRARY_MFR_LIFECYCLE_ACTIVE = "library-mfr-lifecycle-active";
+    LIBRARY_MFR_LIFECYCLE_NRND = "library-mfr-lifecycle-nrnd";
+    LIBRARY_MFR_LIFECYCLE_EOL = "library-mfr-lifecycle-eol";
+    LIBRARY_MFR_LIFECYCLE_UNKNOWN = "library-mfr-lifecycle-unknown";
+    LIBRARY_SUPPLY_MANUAL = "library-supply-manual";
+    LIBRARY_SUPPLY_FETCHED = "library-supply-fetched";
+    LIBRARY_SUPPLY_MANUAL_OVER_FETCHED = "library-supply-manual-over-fetched";
+    LIBRARY_SUPPLY_NONE = "library-supply-none";
+    LIBRARY_SUPPLY_LIFECYCLE_FETCHED = "library-supply-lifecycle-fetched";
 }

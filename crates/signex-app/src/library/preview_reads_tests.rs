@@ -72,6 +72,7 @@ fn open(state: &mut LibraryState, root: &std::path::Path, library_id: Uuid) {
         observed_stamp: None,
         dangling: Default::default(),
         pricing: Default::default(),
+        alternate_supply: Default::default(),
         own_edit_stamp: None,
         display: LibraryDisplaySettings::default(),
         provenance: Default::default(),

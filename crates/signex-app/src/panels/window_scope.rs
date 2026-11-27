@@ -366,6 +366,8 @@ impl PanelMsg {
             | Self::SchLibraryDeleteSymbol { .. }
             | Self::SchLibraryDeleteConfirmed { .. }
             | Self::SchLibraryDeleteCancelled { .. }
+            | Self::SchLibraryDeleteRebind { .. }
+            | Self::SchLibraryDeleteShowAllRows { .. }
             | Self::UpdateDrawingEdit { .. }
             | Self::DrawingFieldTyping { .. }
             | Self::DrawingFieldLeft { .. }

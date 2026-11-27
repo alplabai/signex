@@ -99,6 +99,7 @@ fn app_with_row_and_symbol(stored: u64, read: u64) -> (Signex, EditorAddress, Sy
         own_edit_stamp: None,
         display: LibraryDisplaySettings::default(),
         pricing: Default::default(),
+        alternate_supply: Default::default(),
         provenance: Default::default(),
     });
     let mut preview = ComponentPreviewState::from_row(root, TABLE.into(), row);
@@ -526,6 +527,7 @@ fn a_refused_browser_row_bind_refreshes_the_cache_so_a_retry_is_not_refused_agai
         address.clone(),
         signex_library::PrimitiveKind::Symbol,
         PrimitiveRef::new(Uuid::now_v7(), Uuid::now_v7()),
+        None,
     );
 
     run_write(&mut app, task);

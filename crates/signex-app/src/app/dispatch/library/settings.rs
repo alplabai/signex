@@ -266,8 +266,8 @@ impl Signex {
                     }
                 });
             }
-            SettingsMsg::PreferenceUp(src) => self.swap_preferred_order(src, true),
-            SettingsMsg::PreferenceDown(src) => self.swap_preferred_order(src, false),
+            SettingsMsg::PreferenceUp(src) => return self.swap_preferred_order(src, true),
+            SettingsMsg::PreferenceDown(src) => return self.swap_preferred_order(src, false),
             SettingsMsg::PreferenceDragStarted(src) => {
                 self.library.settings.preferred_order_drag = Some(src);
                 self.library.settings.preferred_order_drop_target = None;
@@ -280,12 +280,18 @@ impl Signex {
             SettingsMsg::PreferenceDropped(target) => {
                 self.library.settings.preferred_order_drop_target = None;
                 if let Some(src) = self.library.settings.preferred_order_drag.take() {
-                    self.move_preferred_order(src, target);
+                    return self.move_preferred_order(src, target);
                 }
             }
             SettingsMsg::PreferenceDragEnded => {
                 self.library.settings.preferred_order_drag = None;
                 self.library.settings.preferred_order_drop_target = None;
+            }
+            SettingsMsg::PreferenceOrderSaved { generation, result } => {
+                let settings = &mut self.library.settings;
+                if generation == settings.preferred_order_save_generation {
+                    settings.preferred_order_error = result.err();
+                }
             }
         }
         Task::none()
@@ -355,56 +361,97 @@ impl Signex {
         &mut self,
         src: signex_library::DistributorSource,
         target: signex_library::DistributorSource,
-    ) {
+    ) -> Task<Message> {
         let order = &mut self.library.settings.preferred_order;
         let (Some(from), Some(to)) = (
             order.iter().position(|s| *s == src),
             order.iter().position(|s| *s == target),
         ) else {
-            return;
+            return Task::none();
         };
         if from == to {
-            return;
+            return Task::none();
         }
         let moved = order.remove(from);
         order.insert(to, moved);
-        self.save_preferred_order();
+        self.save_preferred_order()
     }
 
     /// Move `src` one slot up (or down) the preferred-order list and
     /// persist. A save failure lands in `preferred_order_error` so the
     /// panel can show it inline — silently swallowing it left the user
     /// to discover the reverted order on next launch.
-    fn swap_preferred_order(&mut self, src: signex_library::DistributorSource, up: bool) {
+    fn swap_preferred_order(
+        &mut self,
+        src: signex_library::DistributorSource,
+        up: bool,
+    ) -> Task<Message> {
         let order = &mut self.library.settings.preferred_order;
         let Some(i) = order.iter().position(|s| *s == src) else {
-            return;
+            return Task::none();
         };
         let target = if up {
             if i == 0 {
-                return;
+                return Task::none();
             }
             i - 1
         } else {
             if i + 1 >= order.len() {
-                return;
+                return Task::none();
             }
             i + 1
         };
         order.swap(i, target);
-        self.save_preferred_order();
+        self.save_preferred_order()
     }
 
-    /// Persist the preferred order; a failure is kept for the inline error.
-    /// Up / Down and a dropped grip all save here, still as a synchronous
-    /// `atomic_write` of the small `distributors.toml` inside `update`;
-    /// moving it to a Task is #2626.
-    fn save_preferred_order(&mut self) {
-        let saved = crate::library::settings::persistence::save_preferred_order(
-            &self.library.settings.preferred_order,
-        );
-        self.library.settings.preferred_order_error = saved.err();
+    /// Persist the preferred order off the `update` thread (#2626). Up /
+    /// Down and a dropped grip all save here. The new order is in the Model
+    /// at once; the result comes back as `PreferenceOrderSaved`, and only
+    /// the newest generation's result sets the inline error.
+    fn save_preferred_order(&mut self) -> Task<Message> {
+        let settings = &mut self.library.settings;
+        settings.preferred_order_save_generation += 1;
+        let generation = settings.preferred_order_save_generation;
+        let order = settings.preferred_order.clone();
+        let written = std::sync::Arc::clone(&settings.preferred_order_written);
+        let i18n = std::sync::Arc::clone(&self.ui_state.i18n);
+        Task::perform(
+            async move {
+                tokio::task::spawn_blocking(move || {
+                    save_in_turn(&written, generation, || {
+                        crate::library::settings::persistence::save_preferred_order(&order)
+                    })
+                })
+                .await
+                .unwrap_or_else(|e| Err(worker_panicked(&i18n, &e)))
+            },
+            move |result| {
+                Message::Library(LibraryMessage::Settings(
+                    SettingsMsg::PreferenceOrderSaved { generation, result },
+                ))
+            },
+        )
     }
+}
+
+/// Run the order save of `generation` unless a newer one already ran, with
+/// `written` held across the write so two saves never interleave. The
+/// newest generation that reached the lock is recorded even when its write
+/// failed, so an older order can never land after it: the last save wins.
+pub(super) fn save_in_turn(
+    written: &std::sync::Mutex<u64>,
+    generation: u64,
+    save: impl FnOnce() -> Result<(), String>,
+) -> Result<(), String> {
+    let mut newest = written
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    if *newest >= generation {
+        return Ok(());
+    }
+    *newest = generation;
+    save()
 }
 
 /// Save a validated Mouser API key through `save` (the OS keychain in

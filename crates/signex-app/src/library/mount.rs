@@ -176,6 +176,7 @@ fn prepare_opened(path: &Path, adapter: LocalGitAdapter, history_missing: bool) 
         observed_stamp: None,
         dangling: Default::default(),
         pricing: Default::default(),
+        alternate_supply: Default::default(),
         own_edit_stamp: None,
         display: LibraryDisplaySettings::default(),
         provenance: adapter.provenance(),
@@ -240,7 +241,7 @@ impl LibraryState {
     /// `state/methods.rs:83-85`.
     pub fn request_mount(&mut self, path: &Path, intent: MountIntent) -> MountRequest {
         if self.library_at(path).is_some() {
-            self.cancel_pending_close(path, "it was opened again");
+            self.note_reopened(path);
             return MountRequest::AlreadyMounted;
         }
         match self.pending_mounts.get_mut(path) {

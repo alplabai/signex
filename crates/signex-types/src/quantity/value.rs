@@ -53,6 +53,23 @@ impl Quantity {
         (format!("{sign}{}", l.text), l.prefix)
     }
 
+    /// The number the default display shows, without prefix and unit:
+    /// `4.7` for 4.7 kΩ, `100` for 100 nF. "Any prefix" comparisons read
+    /// this (mockup row 52).
+    pub fn displayed_number(&self) -> f64 {
+        // The mantissa text is a valid number by construction (see
+        // `eng_parts`); the fallback is unreachable in practice.
+        self.eng_parts().0.parse().unwrap_or(self.base)
+    }
+
+    /// The number this value shows in `prefix` (`0.1` for 100 nF in µ),
+    /// rounded to 12 significant digits so float noise from the scaling
+    /// never decides a comparison.
+    pub fn number_in(&self, prefix: SiPrefix) -> f64 {
+        let scaled = self.base / 10f64.powi(prefix.exponent());
+        format!("{scaled:.11e}").parse().unwrap_or(scaled)
+    }
+
     /// Render in `style`; `plus_minus` prefixes `±` (`+/-` in ASCII) for
     /// template slots that set `display_plus_minus`. Up to 15 significant
     /// digits; see [`format_quantity_sig`](super::format_quantity_sig) to

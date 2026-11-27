@@ -39,6 +39,11 @@ fn rebase_picker_target(target: &mut PrimitivePickerTarget, old: &Path, new: &Pa
         | PrimitivePickerTarget::EditRowModal(address)
         | PrimitivePickerTarget::BrowserRow(address)
         | PrimitivePickerTarget::PreviewAlternate(address) => rebase_address(address, old, new),
+        PrimitivePickerTarget::BrowserRows { rows, .. } => {
+            for address in rows {
+                rebase_address(address, old, new);
+            }
+        }
         PrimitivePickerTarget::DesignPart { .. }
         | PrimitivePickerTarget::BoardFootprint { .. }
         | PrimitivePickerTarget::SketchParameters { .. } => {}

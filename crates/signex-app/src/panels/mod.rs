@@ -264,9 +264,9 @@ pub(super) use properties::{
     PROPERTY_ROW_PAD_X, view_properties,
 };
 pub use symbol_context::{
-    GraphicFieldId, GraphicKindSummary, GraphicSummary, SymbolDeleteWarning, SymbolDisplayOptions,
-    SymbolEditorPanelContext, SymbolEditorSelection, SymbolFileEntry, SymbolPinDetails,
-    SymbolPinSummary,
+    GraphicFieldId, GraphicKindSummary, GraphicSummary, SymbolDeleteRebind, SymbolDeleteWarning,
+    SymbolDisplayOptions, SymbolEditorPanelContext, SymbolEditorSelection, SymbolFileEntry,
+    SymbolPinDetails, SymbolPinSummary, SymbolUsageEntry, SymbolUsageKey,
 };
 pub(super) use widgets::{
     collapsible_section_header, form_edit_row_f64, is_section_collapsed, part_tree_row,

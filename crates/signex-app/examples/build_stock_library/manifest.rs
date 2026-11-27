@@ -80,6 +80,7 @@ pub fn stock_library_file() -> Result<LibraryFile, Box<dyn Error>> {
         rows,
         column_types: BTreeMap::new(),
         pricing: Default::default(),
+        alternate_supply: Default::default(),
     };
     Ok(LibraryFile {
         layout: Default::default(),

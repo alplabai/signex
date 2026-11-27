@@ -1,7 +1,7 @@
 # Signex library format
 
-Status: normative for `snxlib/2`, `snxsym/v1` to `v4` and `snxfpt/1.1` to
-`1.4` (#3105). Section 8 describes the embedded 3D models of `snxfpt/1.4`
+Status: normative for `snxlib/2` and `2.1`, `snxsym/v1` to `v4` and
+`snxfpt/1.1` to `1.4` (#3105). Section 8 describes the embedded 3D models of `snxfpt/1.4`
 (#3107, #3108).
 
 This is the byte-level specification of a Signex component library, written
@@ -14,8 +14,10 @@ writer accepts more than it writes, the spec says what it writes.
 complete small library written by Signex's own writer: two symbols (one with
 two units and De Morgan bodies), four footprints (one with a STEP
 attachment and its `step/` file, one with an asymmetric pad layout, one
-with a pad of each remaining layer set of section 4.2) and three part rows
-covering every structured cell form.
+with a pad of each remaining layer set of section 4.2), three part rows
+covering every structured cell form, a cached price and a fetched alternate
+supply record (2.6). It is `snxlib/2`: the hand-entered stock and lifecycle
+of `snxlib/2.1` (2.4) are not in it.
 `docs/fixtures/library-format/content-hash/<row_id>.json` holds the exact
 bytes each row's `content_hash` is computed over. The test
 `crates/signex-library/tests/library_format_conformance/` builds the same
@@ -124,16 +126,22 @@ without git); a converter must not create or commit one.
 - **`.snxsym` and `.snxfpt`:** unknown keys are **dropped** on the next save.
   A converter must write only the keys below.
 
-## 2. `.snxlib` (`snxlib/2`)
+## 2. `.snxlib` (`snxlib/2`, `2.1`)
 
 A TOML document: a manifest, then one `[tables.<name>]` block per part table.
-`snxlib/2` is the only token read or written; any other token, or none, is
-refused.
+The token is `snxlib/2`, or `snxlib/2.1` while any manufacturer part in the
+file (a `primary_mpn` cell or an element of an `alternates` cell) carries
+`manual_stock` or `manual_lifecycle` (2.4, #3046). A file without them keeps
+`snxlib/2`, byte for byte, and removing the last one writes `snxlib/2`
+again. Signex reads both; any other token, or none, is refused. A build
+older than 2.1 reads only `snxlib/2` and refuses a `snxlib/2.1` file by
+name, since it would drop the hand-entered values on save. A converter
+writes `snxlib/2` unless its source has such values.
 
 ### 2.1 Manifest, in write order
 
 ```toml
-format = "snxlib/2"
+format = "snxlib/2"               # "snxlib/2.1" with hand-entered supply (2.4)
 library_id = "<uuid>"
 
 [library]
@@ -337,10 +345,17 @@ refused.
 
 ```json
 {"manufacturer":"Example Corp","mpn":"EX-1","status":"Primary","notes":null}
+{"manufacturer":"Sample Inc","mpn":"SI-1","status":"Approved","notes":null,"manual_stock":1200,"manual_lifecycle":"NRND"}
 ```
 
 `status` is `Primary`, `Approved`, `Conditional` or `Disqualified`; `notes`
-is a string or `null`.
+is a string or `null`. `manual_stock` (units, an integer from 0 to
+4294967295) and `manual_lifecycle` (`Active`, `NRND` or `EOL`, the maker's
+lifecycle) are what the librarian entered in the editor's Supply tab
+(#3046). Each is written, after `notes`, only when set, and either one makes
+the file `snxlib/2.1`. They win over the values a distributor refresh
+fetched, which are kept apart in the `alternate_supply` sidecar (2.6) and
+never written here.
 
 **Distributor listing** (elements of `supply`):
 
@@ -366,9 +381,13 @@ order; each value is tagged:
 
 A measurement is stored as the value in the **base unit** with the base
 unit's token: `ohm`, `F`, `H`, `V`, `A`, `W`, `Hz`, `%`, `ppm/C`, `V/us`,
-`AWG` (4.7 kilo-ohm is `{"value":4700.0,"unit":"ohm"}`). Signex also reads a
-prefixed form (`{"value":4.7,"unit":"kΩ"}`) as the same quantity but keeps
-it as written, and keeps any other unit text as written. Non-finite numbers
+`AWG`, `bps`, `degC` (4.7 kilo-ohm is `{"value":4700.0,"unit":"ohm"}`, 20
+kbps is `{"value":20000.0,"unit":"bps"}`). Signex also reads a prefixed form
+(`{"value":4.7,"unit":"kΩ"}`) as the same quantity but keeps it as written,
+reads `°C` as `degC`, and keeps any other unit text as written. A min-to-max
+value (supply voltage, operating temperature) is two measurements, one
+parameter per end (`supply_min`, `supply_max`); the class template's
+`[[ranges]]` pairs them for display. Non-finite numbers
 are refused. The parameter `designator_prefix` (`Text`, ASCII letters) sets
 the part's reference prefix.
 
@@ -426,6 +445,31 @@ quantity (from 1), prices finite and not negative. `unit_price` uses Rust's
 debug float form (`0.1`, `1.0`, `1e-7`). Prices are a cache refreshed from
 distributors: a converter normally writes none. A record whose row is gone,
 or whose part number the row no longer lists, is dropped on the next save.
+
+**Fetched alternate supply** (#3046), written after the cached prices, one
+table per row, distributor and alternate MPN, in byte order of each:
+
+```toml
+[tables.resistors.alternate_supply.<row_id>.ExampleDistributor.SI-10K-0603]
+stock = 1200
+lifecycle = "Active"
+fetched_at = "2026-01-03T10:00:00Z"
+```
+
+What Refresh All Pricing fetched for an alternate: each distributor the row
+lists (`supply`) is asked by the alternate's MPN and manufacturer. `stock`
+and `lifecycle` (`Active`, `NRND`, `EOL`) are each omitted when the
+distributor did not report it; `fetched_at` uses section 5.4 with `Z`. Like
+prices it is a cache: a refresh writes only here, never the row, so it never
+changes an alternate's hand-entered values (2.4), and a converter normally
+writes none. A record whose row is gone, or whose distributor or alternate
+MPN (trimmed, any case) the row no longer lists, is dropped on the next
+save; a damaged record is dropped with a warning when the file loads. It
+needs no token: a build older than the sidecar keeps it as an unknown key.
+
+Where an alternate's stock and lifecycle are shown, the hand-entered value
+is in effect when set; otherwise the stock is the largest any distributor
+reported and the lifecycle the newest record's.
 
 Each sidecar section is preceded by one blank line.
 
@@ -901,7 +945,10 @@ order:
 | `plm` | `{"plm_part_id":null,"eco_refs":[],"compliance":{}}` | always |
 
 Not hashed: `created`, `updated`, `content_hash`, `version`, `released`,
-`symbol_version`, `footprint_version`, `sim_version`. The digest's 32 bytes
+`symbol_version`, `footprint_version`, `sim_version`, and the sidecars (2.6).
+The `primary_mpn` and `alternates` objects are the cell form of 2.4, so a
+hand-entered `manual_stock` or `manual_lifecycle` is hashed when set and a
+part without one hashes as before. The digest's 32 bytes
 are written as 64 lower-case hex digits. The fixture files
 `content-hash/<row_id>.json` are these documents, without a trailing
 newline.

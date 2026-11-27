@@ -1,0 +1,150 @@
+{
+  "Products": [
+    {
+      "ManufacturerProductNumber": "SYN-D-1",
+      "Manufacturer": {
+        "Name": "Example Corp"
+      },
+      "Description": {
+        "ProductDescription": "Synthetic part for lifecycle parsing"
+      },
+      "QuantityAvailable": 100,
+      "ProductVariations": [
+        {
+          "DigiKeyProductNumber": "SYN-D-1-ND",
+          "StandardPricing": [
+            {
+              "BreakQuantity": 1,
+              "UnitPrice": 0.1
+            }
+          ]
+        }
+      ],
+      "ProductStatus": {
+        "Id": 0,
+        "Status": "Active"
+      }
+    },
+    {
+      "ManufacturerProductNumber": "SYN-D-2",
+      "Manufacturer": {
+        "Name": "Example Corp"
+      },
+      "Description": {
+        "ProductDescription": "Synthetic part for lifecycle parsing"
+      },
+      "QuantityAvailable": 100,
+      "ProductVariations": [
+        {
+          "DigiKeyProductNumber": "SYN-D-2-ND",
+          "StandardPricing": [
+            {
+              "BreakQuantity": 1,
+              "UnitPrice": 0.1
+            }
+          ]
+        }
+      ],
+      "ProductStatus": {
+        "Id": 0,
+        "Status": "Not For New Designs"
+      }
+    },
+    {
+      "ManufacturerProductNumber": "SYN-D-3",
+      "Manufacturer": {
+        "Name": "Example Corp"
+      },
+      "Description": {
+        "ProductDescription": "Synthetic part for lifecycle parsing"
+      },
+      "QuantityAvailable": 100,
+      "ProductVariations": [
+        {
+          "DigiKeyProductNumber": "SYN-D-3-ND",
+          "StandardPricing": [
+            {
+              "BreakQuantity": 1,
+              "UnitPrice": 0.1
+            }
+          ]
+        }
+      ],
+      "ProductStatus": {
+        "Id": 0,
+        "Status": "Last Time Buy"
+      }
+    },
+    {
+      "ManufacturerProductNumber": "SYN-D-4",
+      "Manufacturer": {
+        "Name": "Example Corp"
+      },
+      "Description": {
+        "ProductDescription": "Synthetic part for lifecycle parsing"
+      },
+      "QuantityAvailable": 100,
+      "ProductVariations": [
+        {
+          "DigiKeyProductNumber": "SYN-D-4-ND",
+          "StandardPricing": [
+            {
+              "BreakQuantity": 1,
+              "UnitPrice": 0.1
+            }
+          ]
+        }
+      ],
+      "ProductStatus": {
+        "Id": 0,
+        "Status": "Obsolete"
+      }
+    },
+    {
+      "ManufacturerProductNumber": "SYN-D-5",
+      "Manufacturer": {
+        "Name": "Example Corp"
+      },
+      "Description": {
+        "ProductDescription": "Synthetic part for lifecycle parsing"
+      },
+      "QuantityAvailable": 100,
+      "ProductVariations": [
+        {
+          "DigiKeyProductNumber": "SYN-D-5-ND",
+          "StandardPricing": [
+            {
+              "BreakQuantity": 1,
+              "UnitPrice": 0.1
+            }
+          ]
+        }
+      ],
+      "ProductStatus": {
+        "Id": 0,
+        "Status": "Discontinued at Digi-Key"
+      }
+    },
+    {
+      "ManufacturerProductNumber": "SYN-D-6",
+      "Manufacturer": {
+        "Name": "Example Corp"
+      },
+      "Description": {
+        "ProductDescription": "Synthetic part for lifecycle parsing"
+      },
+      "QuantityAvailable": 100,
+      "ProductVariations": [
+        {
+          "DigiKeyProductNumber": "SYN-D-6-ND",
+          "StandardPricing": [
+            {
+              "BreakQuantity": 1,
+              "UnitPrice": 0.1
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

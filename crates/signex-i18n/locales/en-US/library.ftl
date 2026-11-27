@@ -271,6 +271,7 @@ library-row-footprint-reading = Reading footprint…
 library-symbol-delete-checking = Checking whether symbol "{ $name }" is in use
 library-symbol-delete-may-be-in-use = Symbol "{ $name }" may still be in use
 library-symbol-delete-in-use = Symbol "{ $name }" is still in use
+library-symbol-delete-not-in-use = Symbol "{ $name }" is no longer in use
 
 ## Library dialog buttons (#2225)
 library-create-options-create = Create Library
@@ -281,7 +282,7 @@ library-edit-row-reload-saved = Reload saved version
 # Change Component: go on to the pin preview.
 library-picker-next = Next
 library-primitive-picker-browse = Browse filesystem…
-library-primitive-picker-open-library = Open library
+library-primitive-picker-library-not-open = Library not open
 library-recovery-remove-from-project = Remove from project
 library-recovery-locate = Locate…
 library-recovery-restore-remote = Restore from remote
@@ -597,6 +598,8 @@ library-primitive-picker-no-libraries = No libraries open. Use Browse filesystem
 library-primitive-picker-no-match = No primitives match. Only primitives saved inside an open `.snxlib` are listed: save the symbol into `<lib>.snxlib/symbols/`, or use Browse filesystem…
 # The library the row belongs to, when its name is not known.
 library-primitive-picker-this-library = this library
+# The rows a Re-bind is for are in several libraries, so a symbol from outside every library has no one library to be copied into (#2572).
+library-primitive-picker-several-libraries = These rows are in several libraries, so a symbol from outside every library cannot be copied into them. Pick a symbol from a library.
 # Title of the confirm shown before a symbol is copied or linked.
 library-primitive-picker-copy-title = Copy into library?
 # The symbol is in no library. $name is the symbol, $library the row's library.
@@ -797,6 +800,24 @@ library-range-filter-done = Done
 # symbol-delete-modal
 # Title of the confirm a Delete of a symbol still in use opens (mockup row 137).
 library-symbol-delete-title = Delete Symbol?
+# What Delete anyway does to the rows that bind the symbol (#2572). $count is a whole number.
+library-symbol-delete-consequence = { $count ->
+        [one] { $count } component row will show a broken symbol binding.
+       *[other] { $count } component rows will show a broken symbol binding.
+    }
+# Keys of the in-use box: the rows, open sheets and closed sheets that use the symbol, and what could not be read.
+library-symbol-delete-key-rows = Component rows
+library-symbol-delete-key-open-sheets = Open sheets
+library-symbol-delete-key-closed-sheets = Closed sheets
+library-symbol-delete-key-not-checked = Not checked
+# Closed sheets value while they are still being read from disk.
+library-symbol-delete-checking-closed = Checking closed sheets of the open projects…
+# Opens the symbol picker for one affected row, then returns to the confirm.
+library-symbol-delete-rebind-row = Re-bind…
+# Opens the symbol picker once and binds the picked symbol to every affected row.
+library-symbol-delete-rebind-all = Re-bind all to…
+# Lists every affected row. $count is how many rows are listed then.
+library-symbol-delete-show-all = Show all { $count }
 # picker-and-change-component
 # Change Component header note: $reference is the part's designator, $sheet the sheet's file name.
 library-change-component-note = { $reference } · { $sheet }
@@ -1184,3 +1205,18 @@ library-import-dialog-partial = { $count ->
 library-import-dialog-unreadable-hint = Install a library converter that reads this kind of file, then press Look again.
 # The Library Browser's LIBRARIES header (#3122).
 library-browser-import = Import…
+# A manufacturer part's lifecycle as its maker states it (#3046); not the
+# library row's own Draft / Released state.
+library-mfr-lifecycle-active = Active
+library-mfr-lifecycle-nrnd = NRND
+library-mfr-lifecycle-eol = EOL
+library-mfr-lifecycle-unknown = Unknown
+# Where an alternate's stock or lifecycle comes from. $distributor is the
+# distributor that reported it, $when the time it was fetched.
+library-supply-manual = Entered by hand in the library
+library-supply-fetched = From { $distributor }, { $when }
+# A hand-entered value hides a fetched one: $value is what the distributor reported.
+library-supply-manual-over-fetched = Entered by hand in the library; { $distributor } reported { $value } on { $when }
+library-supply-none = No value yet: Refresh All Pricing asks the distributors the row lists
+# The Supply tab's lifecycle picker: no hand-entered value, the fetched one is used.
+library-supply-lifecycle-fetched = From distributor

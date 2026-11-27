@@ -364,6 +364,36 @@ start-libraries-stock-caption = ships with Signex · read-only
 start-libraries-no-match = No libraries match “{ $query }”
 start-libraries-none = No libraries loaded
 start-libraries-none-body = Add a library to use its parts in every project.
+# Version control column (#2591). The heading is shown in capitals; git and
+# git-lfs are the tools' names.
+start-libraries-column-version-control = VERSION CONTROL
+# The library that comes with the install has no version control to show.
+start-libraries-vcs-none = —
+# Shown while the library's version control is still being read.
+start-libraries-vcs-pending = …
+start-libraries-vcs-git = git
+# A link: pressing it opens Enable Version Control for the library.
+start-libraries-vcs-off = off
+start-libraries-vcs-attention = needs attention
+# Reasons shown under "needs attention".
+start-libraries-vcs-git-missing = git is not installed or not on PATH
+start-libraries-vcs-lfs-missing = uses Git LFS, but git-lfs is not on PATH
+# $count is a whole number.
+start-libraries-vcs-uncommitted =
+    { $count ->
+        [one] { $count } uncommitted change
+       *[other] { $count } uncommitted changes
+    }
+# $reason is git's own message, in English.
+start-libraries-vcs-unreadable = cannot read the repository: { $reason }
+# Messages line when the version control of the libraries could not be read.
+# $reason is the system's reason, in English.
+start-libraries-vcs-read-failed = Could not read the version control of the libraries: { $reason }
+# The button that opens a library row's menu (#2592).
+start-library-row-menu = ⋯
+# Row menu entry and the confirm's button: Signex stops loading the library;
+# its files stay on disk.
+start-library-remove = Remove from { -brand-name }
 # A project is open but no document is shown.
 start-hint-title = No document selected
 start-hint-body = Choose a schematic or PCB from the project tree, or open one here.
@@ -875,7 +905,7 @@ panels-components-clear-filter = Clear
 panels-components-place = Place
 # Switch next to Add: rows with a symbol thumbnail and a description.
 panels-components-previews = Previews
-panels-components-previews-tooltip = Rows with symbol preview (remembered as a preference)
+panels-components-previews-tooltip = A symbol preview column and taller rows (remembered as a preference)
 # Section title above the parts placed from this panel, in capitals.
 panels-components-recent-title = RECENTLY PLACED
 # How often a recent part was placed this session. $count is a whole number.
@@ -1485,3 +1515,102 @@ panels-dock-command-unknown-panel = `panel` is one of { $panels }.
 panels-dock-command-unknown-state = `state` is one of open, close, collapse, expand.
 panels-dock-command-in-window = The { $panel } panel is in a window of its own; close that window.
 panels-dock-command-not-docked = The { $panel } panel is not docked, so it has no region to { $state }.
+# components-panel-table
+# Column captions of the Components panel table (mockup row 52).
+panels-components-column-part-number = Part Number
+panels-components-column-description = Description
+panels-components-column-manufacturer = Manufacturer
+panels-components-column-library-ref = Library Ref
+panels-components-column-footprint = Footprint
+panels-components-column-stock = Stock
+panels-components-column-price = Price
+# A min-to-max value in one cell: $low and $high are formatted values.
+panels-components-range = { $low } to { $high }
+# A min-to-max value with only its low end set ($value is that end).
+panels-components-at-least = ≥ { $value }
+# A min-to-max value with only its high end set ($value is that end).
+panels-components-at-most = ≤ { $value }
+# A category picker entry: $name is the category, $count its parts.
+panels-components-category = { $name } ({ $count })
+# The category picker entry for every part.
+panels-components-all-parts = All parts
+# The tool line's Filter button, and with $count active filters.
+panels-components-filter-button = Filter
+panels-components-filter-active = Filter { $count }
+# The tool line's Columns button.
+panels-components-columns-button = Columns
+# The view switch: the list alone, or the list with details.
+panels-components-view-list = List
+panels-components-view-details = Details
+# Status line under the table: how many parts show, of $total.
+panels-components-results = Results { $count }
+panels-components-results-of = Results { $count } of { $total }
+# Status line: the sort keys, "Voltage ↑, Value ↓", or none.
+panels-components-unsorted = Unsorted
+panels-components-sorted-by = Sort: { $keys }
+# The empty table, and its actions.
+panels-components-no-parts-match = No parts match. The active filters exclude every part.
+panels-components-clear-filters = Clear filters
+panels-components-search-all = Search all parts
+# A value a part does not set: in a group line and in Details.
+panels-components-not-set = Not set
+# The part count of a group line.
+panels-components-group-count = { $count }
+# The group bar with no level, its buttons and the count of a group.
+panels-components-group-hint = No grouping
+panels-components-group-add = + Group
+panels-components-expand-all = Expand all
+panels-components-collapse-all = Collapse all
+# The close button of a table popover.
+panels-components-popover-close = ✕
+# A column header's menu.
+panels-components-sort-ascending = Sort ascending
+panels-components-sort-descending = Sort descending
+panels-components-sort-add = Add to sort (Shift+click)
+panels-components-sort-remove = Remove from sort
+panels-components-group-by = Group by this
+panels-components-group-remove = Remove from groups
+panels-components-hide-column = Hide column
+panels-components-reset-width = Reset width
+panels-components-columns-menu = Columns…
+# The "+ Group" menu's title.
+panels-components-group-by-title = Group by
+# The Columns picker: its title ($category is the category entry), search, sections and footer.
+panels-components-columns-title = Columns · { $category }
+panels-components-columns-search = Search parameters
+panels-components-columns-parameters = Category parameters
+panels-components-columns-shared = Shared
+panels-components-columns-no-match = No parameter matches.
+panels-components-using-default = Using category default
+panels-components-saved-setup = Your saved setup
+panels-components-reset-default = Reset to category default
+# The category default as the Columns picker sums it up: $grouped, $sorted and $columns (a count).
+panels-components-default-ungrouped = No grouping
+panels-components-default-grouped = Grouped by { $keys }
+panels-components-default-summary = Default: { $grouped } · sorted by { $sorted } · { $columns } columns
+# The Filter popover: its title, In stock only, the Range section and the part count.
+panels-components-filter-title = Filter
+panels-components-in-stock-only = In stock only
+panels-components-filter-range = Range
+panels-components-filter-count = { $count } parts
+# What a min-to-max range filter tests: a number inside the range, or its low or high end.
+panels-components-range-covers = Covers
+panels-components-range-min = Min
+panels-components-range-max = Max
+# A range filter bound on Any prefix compares the number as displayed (mockup row 52).
+panels-components-any-prefix = Any prefix
+panels-components-any-prefix-note = Any prefix: compares the displayed number.
+# Details: show every parameter, or only the pinned ones; $count is how many there are.
+panels-components-show-all = Show all ({ $count })
+panels-components-show-less = Show less
+# Section labels of the selected component's details, in capitals.
+panels-components-details-references = REFERENCES
+panels-components-details-choices = PART CHOICES
+# A part choice's stock: $count parts, or none.
+panels-components-in-stock = { $count } in stock
+panels-components-out-of-stock = Out of stock
+# The category of the parts placed from the panel this session.
+panels-components-recent-category = Recently placed
+# A Columns picker entry for a column only a library's own class template
+# offers: $column is its caption, $library the library.
+panels-components-column-from = { $column } ({ $library } template)

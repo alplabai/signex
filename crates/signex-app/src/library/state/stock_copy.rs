@@ -10,6 +10,14 @@ use crate::library::stock_copy::StockPrimitiveKind;
 pub const STOCK_LIBRARY_ID: uuid::Uuid = uuid::uuid!("019df45d-af5e-7a00-8c3b-dd3bf89b40ae");
 
 impl LibraryState {
+    /// The bundled stock library was looked for and is neither mounted nor
+    /// still mounting: not found, or it failed to open.
+    pub(crate) fn is_stock_missing(&self) -> bool {
+        self.stock_expected
+            && self.stock_library.is_none()
+            && !self.pending_mounts.keys().any(|p| self.is_stock_root(p))
+    }
+
     /// Refuse a library at `root` that is a copy of the bundled stock
     /// library (it carries the stock id but is not the stock file), so the
     /// bundled one always wins, whichever mount finishes first (#1894).

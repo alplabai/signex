@@ -413,6 +413,11 @@ impl Signex {
                 }
             };
         }
+        // The library stays open with its drafts: a Remove from Signex
+        // waiting on this close is dropped.
+        if let SaveAllNext::CloseLibrary { library_path } = &next {
+            self.drop_library_removal(library_path);
+        }
         let listing = Self::save_all_failure_listing(&failed);
         let id = match next {
             SaveAllNext::CloseProject { .. } => signex_i18n::ids::NOTICE_SAVE_ALL_PROJECT_KEPT,

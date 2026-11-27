@@ -22,7 +22,7 @@ use signex_app::library::state::{
 use signex_library::adapters::local_git::{LibraryInitOptions, LocalGitAdapter};
 use signex_library::library_file::{FORMAT_TOKEN, LibrarySection, SnxlibManifest};
 use signex_library::manifest::{LibraryMode, UsersConfig, WorkflowConfig};
-use signex_library::{ComponentRow, PrimitiveKind, PrimitiveRef, RowId};
+use signex_library::{ComponentRow, PrimitiveKind, PrimitiveRef, RowId, Symbol, SymbolFile};
 use uuid::Uuid;
 
 /// Messages-panel records written after `after_id` that contain `needle`.
@@ -126,6 +126,7 @@ fn new_component_on_a_library_without_a_table_says_why() {
         display: LibraryDisplaySettings::default(),
         dangling: Default::default(),
         pricing: Default::default(),
+        alternate_supply: Default::default(),
         provenance: Default::default(),
     });
     let before = diagnostics::newest_entry_id();
@@ -176,8 +177,20 @@ fn a_new_row_is_unbound_reported_once_and_binding_clears_it() {
         target: PrimitivePickerTarget::BrowserRow(address),
     }));
     crate::drive::drive(&mut app, task);
+    // A symbol pick reads the symbol's current version before it binds
+    // (#2572), so the picked symbol must exist in the library.
+    let symbol = Symbol::empty("PICKED");
+    let symbol_uuid = symbol.uuid;
+    std::fs::create_dir_all(tmp.path().join("symbols")).expect("symbols dir");
+    std::fs::write(
+        tmp.path().join("symbols").join("picked.snxsym"),
+        SymbolFile::from_symbol(symbol)
+            .to_toml_string()
+            .expect("emit"),
+    )
+    .expect("write symbol");
     let library_id = app.library.library_at(&snxlib).expect("open").library_id;
-    let picked = PrimitiveRef::new(library_id, Uuid::now_v7());
+    let picked = PrimitiveRef::new(library_id, symbol_uuid);
     let task = app.update(Message::Library(LibraryMessage::PrimitivePicker(
         PrimitivePickerMsg::Pick(picked),
     )));

@@ -486,6 +486,12 @@ variant-edit-same-footprint-head = Same footprint
 variant-edit-same-footprint-detail = { $footprint } in Base and in { $variant }
 variant-edit-footprint-differs = Footprint differs
 variant-edit-footprint-differs-detail = { $theirs } vs { $ours }: the board changes in { $variant }
+# The compare strip's cell for a library alternate's stock and lifecycle
+# (#3046). $stock is a number of units or "—"; $lifecycle is Active, NRND,
+# EOL or Unknown.
+variant-edit-supply-head = Stock and lifecycle
+variant-edit-supply-stock = Stock { $stock }
+variant-edit-supply-lifecycle = Lifecycle { $lifecycle }
 variant-edit-gets = { $variant } gets
 variant-edit-gets-detail = MPN { $mpn } · value { $value } · footprint { $footprint }
 # The scope on a channel tab (mockup rows 208, 209); $first and $last are the

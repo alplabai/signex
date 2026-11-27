@@ -9,7 +9,9 @@ format declares only its own table row below.
 ## The rules
 
 - **Save** writes the format's current token. The exceptions are `.snxsym`,
-  `.snxfpt`, `.snxsch`, `.snxpcb`, `.snxprj` and `.snxnbk`: each writes the lowest token the content needs. A
+  `.snxfpt`, `.snxsch`, `.snxpcb`, `.snxprj`, `.snxnbk` and `.snxlib`: each writes the lowest token the content needs. A
+  library stays `snxlib/2`, byte for byte, and writes `snxlib/2.1` while a
+  manufacturer part carries a hand-entered stock or lifecycle (#3046). A
   symbol file without polygons, De Morgan bodies or the `v4` shapes (table below) stays `snxsym/v1`; a
   schematic stays `snxsch/1.1`, byte for byte, unless a No-ERC directive
   names the rules it silences, which writes `snxsch/1.2` (#1699), or it holds
@@ -84,7 +86,8 @@ format declares only its own table row below.
 | BOM template | `snxbomt/1` (a BOM column preset with computed columns, #1988; `docs/BOM_COLUMNS.md`). An unknown key is refused, so a newer template is never rewritten without it | `snxbomt/1` | refused | refused |
 | `.snxprj` | `snxprj/1` | `snxprj/1` | opens read-only | read as `snxprj/1` |
 | `.snxprj`, variant settings | `snxprj/1.1` while `variant_settings` is not empty (a default variant or a part entry, a channel's copy of a part on a repeated sheet included, #2662; `project::snxprj_token`; DECISIONS 2026-11-25); else `snxprj/1`, byte for byte. A `snxprj/1` build would keep the section but not follow a variant rename or removal. Builds released before this policy (v26.11.0 and earlier) refuse any newer minor on load, so they refuse a 1.1 project rather than open it read-only | adds `snxprj/1.1` | opens read-only | read as `snxprj/1` |
-| `.snxlib` | `snxlib/2` | `snxlib/2` | refused | refused |
+| `.snxlib` | `snxlib/2` | `snxlib/2`, `2.1` | refused | refused |
+| `.snxlib`, hand-entered alternate supply | `snxlib/2.1` while a `primary_mpn` or `alternates` part carries `manual_stock` or `manual_lifecycle` (`LibraryFile::format_token`, #3046; DECISIONS 2026-11-27), whatever else the library holds; else `snxlib/2`, byte for byte, and clearing the last value writes `snxlib/2` again. A `snxlib/2` build would drop the values on save, so it refuses the file by name. The fetched values (`[tables.<name>.alternate_supply]`, `docs/LIBRARY_FORMAT.md` 2.6) take no token: an older build keeps them as unknown keys | adds `snxlib/2.1` | refused | refused |
 | `.snxfpt` | `snxfpt/1.1`, `1.2` with sketch links (reference dimensions, pattern sources and mirrors, per-instance pad overrides), or `1.3` with generated features (silkscreen outline, pad clearance, pin 1 marker, assembly outline; mockup row 124, #2834) or a pattern numbering sweep other than row by row (mockup row 126), whatever else it holds; `1.4` while a pad or a sketch pad sets its own thermal relief air gap, spoke width or spoke count (#2593: the `thermal_air_gap`, `thermal_spoke_width` and `thermal_spokes` pad columns, the sketch pad's `stack.thermal`), whatever else it holds. A 1.3 build refuses the pad columns and would drop the sketch pad's values on save | `snxfpt/1`, `1.1`, `1.2`, `1.3`, `1.4` | refused | refused |
 | `.snxfpt`, embedded 3D models | `snxfpt/1.4` while the file embeds a STEP model a footprint attaches (`[[models]]`, #3107/#3108; DECISIONS 2026-11-26), whatever else it holds; else the tokens above, byte for byte, and removing the last model writes the lower token again. A 1.3 build would ignore the section and drop the models on save | `snxfpt/1.4`, as above | refused | refused |
 | `.snxblk`, block diagram | `snxblk/1` (mockup row 171, #2796; `docs/architecture/snxblk-format.md`) | `snxblk/1` | opens read-only | refused |

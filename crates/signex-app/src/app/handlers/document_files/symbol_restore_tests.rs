@@ -4,8 +4,7 @@
 
 use crate::app::restore_job::RestoreJobDocument;
 use crate::app::{Signex, SymbolDocument, TabInfo, TabKind};
-use crate::library::symbol_delete::PendingSymbolDelete;
-use crate::panels::SymbolDeleteWarning;
+use crate::library::symbol_delete::{PendingSubject, PendingSymbolDelete, SymbolUsage};
 use signex_library::{Symbol, SymbolFile};
 use std::path::PathBuf;
 
@@ -18,24 +17,21 @@ fn app_with_warning() -> (Signex, PathBuf, SymbolFile) {
     // generation a freshly built restored document starts at.
     let editor = SymbolDocument::new(path.clone(), file.clone());
     let symbol = editor.draft.file.symbols[0].uuid;
-    app.library.pending_symbol_delete = Some(PendingSymbolDelete {
-        path: path.clone(),
-        symbol,
-        history: editor.draft.history_generation,
-        serial: 1,
-        rows: 1,
-        sheets: 0,
-        closed: 0,
-        base_lines: 1,
-        unchecked: 0,
-        warning: SymbolDeleteWarning {
+    app.library.pending_symbol_delete = Some(PendingSymbolDelete::new(
+        PendingSubject {
+            path: path.clone(),
+            symbol,
+            history: editor.draft.history_generation,
+            serial: 1,
             idx: 0,
             name: "A".into(),
-            only_unknown: false,
-            checking: false,
-            lines: vec!["Component rows: R1".into()],
         },
-    });
+        SymbolUsage {
+            placed: vec!["a.snxsch: R1".into()],
+            ..Default::default()
+        },
+        false,
+    ));
     app.document_state
         .symbol_editors
         .insert(path.clone(), editor);

@@ -49,16 +49,22 @@ pub(super) fn view<'a>(library: &'a LibraryState, ctx: &'a PanelContext) -> Kind
     }
 }
 
-/// The highlighted row, while its library is open and still holds it.
+/// The highlighted row, while its library is open, still holds it and the
+/// filter shows it: the toolbar never acts on a row nobody sees (#2747).
 fn highlighted(library: &LibraryState) -> Option<ComponentsPanelRowKey> {
     let key = library.panel_selected.as_ref()?;
-    let present = library
+    let rows = library
         .library_at(&key.library_path)?
         .tables
-        .get(&key.table)?
-        .iter()
+        .get(&key.table)?;
+    let shown = library
+        .library_panel
+        .rows
+        .visible_rows(&key.library_path, usize::MAX)
+        .filter(|(table, _)| *table == key.table)
+        .filter_map(|(_, index)| rows.get(index))
         .any(|r| signex_library::RowId::from_uuid(r.row_id) == key.row_id);
-    present.then(|| key.clone())
+    shown.then(|| key.clone())
 }
 
 /// The toolbar acts on the highlighted row through the messages the

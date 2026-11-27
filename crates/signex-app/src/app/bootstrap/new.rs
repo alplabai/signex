@@ -960,6 +960,9 @@ impl Signex {
                 stock_copy_target: crate::fonts::read_stock_copy_target_pref_from(prefs),
                 components_panel: crate::library::state::ComponentsPanelState {
                     row_style: crate::fonts::read_components_row_style_pref_from(prefs),
+                    table: crate::panels::components_panel::table::ComponentsTable::from_prefs(
+                        crate::fonts::read_components_views_from(prefs),
+                    ),
                     ..Default::default()
                 },
                 ..Default::default()

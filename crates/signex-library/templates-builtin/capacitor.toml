@@ -28,3 +28,10 @@ unit = "ohm"
 [[optional_params]]
 name = "package"
 kind = "text"
+
+# The Components panel view the category opens with (mockup row 52).
+[view]
+columns = ["row:part_number", "value", "voltage_max", "dielectric", "tolerance", "package", "row:stock", "row:price"]
+sort = [{ column = "voltage_max" }]
+group = [{ column = "package" }, { column = "value" }]
+pinned = ["value", "voltage_max", "dielectric", "package"]

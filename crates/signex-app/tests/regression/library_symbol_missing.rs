@@ -8,7 +8,7 @@ use signex_app::app::{
 };
 use signex_app::dock::DockMessage;
 use signex_app::library::messages::{LibraryMessage, PrimitiveEdit, SymbolEditorMsg};
-use signex_app::panels::PanelMsg;
+use signex_app::panels::{PanelMsg, SymbolUsageKey};
 use signex_library::{Symbol, SymbolFile};
 use std::path::PathBuf;
 
@@ -72,10 +72,15 @@ fn deleting_a_used_symbol_asks_first_and_names_the_row_and_sheet() {
     );
     let ctx = app.document_view.panel_ctx.symbol_editor.as_ref().unwrap();
     let warning = ctx.delete_warning.as_ref().expect("a warning is shown");
-    let text = warning.lines.join("\n");
-    assert!(text.contains("Component rows"), "{text}");
-    assert!(text.contains("place-364.snxsch"), "{text}");
-    assert!(text.contains(&reference), "{text}");
+    assert_eq!(warning.rows, 1);
+    let rows = warning.items(SymbolUsageKey::ComponentRows);
+    assert!(
+        rows.len() == 1 && rows[0].starts_with("SNX-TWO (") && rows[0].ends_with(" / ICs)"),
+        "{rows:?}"
+    );
+    let sheets = warning.items(SymbolUsageKey::OpenSheets).join("\n");
+    assert!(sheets.contains("place-364.snxsch"), "{sheets}");
+    assert!(sheets.contains(&reference), "{sheets}");
 
     panel(&mut app, PanelMsg::SchLibraryDeleteConfirmed(0));
     assert_eq!(symbol_count(&app, &path), 1, "the user can still delete");
@@ -487,7 +492,7 @@ fn a_symbol_whose_table_could_not_be_read_is_not_deleted_silently() {
         .delete_warning
         .as_ref()
         .expect("a warning")
-        .lines
+        .items(SymbolUsageKey::NotChecked)
         .join("\n");
     assert!(
         lines.contains("Table ICs")
@@ -550,9 +555,12 @@ fn restoring_the_header_and_refreshing_names_the_row_again() {
         .delete_warning
         .clone()
         .expect("the row still uses it");
-    let lines = warning.lines.join("\n");
-    assert!(!lines.contains("could not be read"), "{lines}");
-    assert!(lines.contains("Component rows"), "{lines}");
+    assert!(
+        warning.items(SymbolUsageKey::NotChecked).is_empty(),
+        "{:?}",
+        warning.entries
+    );
+    assert_eq!(warning.items(SymbolUsageKey::ComponentRows).len(), 1);
     assert!(!warning.only_unknown);
     assert_eq!(symbol_count(&app, &path), 2);
 }
@@ -574,11 +582,16 @@ fn a_symbol_outside_any_mounted_library_is_not_deleted_silently() {
     );
     let ctx = app.document_view.panel_ctx.symbol_editor.as_ref().unwrap();
     let warning = ctx.delete_warning.as_ref().expect("a warning");
-    let lines = warning.lines.join("\n");
-    assert!(lines.contains("is not inside a mounted library"), "{lines}");
+    let unchecked = warning.items(SymbolUsageKey::NotChecked).join("\n");
     assert!(
-        lines.contains("Open sheets with placed parts"),
-        "the open sheet is still found by symbol uuid: {lines}"
+        unchecked.contains("is not inside a mounted library"),
+        "{unchecked}"
+    );
+    assert_eq!(
+        warning.items(SymbolUsageKey::OpenSheets).len(),
+        1,
+        "the open sheet is still found by symbol uuid: {:?}",
+        warning.entries
     );
 }
 

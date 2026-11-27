@@ -759,6 +759,25 @@ fn an_unbind_of_one_trigger_keeps_the_hint_of_the_surviving_one() {
     );
 }
 
+/// The strokes a claim accepts for a hinted command are the strokes its
+/// hint names: the surviving F7, not the unbound Ctrl+P (#2631).
+#[test]
+fn the_shown_sequence_is_the_binding_the_hint_names() {
+    let print = AppCommandId::new("print").unwrap();
+    let keymap = CompiledKeymap::compile(&custom_profile(vec![
+        bind(ShortcutBindingAction::Command(print.clone()), "Ctrl+P"),
+        bind(ShortcutBindingAction::Command(print.clone()), "F7"),
+        bind(ShortcutBindingAction::Unbind(print.clone()), "Ctrl+P"),
+    ]));
+    let f7 = KeyStroke {
+        modifiers: Modifiers::default(),
+        key: KeyToken::Function(7),
+    };
+    assert_eq!(keymap.shown_sequence_for_id("print"), Some(&[f7][..]));
+    assert_eq!(keymap.shown_sequence_for_id("copy"), None, "unbound");
+    assert_eq!(keymap.shown_sequence_for_id("no such id!"), None);
+}
+
 #[test]
 fn a_command_whose_every_binding_is_unbound_has_no_hint() {
     let print = AppCommandId::new("print").unwrap();

@@ -1049,6 +1049,10 @@ pub enum PanelMsg {
     SchLibraryDeleteConfirmed(usize),
     /// The user backed out of that Delete.
     SchLibraryDeleteCancelled,
+    /// Re-bind rows the warning lists to a picked symbol (#2572).
+    SchLibraryDeleteRebind(crate::panels::SymbolDeleteRebind),
+    /// List every row the warning names, not only the first ones.
+    SchLibraryDeleteShowAllRows,
     UpdateDrawingEdit(crate::app::contracts::DrawingFieldEdit),
     /// Numeric text_input keystroke for a drawing field. The string is
     /// stored verbatim in panel_ctx.drawing_edit_buf so empty / partial

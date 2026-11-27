@@ -105,6 +105,7 @@ pub(crate) fn snapshot(
         currency: currency.to_ascii_uppercase(),
         stock,
         part_number: part_number.filter(|p| !p.trim().is_empty()),
+        lifecycle: None,
         by_distributor: std::collections::BTreeMap::from([(client_name.to_string(), breaks)]),
     }
 }

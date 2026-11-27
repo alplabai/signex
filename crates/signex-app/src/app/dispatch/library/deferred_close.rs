@@ -55,8 +55,11 @@ impl Signex {
     /// saved or discarded through the close prompt. A library mounted again
     /// meanwhile keeps its tabs.
     pub(crate) fn close_tabs_of_unmounted_libraries(&mut self) -> Task<Message> {
+        for root in std::mem::take(&mut self.library.reopened) {
+            self.drop_library_removal(&root);
+        }
         let unmounted = std::mem::take(&mut self.library.unmounted);
-        let mut tasks = Vec::new();
+        let mut tasks = vec![self.unregister_removed_library(&unmounted)];
         for root in unmounted {
             if self.library.library_at(&root).is_some() {
                 continue;
@@ -94,9 +97,12 @@ impl Signex {
             dirty.len() + dirty_files.len()
         ));
         // Another library's prompt stays up; this close is simply cancelled
-        // and the user can ask again.
+        // and the user can ask again, so a Remove from Signex waiting on it
+        // is dropped too.
         if self.library.close_library_confirm.is_none() {
             self.raise_close_library_prompt(root.to_path_buf(), dirty);
+        } else {
+            self.drop_library_removal(root);
         }
     }
 }

@@ -22,6 +22,7 @@ use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
 use crate::adapter::LibraryError;
+use crate::alternate_supply::RowAlternateSupply;
 use crate::component::ComponentRow;
 use crate::library_file::{ColumnType, SnxlibManifest};
 use crate::pricing::RowPricing;
@@ -48,6 +49,9 @@ pub struct TableDraft {
     pub column_types: BTreeMap<String, ColumnType>,
     /// `[tables.<name>.pricing...]`, keyed by `row_id`. Normally empty.
     pub pricing: BTreeMap<String, RowPricing>,
+    /// `[tables.<name>.alternate_supply...]` (#3046), keyed by `row_id`.
+    /// Normally empty.
+    pub alternate_supply: BTreeMap<String, RowAlternateSupply>,
 }
 
 /// A library being assembled in memory. See the module docs.

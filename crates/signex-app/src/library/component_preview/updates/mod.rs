@@ -91,6 +91,12 @@ fn route_inline_edit(state: &mut ComponentPreviewState, msg: EditorMsg) {
             supply::set_alternate_notes(state, idx, value)
         }
         EditorMsg::SupplyAlternateRemove { idx } => supply::remove_alternate(state, idx),
+        EditorMsg::SupplyAlternateStockEdited { idx, value } => {
+            supply::set_alternate_stock(state, idx, &value)
+        }
+        EditorMsg::SupplyAlternateLifecyclePicked { idx, value } => {
+            supply::set_alternate_lifecycle(state, idx, value)
+        }
 
         // ── Supply: distributor listings ─────────────────────────────
         EditorMsg::SupplyListingAdd => supply::add_listing(state),

@@ -578,6 +578,9 @@ mod library_stock_editable;
 mod library_stock_place;
 #[path = "regression/library_symbol_delete_closed.rs"]
 mod library_symbol_delete_closed;
+// #2572 — an in-use symbol Delete counts the rows and re-binds them.
+#[path = "regression/library_symbol_delete_rebind.rs"]
+mod library_symbol_delete_rebind;
 #[path = "regression/library_symbol_drift.rs"]
 mod library_symbol_drift;
 #[path = "regression/library_symbol_missing.rs"]

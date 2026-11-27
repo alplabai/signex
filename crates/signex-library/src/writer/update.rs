@@ -46,6 +46,7 @@ use super::update_guard;
 use super::{LibraryWriter, TableDraft};
 use crate::adapter::LibraryError;
 use crate::adapters::local_git::{component_to_library_row, library_row_to_component};
+use crate::alternate_supply::RowAlternateSupply;
 use crate::library_file::{LibraryFile, LibraryRow, LibraryTable};
 use crate::pricing::RowPricing;
 use crate::tables::ALTERNATE_SYMBOLS_COLUMN;
@@ -119,6 +120,7 @@ pub(super) fn write_update(w: &LibraryWriter, dir: &Path) -> Result<UpdateSummar
         )));
     }
     let old_pricing = stored_pricing(&existing);
+    let old_supply = stored_alternate_supply(&existing);
     let previous = match ledger::read(dir, w.manifest.library_id) {
         LedgerRead::Trusted(ledger) => {
             summary.ledger = LedgerState::Trusted;
@@ -140,6 +142,7 @@ pub(super) fn write_update(w: &LibraryWriter, dir: &Path) -> Result<UpdateSummar
             old_table,
             &mut old_rows,
             &old_pricing,
+            &old_supply,
             now,
             &mut summary,
         )?;
@@ -285,19 +288,41 @@ fn stored_pricing(file: &LibraryFile) -> HashMap<Uuid, RowPricing> {
         .collect()
 }
 
+/// Every stored row's fetched alternate supply (#3046), by `row_id`.
+fn stored_alternate_supply(file: &LibraryFile) -> HashMap<Uuid, RowAlternateSupply> {
+    file.tables
+        .values()
+        .flat_map(|t| &t.alternate_supply)
+        .filter_map(|(id, s)| Some((id.parse::<Uuid>().ok()?, s.clone())))
+        .collect()
+}
+
 fn merged_table(
     draft: &TableDraft,
     old_table: Option<&LibraryTable>,
     old_rows: &mut HashMap<Uuid, Arc<LibraryRow>>,
     old_pricing: &HashMap<Uuid, RowPricing>,
+    old_supply: &HashMap<Uuid, RowAlternateSupply>,
     now: chrono::DateTime<chrono::Utc>,
     summary: &mut UpdateSummary,
 ) -> Result<LibraryTable, LibraryError> {
     let mut rows = Vec::with_capacity(draft.rows.len());
     let mut pricing = draft.pricing.clone();
+    let mut alternate_supply = draft.alternate_supply.clone();
     for row in &draft.rows {
         let mut new = hashed(row)?;
         let key = new.row_id.to_string();
+        // Fetched alternate supply is a cache of the stored row: it follows
+        // the row while the row still lists the distributor and alternate.
+        if !alternate_supply.contains_key(&key)
+            && let Some(kept) = old_supply.get(&new.row_id)
+        {
+            let mut kept = kept.clone();
+            crate::alternate_supply::prune_row_alternate_supply(&new, &mut kept);
+            if !kept.is_empty() {
+                alternate_supply.insert(key.clone(), kept);
+            }
+        }
         if !pricing.contains_key(&key)
             && let Some(kept) = old_pricing.get(&new.row_id)
         {
@@ -343,6 +368,7 @@ fn merged_table(
         rows,
         column_types,
         pricing,
+        alternate_supply,
     })
 }
 
@@ -408,6 +434,7 @@ fn keep_unrecorded_rows(
                 rows: Vec::new(),
                 column_types: old_table.column_types.clone(),
                 pricing: BTreeMap::new(),
+                alternate_supply: Default::default(),
             });
             if row.cells.contains_key(ALTERNATE_SYMBOLS_COLUMN)
                 && !table.columns.iter().any(|c| c == ALTERNATE_SYMBOLS_COLUMN)
@@ -416,6 +443,11 @@ fn keep_unrecorded_rows(
             }
             if let Some(prices) = old_table.pricing.get(&id.to_string()) {
                 table.pricing.insert(id.to_string(), prices.clone());
+            }
+            if let Some(supply) = old_table.alternate_supply.get(&id.to_string()) {
+                table
+                    .alternate_supply
+                    .insert(id.to_string(), supply.clone());
             }
             table.rows.push(Arc::clone(row));
             kept.push(Arc::clone(row));
