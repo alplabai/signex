@@ -27,6 +27,7 @@ fn library(root: &str, components: Vec<ComponentSummary>) -> OpenLibrary {
         observed_stamp: None,
         dangling: Default::default(),
         pricing: Default::default(),
+        alternate_supply: Default::default(),
         own_edit_stamp: None,
         display: LibraryDisplaySettings::default(),
         provenance: Default::default(),

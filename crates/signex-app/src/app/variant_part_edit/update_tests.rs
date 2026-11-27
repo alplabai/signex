@@ -153,6 +153,7 @@ pub(super) fn alternate(mpn: &str) -> Candidate {
         pins: None,
         stock: Some(1200),
         status: CandidateStatus::Alternate(signex_library::AlternateStatus::Approved),
+        supply: None,
     }
 }
 

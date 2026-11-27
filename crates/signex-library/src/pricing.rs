@@ -362,6 +362,7 @@ mod tests {
             currency: "usd".into(),
             stock: Some(10),
             part_number: None,
+            lifecycle: None,
             by_distributor: BTreeMap::from([("Mouser".to_string(), breaks)]),
         }
     }

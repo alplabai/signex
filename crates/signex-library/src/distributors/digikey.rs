@@ -35,9 +35,11 @@ use url::Url;
 
 use crate::distributor::{
     DistributorAdapter, DistributorError, DistributorPart, DistributorSource, PriceBreak,
+    PricingSnapshot,
 };
 use crate::distributors::cache::DistributorCache;
 use crate::distributors::keyring::{KeyringError, KeyringStore};
+use crate::manufacturer::ManufacturerLifecycle;
 use crate::param::ParamMap;
 
 /// DigiKey production endpoints. Tests override these via `with_endpoints`.
@@ -679,6 +681,15 @@ struct DigiKeyProductDto {
     product_url: Option<String>,
     #[serde(default, rename = "ProductVariations")]
     variations: Vec<DigiKeyVariation>,
+    #[serde(default, rename = "ProductStatus")]
+    product_status: Option<DigiKeyProductStatus>,
+}
+
+/// `{ "Status": "Active" }`: the maker's lifecycle as DigiKey words it.
+#[derive(Debug, Deserialize)]
+struct DigiKeyProductStatus {
+    #[serde(default, rename = "Status")]
+    status: String,
 }
 
 /// `{ "Product": { … } }` — the shape of `…/{sku}/productdetails`.
@@ -779,13 +790,18 @@ impl DigiKeyResponse {
                                     );
                                     None
                                 }
-                                Some(breaks) => Some(super::price::snapshot(
-                                    DIGIKEY_NAME,
-                                    currency,
-                                    p.quantity_available,
-                                    Some(v.product_number.clone()),
-                                    breaks,
-                                )),
+                                Some(breaks) => Some(PricingSnapshot {
+                                    lifecycle: p.product_status.as_ref().and_then(|s| {
+                                        ManufacturerLifecycle::from_distributor_text(&s.status)
+                                    }),
+                                    ..super::price::snapshot(
+                                        DIGIKEY_NAME,
+                                        currency,
+                                        p.quantity_available,
+                                        Some(v.product_number.clone()),
+                                        breaks,
+                                    )
+                                }),
                             }
                         }
                         Err(why) => {

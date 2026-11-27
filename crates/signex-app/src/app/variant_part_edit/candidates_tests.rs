@@ -60,6 +60,8 @@ fn alternate(manufacturer: &str, mpn: &str, status: AlternateStatus) -> Manufact
         mpn: mpn.to_string(),
         status,
         notes: None,
+        manual_stock: None,
+        manual_lifecycle: None,
     }
 }
 
@@ -194,6 +196,7 @@ fn the_variant_gets_what_differs() {
         pins: None,
         stock: None,
         status: CandidateStatus::Lifecycle(LifecycleState::Released),
+        supply: None,
     };
     assert_eq!(
         alternate_values(&candidate("22µ", "cap_0805"), "22µ", "CAP_0805"),
@@ -212,4 +215,74 @@ fn the_variant_gets_what_differs() {
         ("NFM31PC276B0J3L".to_string(), None, None),
         "nothing read keeps the part's own"
     );
+}
+
+/// #3046: a library alternate carries its stock and lifecycle, the
+/// hand-entered value over the fetched one, and the fetched one beside it.
+#[test]
+fn an_alternate_reads_its_stock_and_lifecycle_with_the_row() {
+    use signex_library::{FetchedSupply, ManufacturerLifecycle, RowAlternateSupply, SupplySource};
+    let lib = Uuid::now_v7();
+    let mut base = row("C-22U", "GRM21BR61A226ME44", "22µ", lib);
+    let mut tdk = alternate("TDK", "C2012X5R1A226M125AB", AlternateStatus::Approved);
+    tdk.manual_lifecycle = Some(ManufacturerLifecycle::Nrnd);
+    base.alternates = vec![
+        alternate(
+            "Samsung Electro-Mechanics",
+            "CL21A226MPQNNNE",
+            AlternateStatus::Approved,
+        ),
+        tdk,
+        alternate("Yageo", "CC0805MKX5R6BB226", AlternateStatus::Approved),
+    ];
+    let at = chrono::Utc::now();
+    let fetched = |stock, lifecycle| FetchedSupply {
+        stock: Some(stock),
+        lifecycle: Some(lifecycle),
+        fetched_at: at,
+    };
+    let mut supply = RowAlternateSupply::new();
+    supply.entry("Mouser".into()).or_default().extend([
+        (
+            "CL21A226MPQNNNE".to_string(),
+            fetched(86_400, ManufacturerLifecycle::Active),
+        ),
+        (
+            "C2012X5R1A226M125AB".to_string(),
+            fetched(12_050, ManufacturerLifecycle::Active),
+        ),
+    ]);
+    let base_id = base.row_id;
+    let adapter = PricedAdapter::new(lib)
+        .with_rows(vec![base])
+        .with_alternate_supply([(base_id, supply)].into());
+    let mut out = Candidates::default();
+    collect(
+        &adapter,
+        "passives.snxlib",
+        &query(Some((lib, base_id)), ""),
+        &no_other,
+        &mut out,
+    );
+    let [samsung, tdk, yageo] = &out.alternates[..] else {
+        panic!("three alternates: {:?}", out.alternates);
+    };
+    assert_eq!(samsung.stock, Some(86_400));
+    let samsung = samsung.supply.as_ref().unwrap();
+    assert_eq!(samsung.lifecycle(), Some(ManufacturerLifecycle::Active));
+    assert_eq!(
+        samsung.stock_source(),
+        Some(SupplySource::Fetched {
+            distributor: "Mouser".into(),
+            fetched_at: at
+        })
+    );
+    // The hand-entered lifecycle wins; the fetched stock still shows.
+    assert_eq!(tdk.stock, Some(12_050));
+    let tdk = tdk.supply.as_ref().unwrap();
+    assert_eq!(tdk.lifecycle(), Some(ManufacturerLifecycle::Nrnd));
+    assert_eq!(tdk.lifecycle_source(), Some(SupplySource::Manual));
+    // Nothing known: no stock, no lifecycle.
+    assert_eq!(yageo.stock, None);
+    assert_eq!(yageo.supply.as_ref().unwrap().lifecycle(), None);
 }

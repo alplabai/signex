@@ -10,6 +10,7 @@ pub mod adapter;
 pub mod adapters;
 #[cfg(feature = "ai-stub")]
 pub mod ai_stub;
+pub mod alternate_supply;
 pub mod alternate_symbol;
 pub mod alternate_symbol_edit;
 pub(crate) mod board_footprint;
@@ -72,6 +73,10 @@ pub use adapters::library_set::{LibrarySet, UnresolvedRefs, absence_is_none};
 pub use adapters::read_only::ReadOnlyAdapter;
 #[cfg(feature = "ai-stub")]
 pub use ai_stub::{PinGuess, PinoutGuess, extract_pinout};
+pub use alternate_supply::{
+    AlternateSupply, AlternateSupplyUpdate, Fetched, FetchedSupply, RowAlternateSupply,
+    SupplySource,
+};
 pub use alternate_symbol::{
     AlternateSymbol, AlternateSymbolIssue, PinCompatibility, SymbolChoice, alternate_symbol_issues,
     check_pin_compatibility,
@@ -119,7 +124,9 @@ pub use manifest::{
     LibraryMeta, LibraryMode, Manifest, TableConfig, UserEntry, UsersConfig, WorkflowConfig,
     WorkflowMode,
 };
-pub use manufacturer::{AlternateStatus, DistributorListing, ManufacturerPart};
+pub use manufacturer::{
+    AlternateStatus, DistributorListing, ManufacturerLifecycle, ManufacturerPart,
+};
 pub use param::{ParamMap, ParamValue};
 pub use param_edit::{
     MeasurementParts, blank_slot_value, commit_measurement, commit_slot_measurement,

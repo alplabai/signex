@@ -126,6 +126,7 @@ fn new_component_on_a_library_without_a_table_says_why() {
         display: LibraryDisplaySettings::default(),
         dangling: Default::default(),
         pricing: Default::default(),
+        alternate_supply: Default::default(),
         provenance: Default::default(),
     });
     let before = diagnostics::newest_entry_id();

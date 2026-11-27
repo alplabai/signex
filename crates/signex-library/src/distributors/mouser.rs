@@ -23,6 +23,7 @@ use crate::distributor::{
 };
 use crate::distributors::cache::DistributorCache;
 use crate::distributors::keyring::{KeyringError, KeyringStore};
+use crate::manufacturer::ManufacturerLifecycle;
 use crate::param::ParamMap;
 
 const MOUSER_PROVIDER_KEY: &str = "mouser";
@@ -307,6 +308,10 @@ struct MouserPartDto {
     availability_in_stock: Option<serde_json::Value>,
     #[serde(default, rename = "PriceBreaks")]
     price_breaks: Vec<MouserPriceBreak>,
+    /// The maker's lifecycle text (`"End of Life"`, ...); absent or `null`
+    /// for most parts.
+    #[serde(default, rename = "LifecycleStatus")]
+    lifecycle_status: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -389,8 +394,15 @@ impl MouserResponse {
                             .and_then(|s| s.split_whitespace().next())
                             .and_then(|n| n.replace(',', "").parse::<u32>().ok())
                     });
+                let lifecycle = p
+                    .lifecycle_status
+                    .as_deref()
+                    .and_then(ManufacturerLifecycle::from_distributor_text);
                 let pricing = match mouser_pricing(&p.price_breaks, stock, mouser_pn.clone()) {
-                    Some(Ok(snapshot)) => Some(snapshot),
+                    Some(Ok(snapshot)) => Some(PricingSnapshot {
+                        lifecycle,
+                        ..snapshot
+                    }),
                     Some(Err(why)) => {
                         extra.insert(super::price::PRICING_ERROR_KEY.into(), why);
                         None
@@ -454,6 +466,16 @@ mod tests {
             DistributorError::Auth(_) => {}
             other => panic!("expected Auth, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn the_lifecycle_status_rides_on_the_price_snapshot() {
+        let json = r#"{"Errors":[],"SearchResults":{"Parts":[{"MouserPartNumber":"603-X","ManufacturerPartNumber":"X","Manufacturer":"YAGEO","AvailabilityInStock":"12","LifecycleStatus":"Not Recommended for New Designs","PriceBreaks":[{"Quantity":1,"Price":"$0.10","Currency":"USD"}]}]}}"#;
+        let response: MouserResponse = serde_json::from_str(json).unwrap();
+        let parts = response.into_parts().unwrap();
+        let snapshot = parts[0].pricing.as_ref().expect("priced");
+        assert_eq!(snapshot.lifecycle, Some(ManufacturerLifecycle::Nrnd));
+        assert_eq!(snapshot.stock, Some(12));
     }
 
     #[test]

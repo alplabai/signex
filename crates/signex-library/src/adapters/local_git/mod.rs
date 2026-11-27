@@ -517,6 +517,7 @@ impl LocalGitAdapter {
 }
 
 mod adapter;
+mod alternate_supply;
 pub(crate) mod branch_switch;
 mod commit_lock;
 mod disk_sync;

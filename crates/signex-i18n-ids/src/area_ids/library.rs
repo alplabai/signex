@@ -377,4 +377,13 @@ define_ids! {
     LIBRARY_IMPORT_UPDATE_RESTORED = "library-import-update-restored";
     LIBRARY_IMPORT_UPDATE_NOT_RESTORED = "library-import-update-not-restored";
     LIBRARY_IMPORT_ID_CLASH = "library-import-id-clash";
+    LIBRARY_MFR_LIFECYCLE_ACTIVE = "library-mfr-lifecycle-active";
+    LIBRARY_MFR_LIFECYCLE_NRND = "library-mfr-lifecycle-nrnd";
+    LIBRARY_MFR_LIFECYCLE_EOL = "library-mfr-lifecycle-eol";
+    LIBRARY_MFR_LIFECYCLE_UNKNOWN = "library-mfr-lifecycle-unknown";
+    LIBRARY_SUPPLY_MANUAL = "library-supply-manual";
+    LIBRARY_SUPPLY_FETCHED = "library-supply-fetched";
+    LIBRARY_SUPPLY_MANUAL_OVER_FETCHED = "library-supply-manual-over-fetched";
+    LIBRARY_SUPPLY_NONE = "library-supply-none";
+    LIBRARY_SUPPLY_LIFECYCLE_FETCHED = "library-supply-lifecycle-fetched";
 }

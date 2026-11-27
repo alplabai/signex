@@ -52,3 +52,8 @@ currency = "EUR"
 stock = 5000
 fetched_at = "2026-01-03T10:00:00Z"
 breaks = [{ qty = 1, unit_price = 0.1 }, { qty = 100, unit_price = 0.02 }, { qty = 1000, unit_price = 0.0085 }]
+
+[tables.resistors.alternate_supply.01940000-0000-7000-8000-000000000041.ExampleDistributor.SI-10K-0603]
+stock = 1200
+lifecycle = "Active"
+fetched_at = "2026-01-03T10:00:00Z"

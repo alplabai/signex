@@ -101,6 +101,7 @@ fn app_with_resistors() -> (Signex, PathBuf) {
         display: LibraryDisplaySettings::default(),
         dangling: Default::default(),
         pricing: Default::default(),
+        alternate_supply: Default::default(),
         provenance: Default::default(),
     });
     app.library.touch_data();

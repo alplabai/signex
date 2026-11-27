@@ -278,3 +278,47 @@ fn the_compare_strip_names_the_pin_left_without_a_wire() {
         "{shown:?}"
     );
 }
+
+/// #3046 (DECISIONS 2026-11-27): a library alternate's lifecycle column is
+/// its maker's lifecycle, its stock comes with the row, and an approval
+/// short of Approved moves beside its MPN.
+#[test]
+fn a_library_alternate_shows_its_stock_lifecycle_and_approval() {
+    use signex_library::{AlternateStatus, AlternateSupply, Fetched, ManufacturerLifecycle};
+    for theme in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
+        let (mut app, _id, _path, _dir) = app();
+        set_theme(&mut app, theme);
+        open(&mut app, VariantEditKind::Alternate);
+        let supply = |lifecycle| AlternateSupply {
+            manual_lifecycle: lifecycle,
+            fetched_stock: Some(Fetched {
+                value: 12_050,
+                distributor: "Mouser".into(),
+                fetched_at: chrono::Utc::now(),
+            }),
+            ..AlternateSupply::default()
+        };
+        let mut nrnd = alternate("C2012X5R1A226M125AB");
+        nrnd.stock = Some(12_050);
+        nrnd.status = super::candidates::CandidateStatus::Alternate(AlternateStatus::Conditional);
+        nrnd.supply = Some(supply(Some(ManufacturerLifecycle::Nrnd)));
+        let mut unknown = alternate("CL21A226MPQNNNE");
+        unknown.supply = Some(supply(None));
+        land(
+            &mut app,
+            Candidates {
+                library: Some("passives.snxlib".into()),
+                alternates: vec![nrnd, unknown],
+                ..Candidates::default()
+            },
+        );
+        let shown = texts(&app);
+        for words in ["12050", "NRND", "Conditional", "Unknown"] {
+            assert!(has(&shown, words), "{theme:?}: {words} in {shown:?}");
+        }
+        assert!(
+            !has(&shown, "Approved"),
+            "{theme:?}: an approved alternate shows no approval pill: {shown:?}"
+        );
+    }
+}

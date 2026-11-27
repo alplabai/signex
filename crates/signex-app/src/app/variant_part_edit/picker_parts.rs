@@ -15,6 +15,7 @@ use super::candidates::{
 use super::state::EditedPart;
 use super::wiring::{PinProblem, pin_problem};
 use crate::app::Message;
+use crate::library::alternate_supply_words::{SupplyValue, lifecycle_words, source_line};
 use crate::library::picker::mono;
 use crate::styles::tokens::resolve;
 use crate::styles::{PillTone, Radii, Spacing, TypeScale, medium_font, pill, pill_colors, ti};
@@ -235,6 +236,19 @@ pub(super) fn candidate_row<'a>(
     let mut mpn: Row<Element<'a, Message>> = row![data(&candidate.mpn, ink)]
         .spacing(SP.xs)
         .align_y(Alignment::Center);
+    // A library alternate's lifecycle column is its maker's lifecycle
+    // (#3046), so an approval short of Approved moves beside its MPN.
+    if candidate.supply.is_some()
+        && matches!(
+            candidate.status,
+            CandidateStatus::Alternate(
+                AlternateStatus::Conditional | AlternateStatus::Disqualified
+            )
+        )
+    {
+        let (approval, tone) = status_words(candidate.status);
+        mpn = mpn.push(status_pill(t!(i18n, approval), tone, tokens));
+    }
     if let Some(variant) = used_in {
         let tip = t!(i18n, ids::VARIANT_EDIT_USED_IN_TIP, "variant" => variant, "part" => part);
         let used = status_pill(
@@ -250,18 +264,32 @@ pub(super) fn candidate_row<'a>(
         } else {
             warn
         };
-    let stock = match candidate.stock {
+    let mut stock = match candidate.stock {
         Some(stock) => data(&stock.to_string(), ink),
         None => words(t!(i18n, ids::VARIANT_EDIT_STOCK_UNKNOWN), TS.body, ink),
     };
-    let (status, tone) = status_words(candidate.status);
+    let lifecycle = match &candidate.supply {
+        Some(supply) => {
+            stock = with_tip(stock, source_line(supply, SupplyValue::Stock, i18n), tokens);
+            let (label, tone) = lifecycle_words(supply.lifecycle());
+            with_tip(
+                status_pill(t!(i18n, label), tone, tokens),
+                source_line(supply, SupplyValue::Lifecycle, i18n),
+                tokens,
+            )
+        }
+        None => {
+            let (status, tone) = status_words(candidate.status);
+            status_pill(t!(i18n, status), tone, tokens)
+        }
+    };
     let line = row![
         cell(mpn.boxed(), COLUMN_EMS[0]),
         cell(plain(&candidate.manufacturer, ink), COLUMN_EMS[1]),
         cell(data(&candidate.value, ink), COLUMN_EMS[2]),
         cell(data(&candidate.footprint, footprint_ink), COLUMN_EMS[3]),
         cell(stock, COLUMN_EMS[4]),
-        cell(status_pill(t!(i18n, status), tone, tokens), COLUMN_EMS[5]),
+        cell(lifecycle, COLUMN_EMS[5]),
     ]
     .align_y(Alignment::Center);
     button(

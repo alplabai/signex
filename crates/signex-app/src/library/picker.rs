@@ -719,6 +719,7 @@ mod tests {
             own_edit_stamp: None,
             display: Default::default(),
             pricing: Default::default(),
+            alternate_supply: Default::default(),
             provenance: Default::default(),
         });
         state.touch_data();

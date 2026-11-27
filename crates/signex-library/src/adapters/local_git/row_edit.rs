@@ -71,6 +71,7 @@ impl LocalGitAdapter {
                 };
                 if let Some(entry) = lf.tables.get_mut(table) {
                     prune_pricing_of(entry, &id);
+                    super::alternate_supply::prune_alternate_supply_of(entry, &id);
                 }
                 let text = lf.write_row_edit(table, changed, &mut self.row_lines());
                 #[cfg(debug_assertions)]

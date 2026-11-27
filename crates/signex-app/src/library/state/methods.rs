@@ -536,6 +536,7 @@ impl LibraryState {
             observed_stamp: None,
             dangling: Default::default(),
             pricing: Default::default(),
+            alternate_supply: Default::default(),
             own_edit_stamp: None,
             display: LibraryDisplaySettings::seeded(&self.new_library_defaults),
             provenance,
@@ -791,6 +792,9 @@ pub struct OpenLibrary {
     /// [`LibraryState::refresh_components`] read them. `view` reads this;
     /// it never asks the adapter.
     pub pricing: HashMap<Uuid, signex_library::RowPricing>,
+    /// What a distributor refresh fetched for each row's alternates, by
+    /// `row_id`, read with `pricing` (#3046). `view` reads this.
+    pub alternate_supply: HashMap<Uuid, signex_library::RowAlternateSupply>,
     /// The manifest's licence, source, converter and required libraries
     /// (#3112), read on mount.
     pub provenance: signex_library::LibraryProvenance,
@@ -881,6 +885,7 @@ impl OpenLibrary {
             tables,
             summaries,
             pricing,
+            alternate_supply,
             unreadable,
         } = super::table_scan::scan_tables(
             adapter,
@@ -906,6 +911,7 @@ impl OpenLibrary {
         self.tables = tables;
         self.dangling.unreadable_tables = unreadable;
         self.pricing = pricing;
+        self.alternate_supply = alternate_supply;
         self.cached_components = summaries;
         self.cached_classes = adapter.library_classes();
         self.observed_stamp = stamp;
