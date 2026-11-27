@@ -272,8 +272,8 @@ closes: a cancel, a silence stop, quitting Signex or Signex crashing ends
 whatever the converter started, and so does the end of a run that a
 process the converter left behind outlived. A stop waits up to 2 s for
 those processes to end before the output is removed or restored. The
-converter is put in the job right after it starts, so a process it starts
-in that first moment would be outside it. Where the system refuses a job,
+converter is started suspended, put in the job, then resumed, so nothing
+it starts can be outside it. Where the system refuses a job,
 only the converter process itself is killed. After the converter exits,
 its pipes are read for at most 2 s more, so a process it left behind
 cannot hold the import.

@@ -149,12 +149,32 @@ impl Running {
             use std::os::unix::process::CommandExt as _;
             builder.process_group(0);
         }
+        // Started suspended, so nothing runs before it is in its job.
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt as _;
+            builder.creation_flags(super::job::CREATE_SUSPENDED);
+        }
         let mut child = builder.spawn().map_err(|e| ImportError::StartFailed {
             program: command.program.clone(),
             detail: e.to_string(),
         })?;
         #[cfg(windows)]
         let job = Job::holding(&child).map(Arc::new);
+        #[cfg(windows)]
+        if let Err(e) = super::job::resume(&child) {
+            // A converter that cannot be resumed would hang the run.
+            if let Err(why) = child.kill() {
+                log::warn!("library import: the suspended converter was not killed: {why}");
+            }
+            if let Err(why) = child.wait() {
+                log::warn!("library import: the suspended converter was not reaped: {why}");
+            }
+            return Err(ImportError::StartFailed {
+                program: command.program.clone(),
+                detail: e.to_string(),
+            });
+        }
         let stderr = Arc::new(Mutex::new(Vec::new()));
         let stderr_done = Arc::new(AtomicBool::new(false));
         drain_tail(child.stderr.take(), stderr.clone(), stderr_done.clone());

@@ -175,6 +175,8 @@ windows-sys = { version = "0.61", features = [
     # The Job object a library converter runs in, so a stop or an exit kills
     # what it started (#3134, `src/library_import/job.rs`).
     "Win32_System_JobObjects",
+    # Resuming the converter started suspended once it is in its job.
+    "Win32_System_Diagnostics_ToolHelp",
 ] }
 
 # NOT `[lints] workspace = true` — cargo rejects mixing inheritance with
