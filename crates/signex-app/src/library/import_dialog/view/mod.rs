@@ -321,6 +321,46 @@ pub(super) fn outline_btn<'a>(
     b.boxed()
 }
 
+/// The end of the converter's error output under a failure (#3124): a
+/// caption over the lines in the mono face, in a sunken box. Nothing when
+/// it wrote none.
+pub(super) fn stderr_box<'a>(
+    tail: &str,
+    tokens: &ThemeTokens,
+    i18n: &I18n,
+) -> Option<Element<'a, LibraryMessage>> {
+    if tail.is_empty() {
+        return None;
+    }
+    let font = crate::fonts::iced_font_for_family(crate::fonts::CHROME_MONO_FONT);
+    let fill = tokens::resolve(tokens).sunken;
+    let lines = container(
+        text(UserText::new(tail.to_string()))
+            .size(TS.caption)
+            .font(font)
+            .color(ti(tokens.text))
+            .wrapping(Wrapping::WordOrGlyph),
+    )
+    .padding(SP.m)
+    .width(Length::Fill)
+    .style(move |_: &Theme| container::Style {
+        background: Some(Background::Color(fill)),
+        border: Border {
+            radius: Radii::GRAPHITE.button.into(),
+            ..Border::default()
+        },
+        ..container::Style::default()
+    });
+    Some(
+        column![
+            caption(t!(i18n, ids::LIBRARY_IMPORT_DIALOG_STDERR), tokens),
+            lines
+        ]
+        .spacing(SP.xs)
+        .boxed(),
+    )
+}
+
 /// One count tile (the mock's `.r211-ct`): the number over its label, the
 /// number in `tone`'s ink.
 pub(super) fn count_tile<'a>(

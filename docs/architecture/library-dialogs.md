@@ -180,6 +180,19 @@ drops the offer. On step 3 the silence and Cancel lines say a stopped or
 cancelled update puts the library back to its last import, and a failed one
 says whether it was put back (`FolderAfter`).
 
+**What went wrong (#3124).** A picked file no installed converter reads
+shows a warning under Detected with how to get one, why converters were set
+aside (one too new for this Signex says which contract it speaks, from
+`describe`), and Look again. A failed dry run (step 2) or import (step 3)
+names a converter that ended without a result as having crashed or been
+stopped from outside, with its exit status; one that exited 1 with its own
+error as unable to convert the library, with that error; anything else in the
+engine's words (`library_import::error`). Under each, the last 12 non-blank
+lines of the converter's error output, in a mono box
+(`import_dialog::notices`). An import that exited 2 ends on its result card
+with an amber line counting what was dropped or not imported, and the loss
+report lists each.
+
 **Step 2, preview.** A `--dry-run` into a new temp folder
 (`signex-library-preview-<uuid>` under the system temp folder, removed when the
 dialog moves on or closes). It shows the counts (parts, symbols, footprints,

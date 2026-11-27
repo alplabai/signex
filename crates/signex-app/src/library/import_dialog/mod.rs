@@ -24,12 +24,15 @@ use crate::library::messages::{LibraryImportMsg, LibraryMessage};
 use crate::library_import::report::Severity;
 use crate::library_import::{Discovery, DiscoveryCache, RunOutcome};
 
+pub mod notices;
 pub mod preview;
 pub mod progress;
 pub mod result;
 pub mod source;
 mod view;
 
+#[cfg(test)]
+mod notices_tests;
 #[cfg(test)]
 mod report_tests;
 #[cfg(test)]
@@ -69,8 +72,8 @@ pub enum PreviewState {
     Running,
     /// Finished: what the converter would write.
     Ready(Box<RunOutcome>),
-    /// It failed; the reason.
-    Failed(Translatable),
+    /// It failed; why, and the converter's last error output.
+    Failed(Box<notices::RunProblem>),
 }
 
 /// What became of the library folder after a run that wrote no library.
@@ -102,10 +105,12 @@ impl FolderAfter {
 pub enum ImportEnd {
     /// Cancelled, and what became of the folder.
     Cancelled { folder: FolderAfter },
-    /// It failed; the reason, and what became of the folder.
+    /// It failed; the reason, what became of the folder, and the end of
+    /// the converter's error output.
     Failed {
         reason: Translatable,
         folder: FolderAfter,
+        stderr_tail: String,
     },
     /// Refused before the converter started: nothing was changed.
     Refused { reason: Translatable },

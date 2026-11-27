@@ -4,12 +4,13 @@
 //! run and the import) go through [`Signex::start_library_import`]. The
 //! result's report actions are in [`report`].
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::atomic::Ordering;
 
 use signex_i18n::{Translatable, ids};
 
 use super::*;
+use crate::library::import_dialog::notices::RunProblem;
 use crate::library::import_dialog::progress::{ends_item, item_in_flight};
 use crate::library::import_dialog::result::{ImportResult, Mounted, RequiredLibrary};
 use crate::library::import_dialog::{
@@ -130,7 +131,9 @@ impl Signex {
                 self.edit_import_dialog(|d| d.selected_item = Some(index))
             }
             ImportDialogMsg::CancelPressed | ImportDialogMsg::Closed => self.import_dialog_closed(),
-            ImportDialogMsg::ResultTabPicked(tab) => self.edit_import_dialog(|d| d.result_tab = tab),
+            ImportDialogMsg::ResultTabPicked(tab) => {
+                self.edit_import_dialog(|d| d.result_tab = tab)
+            }
             ImportDialogMsg::SaveReportPressed => self.pick_import_report_target(),
             ImportDialogMsg::ReportSavePicked(target) => self.save_import_report(target),
             ImportDialogMsg::ReportSaved(saved) => self.import_report_saved(saved),
@@ -528,7 +531,7 @@ impl Signex {
                 d.preview = Some(PreviewState::Ready(Box::new(outcome.run.clone())));
             }
             (Some(RunMode::Preview), Err(failure)) => {
-                d.preview = Some(PreviewState::Failed(failure.error.to_translatable()));
+                d.preview = Some(PreviewState::Failed(Box::new(RunProblem::of(failure))));
             }
             (Some(mode), Ok(outcome)) => {
                 let output = d.location_path();
@@ -546,10 +549,14 @@ impl Signex {
                     crate::library_import::ImportError::Cancelled => {
                         ImportEnd::Cancelled { folder }
                     }
-                    ref error => ImportEnd::Failed {
-                        reason: error.to_translatable(),
-                        folder,
-                    },
+                    _ => {
+                        let problem = RunProblem::of(failure);
+                        ImportEnd::Failed {
+                            reason: problem.reason,
+                            folder,
+                            stderr_tail: problem.stderr_tail,
+                        }
+                    }
                 });
             }
         }

@@ -1129,5 +1129,17 @@ library-import-dialog-requires = Requires
 library-import-dialog-requires-open = { $name } (open)
 # $id is a library id.
 library-import-dialog-requires-missing = Library { $id } (not open; open it so the parts that use it resolve)
+# Import Library dialog, what went wrong (#3124).
+# $status is the process exit status.
+library-import-dialog-crashed = The converter ended without finishing ({ $status }): it crashed or was stopped from outside Signex.
+# $error is the converter's own message.
+library-import-dialog-fatal = The converter could not convert the library (exit 1): { $error }
+library-import-dialog-stderr = The converter's last error output:
+# $count is a whole number.
+library-import-dialog-partial = { $count ->
+        [one] Imported with losses: 1 item was dropped or not imported. The loss report lists it.
+       *[other] Imported with losses: { $count } items were dropped or not imported. The loss report lists each one.
+    }
+library-import-dialog-unreadable-hint = Install a library converter that reads this kind of file, then press Look again.
 # The Library Browser's LIBRARIES header (#3122).
 library-browser-import = Import…

@@ -22,8 +22,8 @@ use crate::library::messages::LibraryMessage;
 use crate::library::modal_chrome::{
     cancel_btn, footer_strip, key_value_box, notice_banner, primary_btn_if,
 };
-use crate::library_import::RunMode;
 use crate::library_import::report::Severity;
+use crate::library_import::{ExitKind, RunMode};
 use crate::styles::{DialogButtonKind, HAIRLINE, PillTone, Radii, dialog_button, ti};
 
 /// How much of a commit id the History row shows.
@@ -87,35 +87,96 @@ fn result_card<'a>(
             t!(i18n, ids::LIBRARY_IMPORT_DIALOG_RESULT_IMPORTED, "name" => name)
         }
     };
-    let approximated = result.count(Severity::Approximated) as u64;
-    let dropped = result.count(Severity::Dropped) as u64;
-    let tiles = row![
-        count_tile(
+    let warn = |words: Localized| -> Element<'a, LibraryMessage> {
+        notice_banner(
+            PillTone::Warn,
+            text(words).size(TS.body).boxed(),
+            Vec::new(),
+            tokens,
+        )
+    };
+    let mut col = column![text(title).size(TS.title).color(ti(tokens.text))].spacing(SP.l);
+    // Exit 2 (contract §3.3): written, with items dropped or not imported.
+    if facts.exit == ExitKind::Partial {
+        col = col.push(warn(t!(
+            i18n,
+            ids::LIBRARY_IMPORT_DIALOG_PARTIAL,
+            "count" => result.lost_items()
+        )));
+    }
+    col = col
+        .push(result_tiles(result, facts, tokens, i18n))
+        .push(key_value_box(result_rows(result, facts, tokens, i18n), tokens));
+    if facts.mode == RunMode::Update && facts.local_commits > 0 {
+        col = col.push(warn(t!(
+            i18n,
+            ids::LIBRARY_IMPORT_LOCAL_COMMITS,
+            "count" => facts.local_commits
+        )));
+    }
+    let summary = t!(
+        i18n,
+        ids::LIBRARY_IMPORT_DIALOG_REPORT_SUMMARY,
+        "approximated" => result.count(Severity::Approximated),
+        "dropped" => result.count(Severity::Dropped),
+        "skipped" => facts.counts.skipped
+    );
+    let view_report = row![
+        crate::library::modal_chrome::secondary_btn(
+            t!(i18n, ids::LIBRARY_IMPORT_DIALOG_VIEW_REPORT),
+            msg(ImportDialogMsg::ResultTabPicked(ResultTab::Report)),
+            tokens,
+        ),
+        caption(summary, tokens),
+    ]
+    .spacing(SP.m)
+    .align_y(Alignment::Center);
+    col.push(view_report).boxed()
+}
+
+/// Imported parts, approximated and dropped items, skipped items.
+fn result_tiles<'a>(
+    result: &ImportResult,
+    facts: &RunFacts,
+    tokens: &ThemeTokens,
+    i18n: &I18n,
+) -> Element<'a, LibraryMessage> {
+    let tile = |count: u64, label: Localized, tone: PillTone| -> Element<'a, LibraryMessage> {
+        count_tile(count, label, tone, tokens)
+    };
+    row![
+        tile(
             facts.counts.parts,
             t!(i18n, ids::LIBRARY_IMPORT_DIALOG_COUNT_IMPORTED),
-            PillTone::Ok,
-            tokens
+            PillTone::Ok
         ),
-        count_tile(
-            approximated,
+        tile(
+            result.count(Severity::Approximated) as u64,
             t!(i18n, ids::LIBRARY_IMPORT_DIALOG_SEVERITY_APPROXIMATED),
-            PillTone::Info,
-            tokens
+            PillTone::Info
         ),
-        count_tile(
-            dropped,
+        tile(
+            result.count(Severity::Dropped) as u64,
             t!(i18n, ids::LIBRARY_IMPORT_DIALOG_SEVERITY_DROPPED),
-            PillTone::Warn,
-            tokens
+            PillTone::Warn
         ),
-        count_tile(
+        tile(
             facts.counts.skipped,
             t!(i18n, ids::LIBRARY_IMPORT_DIALOG_COUNT_SKIPPED),
-            PillTone::Err,
-            tokens
+            PillTone::Err
         ),
     ]
-    .spacing(SP.m);
+    .spacing(SP.m)
+    .boxed()
+}
+
+/// Location, Mounted, History and, when the manifest names any, Requires.
+fn result_rows<'a>(
+    result: &ImportResult,
+    facts: &RunFacts,
+    tokens: &ThemeTokens,
+    i18n: &I18n,
+) -> Vec<(Localized, Element<'a, LibraryMessage>)> {
     let line = |words: Localized| -> Element<'a, LibraryMessage> {
         text(words).size(TS.body).boxed()
     };
@@ -140,39 +201,7 @@ fn result_card<'a>(
         }
         rows.push((t!(i18n, ids::LIBRARY_IMPORT_DIALOG_REQUIRES), names.boxed()));
     }
-    let summary = t!(
-        i18n,
-        ids::LIBRARY_IMPORT_DIALOG_REPORT_SUMMARY,
-        "approximated" => approximated,
-        "dropped" => dropped,
-        "skipped" => facts.counts.skipped
-    );
-    let view_report = row![
-        crate::library::modal_chrome::secondary_btn(
-            t!(i18n, ids::LIBRARY_IMPORT_DIALOG_VIEW_REPORT),
-            msg(ImportDialogMsg::ResultTabPicked(ResultTab::Report)),
-            tokens,
-        ),
-        caption(summary, tokens),
-    ]
-    .spacing(SP.m)
-    .align_y(Alignment::Center);
-    let mut col = column![
-        text(title).size(TS.title).color(ti(tokens.text)),
-        tiles,
-        key_value_box(rows, tokens),
-    ]
-    .spacing(SP.l);
-    if facts.mode == RunMode::Update && facts.local_commits > 0 {
-        let words = t!(
-            i18n,
-            ids::LIBRARY_IMPORT_LOCAL_COMMITS,
-            "count" => facts.local_commits
-        );
-        let words = text(words).size(TS.body).boxed();
-        col = col.push(notice_banner(PillTone::Warn, words, Vec::new(), tokens));
-    }
-    col.push(view_report).boxed()
+    rows
 }
 
 /// Where the library was mounted; "Mounting…" until that is settled.

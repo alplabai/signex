@@ -285,3 +285,65 @@ fn cancel_gives_the_window_back_whatever_the_converter_does() {
         assert!(app.library.import_dialog.is_none(), "{body}: closes");
     }
 }
+
+/// #3124: a converter that dies without a result, and one that exits 1
+/// with its own error, each end step 3 on their own words with the end of
+/// their error output, and the folder they wrote removed.
+#[test]
+fn a_crash_and_a_fatal_exit_show_the_end_of_the_error_output() {
+    use crate::library_import::run_tests::{request, sh, summary};
+    use crate::library_import::{ImportJob, MountScope, RunLimits, RunMode};
+    let crash = "echo 'reading R1' >&2\nmkdir -p \"$out\"; : > \"$out/half.snxsym\"\nkill -9 $$\n";
+    let fatal = format!(
+        "echo 'bad record at 12' >&2\n{}\nexit 1\n",
+        summary("failed", false)
+    );
+    for (body, id, tail) in [
+        (
+            crash.to_string(),
+            signex_i18n::ids::LIBRARY_IMPORT_DIALOG_CRASHED,
+            "reading R1",
+        ),
+        (
+            fatal,
+            signex_i18n::ids::LIBRARY_IMPORT_DIALOG_FATAL,
+            "bad record at 12",
+        ),
+    ] {
+        let dir = tempfile::tempdir().unwrap();
+        let out = dir.path().join("P");
+        let job = ImportJob {
+            command: sh(dir.path(), &body),
+            converter: "fake-import".into(),
+            converter_version: "1".into(),
+            request: request(out.clone(), RunMode::Import),
+            limits: RunLimits {
+                silence: Duration::from_secs(30),
+                poll: Duration::from_millis(10),
+            },
+            group: Default::default(),
+        };
+        let (mut app, _boot) = Signex::new();
+        let task = app.start_library_import(job, MountScope::AllProjects);
+        app.library.import_dialog = Some(Box::new(super::ImportDialogState {
+            step: Step::Import,
+            awaiting: Some(RunMode::Import),
+            location: out.display().to_string(),
+            ..super::ImportDialogState::new()
+        }));
+        TaskDriver::new().settle(&mut app, task).unwrap();
+        let state = app.library.import_dialog.as_deref().expect("open");
+        let Some(super::ImportEnd::Failed {
+            reason,
+            folder,
+            stderr_tail,
+        }) = &state.import_end
+        else {
+            panic!("{body}: {:?}", state.import_end);
+        };
+        assert_eq!(reason.id(), Some(id), "{body}");
+        assert_eq!(folder, &super::FolderAfter::Removed, "{body}");
+        assert!(stderr_tail.contains(tail), "{body}: {stderr_tail}");
+        assert!(!out.exists(), "{body}: what it wrote is gone");
+    }
+}

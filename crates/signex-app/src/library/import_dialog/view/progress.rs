@@ -217,7 +217,15 @@ fn ended<'a>(
     let words = column![text(first).size(TS.body), text(second).size(TS.body)]
         .spacing(SP.xs)
         .boxed();
-    notice_banner(tone, words, Vec::new(), tokens)
+    let banner = notice_banner(tone, words, Vec::new(), tokens);
+    let stderr = match end {
+        ImportEnd::Failed { stderr_tail, .. } => super::stderr_box(stderr_tail, tokens, i18n),
+        ImportEnd::Cancelled { .. } | ImportEnd::Refused { .. } => None,
+    };
+    match stderr {
+        Some(stderr) => column![banner, stderr].spacing(SP.m).boxed(),
+        None => banner,
+    }
 }
 
 /// The tone and the two lines of how the import ended, for the folder
@@ -240,7 +248,7 @@ pub(in crate::library::import_dialog) fn end_words(
             t!(i18n, ids::LIBRARY_IMPORT_DIALOG_CANCELLED),
             folder_after(folder, path, i18n),
         ),
-        ImportEnd::Failed { reason, folder } => (
+        ImportEnd::Failed { reason, folder, .. } => (
             PillTone::Err,
             failed(reason),
             folder_after(folder, path, i18n),

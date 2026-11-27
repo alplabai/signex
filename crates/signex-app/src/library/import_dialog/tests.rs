@@ -638,6 +638,7 @@ fn a_refused_folder_says_nothing_was_changed() {
     let wrote = ImportEnd::Failed {
         reason: ImportError::Cancelled.to_translatable(),
         folder: FolderAfter::Removed,
+        stderr_tail: String::new(),
     };
     let (_, _, second) = super::view::end_words(&wrote, "/out/P".into(), &i18n);
     assert!(plain(&second.into_string()).starts_with("Nothing was kept"));

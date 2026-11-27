@@ -59,14 +59,17 @@ pub(super) fn body<'a>(
             ));
             col = col.push(super::progress::current_line(state, ctx, tokens, i18n));
         }
-        Some(PreviewState::Failed(reason)) => {
+        Some(PreviewState::Failed(problem)) => {
             let words = t!(
                 i18n,
                 ids::LIBRARY_IMPORT_DIALOG_PREVIEW_FAILED,
-                "error" => reason.localized(i18n).into_string()
+                "error" => problem.reason.localized(i18n).into_string()
             );
             let words = text(words).size(TS.body).boxed();
             col = col.push(notice_banner(PillTone::Err, words, Vec::new(), tokens));
+            if let Some(stderr) = super::stderr_box(&problem.stderr_tail, tokens, i18n) {
+                col = col.push(stderr);
+            }
         }
         Some(PreviewState::Ready(outcome)) => col = ready(col, state, outcome, tokens, i18n),
     }

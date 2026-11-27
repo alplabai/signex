@@ -45,6 +45,9 @@ pub(super) fn body<'a>(
         detected(state, tokens, i18n),
         tokens,
     ));
+    if let (Some(discovery), Some(_)) = (&state.discovery, state.unreadable_source()) {
+        col = col.push(unreadable(discovery, tokens, i18n));
+    }
     if state.has_database_input() {
         col = col.push(database_row(state, tokens, i18n));
     }
@@ -135,12 +138,8 @@ fn not_installed<'a>(
         .size(TS.body),
     ]
     .spacing(SP.xs);
-    for (_, why) in discovery.skipped.iter().take(3) {
-        words = words.push(
-            text(why.to_translatable().localized(i18n))
-                .size(TS.caption)
-                .boxed(),
-        );
+    for line in set_aside(discovery, i18n) {
+        words = words.push(line);
     }
     let actions = vec![
         outline_btn(
@@ -154,6 +153,44 @@ fn not_installed<'a>(
         ),
     ];
     notice_banner(PillTone::Info, words.boxed(), actions, tokens)
+}
+
+/// Why converters were set aside, at most three: one too new for this
+/// Signex says so (`ImportError::UnsupportedContract`), one that did not
+/// answer says why.
+fn set_aside<'a>(discovery: &Discovery, i18n: &I18n) -> Vec<Element<'a, LibraryMessage>> {
+    discovery
+        .skipped
+        .iter()
+        .take(3)
+        .map(|(_, why)| {
+            text(why.to_translatable().localized(i18n))
+                .size(TS.caption)
+                .boxed()
+        })
+        .collect()
+}
+
+/// A picked file no installed converter reads (#3124): how to get one,
+/// why converters were set aside, and Look again.
+fn unreadable<'a>(
+    discovery: &Discovery,
+    tokens: &ThemeTokens,
+    i18n: &I18n,
+) -> Element<'a, LibraryMessage> {
+    let mut words = column![
+        text(t!(i18n, ids::LIBRARY_IMPORT_DIALOG_UNREADABLE_HINT)).size(TS.body)
+    ]
+    .spacing(SP.xs);
+    for line in set_aside(discovery, i18n) {
+        words = words.push(line);
+    }
+    let actions = vec![outline_btn(
+        t!(i18n, ids::LIBRARY_IMPORT_DIALOG_RESCAN),
+        Some(msg(ImportDialogMsg::RescanPressed)),
+        tokens,
+    )];
+    notice_banner(PillTone::Warn, words.boxed(), actions, tokens)
 }
 
 /// Source: the Files / Database choice (when both are offered), the

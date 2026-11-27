@@ -517,5 +517,10 @@ define_ids! {
     LIBRARY_IMPORT_DIALOG_REQUIRES = "library-import-dialog-requires";
     LIBRARY_IMPORT_DIALOG_REQUIRES_OPEN = "library-import-dialog-requires-open";
     LIBRARY_IMPORT_DIALOG_REQUIRES_MISSING = "library-import-dialog-requires-missing";
+    LIBRARY_IMPORT_DIALOG_CRASHED = "library-import-dialog-crashed";
+    LIBRARY_IMPORT_DIALOG_FATAL = "library-import-dialog-fatal";
+    LIBRARY_IMPORT_DIALOG_STDERR = "library-import-dialog-stderr";
+    LIBRARY_IMPORT_DIALOG_PARTIAL = "library-import-dialog-partial";
+    LIBRARY_IMPORT_DIALOG_UNREADABLE_HINT = "library-import-dialog-unreadable-hint";
     LIBRARY_BROWSER_IMPORT = "library-browser-import";
 }
