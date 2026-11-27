@@ -30,6 +30,11 @@ impl Signex {
             &self.interaction_state.canvas_for_window(window_id).selected
         };
         let activity = self.status_activity(window_id);
+        let focused_pin = if symbol.is_some() {
+            None
+        } else {
+            self.status_focused_pin(window_id)
+        };
         let bar = crate::status_bar::view(
             cursor_x,
             cursor_y,
@@ -52,11 +57,21 @@ impl Signex {
                 board: self.status_board(window_id),
                 no_document: self.status_shows_no_document(window_id),
                 missing_libraries: self.skipped_missing_libraries().len(),
+                focused_pin,
             },
             &self.ui_state.i18n,
         );
         bar.map(move |req| Signex::status_bar_message(window_id, symbol.as_deref(), req))
             .boxed()
+    }
+
+    /// The pin a click picked on the part that is `window`'s whole selection
+    /// (#2998, mockup row 50): the pin the canvas highlights, by the same rule.
+    fn status_focused_pin(&self, window: iced::window::Id) -> Option<String> {
+        let canvas = self.interaction_state.canvas_for_window(window);
+        let (symbol, pin) = canvas.focused_pin.as_ref()?;
+        crate::canvas::pin_focus::is_sole_selected_symbol(&canvas.selected, *symbol)
+            .then(|| pin.clone())
     }
 
     /// Whether `window` shows no document: the Start screen (mockup row 1) or
