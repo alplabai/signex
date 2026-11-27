@@ -159,7 +159,7 @@ mod unix {
         if !matches!(error.raw_os_error(), Some(libc::EISDIR | libc::EPERM)) {
             return Err(error);
         }
-        let sub = open_dir_at(dir.as_raw_fd(), name)?;
+        let sub = open_dir_at(dir.as_raw_fd(), name).map_err(|e| reported_error(error, e))?;
         empty_through(&sub)?;
         drop(sub);
         // SAFETY: as above; AT_REMOVEDIR removes only an empty folder, and
@@ -168,6 +168,37 @@ mod unix {
             return Err(io::Error::last_os_error());
         }
         Ok(())
+    }
+
+    /// The error for an entry that unlinkat refused (`unlinked`) and that
+    /// could not then be opened as a folder (`opened`). Not a folder after
+    /// all (EPERM on a file in a sticky folder): the refusal is the reason.
+    fn reported_error(unlinked: io::Error, opened: io::Error) -> io::Error {
+        if opened.raw_os_error() == Some(libc::ENOTDIR) {
+            unlinked
+        } else {
+            opened
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        fn errno(e: &io::Error) -> Option<i32> {
+            e.raw_os_error()
+        }
+
+        #[test]
+        fn a_refused_file_reports_the_refusal_not_that_it_is_no_folder() {
+            let os = io::Error::from_raw_os_error;
+            let file = reported_error(os(libc::EPERM), os(libc::ENOTDIR));
+            assert_eq!(errno(&file), Some(libc::EPERM));
+            let folder = reported_error(os(libc::EISDIR), os(libc::EACCES));
+            assert_eq!(errno(&folder), Some(libc::EACCES));
+            let link = reported_error(os(libc::EPERM), os(libc::ELOOP));
+            assert_eq!(errno(&link), Some(libc::ELOOP));
+        }
     }
 }
 
