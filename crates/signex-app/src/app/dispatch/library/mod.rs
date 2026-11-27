@@ -57,6 +57,7 @@ mod editor_reads_tests;
 mod external_edits;
 #[cfg(test)]
 mod grid_window_tests;
+mod library_import;
 mod lifecycle;
 #[cfg(test)]
 mod missing_mount_tests;
@@ -683,6 +684,7 @@ impl Signex {
                 outcome,
             } => self.handle_pricing_refresh_finished(library_path, outcome),
             LibraryMessage::StockCopy(msg) => self.handle_stock_copy(msg),
+            LibraryMessage::Import(msg) => self.handle_library_import(msg),
             LibraryMessage::ComponentsPanelRowStylePicked(style) => {
                 self.handle_components_panel_row_style_picked(style)
             }

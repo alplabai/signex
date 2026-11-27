@@ -75,6 +75,7 @@ fn rows_beyond_the_cap_collapse_into_a_refine_search_row() {
         pricing: Default::default(),
         own_edit_stamp: None,
         display: Default::default(),
+        provenance: Default::default(),
     });
     state.touch_data();
     state.sync_view_caches();
@@ -127,6 +128,7 @@ pub(super) fn library_with(rows: Vec<ComponentRow>) -> LibraryState {
         pricing: Default::default(),
         own_edit_stamp: None,
         display: Default::default(),
+        provenance: Default::default(),
     });
     state.touch_data();
     state.sync_view_caches();

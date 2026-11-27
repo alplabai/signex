@@ -68,7 +68,10 @@ pub(super) fn view_header<'a>(
     .size(TS.caption)
     .color(r.ink4)
     .wrapping(iced::widget::text::Wrapping::None);
-    let title = column![title.boxed(), caption.boxed()];
+    let mut title = column![title.boxed(), caption.boxed()];
+    if let Some(line) = provenance_line(lib, r.ink4, i18n) {
+        title = title.push(line);
+    }
 
     let library_for_search = lib_pb.clone();
     let search = text_input(t!(i18n, ids::LIBRARY_BROWSER_SEARCH), &browser.search)
@@ -156,4 +159,81 @@ pub(super) fn view_header<'a>(
         .width(Length::Fill)
         .style(crate::styles::tab_bar_strip(tokens))
         .boxed()
+}
+
+/// The licence and source of a converted library (#3112), when its manifest
+/// names either: one caption line under the summary. Read-only.
+fn provenance_line<'a>(
+    lib: &'a OpenLibrary,
+    ink: iced::Color,
+    i18n: &I18n,
+) -> Option<Element<'a, LibraryMessage>> {
+    let p = &lib.provenance;
+    let caption = |line| {
+        text(line)
+            .size(TS.caption)
+            .color(ink)
+            .wrapping(iced::widget::text::Wrapping::None)
+            .boxed()
+    };
+    let mut parts: Vec<Element<'a, LibraryMessage>> = Vec::new();
+    if let Some(license) = p.license.as_deref().filter(|s| !s.trim().is_empty()) {
+        parts.push(caption(
+            t!(i18n, ids::LIBRARY_BROWSER_LICENSE, "license" => license),
+        ));
+    }
+    if let Some(source) = p.source.as_deref().filter(|s| !s.trim().is_empty()) {
+        parts.push(caption(
+            t!(i18n, ids::LIBRARY_BROWSER_SOURCE, "source" => source),
+        ));
+    }
+    (!parts.is_empty()).then(|| row(parts).spacing(SP.m).boxed())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn library(provenance: signex_library::LibraryProvenance) -> OpenLibrary {
+        OpenLibrary {
+            root: std::path::PathBuf::from("/tmp/Converted.snxlib"),
+            display_name: "Converted".into(),
+            library_id: uuid::Uuid::from_u128(1),
+            tables: std::collections::HashMap::new(),
+            cached_components: Vec::new(),
+            cached_symbols: Vec::new(),
+            cached_footprints: Vec::new(),
+            cached_sims: Vec::new(),
+            cached_classes: Vec::new(),
+            observed_stamp: None,
+            dangling: Default::default(),
+            pricing: Default::default(),
+            own_edit_stamp: None,
+            display: Default::default(),
+            provenance,
+        }
+    }
+
+    /// #3112: the licence / source line shows only when the manifest names one.
+    #[test]
+    fn the_provenance_line_shows_only_when_a_licence_or_source_is_set() {
+        let i18n = I18n::en_us();
+        let ink = iced::Color::BLACK;
+        assert!(provenance_line(&library(Default::default()), ink, &i18n).is_none());
+        let blank = signex_library::LibraryProvenance {
+            license: Some("  ".into()),
+            ..Default::default()
+        };
+        assert!(provenance_line(&library(blank), ink, &i18n).is_none());
+        let licensed = signex_library::LibraryProvenance {
+            license: Some("CC-BY-SA-4.0".into()),
+            ..Default::default()
+        };
+        assert!(provenance_line(&library(licensed), ink, &i18n).is_some());
+        let sourced = signex_library::LibraryProvenance {
+            source: Some("https://example.com/parts v2".into()),
+            ..Default::default()
+        };
+        assert!(provenance_line(&library(sourced), ink, &i18n).is_some());
+    }
 }

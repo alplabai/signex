@@ -110,9 +110,7 @@ fn take_rebuild(shown: &mut Option<Shown>, current: &Shown) -> bool {
 
 /// A sheet holding `lib` placed once near the paper's centre, unit 1, normal
 /// body.
-pub(in crate::panels::components_panel) fn preview_sheet(
-    lib: &LibSymbol,
-) -> (SchematicSheet, Symbol) {
+pub(crate) fn preview_sheet(lib: &LibSymbol) -> (SchematicSheet, Symbol) {
     let mut sheet = SchematicSheet::default();
     let (width, height) = sheet.paper_mm();
     let on_grid = |mid: f64| (mid / PLACEMENT_GRID_MM).round() * PLACEMENT_GRID_MM;

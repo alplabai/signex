@@ -6581,11 +6581,14 @@ name = "signex-cli"
 version = "26.11.1"
 dependencies = [
  "dirs",
+ "resvg 0.48.1",
  "serde",
  "serde_json",
  "signex-app",
  "signex-engine",
  "signex-i18n",
+ "signex-library",
+ "signex-renderer",
  "signex-types",
  "tempfile",
  "uuid",
@@ -6746,9 +6749,11 @@ name = "signex-library"
 version = "26.11.1"
 dependencies = [
  "anyhow",
+ "base64 0.22.1",
  "chrono",
  "csv",
  "dirs",
+ "flate2",
  "git2",
  "keyring",
  "oauth2",

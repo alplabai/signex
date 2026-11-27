@@ -49,6 +49,7 @@ pub(crate) fn library_with_rows(dir: &Path, name: &str, count: usize) -> (PathBu
         library: LibrarySection {
             name: name.into(),
             description: None,
+            ..Default::default()
         },
         mode: LibraryMode::default(),
         workflow: WorkflowConfig::default(),

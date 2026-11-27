@@ -361,6 +361,7 @@ mod tests {
             pricing: Default::default(),
             own_edit_stamp: None,
             display: LibraryDisplaySettings::default(),
+            provenance: Default::default(),
         }
     }
 

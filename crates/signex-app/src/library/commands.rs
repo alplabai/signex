@@ -294,6 +294,7 @@ pub(crate) fn seed_manifest(
         library: LibrarySection {
             name,
             description: None,
+            ..Default::default()
         },
         mode: Default::default(),
         workflow: WorkflowConfig::default(),

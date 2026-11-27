@@ -103,6 +103,7 @@ fn fixture(read: Read) -> Fixture {
         pricing: Default::default(),
         own_edit_stamp: None,
         display: LibraryDisplaySettings::default(),
+        provenance: Default::default(),
     });
     Fixture {
         state,

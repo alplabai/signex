@@ -25,6 +25,7 @@ fn broken_stock() -> (tempfile::TempDir, std::path::PathBuf, Signex) {
             library: LibrarySection {
                 name: "Stock".into(),
                 description: None,
+                ..Default::default()
             },
             mode: LibraryMode::default(),
             workflow: WorkflowConfig::default(),

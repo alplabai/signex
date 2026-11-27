@@ -32,6 +32,7 @@ pub(crate) fn library_with_a_measurement_row(dir: &std::path::Path) -> (PathBuf,
         library: LibrarySection {
             name: "cells".into(),
             description: None,
+            ..Default::default()
         },
         mode: LibraryMode::default(),
         workflow: WorkflowConfig::default(),

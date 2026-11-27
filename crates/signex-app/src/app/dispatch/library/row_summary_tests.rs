@@ -71,6 +71,7 @@ fn app_with_selected_row(
         pricing: Default::default(),
         own_edit_stamp: None,
         display: LibraryDisplaySettings::default(),
+        provenance: Default::default(),
     });
     let mut browser = LibraryBrowserState::new(root.clone());
     browser.active_table = Some("R".into());

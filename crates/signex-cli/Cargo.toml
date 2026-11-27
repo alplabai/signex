@@ -19,6 +19,12 @@ signex-app = { path = "../signex-app" }
 # Renders the app's notices in en-US for the result lines.
 signex-i18n.workspace = true
 signex-types.workspace = true
+# `library check` (#3111) and `library textconv` (#3109).
+signex-library = { workspace = true, features = ["local-git"] }
+# `library render` (#3116): the scene-to-SVG writer and the primitive scenes.
+signex-renderer.workspace = true
+# PNG for `library render --png`: already built for the UI toolkit; text only.
+resvg = { version = "0.48", default-features = false, features = ["text"] }
 serde.workspace = true
 serde_json.workspace = true
 uuid.workspace = true

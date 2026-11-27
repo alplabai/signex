@@ -24,6 +24,7 @@ fn mounted_library(app: &mut Signex, dir: &std::path::Path, name: &str) -> std::
         library: LibrarySection {
             name: name.into(),
             description: None,
+            ..Default::default()
         },
         mode: LibraryMode::default(),
         workflow: WorkflowConfig::default(),
@@ -53,6 +54,7 @@ fn mounted_library(app: &mut Signex, dir: &std::path::Path, name: &str) -> std::
             own_edit_stamp: None,
             display: Default::default(),
             pricing: Default::default(),
+            provenance: Default::default(),
         });
     file
 }

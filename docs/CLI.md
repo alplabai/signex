@@ -13,6 +13,9 @@ signex-cli run <project> <command-id> [--arg key=value]... [options]
 signex-cli commands [--json]
 signex-cli agent-log <project> [--access]
 signex-cli notebook export-pdf --project <project> [options]
+signex-cli library check <library> [--with <library>]... [--strict] [--json]
+signex-cli library render <library> [--out <dir>] [--symbol <uuid|name>]... [--footprint <uuid|name>]... [--png]
+signex-cli library textconv <file.snxfpt>
 ```
 
 `agent-log` prints the project's agent journal as a table: the edits agents
@@ -42,6 +45,165 @@ Signex".
 | `--allow <caps>` | also allow capabilities (comma list) |
 | `--allow-path <dir>` | also allow paths inside `<dir>` (repeatable) |
 | `--max-line-bytes`, `--max-commands`, `--max-file-bytes` | tighten or raise the input limits |
+
+## Library tools
+
+`library <verb>` runs a library tool. It needs no project and no window,
+only reads (`render` writes only into its `--out` folder), and takes none of the
+`run` options. The verbs are `check`, `render` and `textconv`.
+
+### `library check`
+
+```
+signex-cli library check <library> [--with <library>]... [--strict] [--json]
+```
+
+Checks a library folder (or its `.snxlib`) the way Signex loads and saves it,
+with no window and no project (#3111). Library converters run it in their CI
+to prove their output is valid; `docs/LIBRARY_FORMAT.md` is what it checks
+against.
+
+- the `.snxlib` opens, and every table's rows read;
+- every row passes the checks a save runs (`row.invalid`), its `row_id` and
+  its non-blank `internal_pn` are unique in the library, and its stored
+  `content_hash` is the hash of its content;
+- every symbol, alternate symbol, footprint, alternate footprint and sim
+  reference resolves: into this library, or into a library given with
+  `--with`. A library the manifest `requires` must be given with `--with`;
+- library ids are unique across the checked library and the `--with` ones;
+- every `.snxsym`, `.snxfpt` and `.snxsim` reads (its format token included),
+  each footprint and sim file holds one item and is named by its uuid, and
+  every file, the `.snxlib` too, re-saves as its own bytes;
+- every footprint STEP attachment names a SHA-256 whose model is embedded
+  in the footprint file and decodes to that size and hash, or, for a
+  library written before `snxfpt/1.4`, is in `step/<hash>.step` with that
+  hash.
+
+The exit code is `0` when the check finds no error (warnings are allowed),
+`1` when it finds one, and `2` for a usage error. With `--strict` a warning
+fails the check too (exit `1`); converter CI runs `library check --strict`,
+so a converter's output carries no warning either. Without `--json` it prints
+one line per problem and a count; with `--json` one line:
+
+```json
+{"ok":false,"strict":false,"library":"Passives","errors":1,"warnings":0,"problems":[{"severity":"error","code":"ref.missing_footprint","file":"Passives.snxlib","item":"0194…","message":"row R-10K (\"resistors\"): footprint 0194… is not in library 0194…"}]}
+```
+
+`file` is relative to the library folder (empty for the library as a whole);
+`item` is the row id, primitive uuid or table the problem is about, or
+`null`. Codes are stable:
+
+| Code | Severity | Meaning |
+|---|---|---|
+| `library.not_found`, `library.ambiguous` | error | no `.snxlib`, or more than one, in the folder |
+| `library.unreadable` | error | the `.snxlib` or a library folder does not read |
+| `library.duplicate_id` | error | a `--with` library has the id of another checked library |
+| `with.unreadable` | error | a `--with` library does not open |
+| `manifest.requires_malformed` | error | a `requires` entry is not a UUID |
+| `requires.missing` | error | a required library was not given with `--with` (references into it are not checked) |
+| `snxlib.not_canonical` | error | the `.snxlib` would be rewritten by a save |
+| `table.unreadable` | error | a table's rows do not read |
+| `row.invalid` | error | a save refuses the row |
+| `row.duplicate_row_id`, `row.duplicate_internal_pn` | error | not unique in the library |
+| `row.content_hash` | warning | the stored hash is not the row's; change detection is defeated |
+| `ref.missing_symbol`, `ref.missing_footprint`, `ref.missing_sim` | error | the referenced primitive is not in its library |
+| `ref.unknown_library` | error | the reference names a library that is neither this one nor a `--with` one |
+| `ref.not_required` | warning | the reference resolves into a `--with` library the manifest does not `require` |
+| `format.unsupported` | error | a primitive file's format token is refused |
+| `symbol.unreadable`, `footprint.unreadable`, `sim.unreadable` | error | the file does not read |
+| `symbol.duplicate_uuid` | error | two symbols share a uuid |
+| `footprint.misnamed`, `sim.misnamed` | error | the file is not named `<uuid>` of its first item |
+| `footprint.unreachable`, `sim.unreachable` | error | a second item in one file, which nothing can reach |
+| `symbol.not_canonical`, `footprint.not_canonical`, `sim.not_canonical` | error | a save would rewrite the file |
+| `symbol.legacy_token`, `footprint.legacy_token`, `sim.legacy_token` | warning | only the format token would be rewritten: a token this build reads but no longer writes |
+| `model.bad_hash` | error | a STEP attachment's `content_hash` is not a lower-case SHA-256 |
+| `model.hash_mismatch` | error | `step/<hash>.step` holds other bytes |
+| `model.missing` | error | the model is neither embedded in the footprint file (`[[models]]`) nor in `step/<hash>.step` |
+| `model.embedded_invalid` | error | an embedded model does not inflate to its `size` and SHA-256 |
+| `model.unreadable` | error | `step/<hash>.step` is there but does not read |
+
+`footprint.legacy_token` is a warning on purpose: the stock library's
+footprints carry `snxfpt/1`, which Signex reads but no longer writes, so
+their bytes change only in that line on the next save (the format's open
+point 8). The stock library therefore passes `library check` and fails
+`library check --strict`.
+
+### `library render`
+
+```
+signex-cli library render <library> [--out <dir>] [--symbol <uuid|name>]...
+                          [--footprint <uuid|name>]... [--png]
+```
+
+Renders the symbols and footprints of a library folder (or its `.snxlib`) to
+SVG with no window (#3116), so a converted library can be compared with its
+source by eye or by image diff. With no `--symbol` and no `--footprint` it
+renders every primitive; with either it renders only the ones named, by uuid
+or by name (a name matches without regard to case). A name that matches
+nothing is reported and fails the run (exit `1`). `--out` defaults to
+`./library-render`.
+
+One file per primitive, named `<kind>-<slug>-<uuid8>.svg` (`symbol-r-0194ab12.svg`,
+`footprint-chip-0603-019df45d.svg`): the kind, the name's slug as the library
+files use, and the first eight hex digits of the primitive's uuid. Each written
+path is printed. A symbol that draws nothing is reported as skipped.
+
+The drawing is the editors', not a second renderer:
+
+- a symbol is placed on a sheet and lowered by the schematic scene builder the
+  Symbol Editor and the Components panel preview use, in Graphite Light, unit
+  1, normal body, on that theme's paper;
+- a footprint is built through the Components panel's preview model: pads
+  through the PCB canvas's own lowering, then fab, silk, courtyard and pad
+  numbers, in the board palette on the board backdrop.
+
+Both are world-space scenes. `signex-renderer`'s `scene_svg` replays a scene's
+buckets in the shared draw order (`GPU_SCENE_DRAW_ORDER`) as SVG, one unit per
+millimetre; overlay and marker buckets are editing aids and are left out.
+Numbers print to four decimals, so the same library gives the same bytes.
+The SVG names its font family (Iosevka, then `sans-serif`) and embeds no glyphs,
+so text looks as the viewer's installed fonts draw it; the PNG uses the bundled
+fonts.
+
+Differences from the live editor view: no grid, no selection, and a footprint
+pad the board cannot hold (custom shape, slot, copper offset) is not drawn.
+
+`--png` also writes `<same name>.png`, 1024 px on the longer side, through
+`resvg`, which the UI toolkit already ships; text is set in the bundled
+Iosevka. Without `--png` no rasteriser runs.
+
+### `library textconv`
+
+`library textconv <file>` prints a footprint file (`.snxfpt`) with the `data`
+block of each embedded 3D model (`[[models]]`, `docs/FORMAT_VERSIONS.md`,
+`snxfpt/1.4`) replaced by one summary line:
+
+```
+data = <deflate+base64, 482113 bytes, sha256 ab12cd34ef56…>
+```
+
+Every other line is printed as it is, so a file with no embedded model comes
+out unchanged, and a file that is not text is printed byte for byte. It is
+meant as git's `textconv` driver, so that `git diff` and `git log -p` show a
+changed model as its `hash`, `size` and summary lines instead of thousands of
+base64 lines. When an imported library is initialised (#3114) its git setup
+always gets this `.gitattributes` line:
+
+```
+*.snxfpt diff=snxfpt
+```
+
+and, only when a `signex-cli` executable is found (an absolute `PATH` entry,
+or next to the running app), the local setting with the absolute path, quoted
+for git's shell:
+
+```
+git config diff.snxfpt.textconv "'/path/to/signex-cli' library textconv"
+```
+
+Release builds ship the app without `signex-cli`; then the setting is not
+written (one line goes to the log) and git, given the attribute but no driver,
+shows the full text diff, which is correct, only long. The exit code is `0`, or `2` when the file cannot be read.
 
 ## JSON Lines
 

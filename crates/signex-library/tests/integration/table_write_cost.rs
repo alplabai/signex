@@ -100,6 +100,7 @@ fn seeded_library(dir: &Path, size: usize) -> (PathBuf, LocalGitAdapter, Compone
         library: LibrarySection {
             name: "lib".into(),
             description: None,
+            ..Default::default()
         },
         mode: LibraryMode::default(),
         workflow: WorkflowConfig::default(),

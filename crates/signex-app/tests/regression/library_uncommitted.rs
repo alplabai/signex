@@ -24,6 +24,7 @@ fn versioned_library(dir: &Path) -> PathBuf {
         library: LibrarySection {
             name: "lib".into(),
             description: None,
+            ..Default::default()
         },
         mode: LibraryMode::default(),
         workflow: WorkflowConfig::default(),

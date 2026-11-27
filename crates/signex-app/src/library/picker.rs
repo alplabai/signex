@@ -719,6 +719,7 @@ mod tests {
             own_edit_stamp: None,
             display: Default::default(),
             pricing: Default::default(),
+            provenance: Default::default(),
         });
         state.touch_data();
         state.picker = Some(PickerState::default());

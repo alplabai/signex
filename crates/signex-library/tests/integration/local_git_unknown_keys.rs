@@ -31,6 +31,7 @@ fn library_with_unknown_class_key(dir: &Path) -> (std::path::PathBuf, LocalGitAd
         library: LibrarySection {
             name: "Unk".into(),
             description: None,
+            ..Default::default()
         },
         mode: LibraryMode::default(),
         workflow: WorkflowConfig::default(),

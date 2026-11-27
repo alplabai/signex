@@ -9,6 +9,8 @@ mod autosave_project_tests;
 pub mod autosave_recovery;
 pub mod autosave_row;
 pub(crate) mod board_3d;
+#[cfg(test)]
+mod board_3d_model_tests;
 mod board_3d_screenshot;
 pub(crate) mod board_net_classes;
 mod board_sketch;

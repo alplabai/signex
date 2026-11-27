@@ -79,7 +79,8 @@ format declares only its own table row below.
 | `.snxprj` | `snxprj/1` | `snxprj/1` | opens read-only | read as `snxprj/1` |
 | `.snxprj`, variant settings | `snxprj/1.1` while `variant_settings` is not empty (a default variant or a part entry, a channel's copy of a part on a repeated sheet included, #2662; `project::snxprj_token`; DECISIONS 2026-11-25); else `snxprj/1`, byte for byte. A `snxprj/1` build would keep the section but not follow a variant rename or removal. Builds released before this policy (v26.11.0 and earlier) refuse any newer minor on load, so they refuse a 1.1 project rather than open it read-only | adds `snxprj/1.1` | opens read-only | read as `snxprj/1` |
 | `.snxlib` | `snxlib/2` | `snxlib/2` | refused | refused |
-| `.snxfpt` | `snxfpt/1.1`, `1.2` with sketch links (reference dimensions, pattern sources and mirrors, per-instance pad overrides), or `1.3` with generated features (silkscreen outline, pad clearance, pin 1 marker, assembly outline; mockup row 124, #2834) or a pattern numbering sweep other than row by row (mockup row 126), whatever else it holds | `snxfpt/1`, `1.1`, `1.2`, `1.3` | refused | refused |
+| `.snxfpt` | `snxfpt/1.1`, `1.2` with sketch links (reference dimensions, pattern sources and mirrors, per-instance pad overrides), or `1.3` with generated features (silkscreen outline, pad clearance, pin 1 marker, assembly outline; mockup row 124, #2834) or a pattern numbering sweep other than row by row (mockup row 126), whatever else it holds | `snxfpt/1`, `1.1`, `1.2`, `1.3`, `1.4` | refused | refused |
+| `.snxfpt`, embedded 3D models | `snxfpt/1.4` while the file embeds a STEP model a footprint attaches (`[[models]]`, #3107/#3108; DECISIONS 2026-11-26), whatever else it holds; else the tokens above, byte for byte, and removing the last model writes the lower token again. A 1.3 build would ignore the section and drop the models on save | adds `snxfpt/1.4` | refused | refused |
 | `.snxblk`, block diagram | `snxblk/1` (mockup row 171, #2796; `docs/architecture/snxblk-format.md`) | `snxblk/1` | opens read-only | refused |
 | `.snxsym` | `snxsym/v1`, `v2` or `v3` by content; `v4` while any graphic is a Bezier, Pie Chart, Elliptical Arc or Round Rectangle (#2838), whatever else it holds | `snxsym/v1`, `v2`, `v3`, `v4` | refused | refused |
 | `.snxsim` | `snxsim/v1` | `snxsim/v1` | refused | refused |
@@ -128,6 +129,40 @@ that does not set them writes as before, byte for byte. An older build reads
 an entry with one of them as an entry it cannot read: it keeps the entry as
 written, writes it back unchanged and reports it as not checked, so nothing
 is dropped.
+
+**`snxfpt/1.4`, embedded models.** A footprint file carries the STEP
+models its footprints attach, so one file is self-contained. The optional
+`[[models]]` section is written last, one entry per distinct hash, sorted by
+hash, and only for hashes a footprint in the file attaches (an entry no
+footprint uses is dropped on save):
+
+```toml
+[[models]]
+hash = "<SHA-256 hex of the raw STEP bytes>"   # the StepAttachment content_hash
+filename = "SOIC-8.step"
+encoding = "deflate+base64"
+size = 482113                                   # raw bytes
+data = '''
+<base64 of the raw-deflated bytes, 76 columns per line>
+'''
+```
+
+Deflate is raw (RFC 1951). A model Signex embeds is compressed at level 6
+(`MODEL_DEFLATE_LEVEL`) and wrapped at 76 columns, so the same model embeds
+as the same text. An entry read from a file keeps its `data` exactly as
+stored on every re-save, whatever level and line width wrote it, and so
+does one that fails to decode. The compressed bytes are not part of the
+format contract: conformance compares the inflated bytes (their SHA-256).
+`data` may hold only base64 characters and whitespace. A model is inflated
+only when it is read (the board 3D view); its `size` and SHA-256 are checked
+then, and a mismatch is an error naming the footprint. Libraries written before 1.4 keep models in
+`step/<hash>.step` beside the library: readers fall back to it, and saving a
+footprint whose model is only there embeds it, leaving the `step/` file in
+place; Save As into another library also embeds a model the origin library
+keeps only in `step/`. `attach_step` (the editor's attach helper) embeds the
+model, but the editor's attach flow is not wired yet. Boards never embed models; their footprints read the model through
+their library reference. `signex-cli library textconv` prints a file with
+each `data` block summarised, for diffs (`docs/CLI.md`).
 
 ## Changing a format
 

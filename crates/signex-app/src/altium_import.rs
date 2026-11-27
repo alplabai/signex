@@ -59,14 +59,7 @@ fn locate_in(override_path: Option<OsString>, path: Option<OsString>) -> Result<
             ))
         };
     }
-    let name = format!("{BINARY}{}", std::env::consts::EXE_SUFFIX);
-    // An empty or `.` entry would resolve against the working directory.
-    path.iter()
-        .flat_map(std::env::split_paths)
-        .filter(|dir| dir.is_absolute())
-        .map(|dir| dir.join(&name))
-        .find(|p| p.is_file())
-        .ok_or_else(not_installed_message)
+    crate::library_import::discovery::find_on_path(BINARY, path).ok_or_else(not_installed_message)
 }
 
 /// User-facing text for a missing converter.
@@ -271,26 +264,18 @@ fn with_diagnostics(error: String, status: std::process::ExitStatus, stderr: &[u
 /// The reported file, resolved against `out_dir` when relative, and refused
 /// unless it lies inside `out_dir`.
 fn confine(reported: &Path, out_dir: &Path) -> Result<PathBuf, String> {
-    let joined = out_dir.join(reported);
-    let outside = || {
-        format!(
+    use crate::library_import::confine::ConfineError;
+    crate::library_import::confine::confine(reported, out_dir).map_err(|e| match e {
+        ConfineError::Outside => format!(
             "the importer reported {}, which is not inside {}",
             reported.display(),
             out_dir.display()
-        )
-    };
-    let dir = out_dir.canonicalize().map_err(|_| outside())?;
-    let file = joined.canonicalize().map_err(|e| {
-        format!(
-            "the importer reported {}, which cannot be read: {e}",
+        ),
+        ConfineError::Unreadable { joined, error } => format!(
+            "the importer reported {}, which cannot be read: {error}",
             joined.display()
-        )
-    })?;
-    if file.starts_with(&dir) {
-        Ok(joined)
-    } else {
-        Err(outside())
-    }
+        ),
+    })
 }
 
 /// Keep the review list beside the converted files. Best effort: a failure

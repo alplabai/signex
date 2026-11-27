@@ -8,6 +8,7 @@ fn fixture_manifest() -> SnxlibManifest {
         library: LibrarySection {
             name: "MyLib".into(),
             description: Some("test library".into()),
+            ..Default::default()
         },
         mode: LibraryMode::default(),
         workflow: WorkflowConfig::default(),

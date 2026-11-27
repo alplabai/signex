@@ -26,6 +26,7 @@ mod glyph_layout;
 mod hit_test;
 mod input;
 mod preview_model;
+mod preview_scene;
 
 #[cfg(test)]
 mod chrome_fit_tests;

@@ -1,0 +1,54 @@
+format = "snxlib/2"
+library_id = "01940000-0000-7000-8000-000000000001"
+
+[library]
+name = "Conformance"
+description = "Signex library format conformance fixture (docs/LIBRARY_FORMAT.md)."
+
+[mode]
+kind = "local_git"
+
+[workflow]
+mode = "personal"
+review_required = false
+reviewers_required = 1
+auto_lifecycle_promote = "Released"
+
+[users]
+default_role = "Designer"
+allow_self_signup = false
+
+[users."ada@example.com"]
+display_name = "Ada"
+roles = ["Librarian"]
+
+[[classes]]
+key = "resistor"
+label = "Resistor"
+
+[[classes]]
+key = "ic"
+label = "Integrated Circuit"
+
+[tables.logic]
+tsv = '''
+row_id	internal_pn	class	datasheet	state	symbol_ref	footprint_ref	sim_ref	primary_mpn	alternates	supply	parameters	pin_map_overrides	created	updated	content_hash	version	released	symbol_version	footprint_version	sim_version	description
+01940000-0000-7000-8000-000000000043	U-NAND-DUAL	ic	{"kind":"url","url":""}	InReview	{"library_id":"01940000-0000-7000-8000-000000000001","uuid":"01940000-0000-7000-8000-000000000012"}			{"manufacturer":"Example Corp","mpn":"EX-74-00","status":"Primary","notes":null}	[]	[]	{"designator_prefix":{"kind":"Text","value":"U"},"supply_voltage":{"kind":"Measurement","value":{"value":5.0,"unit":"V"}}}	[]	2026-01-01T00:00:00+00:00	2026-01-02T03:04:05+00:00	1f322e2c5b037658c13ba8c1d3c8a09b390894eaf12acd432f4a442901e22938	1.0.0	false	1.0.0			Dual NAND, symbol only
+'''
+
+[tables.resistors]
+tsv = '''
+row_id	internal_pn	class	datasheet	state	symbol_ref	footprint_ref	sim_ref	primary_mpn	alternates	supply	parameters	pin_map_overrides	created	updated	content_hash	version	released	symbol_version	footprint_version	sim_version	description	alternate_symbols
+01940000-0000-7000-8000-000000000041	R-10K-0603	resistor	{"kind":"url","url":"https://example.com/datasheets/r0603.pdf"}	Released	{"library_id":"01940000-0000-7000-8000-000000000001","uuid":"01940000-0000-7000-8000-000000000011"}	[{"footprint":{"library_id":"01940000-0000-7000-8000-000000000001","uuid":"01940000-0000-7000-8000-000000000021"}},{"footprint":{"library_id":"01940000-0000-7000-8000-000000000001","uuid":"01940000-0000-7000-8000-000000000022"},"version":"1.0.0"}]		{"manufacturer":"Example Corp","mpn":"EX-R0603-10K","status":"Primary","notes":null}	[{"manufacturer":"Sample Inc","mpn":"SI-10K-0603","status":"Approved","notes":"drop-in"}]	[{"distributor":"ExampleDistributor","sku":"ED-123","url":"https://example.com/p/ED-123","moq":100}]	{"power":{"kind":"Measurement","value":{"value":0.1,"unit":"W"}},"resistance":{"kind":"Measurement","value":{"value":10000.0,"unit":"ohm"}},"tolerance":{"kind":"Text","value":"1%"}}	[]	2026-01-01T00:00:00+00:00	2026-01-02T03:04:05+00:00	5896217c25822608ad6303c2a40e32272060805892ddde69b3cbedb825177246	1.0.0	true	1.0.0	1.0.0		10 kΩ 1% 0.1 W 0603	[{"symbol_ref":{"library_id":"01940000-0000-7000-8000-000000000001","uuid":"01940000-0000-7000-8000-000000000012"},"symbol_version":"1.0.0","label":"Alternate drawing"}]
+01940000-0000-7000-8000-000000000042	R-1K-0805	resistor	[{"label":"Datasheet","kind":"url","url":"https://example.com/datasheets/r0805.pdf"},{"label":"Errata","kind":"hash_pinned","hash":"0d0838668315bb2a467097ac6a308b2241c798498df919291e9a42ae13240b5b","filename":"errata.pdf"}]	Draft	{"library_id":"01940000-0000-7000-8000-000000000001","uuid":"01940000-0000-7000-8000-000000000011"}	{"library_id":"01940000-0000-7000-8000-000000000001","uuid":"01940000-0000-7000-8000-000000000022"}		{"manufacturer":"Example Corp","mpn":"EX-R0805-1K","status":"Primary","notes":null}	[]	[]	{"aec_q200":{"kind":"Bool","value":true},"pad_count":{"kind":"Number","value":2.0}}	[{"symbol_pin_number":"1","footprint_pad_number":"2"},{"symbol_pin_number":"2","footprint_pad_number":"1"}]	2026-01-01T00:00:00+00:00	2026-01-02T03:04:05+00:00	ca183751e8f009b8dfa82571f0fbb1c233d8f3469e2c927b0ebb6f49bf259fb8	0.0.1	false	1.0.0	1.0.0			
+'''
+
+[tables.resistors.column_types]
+released = "bool"
+
+[tables.resistors.pricing.01940000-0000-7000-8000-000000000041.ExampleDistributor.ED-123]
+sku = "ED-123"
+currency = "EUR"
+stock = 5000
+fetched_at = "2026-01-03T10:00:00Z"
+breaks = [{ qty = 1, unit_price = 0.1 }, { qty = 100, unit_price = 0.02 }, { qty = 1000, unit_price = 0.0085 }]

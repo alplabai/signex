@@ -64,6 +64,7 @@ fn fixture() -> Fixture {
         pricing: Default::default(),
         own_edit_stamp: None,
         display: LibraryDisplaySettings::default(),
+        provenance: Default::default(),
     });
     let row = LibraryRowRef {
         project_id: app.document_state.projects[0].id,
