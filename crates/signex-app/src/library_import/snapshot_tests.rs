@@ -126,7 +126,7 @@ fn a_dirty_tree_refuses_the_update_before_the_converter_runs() {
         .unwrap_err();
 
     assert!(
-        matches!(&failure.error, ImportError::UncommittedChanges { paths } if paths == &["symbols/mine.snxsym"]),
+        matches!(&*failure.error, ImportError::UncommittedChanges { paths } if paths == &["symbols/mine.snxsym"]),
         "{:?}",
         failure.error
     );
@@ -175,7 +175,7 @@ fn an_update_of_a_folder_without_history_is_refused() {
         .run(&AtomicBool::new(false), &mut |_| {})
         .unwrap_err();
     assert!(matches!(
-        failure.error,
+        *failure.error,
         ImportError::NotAnImportedLibrary { .. }
     ));
     assert!(!dir.path().join("Conformance.ran").exists(), "not run");
@@ -223,7 +223,7 @@ fn a_silent_update_is_restored_too() {
     let failure = update_with(dir.path(), body)
         .run(&AtomicBool::new(false), &mut |_| {})
         .unwrap_err();
-    assert_eq!(failure.error, ImportError::Silent { seconds: 1 });
+    assert_eq!(*failure.error, ImportError::Silent { seconds: 1 });
     assert_eq!(failure.restored, Some(Ok(())));
     assert!(!out.join("symbols/added.snxsym").exists());
 }
