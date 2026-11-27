@@ -176,6 +176,7 @@ fn draw_editor(fp: &Footprint, at: &PreviewState) -> Painted {
         trackpad_pan: false,
         wheel_mode: Default::default(),
         mirror_card: None,
+        body_3d: None,
     };
     let camera = FootprintCanvasState::with_view(at.scale(), at.offset());
     let renderer = headless_renderer();

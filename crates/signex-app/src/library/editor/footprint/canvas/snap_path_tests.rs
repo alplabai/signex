@@ -63,6 +63,7 @@ fn canvas_of<'a>(editor: &'a FootprintDocument, cache: &'a canvas::Cache) -> Foo
         trackpad_pan: false,
         wheel_mode: Default::default(),
         mirror_card: None,
+        body_3d: None,
     }
 }
 
@@ -345,5 +346,31 @@ fn a_drawing_click_lands_on_the_grid_node_it_showed() {
             assert_eq!(snap_id, None, "the click must not reuse the nearby Point");
         }
         other => panic!("expected a SketchToolClick, got {other:?}"),
+    }
+}
+
+#[test]
+fn the_canvas_snaps_to_the_footprints_3d_body() {
+    let mut s = Session::new(Footprint::empty("snap"));
+    s.add_pad((0.0, 0.0));
+    s.add_pad((6.0, 4.0));
+    s.apply(Msg::ActiveBarToggleSnap(SnapOptionFlag::Body3dPoints));
+    s.apply(Msg::ActiveBarToggleSnap(SnapOptionFlag::SnapToGrids));
+    s.editor.state.pads_tool = PadsTool::PlacePad;
+    let body = crate::library::editor::footprint::snap_objects::BodyBox::of(s.editor.primitive());
+    let corner = body.corners()[1];
+    let cursor = (corner.0 + 0.1, corner.1 + 0.05);
+    let cache = canvas::Cache::new();
+    let fpc = FootprintCanvas {
+        body_3d: Some(body),
+        ..canvas_of(&s.editor, &cache)
+    };
+    let world_cursor = mouse::Cursor::Available(s.cstate.world_to_screen(cursor));
+    fpc.on_button_pressed(&mut s.cstate, &mouse::Button::Left, BOUNDS, world_cursor);
+    let released =
+        fpc.on_button_released(&mut s.cstate, &mouse::Button::Left, BOUNDS, world_cursor);
+    match footprint_msg(released) {
+        Some(Msg::AddPad { x_mm, y_mm }) => assert_near((x_mm, y_mm), corner),
+        other => panic!("expected an AddPad on the body corner, got {other:?}"),
     }
 }

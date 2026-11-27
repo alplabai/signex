@@ -439,6 +439,7 @@ badge names the target"; `canvas/draw/sketch/snap.rs`):
 | A Circle's or Arc's centre | ⊙ | Centre · circle / arc (or · pad 1) |
 | Guide | none (the guide is drawn) | Guide |
 | A board feature (board sketch only) | ◻ | Pad · J1-1, Courtyard · J1, Board outline, … |
+| A footprint object, or Axes lining up with one ([Object snap](#object-snap)) | none | none |
 | Grid, or no snap | none | none |
 
 The words come from the message catalog through the editor's canvas text,
@@ -498,8 +499,10 @@ constraint on the click's Point, in the click's undo step (Caner,
 | Intersection of two curves | Point on Line for a Line, Point on Arc for an Arc, zero distance to a Circle, on each of the two |
 
 Priority: a sketch Point first (a Point that is a Circle's or Arc's centre
-reads as Centre), then the board, then Midpoint and Centre within the Point
-snap's 8 px, then guides, intersections, H / V, angle and grid. Snap ▾ in
+reads as Centre), then the board, then the footprint objects the sketch does
+not draw ([Object snap](#object-snap)), then Midpoint and Centre within the
+Point snap's 8 px, then guides (while Guides is on), intersections, H / V,
+angle, Axes and grid. Snap ▾ in
 sketch mode has a **Sketch snaps** group (Line midpoints, Circle and arc
 centres, on by default, not saved, no undo step); intersections keep their
 Objects for snapping row. A Line within ±5° of an axis still gets its
@@ -511,6 +514,35 @@ the cursor skips the Midpoint, Centre, Intersection, H / V and angle snaps
 inferred constraint, the Line's auto H / V included. The code is
 `snap::snap_cursor_with` and `snap::click_inference`; the canvas sends
 `SketchToolClickInferred` / `SketchPlacePointInferred` only when one applies.
+
+## Object snap {#object-snap}
+
+The footprint canvas snaps to its own objects within Snap Distance, each
+kind behind its row of Objects for snapping (#2726; `snap_objects/`). In
+Pads mode every kind counts; in Sketch mode only pads without a sketch
+backing and silk the sketch did not bake, since the sketch's own Points
+snap first. The point is placed only; no constraint lands.
+
+| Switch | Targets |
+|---|---|
+| Footprint Origins | (0, 0), Pads mode only |
+| Pad Centers | each pad's centre |
+| Pad Vertices | the corners of Rect, Chamfered, Trapezoid and Custom pads, turned with the pad |
+| Pad Edges | the nearest point of any pad's outline (round corners in 8 chords per quarter turn) |
+| Track Vertices | silk line ends, rectangle and polygon corners |
+| Track/Arc Lines | the nearest point of a silk line, rectangle or polygon side, circle or arc (within its sweep) |
+| Arc Centers | silk circle and arc centres |
+| Texts | a silk string's anchor |
+| Regions | a filled rectangle's or polygon's corners and the nearest point of its edges |
+| 3D Body Snap Points | the box the 3D preview draws (`preview3d::body_bbox`) seen from above: its four corners, its centre (the vertical axis) and the nearest point of its two horizontal axes, Pads mode only |
+
+Via Centers has no target of its own: a footprint via is a pad. **Axes**
+(off by default) lines the pointer up with a fixed target (not the nearest
+point of a line or edge) within Axis Snap Range: the nearest whose x is
+within Snap Distance of the pointer's x gives the x, the same for y, and an
+axis nothing lines up on takes the grid. It runs after the angle snap and
+before the grid. **Guides** (on by default) gates the guide snap. The Snap
+Options are session state, never saved, as on a board.
 
 ## Modify tools
 

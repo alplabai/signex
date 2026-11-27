@@ -286,7 +286,9 @@ fn compute_bbox(fp: &Footprint) -> (f64, f64, f64, f64) {
     bbox.unwrap_or((-3.0, -2.0, 3.0, 2.0))
 }
 
-fn body_bbox(fp: &Footprint) -> (f64, f64, f64, f64) {
+/// The 3D body's box in footprint mm, `(x0, y0, x1, y1)`: what this
+/// preview draws and the 3D body snap reads (#2726).
+pub(crate) fn body_bbox(fp: &Footprint) -> (f64, f64, f64, f64) {
     if let Some(outline) = fp.body_3d.outline.as_ref() {
         let mut bbox: Option<(f64, f64, f64, f64)> = None;
         for v in &outline.points {

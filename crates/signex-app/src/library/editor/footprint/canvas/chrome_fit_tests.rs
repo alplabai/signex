@@ -40,6 +40,7 @@ fn canvas_for<'a>(
         trackpad_pan: false,
         wheel_mode: Default::default(),
         mirror_card: None,
+        body_3d: None,
     }
 }
 

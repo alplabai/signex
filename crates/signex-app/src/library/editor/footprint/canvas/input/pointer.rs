@@ -227,7 +227,9 @@ impl FootprintCanvas<'_> {
         ObjectTargets {
             silk_f: self.silk_f,
             silk_b: self.silk_b,
+            body: self.body_3d,
             moving_pad,
+            moving_selection: false,
         }
     }
 

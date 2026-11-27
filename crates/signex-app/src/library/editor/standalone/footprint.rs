@@ -16,6 +16,7 @@ use crate::library::editor::footprint::layers::FpLayer;
 use crate::library::editor::footprint::sketch_mode::mirror_card::{
     MirrorCard, overlay as mirror_overlay, shown as shown_mirror_card,
 };
+use crate::library::editor::footprint::snap_objects::BodyBox;
 use crate::library::messages::{EditorMsg, FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
@@ -725,6 +726,7 @@ pub(super) fn view_footprint_canvas<'a>(
         wheel_mode: editor.wheel_mode,
         // The Mirror ghost draws what the card's OK writes (mockup row 191).
         mirror_card: shown_mirror_card(editor, mirror_card),
+        body_3d: Some(BodyBox::of(editor.primitive())),
     };
     let canvas_widget: Element<'a, LibraryMessage> = iced::widget::canvas(prog)
         .width(Length::Fill)

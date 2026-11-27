@@ -310,6 +310,9 @@ pub struct FootprintCanvas<'a> {
     /// while Mirror is not armed.
     pub mirror_card:
         Option<crate::library::editor::footprint::sketch_mode::mirror_card::MirrorCard>,
+    /// The footprint's 3D body, a snap target (#2726); `None` where the
+    /// canvas edits no footprint body.
+    pub body_3d: Option<crate::library::editor::footprint::snap_objects::BodyBox>,
 }
 
 impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
