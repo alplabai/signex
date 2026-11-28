@@ -230,18 +230,28 @@ are `updates/sketch/pattern_kind.rs`.
   no entity, constraint, pattern or mirror names it and it has no role.
   Such a centre goes in the same undo step. Which centres the switch
   minted is known for the session only (`switch_minted_centres` in the
-  editor state); after a reload a centre counts as drawn and stays.
+  editor state); each undo step keeps the set as it was in the editor's
+  view state (`state/selection_memo.rs`), so Undo and Redo give it back
+  with the step. After a reload a centre counts as drawn and stays.
 - **Centre.** Linear and Grid switch at once. Polar first asks for a centre
   through the Re-pick flow: the form shows "Click a Point… (Esc to
-  cancel)", and the next click on the canvas, under any tool, picks or
-  places the centre and switches the pattern. Esc, or the pattern's own
-  kind segment, cancels and leaves the pattern as it was.
+  cancel)", and the next press on the canvas, under any tool, picks or
+  places the centre and switches the pattern. The press is taken before
+  any grab, glyph or stroke pick (`canvas/input/centre_pick.rs`): on a
+  Point (the origin, a pad centre) it picks that Point; elsewhere it snaps
+  as a placement does and the centre is a new Point there. Esc, the
+  pattern's own kind segment, or an Undo or Redo cancels and leaves the
+  pattern as it was. A pick whose pattern is gone or already Polar places
+  nothing and says so in the Messages panel.
 - **Instances.** The suppression list and the pattern's per-pad overrides
   follow their instance in the row-by-row walk: cell `(i, j)` of a grid
   `nx` wide is instance `j × nx + i` of a line. An entry with no place in
   the new kind (past the count, past the last row such as a mirrored
   instance, or in a later row of a grid whose width does not resolve) is
-  dropped, and a Messages line names the dropped instances. The mask
+  dropped, and a Messages line names the dropped instances. A pattern
+  that repeats another pattern keys its overrides by (outer slot, inner
+  instance), the outer slot already numbered in walk order, so they keep
+  their key; only one whose outer slot is past the count is dropped. The mask
   expression carries over as written (the bake warns where it does not
   fit) and the numbering scheme is kept; the numbers follow the new walk.
 - **Undo.** The switch is one undo step; for Polar it is the step of the

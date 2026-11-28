@@ -94,22 +94,26 @@ enum Line {
 /// Switch pattern `array_id` to `target`, in place. The count, spacing,
 /// mask expression and numbering carry over; the suppression list and the
 /// pattern's pad overrides are re-indexed in walk order, and the entries
-/// with no place in the new kind are dropped and returned.
+/// with no place in the new kind are dropped and returned. A linked
+/// pattern's override keeps its key: its outer slot is already a walk
+/// place, and only one past the slot count is dropped.
 pub fn switch_pattern_kind(
     sketch: &mut SketchData,
     array_id: ArrayId,
     target: KindTarget,
 ) -> Result<KindSwitched, KindSwitchRefused> {
+    if let Some(refused) = kind_switch_refusal(sketch, array_id, target.kind()) {
+        return Err(refused);
+    }
     let ctx = eval_context(sketch);
-    let old = sketch
+    let Some(old) = sketch
         .arrays
         .iter()
         .find(|a| a.id == array_id)
         .map(|a| a.kind.clone())
-        .ok_or(KindSwitchRefused::NoSuchPattern)?;
-    if PatternKind::of(&old) == target.kind() {
-        return Err(KindSwitchRefused::SameKind);
-    }
+    else {
+        return Err(KindSwitchRefused::NoSuchPattern);
+    };
     let layout = layout_of(&old, &ctx);
     let (mut new, line) = reshaped(&old, target, layout, &ctx);
     let remap = |cell: (u32, u32)| {
@@ -136,11 +140,27 @@ pub fn switch_pattern_kind(
             });
         }
     }
+    // A linked pattern keys an override by (outer slot, inner instance),
+    // the outer slot numbered in walk order, which the switch keeps.
+    let is_linked = sketch
+        .pattern_source_of(array_id)
+        .is_some_and(|s| sketch.is_pattern(s));
+    let slot_count = layout
+        .cols
+        .zip(layout.rows)
+        .map(|(c, r)| c.saturating_mul(r));
+    let remap_key = |(i, j): (u32, u32)| {
+        if is_linked {
+            slot_count.is_none_or(|n| i < n).then_some((i, j))
+        } else {
+            remap((i, j))
+        }
+    };
     sketch.pad_overrides.retain_mut(|o| {
         if o.array != array_id {
             return true;
         }
-        match remap((o.i, o.j)) {
+        match remap_key((o.i, o.j)) {
             Some((i, j)) => {
                 (o.i, o.j) = (i, j);
                 true
@@ -155,6 +175,20 @@ pub fn switch_pattern_kind(
         array.kind = new;
     }
     Ok(switched)
+}
+
+/// Why switching pattern `array_id` to `kind` would change nothing, or
+/// `None` when [`switch_pattern_kind`] would switch it.
+pub fn kind_switch_refusal(
+    sketch: &SketchData,
+    array_id: ArrayId,
+    kind: PatternKind,
+) -> Option<KindSwitchRefused> {
+    match sketch.arrays.iter().find(|a| a.id == array_id) {
+        None => Some(KindSwitchRefused::NoSuchPattern),
+        Some(a) if PatternKind::of(&a.kind) == kind => Some(KindSwitchRefused::SameKind),
+        Some(_) => None,
+    }
 }
 
 /// Remove `point` when nothing uses it: no entity, constraint, pattern or

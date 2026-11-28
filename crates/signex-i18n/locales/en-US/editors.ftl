@@ -1259,6 +1259,12 @@ editors-symbol-bar-pin-type = Pin type
 editors-role-pattern-kind-dropped-skips = Pattern switched to { $kind }: the skip on instances { $instances } was dropped; the new pattern has no such instance.
 # Same, for the per-pad overrides of those instances.
 editors-role-pattern-kind-dropped-overrides = Pattern switched to { $kind }: the pad overrides of instances { $instances } were dropped; the new pattern has no such instance.
+# #3232 Messages panel: a centre pick or kind segment asked to switch a
+# pattern to $kind (Linear, Grid or Polar) and nothing switched, because the
+# pattern is no longer in the sketch (an undo removed it).
+editors-role-pattern-kind-refused-missing = Pattern not switched to { $kind }: the pattern is no longer in the sketch.
+# Same, because the pattern already is that kind.
+editors-role-pattern-kind-refused-same = Pattern not switched to { $kind }: it already is one.
 # Messages panel (#3129): opening a symbol file removed a control character
 # that an older build had written into its pin table. $file is the file name,
 # $symbol the symbol's name, $pin the pin number, $column the pin table column

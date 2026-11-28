@@ -230,8 +230,10 @@ pub struct FootprintEditorState {
     /// during a drag does not repeat the same line on every frame.
     pub logged_solve_warnings: Vec<String>,
     /// Centre Points a switch to Polar minted (#2596), removed again when
-    /// the pattern leaves Polar and nothing uses them. Session only: after a
-    /// reload such a centre counts as drawn and stays.
+    /// the pattern leaves Polar and nothing uses them. Each undo step keeps
+    /// the set as it was (`selection_memo`), so undo and redo give it back
+    /// (#3232). Session only: after a reload such a centre counts as drawn
+    /// and stays.
     pub switch_minted_centres: std::collections::HashSet<signex_sketch::id::SketchEntityId>,
     /// #1073 — set on open when every sketch pad carries the pre-#1052
     /// all-false pad stack, so the Properties panel offers to restore it.
@@ -383,15 +385,16 @@ impl FootprintEditorState {
         pads_tool || sketch_tool || self.edge_pan.is_dragging()
     }
 
-    /// Keep the current pad and sketch picks as the selection the undo
-    /// step `step` gives back.
+    /// Keep the current pad and sketch picks, and the centres the kind
+    /// switch minted, as what the undo step `step` gives back.
     pub fn remember_selection(&mut self, step: &std::sync::Arc<u64>) {
         let selection = selection_memo::StepSelection {
             pad: self.selected_pad,
             sketch: self.selected_sketch,
             sketch_secondary: self.selected_sketch_secondary,
         };
-        self.selection_memo.remember(step, selection);
+        self.selection_memo
+            .remember(step, selection, self.switch_minted_centres.clone());
     }
 
     /// [`Self::from_footprint`] for a switch to another footprint of the

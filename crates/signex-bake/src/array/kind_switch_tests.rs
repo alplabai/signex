@@ -348,3 +348,154 @@ fn only_an_unused_bare_point_is_removed() {
     assert!(!sketch.entities.iter().any(|e| e.id == free));
     assert!(!remove_unused_point(&mut sketch, free), "already gone");
 }
+
+/// #3232: a linked pattern's override is keyed (outer slot, inner
+/// instance); the switch keeps the key, so the override stays on its pad.
+mod linked {
+    use std::collections::HashMap;
+
+    use signex_library::primitive::footprint::Pad as LibPad;
+    use signex_sketch::array::{Array, ArrayId, ArrayKind, NumberingScheme};
+    use signex_sketch::attr::{PadAttr, PadKind, PadShape, PadSide};
+    use signex_sketch::entity::{Entity, EntityKind};
+    use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
+    use signex_sketch::sketch::{PadAttrOverride, SketchData};
+    use signex_sketch::solver::Solver;
+    use signex_sketch::solver::residual::ResolvedParams;
+
+    use super::super::{KindTarget, switch_pattern_kind};
+    use super::SOURCE;
+    use crate::{bake_arrays, bake_pads};
+
+    /// A pad source at the origin, Linear A of 3 at a 1 mm pitch, and
+    /// `outer` linked to A.
+    fn linked_to_linear_a(outer: ArrayKind) -> (SketchData, ArrayId) {
+        let plane = PlaneId::new();
+        let mut source = Entity::new(SOURCE, plane, EntityKind::Point { x: 0.0, y: 0.0 });
+        source.pad = Some(PadAttr {
+            number: "1".into(),
+            kind: PadKind::Smd,
+            side: PadSide::Top,
+            shape: PadShape::Rect,
+            size_x_expr: "0.5mm".into(),
+            size_y_expr: "0.5mm".into(),
+            ..PadAttr::default()
+        });
+        let a = Array {
+            id: ArrayId::new(),
+            kind: super::linear("3", "1mm", "0mm", vec![]),
+            numbering: NumberingScheme::default(),
+        };
+        let b = Array {
+            id: ArrayId::new(),
+            kind: outer,
+            numbering: NumberingScheme::default(),
+        };
+        let (a_id, b_id) = (a.id, b.id);
+        let mut sketch = SketchData {
+            planes: vec![Plane {
+                id: plane,
+                kind: PlaneKind::BoardTop,
+            }],
+            entities: vec![source],
+            arrays: vec![a, b],
+            ..SketchData::default()
+        };
+        sketch.set_pattern_source(b_id, a_id).unwrap();
+        (sketch, b_id)
+    }
+
+    fn bake(sketch: &SketchData) -> Vec<LibPad> {
+        let solved = Solver::default()
+            .solve(sketch, &ResolvedParams::new())
+            .expect("the fixture solves");
+        let (mut out, mut warnings) = (Vec::new(), Vec::new());
+        bake_pads(sketch, &solved, &HashMap::new(), &mut out, &mut warnings).unwrap();
+        bake_arrays(sketch, &solved, &HashMap::new(), &mut out, &mut warnings).unwrap();
+        out
+    }
+
+    fn net(name: &str) -> PadAttrOverride {
+        PadAttrOverride {
+            net: Some(name.into()),
+            ..PadAttrOverride::default()
+        }
+    }
+
+    /// Where the pads with net `name` bake, and their numbers.
+    fn netted(sketch: &SketchData, name: &str) -> Vec<((i64, i64), String)> {
+        bake(sketch)
+            .iter()
+            .filter(|p| p.net == name)
+            .map(|p| {
+                let um = |mm: f64| (mm * 1000.0).round() as i64;
+                ((um(p.position[0]), um(p.position[1])), p.number.clone())
+            })
+            .collect()
+    }
+
+    /// The issue's worked case: Grid B 2 × 2 of Linear A, override on outer
+    /// slot 1, inner 1, at (11, 0). As a line, slot 1 is still at (10, 0).
+    #[test]
+    fn a_linked_grid_to_linear_keeps_the_override_on_its_pad() {
+        let (mut sketch, b) = linked_to_linear_a(ArrayKind::Grid {
+            source: SOURCE,
+            nx_expr: "2".into(),
+            ny_expr: "2".into(),
+            dx_expr: "10mm".into(),
+            dy_expr: "20mm".into(),
+            depopulation: None,
+        });
+        sketch.set_override(b, 1, 1, net("X"));
+        let before = netted(&sketch, "X");
+        assert_eq!(before.len(), 1, "{before:?}");
+        assert_eq!(before[0].0, (11_000, 0));
+
+        let dropped = switch_pattern_kind(&mut sketch, b, KindTarget::Linear).unwrap();
+
+        assert!(dropped.overrides_dropped.is_empty());
+        assert_eq!(sketch.override_for(b, 1, 1), Some(&net("X")));
+        assert_eq!(netted(&sketch, "X"), before);
+    }
+
+    /// Linear B of 2, key (B, 1, 2), switched to Grid: the pad still
+    /// exists, so the override stays; a key past the slot count goes.
+    #[test]
+    fn a_linked_linear_to_grid_keeps_an_inner_index_past_the_row() {
+        let (mut sketch, b) = linked_to_linear_a(super::linear("2", "10mm", "0mm", vec![]));
+        sketch.set_override(b, 1, 2, net("X"));
+        sketch.set_override(b, 5, 0, net("STALE"));
+        let before = netted(&sketch, "X");
+        assert_eq!(before.len(), 1, "{before:?}");
+        assert_eq!(before[0].0, (12_000, 0));
+
+        let dropped = switch_pattern_kind(&mut sketch, b, KindTarget::Grid).unwrap();
+
+        assert_eq!(dropped.overrides_dropped, vec![(5, 0)]);
+        assert_eq!(sketch.override_for(b, 1, 2), Some(&net("X")));
+        assert_eq!(netted(&sketch, "X"), before);
+    }
+
+    /// A vertical linked Linear becomes a grid column; its outer slot k is
+    /// still slot k, not the never-baked slot 0.
+    #[test]
+    fn a_vertical_linked_linear_to_grid_keeps_the_override() {
+        let (mut sketch, b) = linked_to_linear_a(super::linear("3", "0mm", "20mm", vec![]));
+        sketch.set_override(b, 2, 0, net("X"));
+        let before = netted(&sketch, "X");
+        assert_eq!(before.len(), 1, "{before:?}");
+        assert_eq!(before[0].0, (0, 40_000));
+
+        let dropped = switch_pattern_kind(&mut sketch, b, KindTarget::Grid).unwrap();
+
+        assert!(dropped.overrides_dropped.is_empty());
+        let ArrayKind::Grid {
+            nx_expr, ny_expr, ..
+        } = &sketch.arrays[1].kind
+        else {
+            panic!("a grid");
+        };
+        assert_eq!((nx_expr.as_str(), ny_expr.as_str()), ("1", "3"));
+        assert_eq!(netted(&sketch, "X"), before);
+    }
+}
