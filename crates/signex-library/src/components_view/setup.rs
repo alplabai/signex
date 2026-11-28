@@ -168,7 +168,7 @@ impl ViewSetup {
             }
         }
         self.hidden
-            .extend(saved.hidden.iter().filter(|c| absent(*c)).cloned());
+            .extend(saved.hidden.iter().filter(|c| absent(c)).cloned());
         for (column, width) in &saved.widths {
             if absent(column) {
                 self.widths.entry(column.clone()).or_insert(*width);

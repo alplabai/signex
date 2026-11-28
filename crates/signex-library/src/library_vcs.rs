@@ -133,10 +133,7 @@ mod tests {
     #[test]
     fn a_folder_without_git_is_off() {
         let dir = tempfile::tempdir().unwrap();
-        assert_eq!(
-            read(dir.path(), ALL_TOOLS),
-            LibraryVcsState::Off
-        );
+        assert_eq!(read(dir.path(), ALL_TOOLS), LibraryVcsState::Off);
     }
 
     /// Review #3235: a `.git` that git cannot open (here, no HEAD) needs
@@ -154,10 +151,7 @@ mod tests {
     #[test]
     fn a_clean_repository_is_git_and_an_edit_needs_attention() {
         let dir = committed_repo();
-        assert_eq!(
-            read(dir.path(), ALL_TOOLS),
-            LibraryVcsState::Git
-        );
+        assert_eq!(read(dir.path(), ALL_TOOLS), LibraryVcsState::Git);
         std::fs::write(dir.path().join("lib.snxlib"), "edited").unwrap();
         std::fs::write(dir.path().join("new.tsv"), "row").unwrap();
         assert_eq!(
@@ -182,10 +176,7 @@ mod tests {
             git_lfs: false,
         };
         // LFS matters only for a library that uses it.
-        assert_eq!(
-            read(dir.path(), no_lfs),
-            LibraryVcsState::Git
-        );
+        assert_eq!(read(dir.path(), no_lfs), LibraryVcsState::Git);
         std::fs::write(dir.path().join(".gitattributes"), "*.step filter=lfs\n").unwrap();
         assert_eq!(
             read(dir.path(), no_lfs),

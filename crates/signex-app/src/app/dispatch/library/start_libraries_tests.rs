@@ -409,7 +409,11 @@ fn a_second_removal_keeps_the_one_waiting_on_writes() {
     let (next, _startup) = Signex::new();
     for file in [&first, &second] {
         assert!(
-            !next.library.global_libraries.iter().any(|e| &e.path == file),
+            !next
+                .library
+                .global_libraries
+                .iter()
+                .any(|e| &e.path == file),
             "{} does not mount at the next start",
             file.display()
         );

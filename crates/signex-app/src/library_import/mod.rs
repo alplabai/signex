@@ -26,12 +26,12 @@ mod empty_dir;
 mod empty_dir_tests;
 pub mod error;
 pub mod events;
-#[cfg(any(windows, test))]
-mod long_path;
 #[cfg(windows)]
 mod job;
 #[cfg(all(test, windows))]
 mod job_tests;
+#[cfg(any(windows, test))]
+mod long_path;
 pub mod output;
 mod place;
 mod preview_lock;
