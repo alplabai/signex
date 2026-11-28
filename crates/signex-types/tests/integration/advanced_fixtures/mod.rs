@@ -88,8 +88,10 @@ fn every_generated_file_saves_back_to_its_own_bytes() {
                 .into_bytes(),
             Some("snxprj") => {
                 let mut data =
-                    parse_project_bytes(Path::new("/corpus").join(&file).as_path(), &bytes)
-                        .unwrap_or_else(|e| panic!("{file}: {e}"));
+                    parse_project_bytes(Path::new("/corpus").join(&file).as_path(), &bytes, |_| {
+                        false
+                    })
+                    .unwrap_or_else(|e| panic!("{file}: {e}"));
                 // The reader puts the file's real folder in `dir`; the
                 // corpus stores the empty placeholder.
                 data.dir.clear();

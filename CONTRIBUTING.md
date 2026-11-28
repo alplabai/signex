@@ -126,6 +126,7 @@ bash scripts/check_discarded_tasks.sh   # no `let _ =` on an iced::Task
 bash scripts/check_lint_lockstep.sh     # workspace lints present in every member
 bash scripts/check_layer_ratchet.sh   # layer-crossing counts vs scripts/layer-ratchet-baseline.txt
 bash scripts/check_engine_ids.sh      # engine id minting only at scripts/engine-ids-allowlist.txt
+bash scripts/check_domain_io.sh       # DOMAIN crates: IO, clock and ids only at scripts/domain-io-allowlist.txt (builds; needs jq)
 bash scripts/check_app_catch_unwind.sh # app catch_unwind count may only fall (needs ast-grep, jq)
 bash scripts/check_projector_writes.sh # app/projector writes no core state and calls no wrapper (needs ast-grep, jq)
 bash scripts/check_document_load_seam.sh # only the load wrappers call app/state/document_load (needs ast-grep, jq)

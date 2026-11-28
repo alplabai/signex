@@ -416,6 +416,8 @@ mod description_tests;
 #[cfg(test)]
 mod document_id_tests;
 #[cfg(test)]
+mod legacy_listing_tests;
+#[cfg(test)]
 mod net_class_tests;
 #[cfg(test)]
 mod parameters_tests;
@@ -766,13 +768,26 @@ pub fn parse_project(path: &Path) -> Result<ProjectData, ProjectError> {
         path: path.display().to_string(),
         source,
     })?;
-    parse_project_bytes(path, &bytes)
+    parse_project_bytes(path, &bytes, files_on_disk(path))
+}
+
+/// The desktop file listing for [`parse_project_bytes`]: whether a file named
+/// `name` sits in the folder of the project file `path`.
+pub fn files_on_disk(path: &Path) -> impl Fn(&str) -> bool + '_ {
+    let dir = path.parent().unwrap_or(Path::new("."));
+    move |name| dir.join(name).exists()
 }
 
 /// [`parse_project`] over bytes already read. `path` names the project (its
 /// folder and stem fill `dir` and `name`) and need not hold these bytes: a
 /// recovery copy of the project parses as the project it stands for.
-pub fn parse_project_bytes(path: &Path, bytes: &[u8]) -> Result<ProjectData, ProjectError> {
+/// `file_exists` answers for a file name in the project folder; only an empty
+/// or legacy marker asks it (a desktop caller passes [`files_on_disk`], #2431).
+pub fn parse_project_bytes(
+    path: &Path,
+    bytes: &[u8],
+    file_exists: impl Fn(&str) -> bool,
+) -> Result<ProjectData, ProjectError> {
     let dir = path.parent().unwrap_or(Path::new("."));
     let project_name = path
         .file_stem()
@@ -879,14 +894,14 @@ pub fn parse_project_bytes(path: &Path, bytes: &[u8]) -> Result<ProjectData, Pro
     // Non-JSON legacy/empty marker — directory-driven probe (the
     // original pre-JSON behaviour).
     let snx_sch_name = format!("{}.snxsch", project_name);
-    let schematic_root = if dir.join(&snx_sch_name).exists() {
+    let schematic_root = if file_exists(&snx_sch_name) {
         Some(snx_sch_name)
     } else {
         None
     };
 
     let snx_pcb_name = format!("{}.snxpcb", project_name);
-    let pcb_file = if dir.join(&snx_pcb_name).exists() {
+    let pcb_file = if file_exists(&snx_pcb_name) {
         Some(snx_pcb_name)
     } else {
         None

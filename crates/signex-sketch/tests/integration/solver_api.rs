@@ -167,6 +167,7 @@ fn solver_custom_work_budget_and_iter_cap() {
         work_budget: signex_sketch::solver::lm::DEFAULT_WORK_BUDGET,
         max_iters: 100,
         tolerance: 1e-12,
+        ..Solver::default()
     };
     let out = solver.solve(&s.data, &empty_params()).unwrap();
     assert!(out.result.iterations <= 50);
@@ -199,6 +200,7 @@ fn solver_max_iters_field_is_honoured() {
         work_budget: u64::MAX,
         max_iters: 1,
         tolerance: 1e-12,
+        ..Solver::default()
     };
     match solver.solve(&s.data, &empty_params()) {
         Ok(out) => panic!(
@@ -237,6 +239,7 @@ fn solver_tolerance_field_is_honoured() {
         work_budget: u64::MAX,
         max_iters: 100,
         tolerance: 10.0,
+        ..Solver::default()
     };
     let out_loose = solver_loose.solve(&s.data, &empty_params()).unwrap();
     assert_eq!(
