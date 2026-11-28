@@ -586,6 +586,9 @@ pub struct FootprintDocument {
     /// Cleared by every other history push, undo and redo, and by a
     /// sibling switch, add or delete (anything that rewrites `active_idx`).
     last_edit_key: Option<(FieldEditKey, usize)>,
+    /// The id the last history step was given; see
+    /// [`FootprintHistorySnapshot::step_id`].
+    last_step_id: u64,
 }
 
 /// Identifies one field of one target (a pad index, a sketch entity or
@@ -598,8 +601,9 @@ pub type FieldEditKey = (&'static str, u128);
 /// - the full multi-footprint `FootprintFile` (typically <50 KB of
 ///   in-memory representation),
 /// - the active footprint index,
-/// - the canvas-side `EditorPad` cache and its selection state,
-/// - sketch selection state.
+/// - the canvas-side `EditorPad` cache,
+/// - the step's id, under which the editor's view state keeps the
+///   selection the step gives back (`state::selection_memo`).
 ///
 /// Stored by-value (not by-Arc) so undo/redo never aliases the live
 /// state. Memory cost: ~5 KB × `HISTORY_DEPTH` = ~500 KB per editor.
@@ -610,9 +614,9 @@ pub struct FootprintHistorySnapshot {
     pub file: signex_library::FootprintFile,
     pub active_idx: usize,
     pub pads: Vec<crate::library::editor::footprint::state::EditorPad>,
-    pub selected_pad: Option<usize>,
-    pub selected_sketch: Option<signex_sketch::id::SketchEntityId>,
-    pub selected_sketch_secondary: Option<signex_sketch::id::SketchEntityId>,
+    /// This step's identity, shared by its clones; the selection memo keeps
+    /// its entry while any of them is held.
+    pub(in crate::app) step_id: std::sync::Arc<u64>,
     /// The save point when the step was captured, i.e. before the edit it
     /// precedes: [`FootprintDocument::commit_history`] gives it back, so an
     /// edit's own `mark_dirty` cannot cost the point.
@@ -729,6 +733,7 @@ impl FootprintDocument {
                 super::History::at_start(Self::HISTORY_DEPTH)
             },
             last_edit_key: None,
+            last_step_id: 0,
         }
     }
 
@@ -803,7 +808,7 @@ impl FootprintDocument {
 
     /// [`Self::begin_edit`] for a sketch drag tick, which owes its own
     /// solve and so must not settle the previous tick's.
-    pub(crate) fn begin_tick_edit(&self) -> FootprintHistorySnapshot {
+    pub(crate) fn begin_tick_edit(&mut self) -> FootprintHistorySnapshot {
         self.snapshot()
     }
 
@@ -907,14 +912,20 @@ impl FootprintDocument {
     /// v0.24 Phase 1 — capture the current state into a snapshot
     /// without altering the history stack. Used by `push_history`
     /// + `undo`/`redo` to read the canonical state by-value.
-    fn snapshot(&self) -> FootprintHistorySnapshot {
+    fn snapshot(&mut self) -> FootprintHistorySnapshot {
+        self.last_step_id += 1;
+        let step_id = std::sync::Arc::new(self.last_step_id);
+        let selection = crate::library::editor::footprint::state::selection_memo::StepSelection {
+            pad: self.state.selected_pad,
+            sketch: self.state.selected_sketch,
+            sketch_secondary: self.state.selected_sketch_secondary,
+        };
+        self.state.selection_memo.remember(&step_id, selection);
         FootprintHistorySnapshot {
             file: self.file.clone(),
             active_idx: self.active_idx,
             pads: self.state.pads.clone(),
-            selected_pad: self.state.selected_pad,
-            selected_sketch: self.state.selected_sketch,
-            selected_sketch_secondary: self.state.selected_sketch_secondary,
+            step_id,
             point: self.history.point(),
         }
     }
@@ -933,9 +944,10 @@ impl FootprintDocument {
         self.file.models.absorb(&live_models);
         self.active_idx = snap.active_idx;
         self.state.pads = snap.pads;
-        self.state.selected_pad = snap.selected_pad;
-        self.state.selected_sketch = snap.selected_sketch;
-        self.state.selected_sketch_secondary = snap.selected_sketch_secondary;
+        let selection = self.state.selection_memo.recall(&snap.step_id);
+        self.state.selected_pad = selection.pad;
+        self.state.selected_sketch = selection.sketch;
+        self.state.selected_sketch_secondary = selection.sketch_secondary;
         // Bakes shift hand-entry indices and the snapshot keeps no silk
         // selection, so a stale index would point at another entry.
         self.state.clear_silk_selection();
