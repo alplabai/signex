@@ -321,3 +321,7 @@ impl Signex {
 #[cfg(test)]
 #[path = "board_status_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "board_status_grid_tests.rs"]
+mod grid_tests;

@@ -299,11 +299,13 @@ fn value_text(i18n: &I18n, value: &CompareValue) -> Label<'static> {
             "footprint" => footprint.clone()
         )),
         CompareValue::NoNet => Label::from(t!(i18n, ids::COMPARE_BOARD_NO_NET)),
+        CompareValue::Unlinked => Label::from(t!(i18n, ids::COMPARE_BOARD_NOT_LINKED)),
     }
 }
 
 /// A side's cell: its value in mono (the board's, which differs, in the
-/// warning ink and bold), or the absence in italic.
+/// warning ink and bold), or the absence, or the missing link (#3059), in
+/// italic.
 fn side_cell<'a>(
     value: Option<&CompareValue>,
     absent: MessageId,
@@ -312,14 +314,15 @@ fn side_cell<'a>(
     tokens: &ThemeTokens,
 ) -> Element<'a, Message> {
     let r = tokens::resolve(tokens);
+    let missing = |words: Label<'static>| {
+        text(words).size(TS.dense).color(r.ink4).font(Font {
+            style: FontStyle::Italic,
+            ..signex_widgets::ui_font::regular()
+        })
+    };
     let content = match value {
-        None => text(t!(i18n, absent))
-            .size(TS.dense)
-            .color(r.ink4)
-            .font(Font {
-                style: FontStyle::Italic,
-                ..signex_widgets::ui_font::regular()
-            }),
+        None => missing(Label::from(t!(i18n, absent))),
+        Some(value @ CompareValue::Unlinked) => missing(value_text(i18n, value)),
         Some(value) if differs => text(value_text(i18n, value))
             .size(TS.dense)
             .color(ti(tokens.warning))

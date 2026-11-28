@@ -105,7 +105,7 @@ impl Engine {
 
 /// How a refusal names a drawing: its shape and where it starts.
 fn drawing_name(drawing: &signex_types::schematic::SchDrawing) -> String {
-    use signex_types::schematic::SchDrawing;
+    use signex_types::schematic::{CurveShape, SchDrawing};
     let (shape, p) = match drawing {
         SchDrawing::Line { start, .. } => ("line", start),
         SchDrawing::Rect { start, .. } => ("rectangle", start),
@@ -118,6 +118,13 @@ fn drawing_name(drawing: &signex_types::schematic::SchDrawing) -> String {
         SchDrawing::Bezier(b) => ("bezier", &b.start),
         SchDrawing::Dimension(d) => ("dimension", &d.from),
         SchDrawing::Table(t) => ("table", &t.position),
+        SchDrawing::Image(i) => ("image", &i.position),
+        SchDrawing::Curve(c) => match &c.shape {
+            CurveShape::Ellipse { center, .. }
+            | CurveShape::EllipticalArc { center, .. }
+            | CurveShape::Pie { center, .. } => (c.shape.kind_name(), center),
+            CurveShape::RoundRect { from, .. } => (c.shape.kind_name(), from),
+        },
     };
     format!("{shape} ({:.2}, {:.2})", p.x, p.y)
 }

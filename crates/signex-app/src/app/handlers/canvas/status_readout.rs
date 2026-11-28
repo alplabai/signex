@@ -46,6 +46,7 @@ impl Signex {
                 || tab.kind.as_library_browser().is_some()
                 || tab.kind.is_project_page()
                 || tab.kind.is_gerber_viewer()
+                || tab.kind.is_output_job()
                 || tab.kind.is_block_diagram()
             {
                 return Surface::NoCamera;

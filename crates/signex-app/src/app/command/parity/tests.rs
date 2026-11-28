@@ -3,7 +3,7 @@
 use std::collections::BTreeSet;
 
 use super::super::CommandContext;
-use super::annotations::ANNOTATIONS;
+use super::annotations;
 use super::forms::{Form, Owner};
 use super::inputs::{FACTS, Input};
 use super::owners::{OwnerBasis, WRITES, owner};
@@ -88,7 +88,7 @@ fn every_row_has_implicit_inputs_from_the_vocabulary() {
 fn every_annotation_names_one_row() {
     let rows = rows();
     let mut seen = BTreeSet::new();
-    for (ids, form, _) in ANNOTATIONS {
+    for (ids, form, _) in annotations::all() {
         for id in *ids {
             assert!(
                 rows.iter().any(|row| row.id == *id && row.form == *form),

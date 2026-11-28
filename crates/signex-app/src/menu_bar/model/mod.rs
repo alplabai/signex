@@ -43,6 +43,32 @@ pub struct MenuItem {
     pub checked: Option<bool>,
     /// A glyph in the check column, drawn while no check mark shows there.
     pub icon: Option<MenuIcon>,
+    /// What a tile row would do, previewed beside it while it is hovered
+    /// (mockup row 207); a native menu shows none.
+    pub preview: Option<TilePreview>,
+}
+
+/// The preview beside a tile row of View ▸ Window (mockup row 207): which
+/// documents land in which pane. Plain data, built by the app.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TilePreview {
+    /// How the panes are arranged.
+    pub layout: crate::app::TileLayout,
+    /// "Tile Vertically · 4 open documents".
+    pub title: String,
+    /// Each pane's document names, in pane order.
+    pub panes: Vec<Vec<String>>,
+    /// The line under the panes: what the arrangement does.
+    pub note: String,
+}
+
+/// The previews of the three tile rows; `None` where the row would arrange
+/// fewer than two documents.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct TilePreviews {
+    pub horizontal: Option<TilePreview>,
+    pub vertical: Option<TilePreview>,
+    pub grid: Option<TilePreview>,
 }
 
 /// The glyph a row draws in its check column (mockup row 166). Plain data;

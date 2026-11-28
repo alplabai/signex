@@ -300,6 +300,8 @@ fn history_target_of(active: &crate::app::TabInfo) -> Option<std::path::PathBuf>
     match &active.kind {
         // Fabrication files are read, never written: nothing to restore.
         crate::app::TabKind::GerberViewer => None,
+        // An Export Job is not restored from History yet.
+        crate::app::TabKind::OutputJob => None,
         crate::app::TabKind::LibraryBrowser(p) => Some(p.clone()),
         crate::app::TabKind::ComponentEditor(_) => None,
         // A board page; its board's tab offers the board's history.
@@ -311,7 +313,8 @@ fn history_target_of(active: &crate::app::TabInfo) -> Option<std::path::PathBuf>
         | crate::app::TabKind::Rules(_)
         | crate::app::TabKind::LayerStack
         | crate::app::TabKind::PinTable
-        | crate::app::TabKind::VariantManager(_) => None,
+        | crate::app::TabKind::VariantManager(_)
+        | crate::app::TabKind::DesignChecklist(_) => None,
         // Not restored from History yet (#2796): no restore reads a diagram.
         crate::app::TabKind::BlockDiagram(_) => None,
         // A notebook restore would replace text the tab holds; not offered

@@ -226,9 +226,7 @@ impl OpenPackage {
     /// A click on the board selects what is under it; a row still held
     /// by a release missed elsewhere is let go.
     pub fn click_at(&mut self, at: PointNm, tolerance: i64) {
-        self.selected = self.object_at(at, tolerance);
-        self.colour_open = None;
-        self.grip = None;
+        self.select(self.object_at(at, tolerance));
     }
 
     /// Move the row at `from` in the drawing order to `to`.
@@ -340,6 +338,47 @@ impl OpenPackage {
         self.object(self.selected?)?.attributes.net.as_deref()
     }
 
+    /// The layer read from the file named `file`, by its index.
+    pub fn layer_of_file(&self, file: &str) -> Option<usize> {
+        self.package
+            .layers
+            .iter()
+            .position(|layer| layer.image.file == file)
+    }
+
+    /// The topmost object of `layer` at `at` within `tolerance` nm, drawn
+    /// or covered by another layer.
+    pub fn object_on_layer_at(
+        &self,
+        layer: usize,
+        at: PointNm,
+        tolerance: i64,
+    ) -> Option<ObjectRef> {
+        let objects = &self.package.layers.get(layer)?.image.objects;
+        objects
+            .iter()
+            .enumerate()
+            .rev()
+            .find(|(_, object)| covers(object, at, tolerance))
+            .map(|(object, _)| ObjectRef { layer, object })
+    }
+
+    /// Whether some object of the package carries the X2 net `net`.
+    pub fn has_net(&self, net: &str) -> bool {
+        self.package
+            .layers
+            .iter()
+            .flat_map(|layer| layer.image.objects.iter())
+            .any(|object| object.attributes.net.as_deref() == Some(net))
+    }
+
+    /// Select `selected`, or nothing, as a click on the board does.
+    pub fn select(&mut self, selected: Option<ObjectRef>) {
+        self.selected = selected;
+        self.colour_open = None;
+        self.grip = None;
+    }
+
     /// The box holding every layer, as (min, max).
     pub fn bounds(&self) -> Option<(PointNm, PointNm)> {
         self.bounds
@@ -394,6 +433,10 @@ pub struct GerberViewerState {
     /// The clock, in Unix seconds, read in `update` when the recent list
     /// was last checked; the rows' times read against it.
     pub now: Option<i64>,
+    /// The Export Job run the files came from (mockup row 193b).
+    pub from_run: Option<super::RunOrigin>,
+    /// The run's files could not be read: they moved since.
+    pub run_missing: bool,
 }
 
 impl GerberViewerState {

@@ -133,6 +133,61 @@ fn the_library_panel_draws_its_chips_and_no_open_library_footer() {
     );
 }
 
+/// Mockup row 119 (#3007): in the default 240 px left dock the three kind
+/// chips sit on one line, a three-digit Parts count included, and end
+/// inside the dock.
+#[test]
+fn the_kind_chips_share_one_line_in_the_default_left_dock() {
+    let (mut app, main) = app_with_sheet();
+    let row = crate::library::component_preview::test_row();
+    app.library
+        .open_libraries
+        .push(crate::library::state::OpenLibrary {
+            root: std::path::PathBuf::from("/tmp/kind-chips/Lib.snxlib"),
+            display_name: "Lib".into(),
+            library_id: uuid::Uuid::now_v7(),
+            tables: std::collections::HashMap::from([("R".to_string(), vec![row; 305])]),
+            cached_components: Vec::new(),
+            cached_symbols: Vec::new(),
+            cached_footprints: Vec::new(),
+            cached_sims: Vec::new(),
+            cached_classes: Vec::new(),
+            observed_stamp: None,
+            dangling: Default::default(),
+            pricing: Default::default(),
+            own_edit_stamp: None,
+            display: crate::library::state::LibraryDisplaySettings::default(),
+            provenance: Default::default(),
+        });
+    app.library.touch_data();
+    app.library.sync_view_caches();
+    app.document_view
+        .dock
+        .show_panel_at(PanelPosition::Left, PanelKind::Library);
+    assert_eq!(LEFT_W, crate::dock::DEFAULT_LEFT_DOCK_WIDTH);
+    let texts = crate::layout_probe::lay_out_texts(app.view(main), WINDOW);
+    let chip = |label: &str| {
+        texts
+            .iter()
+            .find(|t| t.text == label && t.bounds.x < LEFT_W)
+            .unwrap_or_else(|| panic!("no {label} chip in the left dock: {texts:#?}"))
+            .bounds
+    };
+    let symbols = chip("Symbols");
+    for label in ["Footprints", "Parts", "305"] {
+        let b = chip(label);
+        assert!(
+            (b.center_y() - symbols.center_y()).abs() < 2.0,
+            "{label} wrapped off the chips' line: {b:?} vs {symbols:?}"
+        );
+    }
+    let count = chip("305");
+    assert!(
+        count.x + count.width <= LEFT_W + 0.5,
+        "the Parts count ends inside the dock: {count:?}"
+    );
+}
+
 /// A detached Library panel window (and its SCH Library / Footprint Library
 /// aliases) draws the real panel with its kind chips, not the planned card.
 #[test]

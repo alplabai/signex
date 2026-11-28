@@ -21,6 +21,13 @@ pub(crate) use updates::{
     refuse_read_only,
 };
 
+/// The tool a person arms, which the commands' tests compare against.
+#[cfg(test)]
+pub(crate) use canvas::SymbolTool;
+/// Place a curve shape as the tool's last click does (#2838): the
+/// `symbol_draw_*` commands' commit.
+pub(crate) use updates::place_shape;
+
 /// The Properties panel's state and messages for a symbol editor (mockup
 /// rows 122 and 123), and the rectangle Width / Height rule its form and the graphic
 /// edit share: the slice's surface for the panel and the dock handler.
@@ -28,8 +35,14 @@ pub use state::{
     BodyScope, BodyScopeRow, PartChip, PartStep, SymActiveBarMenu, SymbolPropsMsg, SymbolPropsTab,
     SymbolPropsUi, SymbolSelection, rect_end_for_extent, rect_extent,
 };
+/// The rows `edit_symbol_pins` sets and pastes (#2817), read and applied
+/// by the same rules as the Pin table tab.
+pub use state::{
+    PartView, PinRow, PinRowChange, RowsApplied, apply_rows, electrical_id, orientation_id,
+    parse_paste_fields, parse_paste_mode, parse_pin_rows, read_mapped, unescape_paste,
+};
 /// The Pin table document tab's state, messages and edits (mockup row 122b).
 pub use state::{
     PasteDraft, PasteField, PasteMode, PinTableMsg, PinTableUi, add_table_pin, apply_bulk,
-    apply_paste, parse_mm, paste_preview, remove_pins,
+    apply_paste, drop_pin_selection, parse_mm, paste_preview, remove_pins,
 };

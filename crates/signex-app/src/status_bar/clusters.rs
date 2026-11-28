@@ -54,6 +54,8 @@ pub(super) enum Segment {
     ViewAngle,
     /// A skipped library is still missing; a click reopens its dialog.
     LibraryMissing,
+    /// "N missing assets": image files the sheet's project cannot show.
+    AssetsMissing,
     Zoom,
     Panels,
 }
@@ -89,6 +91,9 @@ pub(super) fn segments(r: &Readout<'_>) -> Vec<Segment> {
     }
     if r.surface.missing_libraries > 0 {
         out.push(S::LibraryMissing);
+    }
+    if r.surface.missing_assets > 0 {
+        out.push(S::AssetsMissing);
     }
     if out.len() > before_zoom {
         out.push(S::Rule);
@@ -227,6 +232,12 @@ fn segment_view<'a>(
         .padding([1.5, 6.0])
         .style(selection_pill(tokens))
         .on_press(StatusBarRequest::LibraryMissingChipClicked)
+        .boxed(),
+        Segment::AssetsMissing => container(mono_message(
+            t!(i18n, ids::IMAGES_STATUS_MISSING, "count" => r.surface.missing_assets),
+            signex_widgets::theme_ext::warning_color(tokens),
+        ))
+        .padding([1.5, 6.0])
         .boxed(),
         Segment::Zoom => mono_message(zoom_text(i18n, r.zoom), muted).boxed(),
         Segment::Panels => panels(tokens, i18n),
@@ -494,6 +505,8 @@ mod tests {
             board: Some(BoardReadout::default()),
             no_document: false,
             missing_libraries: 0,
+            missing_assets: 0,
+            focused_pin: None,
         }
     }
 
@@ -610,6 +623,33 @@ mod tests {
             };
             assert!(segments(&readout(None, surface)).contains(&S::LibraryMissing));
         }
+    }
+
+    /// Mockup row 204: a sheet whose project misses image files counts them
+    /// in a warning pill; with none missing the bar has no pill.
+    #[test]
+    fn missing_image_assets_are_counted_on_the_bar() {
+        let i18n = I18n::en_us();
+        let tokens = signex_types::theme::theme_tokens(ThemeId::GraphiteLight);
+        let none = readout(None, SurfaceReadout::default());
+        assert!(!segments(&none).contains(&S::AssetsMissing));
+        let surface = SurfaceReadout {
+            missing_assets: 2,
+            ..SurfaceReadout::default()
+        };
+        let r = readout(None, surface);
+        assert!(segments(&r).contains(&S::AssetsMissing));
+        let texts = crate::layout_probe::lay_out_texts(
+            view(&r, &tokens, &i18n),
+            iced::Size::new(1440.0, 40.0),
+        );
+        assert!(
+            texts.iter().any(|t| t
+                .text
+                .replace(['\u{2068}', '\u{2069}'], "")
+                .contains("2 missing assets")),
+            "{texts:?}"
+        );
     }
 
     /// Running work stays on the no-document bar: an import keeps its cancel.

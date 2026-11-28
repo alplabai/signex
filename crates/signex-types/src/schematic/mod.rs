@@ -859,6 +859,13 @@ mod not_fitted;
 pub use not_fitted::{
     NOT_FITTED_CROSS_WIDTH_SCALE, NOT_FITTED_PAPER_SHARE, greyed_ink, not_fitted_cross,
 };
+mod note_format;
+pub use note_format::TextNoteFormat;
+mod rich_note_layout;
+pub use rich_note_layout::{
+    DEFAULT_NOTE_HEIGHT_MM, DEFAULT_NOTE_WIDTH_MM, MIN_NOTE_EDGE_MM, NoteFrame, NoteSize,
+    RichNoteLayout,
+};
 mod sheet;
 pub use sheet::*;
 mod sheet_frame;
@@ -920,13 +927,22 @@ pub use harness::{
 };
 mod union;
 pub use union::{SchUnion, union_member_kinds};
+mod curve_shape;
+#[cfg(test)]
+mod curve_shape_tests;
 mod drawing_bezier;
+mod drawing_curve;
 mod drawing_dimension;
+mod drawing_ops;
 mod sch_table;
+pub use curve_shape::{
+    CurveShape, CurveTool, MIN_CURVE_SIZE_MM, angle_deg, max_corner_radius, point_on_ellipse,
+};
 pub use drawing_bezier::{
     BEZIER_FLATTEN_SEGMENTS, LINE_END_ARROW_HALF_WIDTH_MM, LINE_END_ARROW_LENGTH_MM, LineEnds,
     SchBezier,
 };
+pub use drawing_curve::SchCurve;
 pub use drawing_dimension::{
     DIMENSION_MAX_PRECISION, DIMENSION_TEXT_MM, DimensionArrows, DimensionDirection,
     DimensionGeometry, DimensionUnits, SchDimension,
@@ -938,9 +954,19 @@ pub use sch_table::{
 };
 #[cfg(test)]
 mod drawing_kinds_tests;
+mod sch_image;
+pub use sch_image::{SchImage, first_size_mm, free_area_mm};
+mod sch_image_edit;
+pub use sch_image_edit::{
+    IMAGE_MAX_EDGE_MM, ImageEdit, ImageEditRefusal, ImageHandle, resized_by_handle,
+};
 mod repeat;
 #[cfg(test)]
 mod repeat_tests;
+#[cfg(test)]
+mod sch_image_edit_tests;
+#[cfg(test)]
+mod sch_image_tests;
 pub use repeat::{
     ChannelFormatError, ChannelOccurrence, ChannelRepeat, MAX_CHANNELS, RepeatStack, StackLayer,
     channel_alpha, check_format, entry_port_name, renamed_entry, repeated_entry_name,

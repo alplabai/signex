@@ -90,6 +90,13 @@ fn look(kind: DialogButtonKind, tokens: &ThemeTokens) -> Look {
             border: Color::TRANSPARENT,
             text: tokens::resolve(tokens).accent_text,
         },
+        // `.btn.quiet`: the secondary ink (`--ink2`), not the accent, so it
+        // reads neither as a call to action nor as destructive.
+        DialogButtonKind::Quiet => Look {
+            fills: [Color::TRANSPARENT, overlays()[1], overlays()[2]],
+            border: Color::TRANSPARENT,
+            text: ti(tokens.text_secondary),
+        },
         DialogButtonKind::Secondary | DialogButtonKind::Cancel => Look {
             fills: overlays(),
             border: ti(tokens.border),
@@ -143,7 +150,7 @@ mod tests {
     use super::*;
     use signex_types::theme::ThemeId;
 
-    const KINDS: [DialogButtonKind; 8] = [
+    const KINDS: [DialogButtonKind; 9] = [
         DialogButtonKind::Primary,
         DialogButtonKind::Secondary,
         DialogButtonKind::Danger,
@@ -151,8 +158,35 @@ mod tests {
         DialogButtonKind::Accent,
         DialogButtonKind::Ghost,
         DialogButtonKind::Link,
+        DialogButtonKind::Quiet,
         DialogButtonKind::Cancel,
     ];
+
+    /// Mockup row 130: a quiet button (Reload saved version) draws its
+    /// label in the secondary ink, not the accent or the danger red, with no
+    /// fill or border at rest and the Ghost's fill on hover, in every theme.
+    #[test]
+    fn a_quiet_button_draws_the_secondary_ink() {
+        for &id in ThemeId::BUILTINS {
+            let tokens = signex_types::theme::theme_tokens(id);
+            let ink = ti(tokens.text_secondary);
+            let rest = style(DialogButtonKind::Quiet, id, button::Status::Active);
+            assert_eq!(rest.text_color, ink, "{id:?}");
+            assert_eq!(fill(&rest), None, "{id:?}");
+            assert_eq!(rest.border.color, Color::TRANSPARENT, "{id:?}");
+            assert_eq!(dialog_label_color(DialogButtonKind::Quiet, &tokens), ink);
+            let hover = |kind| fill(&style(kind, id, button::Status::Hovered));
+            assert_eq!(
+                hover(DialogButtonKind::Quiet),
+                hover(DialogButtonKind::Ghost),
+                "{id:?}"
+            );
+        }
+        let light = signex_types::theme::theme_tokens(ThemeId::GraphiteLight);
+        let quiet = dialog_label_color(DialogButtonKind::Quiet, &light);
+        assert_ne!(quiet, tokens::resolve(&light).accent_text);
+        assert_ne!(quiet, tokens::danger(&light));
+    }
 
     /// Mockup row 71: a Link is accent text with no fill and no visible
     /// border at rest; hover gives it the Ghost's fill.

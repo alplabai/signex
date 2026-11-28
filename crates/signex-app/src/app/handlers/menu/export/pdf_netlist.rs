@@ -50,6 +50,8 @@ impl Signex {
             }
         };
 
+        // The pages print the date of this export (`read_clock`).
+        self.read_clock();
         let (mut ctx, issues) =
             match super::build_export_scope_for_source(&self.document_state, &source) {
                 Some(c) => c,
@@ -70,12 +72,17 @@ impl Signex {
         options.net_class_styles =
             super::class_styles::export_class_styles(&self.document_state, &source, &ctx);
         options.schematic_defaults = self.document_state.schematic_defaults_for(&source);
+        options.port_cross_refs = issues
+            .sheet_numbering
+            .as_ref()
+            .map(|numbering| numbering.cross_refs().clone())
+            .unwrap_or_default();
         options.draw_not_fitted = self.ui_state.cross_out_not_fitted;
         // Human-consumed deliverable: a partial PDF beats a refusal — the
         // user may well be printing or reviewing mid-refactor with a child
         // file genuinely absent from disk. So this degrades rather than
         // blocks, but it degrades *loudly*, once, from this user action.
-        super::log_stitch_issues(&source, &ctx, &issues);
+        self.report_stitch_issues(&source, &ctx, &issues);
         super::sheet_numbers::log_numbering_issues(issues.sheet_numbering.as_ref());
 
         self.retire_dead_placement(&issues, &source, &options.page_range);
@@ -160,6 +167,7 @@ impl Signex {
             }
         };
 
+        self.read_clock();
         let (ctx, issues) =
             match super::build_export_scope_for_source(&self.document_state, &source) {
                 Some(c) => c,
@@ -174,7 +182,7 @@ impl Signex {
         if self.refused_for_channel_naming(&issues) {
             return Task::none();
         }
-        super::log_stitch_issues(&source, &ctx, &issues);
+        self.report_stitch_issues(&source, &ctx, &issues);
 
         // Not a hole the user can accept: the file would be wrong, not partial.
         if let Some(refusal) = issues.shared_reference_refusal(&ctx) {

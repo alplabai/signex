@@ -47,6 +47,12 @@ pub enum PlacedPartMsg {
     },
     /// The preview was left to pick another part.
     ChangePreviewBackedOut,
+    /// Next was pressed on the pick step: show the comparison of the read
+    /// part (mockup row 129).
+    ChangeNextPressed,
+    /// Back was pressed (or Esc) on the compare step: return to the pick,
+    /// the picked row and its read kept.
+    ChangeBackPressed,
     /// The preview was confirmed: apply the change.
     ChangeConfirmed,
     /// A row of Change Component's list was clicked: pick it and read it.

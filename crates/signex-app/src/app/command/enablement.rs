@@ -566,7 +566,9 @@ mod tests {
         let engine = app.document_state.active_engine_mut().unwrap();
         let document = engine.document().clone();
         engine
-            .execute(signex_engine::Command::ReplaceDocument { document })
+            .execute(signex_engine::Command::ReplaceDocument {
+                document: Box::new(document),
+            })
             .unwrap();
         assert!(enabled(&app, "undo"));
 
@@ -818,6 +820,10 @@ mod tests {
             "draw_full_circle",
             "draw_rectangle",
             "draw_polygon",
+            // #1267: the curve tools.
+            "draw_ellipse",
+            "draw_elliptical_arc",
+            "draw_round_rectangle",
             // #2416: the sheet's selection filter and the Net Classes panel.
             "open_selection_filter",
             "open_net_classes",
@@ -1034,7 +1040,9 @@ mod tests {
             signex_engine::Engine::new(signex_types::schematic::SchematicSheet::default()).unwrap();
         let document = engine.document().clone();
         engine
-            .execute(signex_engine::Command::ReplaceDocument { document })
+            .execute(signex_engine::Command::ReplaceDocument {
+                document: Box::new(document),
+            })
             .unwrap();
         app.document_state.engines.insert(path.clone(), engine);
         app.document_state.tabs.insert(

@@ -591,6 +591,7 @@ mod fields;
 mod hit_test;
 mod movement;
 mod part_view;
+mod pin_rows;
 mod pin_table_edit;
 mod pin_table_ui;
 mod props_ui;
@@ -605,9 +606,14 @@ pub use fields::*;
 pub use hit_test::*;
 pub use movement::*;
 pub use part_view::PartView;
-pub use pin_table_edit::{add_table_pin, apply_bulk, apply_paste, remove_pins};
+pub use pin_rows::{
+    PinFields, PinRow, PinRowChange, RowsApplied, apply_rows, electrical_id, orientation_id,
+    parse_paste_fields, parse_paste_mode, parse_pin_rows, unescape_paste,
+};
+pub use pin_table_edit::{add_table_pin, apply_bulk, apply_paste, drop_pin_selection, remove_pins};
 pub use pin_table_ui::{
-    PasteDraft, PasteField, PasteMode, PinTableMsg, PinTableUi, parse_mm, paste_preview,
+    PasteDraft, PasteField, PasteMode, PastedRow, PinTableMsg, PinTableUi, parse_mm, paste_preview,
+    read_mapped,
 };
 pub use props_ui::{PartChip, PartStep, SymbolPropsMsg, SymbolPropsTab, SymbolPropsUi};
 pub use rect_extent::{rect_end_for_extent, rect_extent};

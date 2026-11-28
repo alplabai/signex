@@ -27,9 +27,12 @@ mod orientation;
 mod palette;
 #[cfg(test)]
 mod palette_scrim_tests;
+mod pane_drop;
 mod panel_list;
 mod placement_paused;
 pub(super) mod read_only_badge;
+#[cfg(test)]
+mod save_failed_file_tests;
 #[cfg(test)]
 mod save_project_as_offer_tests;
 mod symbol_hover;
@@ -71,11 +74,14 @@ impl Signex {
         size: (f32, f32),
     ) -> iced::Rectangle {
         let area = self.document_area_sized(size);
-        match (window, self.tiled_panes()) {
-            (None, Some((layout, panes))) => {
-                let active = self.document_state.active_tab;
-                let index = panes.iter().position(|tab| *tab == active).unwrap_or(0);
-                canvas_region::pane_bounds(area, panes.len(), index, layout)
+        match (window, self.tiled_pane_view()) {
+            // Mockup row 207: the focused pane under its own tab strip, at
+            // the size a splitter drag left it.
+            (None, Some(panes)) => {
+                let cells = self.pane_cells(&panes, (area.width, area.height));
+                cells
+                    .get(panes.focused)
+                    .map_or(area, |tile| canvas_region::pane_canvas(area, tile))
             }
             _ => area,
         }

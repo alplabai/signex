@@ -416,8 +416,8 @@ pub struct UiState {
     /// Status / error line shown under the Keyboard Shortcuts pane —
     /// carries parse failures, save failures and profile actions so no
     /// error is swallowed silently. Empty renders the default conflict
-    /// summary instead.
-    pub preferences_keymap_status: String,
+    /// summary instead. Catalog text, rendered when drawn (#3050).
+    pub preferences_keymap_status: super::KeymapStatus,
     /// Boot-time keyboard-shortcut load failure, carried for the life of
     /// the session (#595). `Some` means a shortcuts file EXISTS on disk
     /// and could not be honoured — unreadable, unparseable, or naming an
@@ -581,6 +581,9 @@ pub struct UiState {
     /// Generation of the newest Fabrication Outputs write, outside the
     /// dialog so a reopened dialog never takes an older answer.
     pub fab_outputs_writes: u64,
+    /// The Export Job tabs' view state, the runs and the automation
+    /// (#1299). Boxed: a pointer of the size budget (#2412).
+    pub output_jobs: Box<crate::app::output_job::OutputJobUi>,
     /// Board Reports and Board Print / PDF (#2404, #2402): the open dialog
     /// and the print options it was last used with.
     pub board_output: crate::app::BoardOutputState,
@@ -640,6 +643,10 @@ pub struct UiState {
     /// editor shows for the first few. Not persisted: no preference stores
     /// such counters.
     pub text_edit_opens: u32,
+    /// Rich text notes (#1114, mockup row 203): the compiles by key, the
+    /// drawings the canvas shows and the in-place editor. Boxed: the
+    /// `UiState` size ceiling.
+    pub rich_notes: Box<crate::app::rich_note::RichNotes>,
     /// v0.18.14.1 — Custom Selection Filter modal draft. `Some`
     /// while the dialog is visible; the eight-bool draft mirror
     /// commits on Apply, discards on Cancel. Boxed as `find_similar`.
@@ -859,6 +866,9 @@ pub struct UiState {
     /// Workspace layouts (mockup row 166): the list, its store, and the Save Layout
     /// and Manage Layouts dialogs while open. Boxed: the size budget (#2412).
     pub workspace_layouts: Box<crate::workspace_layouts::WorkspaceLayoutsState>,
+    /// The pictures of placed images the canvas draws (#1116). Boxed: the
+    /// size budget (#2412).
+    pub(crate) image_cache: Box<crate::app::images::ImageCache>,
 }
 
 impl UiState {
@@ -976,6 +986,10 @@ mod tests {
             (
                 "preferences_pcb_defaults",
                 field_size(|ui| &ui.preferences_pcb_defaults),
+            ),
+            (
+                "preferences_keymap_status",
+                field_size(|ui| &ui.preferences_keymap_status),
             ),
         ];
         for (name, size) in sizes {

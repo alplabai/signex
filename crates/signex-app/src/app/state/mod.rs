@@ -26,6 +26,7 @@ mod error_notice_tests;
 mod fast_grids;
 mod interaction;
 mod keymap_recorder;
+mod keymap_status;
 pub(crate) mod library_entry;
 mod link_policy;
 pub(crate) mod navigator_job;
@@ -71,7 +72,7 @@ pub use agent_edits::AgentEdits;
 pub(crate) use agent_edits::JoinedSheet;
 pub use board_3d::{Board3dSession, BuiltScene, CaptureResult, MatteBackdrop};
 pub use board_net_classes::BoardNetClassPanelState;
-pub use board_sketch::BoardSketchSession;
+pub use board_sketch::{BoardSketchRefusalToast, BoardSketchSession, RefusedGap};
 pub use board_sketch_dxf::{
     DXF_LAYER_TARGETS, DxfImportMode, DxfLayerTarget, SketchDxfDialog, SketchDxfMsg,
     SketchDxfProblem, SketchDxfResult, SketchDxfStep,
@@ -84,11 +85,18 @@ pub use error_notice::{
 };
 pub use interaction::{ClickedPin, InteractionState};
 pub use keymap_recorder::KeymapRecorderState;
+pub use keymap_status::KeymapStatus;
 pub use omitted_page::{OmittedPage, OmittedReason};
 pub use parameter_table::{ClosedSheetCopies, ParameterCell, ParameterTableState};
 pub(crate) use pcb_drc::DrcInput;
 pub(crate) use pcb_ratsnest::{PcbRatsnest, RatsnestKey, RouteRatsKey};
-pub use pdf_dialog::{ANGLE_PRESETS, PdfDialogState, PdfSection, WatermarkPreset};
+pub use pdf_dialog::{
+    ANGLE_PRESETS, PdfDialogState, PdfSection, WATERMARK_SWATCHES, WatermarkDraft, WatermarkPreset,
+    colour_hex,
+};
+pub(crate) use pdf_dialog::{
+    parse_angle as parse_watermark_angle, parse_percent as parse_watermark_opacity,
+};
 pub use pdf_page_setup::PageSetupInputs;
 pub use pdf_preview_raster::{
     PageSetupMemory, RasterOutcome, RasterQueue, RasterSource, RememberedPageSetup,
@@ -626,6 +634,11 @@ pub struct DocumentState {
     /// unsaved per project until Save writes it or Discard drops it.
     pub generated_reports:
         std::collections::HashMap<ProjectId, signex_notebook::generate::GeneratedNotebook>,
+    /// Export Jobs open as tabs, or closed with unsaved edits (#1299).
+    pub output_jobs: std::collections::BTreeMap<PathBuf, signex_types::output_job::OutputJob>,
+    /// Picked image files waiting to be copied into their project, each when
+    /// the sheet that places it is saved (#1116).
+    pub image_copies: Vec<signex_types::image_asset::PendingImageCopy>,
 }
 
 /// A project folder a rename moved from `old` to `new`.

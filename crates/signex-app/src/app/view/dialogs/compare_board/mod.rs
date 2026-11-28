@@ -20,6 +20,8 @@ use crate::app::{CompareBoardMsg, Message, Signex};
 use crate::styles::{DialogButtonKind, Spacing, TypeScale, dialog_button, ti, tokens};
 
 mod confirm;
+#[cfg(test)]
+mod link_row_tests;
 mod table;
 
 const TS: TypeScale = TypeScale::DEFAULT;

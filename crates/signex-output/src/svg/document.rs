@@ -16,7 +16,9 @@ use super::labels::{
     schematic_text_offset_hier, schematic_text_offset_net, spin_text_style, valign_to_svg,
 };
 use super::markers::{push_no_connect_x, push_no_erc_diamond};
-use super::symbols::{push_symbol_body_fills, push_symbol_lib_graphics, push_symbol_pins};
+use super::symbols::{
+    push_symbol_body_fills, push_symbol_lib_graphics, push_symbol_pins, symbol_layer,
+};
 use super::text::glyph_em_pt;
 use super::text::{TextStyle, draw_text_outline};
 use super::*;
@@ -121,19 +123,20 @@ impl SvgRenderContext {
             &xform,
             palette,
             &opts.schematic_defaults,
+            &opts.images,
         );
-        // The parts drawn greyed and crossed out (#1294).
-        let not_fitted = super::not_fitted::drawn_not_fitted(sheet, opts, eval_inputs);
+        // The parts not fitted in the printed variant: in the Not-fitted
+        // parts layer (#2610), and greyed and crossed out (#1294).
+        let not_fitted = super::not_fitted::not_fitted_on_page(sheet, opts, eval_inputs);
         // Body fills sit under the wires but belong to their parts.
-        let fills_start = elements.len();
         push_symbol_body_fills(
             &mut elements,
             &sheet.schematic,
             &xform,
             palette,
             &not_fitted,
+            &mut layers,
         );
-        layers.mark(PdfLayer::Parts, fills_start..elements.len());
 
         // Base primitives
         let wires_start = elements.len();
@@ -311,6 +314,20 @@ impl SvgRenderContext {
         // from the export when the user unchecks the Notes toggle.
         if opts.include_notes {
             for note in &sheet.schematic.text_notes {
+                // A rich note draws as vector paths (#1114); one that does
+                // not compile prints its source as a plain note does.
+                if note.format == signex_types::schematic::TextNoteFormat::Typst
+                    && let Some(rich) = super::rich_note::rich_note_elements(
+                        note,
+                        &xform,
+                        palette.note_text,
+                        palette.paper,
+                        &opts.schematic_defaults,
+                    )
+                {
+                    elements.extend(rich);
+                    continue;
+                }
                 let font_alias =
                     alias_for_family(note.font_family.as_deref(), document_family, "F1");
                 let size_pt =
@@ -463,7 +480,7 @@ impl SvgRenderContext {
                     },
                 ));
             }
-            if not_fitted.contains(&sym.uuid) {
+            if not_fitted.drawn.contains(&sym.uuid) {
                 super::not_fitted::grey_elements(&mut elements[symbol_start..], palette.paper);
                 super::not_fitted::push_not_fitted_cross(
                     &mut elements,
@@ -536,12 +553,10 @@ impl SvgRenderContext {
                     text: crate::shown_value(&value_scope, &drawn).text,
                 });
             }
-            let symbol_layer = if sym.is_power {
-                PdfLayer::PowerPorts
-            } else {
-                PdfLayer::Parts
-            };
-            layers.mark(symbol_layer, symbol_start..elements.len());
+            layers.mark(
+                symbol_layer(sym, &not_fitted.in_variant),
+                symbol_start..elements.len(),
+            );
         }
 
         push_placed_drawings(
@@ -551,6 +566,7 @@ impl SvgRenderContext {
             &xform,
             palette,
             &opts.schematic_defaults,
+            &opts.images,
         );
 
         (
@@ -637,6 +653,19 @@ impl SvgRenderContext {
                     };
                     draw_text_outline(&mut pixmap, &style, text);
                 }
+                SvgElement::Image {
+                    x,
+                    y,
+                    width,
+                    height,
+                    opacity,
+                    picture,
+                } => super::images::draw_raster(
+                    &mut pixmap,
+                    picture,
+                    (*x, *y, *width, *height),
+                    *opacity,
+                ),
             }
         }
 
@@ -672,6 +701,20 @@ fn encode_svg_document(width: f32, height: f32, elements: &[SvgElement]) -> Stri
                     out,
                     "  <path d=\"{}\" stroke=\"{}\"{} fill=\"{}\" stroke-width=\"{}\" stroke-linejoin=\"miter\" stroke-linecap=\"square\" />",
                     d, stroke, opacity, fill, style.stroke_width
+                );
+            }
+            SvgElement::Image {
+                x,
+                y,
+                width,
+                height,
+                opacity,
+                picture,
+            } => {
+                let _ = writeln!(
+                    out,
+                    "  {}",
+                    super::images::image_tag(picture, (*x, *y, *width, *height), *opacity)
                 );
             }
             SvgElement::Text {

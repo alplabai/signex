@@ -35,6 +35,8 @@ fn project(active: Option<&str>, note: &str) -> Signex {
         justify_h: HAlign::Left,
         justify_v: VAlign::Bottom,
         locked: false,
+        format: Default::default(),
+        rich: Default::default(),
     });
     open_with(&mut app.document_state, &top, sheet);
     app
@@ -47,7 +49,7 @@ fn send(app: &mut Signex, message: Message) {
 
 /// Open Export PDF, pick `variant` (`None` is the picker's Base row), turn
 /// on Use Physical Structure so `${VARIANT}` prints, and export.
-fn export(app: &mut Signex, variant: Option<&str>) -> Vec<u8> {
+pub(super) fn export(app: &mut Signex, variant: Option<&str>) -> Vec<u8> {
     send(app, Message::PrintPreview(PrintPreviewMsg::Requested));
     send(
         app,

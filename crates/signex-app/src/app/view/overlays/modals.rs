@@ -86,6 +86,20 @@ impl Signex {
         )
     }
 
+    /// The Place Image dialog (mockup row 204). In-window only.
+    pub(in crate::app::view) fn place_image_overlay(&self) -> Option<Element<'_, Message>> {
+        let dialog = self.ui_state.image_cache.dialog.as_deref()?;
+        Some(
+            crate::app::images::dialog::view(
+                dialog,
+                &self.document_view.panel_ctx.tokens,
+                &self.ui_state.i18n,
+            )
+            .map(|msg| Message::from(crate::app::ImagesMsg::Dialog(msg)))
+            .boxed(),
+        )
+    }
+
     /// The Create Union popover (mockup row 158), laid at the point it opened: a
     /// click-outside layer that cancels it, then the card.
     pub(in crate::app::view) fn union_popover_overlay(&self) -> Vec<Element<'_, Message>> {
@@ -153,15 +167,17 @@ impl Signex {
             &ui.active_keymap,
             &ui.i18n,
         );
-        Self::dismiss_and_centre(
+        let tokens = &self.document_view.panel_ctx.tokens;
+        Self::dismiss_and_centre_dialog(
             Message::Overlay(OverlayMsg::CloseKeyboardShortcuts),
             crate::keyboard_shortcuts_modal::view(
                 &ui.i18n,
-                &self.document_view.panel_ctx.tokens,
+                tokens,
                 sections,
                 &ui.shortcut_sheet,
                 &facts,
             ),
+            tokens,
         )
     }
 
@@ -200,9 +216,11 @@ impl Signex {
         if !ui.about_open || self.modal_detached(crate::app::state::ModalId::About) {
             return Vec::new();
         }
-        Self::dismiss_and_centre(
+        let tokens = &self.document_view.panel_ctx.tokens;
+        Self::dismiss_and_centre_dialog(
             Message::Overlay(OverlayMsg::CloseAbout),
-            crate::about_modal::view(&ui.i18n, &self.document_view.panel_ctx.tokens),
+            crate::about_modal::view(&ui.i18n, tokens),
+            tokens,
         )
     }
 

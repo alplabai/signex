@@ -8,6 +8,29 @@ use super::{
 };
 use signex_i18n_ids::{command_ids, menu_ids};
 
+/// A schematic printed to PDF (#1298, #2609, #2610, #2787): which sheet and
+/// the file; the rest defaults as Export PDF opens on the sheet. `pages` is
+/// `all`, `current` or sheet numbers and ranges (`1-2, 4`), the Pages
+/// field's rule; `layers` is `all` or the ids of the PDF layers visible on
+/// open (`PdfLayer::id`), a flat PDF when left out; `variant` names the
+/// printed variant. `watermark` is `draft`, `confidential` or the text to
+/// print; the other `watermark_*` operands style it (`watermark_pages` is
+/// `all` or `first`). `links=false` writes no link annotations.
+const SCHEMATIC_PDF: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("path", OperandKind::Path),
+    optional("pages", OperandKind::Text),
+    optional("layers", OperandKind::Text),
+    optional("variant", OperandKind::Text),
+    optional("watermark", OperandKind::Text),
+    optional("watermark_color", OperandKind::Color),
+    optional("watermark_opacity", OperandKind::Text),
+    optional("watermark_angle", OperandKind::Text),
+    optional("watermark_pages", OperandKind::Text),
+    optional("watermark_revision", OperandKind::Bool),
+    optional("links", OperandKind::Bool),
+];
+
 /// A block diagram written as SVG or PDF (#2796): the `.snxblk` and the
 /// file; `kind` is `svg` or `pdf` (else the file's extension), `monochrome`
 /// draws every mark in black, `title_block=false` leaves the PDF's off.
@@ -86,6 +109,20 @@ pub(super) const DOCUMENTS: &[CommandMetadata] = &[
         enable: Enablement::Always,
         flags: CommandFlags::NONE,
         operands: operands::OPEN_PATH,
+        ..CommandMetadata::DEFAULT
+    },
+    // #2896: the Gerber Viewer tab, empty or on the package `path` names (a
+    // folder, a zip or one file). Palette only for now, no menu row; it
+    // answers with what the tab shows.
+    CommandMetadata {
+        id: "open_gerber_viewer",
+        category: "file",
+        label: command_ids::CMD_OPEN_GERBER_VIEWER,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: operands::OPTIONAL_PATH,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -295,6 +332,21 @@ pub(super) const DOCUMENTS: &[CommandMetadata] = &[
         operands: super::operands::BOARD_PDF,
         ..CommandMetadata::DEFAULT
     },
+    // #1298, #2609, #2610, #2787, #2663: Export PDF on a sheet (File > Export
+    // > PDF opens it too); headless it writes `document`'s pages to `path`,
+    // with the pages, layers, variant, watermark and links the operands set,
+    // and answers with the contents rows written as links. No default key.
+    CommandMetadata {
+        id: "export_schematic_pdf",
+        category: "reports",
+        label: command_ids::CMD_EXPORT_SCHEMATIC_PDF,
+        menu_label: Some(command_ids::CMD_MENU_EXPORT_SCHEMATIC_PDF),
+        group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::NONE,
+        operands: SCHEMATIC_PDF,
+        ..CommandMetadata::DEFAULT
+    },
     // #2486: the assembly drawings as SVG files in a folder the person
     // picks; headless it writes `document`'s drawings into `path`.
     CommandMetadata {
@@ -333,6 +385,178 @@ pub(super) const DOCUMENTS: &[CommandMetadata] = &[
         enable: Enablement::RequiresDocument(DocumentKind::Pcb),
         flags: CommandFlags::NONE,
         operands: super::operands::BOARD_STEP,
+        ..CommandMetadata::DEFAULT
+    },
+    // #1299: the pages of the schematic's project as PNG files in a folder
+    // the person picks; headless it writes `document`'s pages into `path`.
+    CommandMetadata {
+        id: "export_sheet_png",
+        category: "reports",
+        label: command_ids::CMD_EXPORT_SHEET_PNG,
+        menu_label: None,
+        group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::NONE,
+        operands: super::operands::SHEET_PNG_EXPORT,
+        ..CommandMetadata::DEFAULT
+    },
+    // #1299: an Export Job (`.snxout`) the person picks, or the one `path`
+    // names, runs a profile, every enabled output or the one `name` names.
+    CommandMetadata {
+        id: "run_output_job",
+        category: "reports",
+        label: command_ids::CMD_RUN_OUTPUT_JOB,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: super::job_operands::OUTPUT_JOB_RUN,
+        ..CommandMetadata::DEFAULT
+    },
+    // Mockup row 114: the Export Job tab's actions, each a command. A new
+    // job in its tab, or written at `path`.
+    CommandMetadata {
+        id: "new_output_job",
+        category: "file",
+        label: command_ids::CMD_NEW_OUTPUT_JOB,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: super::job_operands::OUTPUT_JOB_PATH_OPTIONAL,
+        ..CommandMetadata::DEFAULT
+    },
+    // View ▸ Panels ▸ Export Jobs: the project's job, or `path`, in its tab.
+    CommandMetadata {
+        id: "open_output_job",
+        category: "panels",
+        label: command_ids::CMD_OPEN_OUTPUT_JOB,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: super::job_operands::OUTPUT_JOB_PATH_OPTIONAL,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "read_output_job",
+        category: "design",
+        label: command_ids::CMD_READ_OUTPUT_JOB,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: super::job_operands::OUTPUT_JOB_PATH,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "add_job_output",
+        category: "design",
+        label: command_ids::CMD_ADD_JOB_OUTPUT,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: super::job_operands::JOB_OUTPUT_ADD,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "set_job_output",
+        category: "design",
+        label: command_ids::CMD_SET_JOB_OUTPUT,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: super::job_operands::JOB_OUTPUT_SET,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "set_job_profile",
+        category: "design",
+        label: command_ids::CMD_SET_JOB_PROFILE,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: super::job_operands::JOB_PROFILE_SET,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "set_job_triggers",
+        category: "design",
+        label: command_ids::CMD_SET_JOB_TRIGGERS,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: super::job_operands::JOB_TRIGGERS_SET,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "stop_output_job",
+        category: "design",
+        label: command_ids::CMD_STOP_OUTPUT_JOB,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: super::job_operands::OUTPUT_JOB_PATH,
+        ..CommandMetadata::DEFAULT
+    },
+    // Mockup row 193b: a run's files on the Gerber Viewer.
+    CommandMetadata {
+        id: "view_output_job_run",
+        category: "view",
+        label: command_ids::CMD_VIEW_OUTPUT_JOB_RUN,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: super::job_operands::JOB_RUN_VIEW,
+        ..CommandMetadata::DEFAULT
+    },
+    // #1299: a Gerber output's settings, one command each, as the Export
+    // Job tab's Gerber fields set them.
+    CommandMetadata {
+        id: "set_job_gerber_units",
+        category: "design",
+        label: command_ids::CMD_SET_JOB_GERBER_UNITS,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: super::job_operands::JOB_GERBER_UNITS,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "set_job_gerber_format",
+        category: "design",
+        label: command_ids::CMD_SET_JOB_GERBER_FORMAT,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: super::job_operands::JOB_GERBER_FORMAT,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "set_job_gerber_zeros",
+        category: "design",
+        label: command_ids::CMD_SET_JOB_GERBER_ZEROS,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: super::job_operands::JOB_GERBER_ZEROS,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "set_job_gerber_layers",
+        category: "design",
+        label: command_ids::CMD_SET_JOB_GERBER_LAYERS,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: super::job_operands::JOB_GERBER_LAYERS,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "set_job_gerber_apertures",
+        category: "design",
+        label: command_ids::CMD_SET_JOB_GERBER_APERTURES,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: super::job_operands::JOB_GERBER_APERTURES,
         ..CommandMetadata::DEFAULT
     },
     // #2796, mockup row 171: a block diagram (`.snxblk`) as an SVG or PDF
@@ -598,6 +822,41 @@ pub(super) const DOCUMENTS: &[CommandMetadata] = &[
         enable: Enablement::Always,
         flags: CommandFlags::NONE,
         operands: operands::DOCUMENT,
+        ..CommandMetadata::DEFAULT
+    },
+    // #1178: the Project tab's Fonts section (mockup row 205). An edit is
+    // one General step; the add copies the file into `assets/fonts/` first.
+    CommandMetadata {
+        id: "project_add_font",
+        category: "design",
+        label: command_ids::CMD_PROJECT_ADD_FONT,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::MUTATES,
+        operands: operands::PROJECT_ADD_FONT,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "project_remove_font",
+        category: "design",
+        label: command_ids::CMD_PROJECT_REMOVE_FONT,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::MUTATES,
+        operands: operands::PROJECT_FONT,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "project_set_font_license",
+        category: "design",
+        label: command_ids::CMD_PROJECT_SET_FONT_LICENSE,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::MUTATES,
+        operands: operands::PROJECT_FONT_LICENSE,
         ..CommandMetadata::DEFAULT
     },
     // #2943: a power rail's voltage and tolerance, one General step.

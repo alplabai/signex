@@ -121,3 +121,33 @@ workspace-layouts-why-no-list = it has no layouts list
 # { $error } is the system's or the parser's reason.
 workspace-layouts-why-read-failed = reading it failed: { $error }
 workspace-layouts-why-not-json = it is not JSON: { $error }
+
+# Document panes (mockup row 207): what a tab dropped on an edge of the
+# document area does. { $name } is the tab's title.
+workspace-layouts-panes-drop-left = Split left · { $name }
+workspace-layouts-panes-drop-right = Split right · { $name }
+workspace-layouts-panes-drop-top = Split up · { $name }
+workspace-layouts-panes-drop-bottom = Split down · { $name }
+workspace-layouts-panes-drop-second-view = Second view · { $name }
+# Why a split was not made.
+workspace-layouts-panes-not-docked = The document is in a window of its own; only a tab of the main window splits into a pane.
+workspace-layouts-panes-last-tab = The only document of the main window cannot leave its pane; hold Ctrl (Cmd on macOS) to open a second view.
+workspace-layouts-panes-crosswise = The panes run the other way; drop on an edge along them.
+workspace-layouts-panes-too-many = The main window has four panes already.
+# { $why } is the system's reason.
+workspace-layouts-panes-not-kept = The panes of the document area were not kept: { $why }
+workspace-layouts-panes-not-tiled = The document area is not split into panes.
+workspace-layouts-panes-no-zoom = The focused pane shows no sheet or board, so it has no zoom to give the other panes.
+# Messages after Tile Grid. { $count } documents, { $panes } panes.
+workspace-layouts-panes-grid-done = Tile Grid: { $count } documents in { $panes } panes.
+# The pane menu button on each pane's tab strip, and its tooltip.
+workspace-layouts-panes-menu = ⋯
+workspace-layouts-panes-menu-tooltip = Pane menu
+# The preview beside a tile row of View ▸ Window. { $layout } is the row's
+# name, { $count } the documents it arranges.
+workspace-layouts-panes-preview-title = { $layout } · { $count ->
+    [one] 1 open document
+   *[other] { $count } open documents
+}
+workspace-layouts-panes-preview-one-each = One pane per document; the active tab stays focused.
+workspace-layouts-panes-preview-grid = Up to four panes, one document type each where it can; the active tab stays focused.

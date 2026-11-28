@@ -147,12 +147,17 @@ impl Signex {
         // document over profiles the user still has on disk. Copy the file
         // aside first, and refuse to save at all if that copy cannot be
         // made: overwriting after a failed backup is the bug (#595).
-        let mut backup_note = String::new();
+        use signex_i18n::{Translatable, shortcut_ids as sids};
+        let mut backup_note: signex_i18n::Arg = String::new().into();
         if self.ui_state.keymap_load_error.is_some() {
             match crate::keymap::back_up_profile_file() {
                 Ok(Some(bak)) => {
                     self.ui_state.keymap_backup = Some(bak.display().to_string());
-                    backup_note = format!(" The previous file was kept as {}.", bak.display());
+                    backup_note = super::keymap::keymap_path_status(
+                        sids::PREF_KEYMAP_STATUS_SAVED_KEPT,
+                        &bak,
+                    )
+                    .into();
                 }
                 Ok(None) => {}
                 Err(error) => {
@@ -161,11 +166,12 @@ impl Signex {
                         target: "signex::keymap",
                         "keymap backup failed, file left untouched: {error}"
                     );
-                    self.ui_state.preferences_keymap_status = format!(
-                        "Could not save keyboard shortcuts: the existing file could \
-                         not be backed up first, so it was left untouched rather than \
-                         overwritten ({error})."
-                    );
+                    self.ui_state
+                        .preferences_keymap_status
+                        .set(super::keymap::keymap_failure(
+                            sids::PREF_KEYMAP_STATUS_BACKUP_FAILED,
+                            error,
+                        ));
                     return false;
                 }
             }
@@ -179,8 +185,9 @@ impl Signex {
                         .compile_active_in(&self.ui_state.i18n),
                 );
                 self.ui_state.preferences_keymap_recorder = None;
-                self.ui_state.preferences_keymap_status =
-                    format!("Keyboard shortcuts saved.{backup_note}");
+                self.ui_state.preferences_keymap_status.set(
+                    Translatable::new(sids::PREF_KEYMAP_STATUS_SAVED).arg("kept", backup_note),
+                );
                 // The file on disk is now valid and written by this process,
                 // so the boot-time failure no longer holds: drop the banner
                 // and let the next Apply be an ordinary save.
@@ -188,8 +195,12 @@ impl Signex {
                 true
             }
             Err(error) => {
-                self.ui_state.preferences_keymap_status =
-                    format!("Could not save keyboard shortcuts: {error}");
+                self.ui_state
+                    .preferences_keymap_status
+                    .set(super::keymap::keymap_failure(
+                        sids::PREF_KEYMAP_STATUS_SAVE_FAILED,
+                        error,
+                    ));
                 false
             }
         }

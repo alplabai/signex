@@ -152,7 +152,9 @@ fn the_sidecar_holds_the_net_colours_and_a_colour_edit_rewrites_it() {
         ..Default::default()
     });
     engine
-        .execute(signex_engine::Command::ReplaceDocument { document: sheet })
+        .execute(signex_engine::Command::ReplaceDocument {
+            document: Box::new(sheet),
+        })
         .unwrap();
     let task = tick(&mut f);
     complete(&mut f.app, task);
@@ -1058,7 +1060,9 @@ fn a_restored_copy_keeps_its_net_colour_and_save_writes_it() {
         ..Default::default()
     });
     engine
-        .execute(signex_engine::Command::ReplaceDocument { document: sheet })
+        .execute(signex_engine::Command::ReplaceDocument {
+            document: Box::new(sheet),
+        })
         .unwrap();
     engine
         .execute(signex_engine::Command::SetNetColors {

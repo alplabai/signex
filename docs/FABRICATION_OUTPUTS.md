@@ -134,6 +134,9 @@ same bytes, so a diff of two generations shows only real changes.
 
 RS-274X with X2 attributes. Millimetres, `%FSLAX46Y46*%`: six decimals, so a
 coordinate is the board's integer nanometre value itself, with no rounding.
+That is the writer's own form, and the dialog always writes it; an Export
+Job's Gerber output may choose inches, another number format, other zeros,
+some layers or macro apertures (`docs/OUTPUT_JOBS.md`, "Gerber settings").
 Header attributes: `.GenerationSoftware`, `.FileFunction` (`Copper,L1,Top`,
 `Soldermask,Bot`, `Profile,NP`, ...) and `.FilePolarity`. Each aperture
 carries `.AperFunction`; on copper each pad, track, via and zone fill carries

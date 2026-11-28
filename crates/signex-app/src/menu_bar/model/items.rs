@@ -1,6 +1,6 @@
 //! Row constructors the menu builders share.
 
-use super::{ItemState, Menu, MenuEntry, MenuIcon, MenuItem, Shortcut};
+use super::{ItemState, Menu, MenuEntry, MenuIcon, MenuItem, Shortcut, TilePreview};
 use crate::keymap::AppCommandId;
 use crate::menu_bar::{MenuContext, MenuMessage, cmd_label, enabled, shortcut_for};
 use signex_i18n::MessageId;
@@ -30,6 +30,7 @@ fn plain(label: String, state: ItemState) -> MenuEntry {
         state,
         checked: None,
         icon: None,
+        preview: None,
     })
 }
 
@@ -62,6 +63,7 @@ pub(super) fn panel_item(
         state: live(action, true),
         checked: Some(ctx.open_panels.contains(&kind)),
         icon: None,
+        preview: None,
     })
 }
 
@@ -126,6 +128,7 @@ fn command_row(ctx: &MenuContext, cmd: Cmd, label: String, state: ItemState) -> 
         state,
         checked: None,
         icon: None,
+        preview: None,
     })
 }
 
@@ -154,6 +157,7 @@ pub(super) fn extension_item(
         state: live(MenuMessage::Command(row.command.clone()), enabled(ctx, id)),
         checked: None,
         icon: None,
+        preview: None,
     })
 }
 
@@ -211,6 +215,17 @@ pub(super) fn with_icon(entry: MenuEntry, icon: MenuIcon) -> MenuEntry {
     match entry {
         MenuEntry::Item(item) => MenuEntry::Item(MenuItem {
             icon: Some(icon),
+            ..item
+        }),
+        other => other,
+    }
+}
+
+/// `entry` previewing `preview` beside it while hovered (mockup row 207).
+pub(super) fn with_preview(entry: MenuEntry, preview: Option<&TilePreview>) -> MenuEntry {
+    match entry {
+        MenuEntry::Item(item) => MenuEntry::Item(MenuItem {
+            preview: preview.cloned(),
             ..item
         }),
         other => other,

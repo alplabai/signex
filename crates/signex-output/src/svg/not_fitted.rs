@@ -15,16 +15,42 @@ use signex_types::schematic::{
     not_fitted_cross,
 };
 
-/// The symbols of `sheet` drawn as not fitted in the printed variant
-/// (`opts.variant`); none while `opts.draw_not_fitted` is off.
-pub(super) fn drawn_not_fitted(
+/// The symbols of one page whose part is not fitted in the printed variant
+/// (`opts.variant`), read by one rule for both uses.
+#[derive(Debug, Default)]
+pub(super) struct NotFitted {
+    /// They print in the Not-fitted parts PDF layer (#2610).
+    pub in_variant: HashSet<uuid::Uuid>,
+    /// They draw greyed and crossed out (#1294): `in_variant`, or none
+    /// while `opts.draw_not_fitted` is off.
+    pub drawn: HashSet<uuid::Uuid>,
+}
+
+/// The not-fitted symbols of `sheet`. Read only when something uses them:
+/// a layered PDF or the not-fitted look.
+pub(super) fn not_fitted_on_page(
+    sheet: &SheetSnapshot,
+    opts: &PdfOptions,
+    inputs: Option<&SvgEvaluatorInputs<'_>>,
+) -> NotFitted {
+    if !opts.draw_not_fitted && opts.layers.is_none() {
+        return NotFitted::default();
+    }
+    let in_variant = variant_not_fitted(sheet, opts, inputs);
+    let drawn = if opts.draw_not_fitted {
+        in_variant.clone()
+    } else {
+        HashSet::new()
+    };
+    NotFitted { in_variant, drawn }
+}
+
+/// The symbols of `sheet` not fitted in the printed variant.
+fn variant_not_fitted(
     sheet: &SheetSnapshot,
     opts: &PdfOptions,
     inputs: Option<&SvgEvaluatorInputs<'_>>,
 ) -> HashSet<uuid::Uuid> {
-    if !opts.draw_not_fitted {
-        return HashSet::new();
-    }
     let sheets_only = VariantSettings::default();
     let settings = inputs
         .and_then(|inputs| inputs.variant_settings)
@@ -60,6 +86,9 @@ pub(super) fn grey_elements(elements: &mut [SvgElement], paper: (f32, f32, f32))
                 }
             }
             SvgElement::Text { fill_rgb, .. } => *fill_rgb = greyed_rgb(*fill_rgb, paper),
+            // A part never draws a picture: images are sheet drawings, not
+            // symbol graphics, so nothing here is greyed.
+            SvgElement::Image { .. } => {}
         }
     }
 }

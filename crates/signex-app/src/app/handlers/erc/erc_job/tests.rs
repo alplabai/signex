@@ -289,6 +289,7 @@ fn colliding_job() -> (ErcRunInputs, PathBuf, PathBuf, PathBuf) {
         violation_waivers: Vec::new(),
         channel_naming: Default::default(),
         fold: CaseFold::FOLD,
+        pending_images: Vec::new(),
     };
     (inputs, root_path, child_path, loose_path)
 }

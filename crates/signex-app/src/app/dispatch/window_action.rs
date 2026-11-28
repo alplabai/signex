@@ -333,6 +333,15 @@ impl Signex {
             message,
             DockMessage::Library(LibraryMessage::ComponentsPanelRowRightClicked(_))
         );
+        // Opening the window's ⋯ menu closes every other menu, the main
+        // window's part menu too: during the swap that one is out of reach.
+        if let DockMessage::Panel(crate::panels::PanelMsg::Part(
+            crate::panels::PartPanelMsg::MenuToggled(part),
+        )) = &message
+            && self.panel_ctx_for(window).part_panel.menu_for != Some(*part)
+        {
+            self.close_all_context_menus();
+        }
         let task = self.run_in_window_document(window, |app| app.handle_dock_message(message));
         // The row's drag and menu are owned by the window they started in
         // (#1910's `overlay_owner`), recorded only once the action ran.

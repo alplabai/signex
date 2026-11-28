@@ -27,6 +27,9 @@ mod snap_sections;
 
 #[cfg(test)]
 mod tests;
+// The header notes and the snap label clear their neighbours (#3008).
+#[cfg(test)]
+mod clearance_tests;
 
 use iced::widget::Column;
 use iced::{Element, Length};

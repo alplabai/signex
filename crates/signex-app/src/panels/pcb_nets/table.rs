@@ -20,9 +20,11 @@ const ROW_H: f32 = TS.body * 2.4;
 const CLASS_W: f32 = TS.body * 5.0;
 const NODES_W: f32 = TS.body * 3.5;
 const LENGTH_W: f32 = TS.body * 4.5;
-/// The list takes this share of the height while a detail shows under it.
-const LIST_PORTION: u16 = 3;
-const DETAIL_PORTION: u16 = 2;
+/// While a detail shows, the list keeps the height of its rows up to this
+/// many net rows and the detail takes the rest, so a short list leaves the
+/// detail room to show whole at the dock's usual height (#3001).
+const LIST_MAX_ROWS: f32 = 8.0;
+const LIST_MAX_H: f32 = ROW_H * LIST_MAX_ROWS;
 
 pub(super) fn chip_style(tokens: &ThemeTokens) -> ChipStyle {
     let r = resolve(tokens);
@@ -237,7 +239,8 @@ fn footer<'a>(ctx: &'a PanelContext, summary: &PcbNetsSummary) -> Element<'a, Pa
 }
 
 /// A mode's page: `head` over the scrolling `list`, the selected item's
-/// `detail` under it, and the `foot`.
+/// `detail` under it, and the `foot`. With a detail the list shrinks to
+/// its rows, at most [`LIST_MAX_H`], and the detail fills the rest.
 pub(super) fn page<'a>(
     ctx: &PanelContext,
     head: Vec<Element<'a, PanelMsg>>,
@@ -245,16 +248,23 @@ pub(super) fn page<'a>(
     detail: Option<Element<'a, PanelMsg>>,
     foot: Element<'a, PanelMsg>,
 ) -> Element<'a, PanelMsg> {
-    let list_height = if detail.is_some() {
-        Length::FillPortion(LIST_PORTION)
+    // The find results box's bounded list: a shrinking scrollable in a
+    // box that fits it up to the cap.
+    let (scroll_h, box_h) = if detail.is_some() {
+        (Length::Shrink, Length::Fit.max(LIST_MAX_H))
     } else {
-        Length::Fill
+        (Length::Fill, Length::Fill)
     };
-    let list = scrollable(list)
-        .width(Length::Fill)
-        .height(list_height)
-        .style(crate::panels::form_look::scrollbar_style)
-        .boxed();
+    let list = container(
+        scrollable(list)
+            .width(Length::Fill)
+            .height(scroll_h)
+            .style(crate::panels::form_look::scrollbar_style),
+    )
+    .width(Length::Fill)
+    .height(box_h)
+    .clip(true)
+    .boxed();
     let mut page: Column<Element<'a, PanelMsg>> =
         Column::new().width(Length::Fill).height(Length::Fill);
     for part in head {
@@ -266,7 +276,7 @@ pub(super) fn page<'a>(
         page = page.push(
             container(detail)
                 .width(Length::Fill)
-                .height(Length::FillPortion(DETAIL_PORTION))
+                .height(Length::Fill)
                 .boxed(),
         );
     }

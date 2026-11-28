@@ -33,6 +33,8 @@ pub(crate) struct NetIndexJob {
     project_dir: PathBuf,
     /// The project's saved channel naming; part of `key`'s stamp.
     naming: signex_types::project::ChannelNaming,
+    /// The project's name, for the manual page numbers.
+    project_name: String,
     /// Shared with the net-class style job of the same project and key.
     stitch: StitchSlot,
 }
@@ -46,6 +48,7 @@ impl NetIndexJob {
             key,
             project_dir,
             naming,
+            project_name,
             stitch,
         } = self;
         let stitched = stitch.get_or_init(|| {
@@ -56,6 +59,7 @@ impl NetIndexJob {
                 key.fold,
                 Some(project_dir.clone()),
                 &naming,
+                &project_name,
             )
         });
         let result = match &stitched.index {
@@ -65,6 +69,7 @@ impl NetIndexJob {
                 base_dir: Some(project_dir),
                 fold: key.fold,
                 classes: key.classes.clone(),
+                cross_refs: stitched.cross_refs.clone(),
             })),
             None => Err(format!(
                 "the project's root sheet '{}' did not assemble",
@@ -168,6 +173,7 @@ impl Signex {
             key: planned.key,
             project_dir: planned.project_dir,
             naming: planned.naming,
+            project_name: planned.project_name,
             stitch,
         }
     }
@@ -175,24 +181,32 @@ impl Signex {
     /// The index of `project` for its current content, starting a build when
     /// there is none.
     pub(super) fn net_index_lookup(&mut self, project: ProjectId) -> IndexLookup {
-        let job = match self.plan_net_index_job(project) {
-            Ok(job) => job,
-            Err(lookup) => return lookup,
+        match self.plan_net_index_job(project) {
+            Ok(job) => IndexLookup::Building(index_job_task(job)),
+            Err(lookup) => lookup,
+        }
+    }
+
+    /// [`Self::net_index_lookup`] for a caller that waits on the very task it
+    /// is handed (a query a headless run settles): while a build another
+    /// request started is in flight, a job of its own joins it, sharing its
+    /// stitch, so the task handed back always lands.
+    pub(super) fn net_index_lookup_owned(&mut self, project: ProjectId) -> IndexLookup {
+        let Some(planned) = plan_projects(&self.document_state)
+            .into_iter()
+            .find(|p| p.project == project)
+        else {
+            return IndexLookup::Unavailable;
         };
-        let (project, key) = (job.project, job.key.clone());
-        IndexLookup::Building(Task::perform(
-            async move {
-                tokio::task::spawn_blocking(move || job.run())
-                    .await
-                    .unwrap_or_else(|e| IndexOutcome {
-                        project,
-                        key,
-                        result: Err(format!("the net index task failed: {e}")),
-                        warnings: Vec::new(),
-                    })
-            },
-            |outcome| Message::Ui(UiMsg::NetNav(NetNavMsg::IndexResolved(Arc::new(outcome)))),
-        ))
+        if self
+            .document_view
+            .net_nav
+            .index
+            .is_building(project, &planned.key)
+        {
+            return IndexLookup::Building(index_job_task(self.job_for(planned)));
+        }
+        self.net_index_lookup(project)
     }
 
     /// Park `action` and hand back the build's task. A command the user gave
@@ -221,14 +235,22 @@ impl Signex {
     pub(super) fn apply_net_index(&mut self, outcome: &IndexOutcome) -> Task<Message> {
         // The Net Inspector lists what the cache holds: look again.
         self.document_view.net_nav.inspector_stamp = None;
-        match self.document_view.net_nav.index.apply(outcome) {
+        let stored = self.document_view.net_nav.index.apply(outcome);
+        // Cross-reference queries (#1273) that waited for this build.
+        let answered = self.answer_cross_ref_queries(outcome.project, &stored);
+        let follow_up = match stored {
             // A newer key arrived while this one ran: build it now, once.
             Stored::Stale => match self.net_index_lookup(outcome.project) {
                 IndexLookup::Building(build) => build,
-                IndexLookup::Ready(_) => self.run_pending_for(outcome.project),
+                IndexLookup::Ready(data) => {
+                    let ready = Stored::Fresh(data);
+                    let answered = self.answer_cross_ref_queries(outcome.project, &ready);
+                    Task::batch([self.run_pending_for(outcome.project), answered])
+                }
                 IndexLookup::Unavailable => {
                     self.drop_pending_of(outcome.project, messages::command_dropped_left());
-                    Task::none()
+                    let gone = Stored::Failed(messages::command_dropped_left());
+                    self.answer_cross_ref_queries(outcome.project, &gone)
                 }
             },
             Stored::Failed(reason) => {
@@ -247,9 +269,12 @@ impl Signex {
                 self.report_index_warnings(outcome);
                 self.refresh_highlight_from(outcome.project, &data);
                 self.refresh_pin_rows();
+                // The cross references the canvas draws come with the index.
+                self.refresh_canvas_sheet_frame();
                 self.run_pending_for(outcome.project)
             }
-        }
+        };
+        Task::batch([follow_up, answered])
     }
 
     /// Run the parked command when its own project's index lands, and only
@@ -342,9 +367,10 @@ impl Signex {
     /// list, root or sheet list.
     pub(crate) fn refresh_net_nav(&mut self) -> Task<Message> {
         let build = self.refresh_net_index();
+        let cross_refs = self.warm_net_index_for_cross_refs();
         self.sync_net_highlight_to_canvases();
         let inspector = self.sync_net_inspector();
-        Task::batch([build, inspector])
+        Task::batch([build, cross_refs, inspector])
     }
 
     fn refresh_net_index(&mut self) -> Task<Message> {
@@ -427,6 +453,24 @@ impl Signex {
         let outcome = job.run();
         let _follow_up = self.apply_net_index(&outcome);
     }
+}
+
+/// Run `job` off the UI thread; its outcome lands as `IndexResolved`.
+fn index_job_task(job: NetIndexJob) -> Task<Message> {
+    let (project, key) = (job.project, job.key.clone());
+    Task::perform(
+        async move {
+            tokio::task::spawn_blocking(move || job.run())
+                .await
+                .unwrap_or_else(|e| IndexOutcome {
+                    project,
+                    key,
+                    result: Err(format!("the net index task failed: {e}")),
+                    warnings: Vec::new(),
+                })
+        },
+        |outcome| Message::Ui(UiMsg::NetNav(NetNavMsg::IndexResolved(Arc::new(outcome)))),
+    )
 }
 
 /// How far the pointer may drift before it is aiming at something else, in mm.

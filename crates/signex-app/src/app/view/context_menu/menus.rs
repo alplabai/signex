@@ -289,6 +289,7 @@ impl Signex {
                 undock_unavailable: already_undocked
                     || tab.kind.is_project_page()
                     || tab.kind.is_gerber_viewer()
+                    || tab.kind.is_output_job()
                     || tab.kind.is_block_diagram(),
                 has_file: crate::tab_bar::tab_file_path(tab).is_some(),
                 in_project: self.project_tree_key_of_file(&tab.path).is_some(),
@@ -854,7 +855,7 @@ pub(super) struct TabMenuFacts<'a> {
 /// the live tab title and the Close shortcut; a bulk-close row greys when it
 /// would close nothing; "Open In New Window" greys when the tab cannot be
 /// undocked; Copy Path greys for a tab with no file, Reveal in Projects for
-/// a file that is not in an open project.
+/// a file that is not in an open project. Every row has a glyph.
 pub(super) fn tab_menu_entries(
     i18n: &I18n,
     tid: ThemeId,
@@ -878,19 +879,19 @@ pub(super) fn tab_menu_entries(
             pick(A::Close(idx)),
         ),
         gated(
-            None,
+            Some(ic::icon_dd_close_others(tid)),
             text(i18n, menu_ids::CTX_TAB_CLOSE_OTHERS),
             facts.total_tabs > 1,
             A::CloseAllOthers(idx),
         ),
         gated(
-            None,
+            Some(ic::icon_dd_close_right(tid)),
             text(i18n, menu_ids::CTX_TAB_CLOSE_RIGHT),
             facts.strip_tabs_to_the_right,
             A::CloseToTheRight(idx),
         ),
         dd_msg(
-            None,
+            Some(ic::icon_dd_close_all(tid)),
             &command_text(i18n, "close_all_documents"),
             "",
             pick(A::CloseAll),

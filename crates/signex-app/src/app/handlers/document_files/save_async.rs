@@ -113,13 +113,11 @@ impl Signex {
             job = job.writing_a_missing_file();
         }
         let hold = self.document_state.autosave.hold_for_save();
-        Ok(Self::spawn_document_write(
-            job,
-            target,
-            revision,
-            save_as_from,
-            hold,
-        ))
+        // Picked images the sheet places are copied into the project beside
+        // the write (#1116).
+        let image_copies = self.begin_image_copies(&source);
+        let write = Self::spawn_document_write(job, target, revision, save_as_from, hold);
+        Ok(Task::batch([image_copies, write]))
     }
 
     /// Snapshot the board of the PCB at `path` (its tab's, or the one parked
@@ -266,8 +264,8 @@ impl Signex {
             };
             self.document_state
                 .document_saves
-                .record_failure(path, reason.clone());
-            self.report_save_failure(context, &anyhow::anyhow!(reason));
+                .record_failure(path.clone(), reason.clone());
+            self.report_write_failure(&path, context, &anyhow::anyhow!(reason));
             // The file is unchanged, so an Undo back to the save point that
             // the write was holding dirty may now read clean.
             self.document_state.sync_history_dirty(&outcome_path);
@@ -310,6 +308,8 @@ impl Signex {
             .collect();
         tasks.push(project_write);
         tasks.push(self.refresh_project_thumbnail(&path));
+        // Export Job profiles that run on save (mockup row 114).
+        tasks.push(self.auto_runs_after_save(&path));
         Task::batch(tasks)
     }
 

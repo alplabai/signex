@@ -1,0 +1,4 @@
+Name,Description,Designator,Footprint,LibRef,Qty
+100n,Capacitor,"CH1_C7, CH2_C7",C_0603,GRM188R71C104KA01,2
+10k,Resistor,"CH1_R5, CH2_R5, CH3_R5, CH4_R5",R_0603,RC0603FR-0710KL,4
+TLV75518,LDO regulator,U1,SOT-23-5,TLV75518PDBVR,1

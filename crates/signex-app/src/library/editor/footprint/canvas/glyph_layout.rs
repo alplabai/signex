@@ -7,7 +7,7 @@
 
 use std::collections::HashMap;
 
-use iced::{Point, Rectangle, Size};
+use iced::{Point, Rectangle, Size, Vector};
 use signex_sketch::SketchData;
 use signex_sketch::array::{Array, ArrayId, ArrayKind};
 use signex_sketch::constraint::{Constraint, ConstraintKind};
@@ -15,6 +15,7 @@ use signex_sketch::entity::EntityKind;
 use signex_sketch::id::{ConstraintId, SketchEntityId};
 
 use super::FootprintCanvasState;
+use super::draw::spacing_sides;
 use crate::library::editor::footprint::sketch_mode::value_edit;
 use crate::library::editor::footprint::state::FootprintEditorState;
 use crate::library::editor::footprint::state::canvas_text::SketchCanvasText;
@@ -486,6 +487,21 @@ fn pattern_text(
     })
 }
 
+/// Which way a pattern glyph sits from its source, as a sign per axis:
+/// left of and below it, mirrored across the source for each spacing
+/// dimension (`sides`, unit normals) that stands off on that side, so the
+/// glyph never covers a spacing pill (#3009). Values stack the same way.
+fn glyph_side(sides: &[Vector]) -> Vector {
+    sides.iter().fold(Vector::new(-1.0, 1.0), |side, n| {
+        let along = side.x * n.x + side.y * n.y;
+        if along > 0.0 {
+            Vector::new(side.x - 2.0 * along * n.x, side.y - 2.0 * along * n.y)
+        } else {
+            side
+        }
+    })
+}
+
 /// The glyph of one pattern and, while it is selected, its values and
 /// instance slots.
 fn pattern_glyphs(
@@ -503,7 +519,11 @@ fn pattern_glyphs(
     let row = GLYPH_TEXT * LABEL_HEIGHT_EM + 2.0;
     let base = cstate.world_to_screen(source_at);
     let offset = GLYPH_TEXT * PATTERN_OFFSET_EM;
-    let anchor = Point::new(base.x - offset, base.y + offset + stack_index as f32 * row);
+    let side = glyph_side(&spacing_sides(array, l.sketch, l.state, cstate));
+    let anchor = Point::new(
+        base.x + side.x * offset,
+        base.y + side.y * (offset + stack_index as f32 * row),
+    );
     let selected = l.state.sketch_overlay.selected_pattern == Some(array.id);
     let text = pattern_text(l.sketch, array.id, text_set, GLYPH_LINK_DEPTH).unwrap_or_default();
     out.push(Glyph {
@@ -516,7 +536,7 @@ fn pattern_glyphs(
         return;
     }
     for (k, &field) in PatternField::of(&array.kind).iter().enumerate() {
-        let value_anchor = Point::new(anchor.x, anchor.y + (k + 1) as f32 * row);
+        let value_anchor = Point::new(anchor.x, anchor.y + side.y * (k + 1) as f32 * row);
         let edit = l
             .state
             .sketch_overlay
@@ -647,3 +667,7 @@ pub(crate) fn sketch_glyphs(
 #[cfg(test)]
 #[path = "glyph_layout_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "glyph_layout_app_tests.rs"]
+mod app_tests;

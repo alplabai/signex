@@ -34,6 +34,7 @@ fn tile_layout(split: DocumentSplit) -> TileLayout {
     match split {
         DocumentSplit::SideBySide => TileLayout::SideBySide,
         DocumentSplit::Stacked => TileLayout::Stacked,
+        DocumentSplit::Grid => TileLayout::Grid,
     }
 }
 
@@ -81,6 +82,7 @@ impl Signex {
         self.tiled_panes().map(|(layout, _)| match layout {
             TileLayout::SideBySide => DocumentSplit::SideBySide,
             TileLayout::Stacked => DocumentSplit::Stacked,
+            TileLayout::Grid => DocumentSplit::Grid,
         })
     }
 
@@ -291,6 +293,19 @@ impl Signex {
             self.with_manage(|dialog| dialog.rename = None);
             return Task::none();
         }
+        let before = msg
+            .is_undoable()
+            .then(|| self.ui_state.workspace_layouts.layouts.clone());
+        let task = self.run_manage_layouts(msg);
+        if let Some(before) = before
+            && before != self.ui_state.workspace_layouts.layouts
+        {
+            self.with_manage(|dialog| dialog.remember(before));
+        }
+        task
+    }
+
+    fn run_manage_layouts(&mut self, msg: ManageLayoutsMsg) -> Task<Message> {
         match msg {
             ManageLayoutsMsg::Requested => Task::none(),
             ManageLayoutsMsg::Closed => {
@@ -317,6 +332,7 @@ impl Signex {
             ManageLayoutsMsg::DuplicateRequested => self.duplicate_selected_layout(),
             ManageLayoutsMsg::DeleteRequested => self.delete_selected_layout(),
             ManageLayoutsMsg::UndoDeleteRequested => self.undo_layout_delete(),
+            ManageLayoutsMsg::UndoRequested => self.undo_manage_change(),
             ManageLayoutsMsg::ToastExpired(generation) => {
                 self.with_manage(|dialog| {
                     if dialog.toast.as_ref().map(|t| t.generation) == Some(generation) {
@@ -495,6 +511,42 @@ impl Signex {
         };
         let id = state.layouts.undo_delete(toast.deleted, &naming);
         self.with_manage(|dialog| dialog.selected = id);
+        self.persist_workspace_layouts()
+    }
+
+    /// Undo next to Apply (#2930): the list goes back to what it was before
+    /// the last change made in the dialog. The layout on screen keeps its
+    /// check mark where the list still has it, since Apply is not undone.
+    fn undo_manage_change(&mut self) -> Task<Message> {
+        let state = &mut self.ui_state.workspace_layouts;
+        let Some(before) = state.manage.as_mut().and_then(|dialog| dialog.undo.pop()) else {
+            return Task::none();
+        };
+        let on_screen = state.layouts.active().cloned();
+        state.layouts = before;
+        if let Some(id) = on_screen
+            && state.layouts.get(&id).is_some()
+        {
+            state.layouts.set_active(Some(id));
+        }
+        let first = state
+            .layouts
+            .user()
+            .first()
+            .map_or(LayoutId::Builtin(BuiltinLayout::Schematic), |l| {
+                l.id.clone()
+            });
+        let layouts = &state.layouts;
+        if let Some(dialog) = state.manage.as_mut() {
+            if layouts.get(&dialog.selected).is_none() {
+                dialog.selected = first;
+            }
+            // The toast's layout may be back already; the delete is an
+            // Undo step of its own.
+            dialog.toast = None;
+            dialog.rename = None;
+            dialog.drag = None;
+        }
         self.persist_workspace_layouts()
     }
 

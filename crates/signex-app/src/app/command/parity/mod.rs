@@ -29,6 +29,7 @@ mod inputs;
 #[cfg(test)]
 mod needs_owner_tests;
 mod owners;
+mod plain_operands;
 #[cfg(test)]
 mod probe_tests;
 #[cfg(test)]
@@ -144,7 +145,7 @@ fn rows() -> Vec<Row> {
 /// `apply_edits` runs each edit's own operand handler
 /// (`(edit.handler)(app, &edit.args)` in `run_edits`,
 /// command/agent_edits/group_run.rs), and an edit may be any command
-/// `runs_as_one_step` accepts. So its row reads what those handlers' rows
+/// `edit_refusal` lets into a list. So its row reads what those handlers' rows
 /// read. No member reads the render cache: the wire snap reads the edited
 /// sheet's engine (`snap_wire_on_edit_sheet`, #2542).
 ///
@@ -154,7 +155,9 @@ fn derive_apply_edits(rows: &mut [Row]) {
     let mut read = BTreeSet::new();
     for row in rows.iter().filter(|row| row.form == Form::Operand) {
         let command = AppCommandId::new(row.id).expect("catalog id is valid");
-        if agent_edits::runs_as_one_step(&command) {
+        // A list carries only what `edit_refusal` lets in: a command that runs
+        // as its own step but not in a list (`NOT_YET_IN_LISTS`) is not read.
+        if agent_edits::edit_refusal(&command).is_none() {
             // A member that reads the render cache would put `apply_edits` on
             // the kill list; argue it here first.
             assert!(

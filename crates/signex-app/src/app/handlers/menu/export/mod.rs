@@ -6,6 +6,7 @@ use signex_output::{ExportContext, ProjectMetadata, SheetSnapshot};
 use signex_types::schematic::InstancePath;
 
 use crate::app::Signex;
+use crate::app::cross_refs;
 use crate::app::saved_channel_naming::SavedChannelNaming;
 use crate::app::state::UnreadableCause;
 
@@ -16,11 +17,14 @@ mod current_page_tests;
 mod erc_report;
 #[cfg(test)]
 mod filter_names_tests;
+pub(crate) mod job_outputs;
 mod loose_bom;
 mod omitted;
 pub(crate) mod page_list;
 mod page_setup;
+pub(crate) mod pdf_command;
 mod pdf_netlist;
+pub(crate) mod pdf_operands;
 pub(crate) mod placements;
 mod print_preview;
 mod raster_job;
@@ -41,9 +45,8 @@ pub(crate) mod tests;
 /// `rerasterize_print_preview` calls this on every settings toggle *and* on
 /// every keystroke in the specific-page input; the Messages panel keeps only
 /// `MAX_DIAGNOSTIC_ENTRIES` (200) with no dedupe, so those copies evicted the
-/// user's ERC results and eventually the earliest copies of the very stitch
-/// warnings this path exists to deliver. Surfacing belongs to the user
-/// actions — see [`log_stitch_issues`].
+/// user's ERC results and then the very stitch warnings this path delivers.
+/// Surfacing belongs to the user actions — see [`log_stitch_issues`].
 #[cfg(test)]
 fn build_export_context(
     document_state: &crate::app::state::DocumentState,
@@ -262,6 +265,31 @@ fn log_stitch_issues(source: &std::path::Path, ctx: &ExportContext, issues: &Exp
              the missing sheet's ports stay split. Do not use this export as a wiring \
              reference.",
         );
+    }
+}
+
+impl Signex {
+    /// [`log_stitch_issues`] for a user action on `source`, with each stitch
+    /// problem also claimed in its project's reported warnings, so a net
+    /// index build the action sets off (the cross references) does not say
+    /// it a second time.
+    fn report_stitch_issues(
+        &mut self,
+        source: &std::path::Path,
+        ctx: &ExportContext,
+        issues: &ExportIssues,
+    ) {
+        log_stitch_issues(source, ctx, issues);
+        let Some(project) = self.document_state.document_project(source).map(|p| p.id) else {
+            return;
+        };
+        let reported = &mut self.document_view.net_nav.reported;
+        for issue in &issues.stitch {
+            reported.claim(
+                project,
+                &crate::app::project_sheets::stitch_issue_message(issue),
+            );
+        }
     }
 }
 
@@ -559,7 +587,7 @@ fn build_scope(
         let naming = saved_naming.for_design(&project);
         issues.channel_naming_unreadable = naming.is_err();
         let naming = naming.unwrap_or(&default_naming);
-        let result = signex_net::build_project_netlist_named(&project, naming);
+        let (result, index) = signex_net::build_project_netlist_indexed_named(&project, naming);
         channels = signex_net::ChannelDesignators::of_project(&project, naming);
         let occurrences = signex_net::project_occurrences(&project);
         page_occurrences = occurrences.clone();
@@ -569,12 +597,17 @@ fn build_scope(
         if let Some(owner) = owning_project {
             let (numbering, numbering_issues) =
                 signex_net::sheet_numbering(&project, &owner.data.name);
-            issues.sheet_numbering = Some(sheet_numbers::ScopeNumbering::new(
-                numbering,
-                numbering_issues,
-                base_dir.clone(),
-                fold,
-            ));
+            // The off-sheet cross references the PDF prints (#1273).
+            let refs = cross_refs::project_cross_refs(&project, &graph.paths, &index, &numbering);
+            issues.sheet_numbering = Some(
+                sheet_numbers::ScopeNumbering::new(
+                    numbering,
+                    numbering_issues,
+                    base_dir.clone(),
+                    fold,
+                )
+                .with_cross_refs(refs),
+            );
         }
         // Hand the exporters the very sheets the netlist was derived from, in
         // key order so the output is deterministic: hierarchical children are

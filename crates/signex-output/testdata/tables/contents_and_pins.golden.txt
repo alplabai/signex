@@ -1,0 +1,34 @@
+# page 1
+Page
+1
+2
+3
+Sheet
+Contents
+Power
+Old
+Title
+Contents
+Buck converter
+Removed sheet
+Rev
+A
+B
+C
+# page 2
+Pin
+1
+2
+Name
+BOOT
+VIN
+Net
+SW
++12V
+Type
+Passive
+Power input
+# links
+page	row	link	target_page
+1	1	contents.snxsch	1
+1	2	power/buck.snxsch	2

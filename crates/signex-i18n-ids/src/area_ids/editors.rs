@@ -529,6 +529,9 @@ define_ids! {
     EDITORS_PIN_TABLE_LENGTH_REFUSED = "editors-pin-table-length-refused";
     // library-dialog-polish
     EDITORS_SYMBOL_BAR_PIN_TYPE = "editors-symbol-bar-pin-type";
+    // symbol commands (#2817, #2838)
+    EDITORS_SYMBOL_FILE_NOT_OPEN = "editors-symbol-file-not-open";
+    EDITORS_SYMBOL_NOT_OPEN = "editors-symbol-not-open";
     // pin-text-control-characters (#3129)
     EDITORS_SYMBOL_REPAIRED_ON_OPEN = "editors-symbol-repaired-on-open";
     EDITORS_SYMBOL_REPAIRED_MORE = "editors-symbol-repaired-more";

@@ -144,6 +144,8 @@ fn text_note(n: u128) -> TextNote {
         justify_h: HAlign::Left,
         justify_v: VAlign::Bottom,
         locked: false,
+        format: Default::default(),
+        rich: Default::default(),
     }
 }
 
@@ -776,7 +778,9 @@ fn samples() -> Vec<(String, Command)> {
     doc.paper_size = "A3".into();
     add(
         "ReplaceDocument",
-        Command::ReplaceDocument { document: doc },
+        Command::ReplaceDocument {
+            document: Box::new(doc),
+        },
     );
 
     for (name, target) in [
@@ -987,12 +991,12 @@ fn samples() -> Vec<(String, Command)> {
         "UpdateTextNoteProps",
         Command::UpdateTextNoteProps {
             note_id: uid(TEXT_NOTE, 1),
-            props: crate::TextNoteProps {
+            props: Box::new(crate::TextNoteProps {
                 justify_h: Some(HAlign::Right),
                 rotation_degrees: Some(90.0),
                 font_size_mm: Some(2.0),
                 ..Default::default()
-            },
+            }),
         },
     );
     add(

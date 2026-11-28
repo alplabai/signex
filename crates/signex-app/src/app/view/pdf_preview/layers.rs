@@ -21,6 +21,7 @@ pub(super) fn layer_label(layer: PdfLayer) -> MessageId {
         PdfLayer::NetLabelsAndPorts => ids::PDF_LAYER_NET_LABELS,
         PdfLayer::PowerPorts => ids::PDF_LAYER_POWER_PORTS,
         PdfLayer::TitleBlockAndBorder => ids::PDF_LAYER_TITLE_BLOCK,
+        PdfLayer::NotFittedParts => ids::PDF_LAYER_NOT_FITTED,
         PdfLayer::Watermark => ids::PDF_LAYER_WATERMARK,
     }
 }

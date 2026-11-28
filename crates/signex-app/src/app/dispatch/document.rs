@@ -118,6 +118,7 @@ impl Signex {
             EditMsg::SheetSync(msg) => self.dispatch_sheet_sync(msg),
             EditMsg::RailRename(msg) => self.dispatch_rail_rename(msg),
             EditMsg::Tables(msg) => self.dispatch_tables(msg),
+            EditMsg::Images(msg) => self.dispatch_images(msg),
             EditMsg::Unions(msg) => {
                 let task = self.handle_unions_message(msg);
                 Task::batch([task, self.finish_update()])
@@ -351,6 +352,10 @@ impl Signex {
             }
             ExportMsg::BomWritten { source, outcome } => {
                 let task = self.handle_bom_written(source, *outcome);
+                iced::Task::batch([task, self.finish_update()])
+            }
+            ExportMsg::OutputJob(msg) => {
+                let task = self.dispatch_output_job_message(msg);
                 iced::Task::batch([task, self.finish_update()])
             }
             ExportMsg::BlockDiagram(msg) => {

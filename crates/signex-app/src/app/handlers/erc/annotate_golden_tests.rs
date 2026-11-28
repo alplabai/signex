@@ -321,7 +321,9 @@ fn a_part_added_later_to_a_child_placed_twice_is_numbered_per_placement() {
     document.symbols.push(symbol("Q?", 1, 100.0));
     (app.document_state.engines.get_mut(&child_path))
         .expect("parked child")
-        .execute(signex_engine::Command::ReplaceDocument { document })
+        .execute(signex_engine::Command::ReplaceDocument {
+            document: Box::new(document),
+        })
         .expect("add the part");
 
     let task = app.handle_annotate(signex_engine::AnnotateMode::Incremental);

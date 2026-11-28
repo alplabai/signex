@@ -309,7 +309,9 @@ fn the_cached_preview_is_reloaded_after_an_edit() {
     let mut document = engine.document().clone();
     document.symbols[0].reference = "R7".to_string();
     engine
-        .execute(signex_engine::Command::ReplaceDocument { document })
+        .execute(signex_engine::Command::ReplaceDocument {
+            document: Box::new(document),
+        })
         .expect("replace");
 
     // The stale cache still holds the old rows until the reload lands, but
@@ -457,7 +459,9 @@ fn resetting_duplicates_drops_the_cached_rows() {
     twin.uuid = Uuid::now_v7();
     document.symbols.push(twin);
     engine
-        .execute(signex_engine::Command::ReplaceDocument { document })
+        .execute(signex_engine::Command::ReplaceDocument {
+            document: Box::new(document),
+        })
         .expect("replace");
     load_into_cache(&mut app);
     assert!(!app.ui_state.annotate_preview.entries.is_empty());

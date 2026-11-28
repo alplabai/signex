@@ -144,10 +144,11 @@ mod planned_tests;
 
 pub use element_properties::{
     AnnotationField, AnnotationPanelMsg, AnnotationPanelState, DIMENSION_OVERRIDE_INPUT,
-    DIMENSION_TEXT_SECTION, DimensionToolForm,
+    DIMENSION_TEXT_SECTION, DimensionToolForm, ImagePanelField, ImagePanelState,
 };
 pub(crate) use element_properties::{
-    BODY_ALTERNATE, BODY_ALTERNATE_MISSING, BODY_NORMAL, BODY_NORMAL_CAN_SWITCH, sheet_file_missing,
+    BODY_ALTERNATE, BODY_ALTERNATE_MISSING, BODY_NORMAL, BODY_NORMAL_CAN_SWITCH, open_part_menu,
+    sheet_file_missing,
 };
 pub use element_properties::{
     BlanketEdit, FootprintCardFacts, FootprintCardKey, FootprintCardStatus, FootprintCardView,
@@ -247,8 +248,8 @@ pub use pcb_layers::{LayersPanelMsg, LayersPanelUi, LayersTab, PcbLayersPanel};
 pub use pcb_nets::{PcbNetsSummary, PcbPanelMode, PcbPanelMsg, PcbPanelUi};
 pub use pcb_primitive_properties::{PcbPrimitiveFacts, PcbPrimitiveMsg};
 pub use placed_edit::{
-    NoteDraft, NoteLayout, PlacedDraft, PlacedEditMsg, PlacedField, PlacedPanel, PortNameDraft,
-    RunNet,
+    NoteDraft, NoteLayout, NoteLength, PlacedDraft, PlacedEditMsg, PlacedField, PlacedPanel,
+    PortNameDraft, RunNet,
 };
 pub use pre_placement::{
     PlacementPosition, PositionField, PrePlacementData, PrePlacementKind, PrePlacementPositionMsg,
@@ -259,7 +260,7 @@ pub(crate) use projects::NOTEBOOK_ROW_KEY;
 pub(super) use projects::view_projects;
 pub use projects::{DiagramRow, LibraryNodeInfo, ProjectPanelInfo, SheetInfo, build_project_tree};
 pub(crate) use projects::{MISSING_MARK, UNREADABLE_MARK};
-pub use projects_graphite::{ProjectsMsg, ProjectsView};
+pub use projects_graphite::{AssetRow, ProjectsMsg, ProjectsView};
 pub use properties::DrawingFieldId;
 pub(super) use properties::{
     PROPERTY_CONTROL_PORTION, PROPERTY_LABEL_COLUMN, PROPERTY_LABEL_WIDTH, PROPERTY_ROW_GAP,
@@ -614,11 +615,8 @@ pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, Pan
         PanelKind::NetClasses if ctx.net_classes.board.is_some() => board_net_classes::view(ctx),
         PanelKind::NetClasses => net_class_panel::view_panel(ctx),
         PanelKind::Variants => view_stub(ids::PANELS_KIND_VARIANTS, ids::PANELS_STUB_VARIANTS, ctx),
-        PanelKind::OutputJobs => view_stub(
-            ids::PANELS_KIND_OUTPUT_JOBS,
-            ids::PANELS_STUB_OUTPUT_JOBS,
-            ctx,
-        ),
+        // Opens as the Export Job document tab (mockup row 114); never docked.
+        PanelKind::OutputJobs => iced::widget::Space::new().boxed(),
         PanelKind::ObjectList => return object_list::view(ctx),
         PanelKind::BomStudio => view_stub(
             ids::PANELS_KIND_BOM_STUDIO,

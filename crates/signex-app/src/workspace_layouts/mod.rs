@@ -29,6 +29,10 @@ pub use store::{ImportRefusal, LayoutProblem, PrefsWorkspaceLayoutsStore, Worksp
 /// How long the "Deleted layout" toast offers Undo.
 pub const UNDO_TOAST_DURATION: Duration = Duration::from_secs(8);
 
+/// How many list changes Manage Layouts' Undo steps back through; the
+/// oldest is dropped past it.
+pub const MANAGE_UNDO_DEPTH: usize = 32;
+
 /// The layouts and their two dialogs, in `UiState`.
 pub struct WorkspaceLayoutsState {
     pub layouts: Layouts,
@@ -41,6 +45,9 @@ pub struct WorkspaceLayoutsState {
     pub manage: Option<ManageLayoutsDialog>,
     /// Hands out the undo-toast generations.
     pub toast_generation: u64,
+    /// The document area's panes (mockup row 207) and the splits kept per
+    /// project: the arrangement a layout's split stands beside.
+    pub panes: crate::document_panes::DocumentPanesState,
 }
 
 impl WorkspaceLayoutsState {
@@ -60,6 +67,10 @@ impl WorkspaceLayoutsState {
                 save: None,
                 manage: None,
                 toast_generation: 0,
+                panes: crate::document_panes::DocumentPanesState::boot(
+                    prefs,
+                    Arc::new(crate::document_panes::PrefsDocumentPanesStore::user_prefs()),
+                ),
             },
             problems,
         )
@@ -86,6 +97,10 @@ pub struct ManageLayoutsDialog {
     pub drag: Option<RowDrag>,
     /// The "Deleted layout" toast with its Undo, while it shows.
     pub toast: Option<UndoToast>,
+    /// The list before each change made while the dialog is open, newest
+    /// last: the footer's Undo (mockup row 166, #2930) puts the last one
+    /// back. Closing the dialog drops them.
+    pub undo: Vec<Layouts>,
 }
 
 impl ManageLayoutsDialog {
@@ -95,7 +110,21 @@ impl ManageLayoutsDialog {
             rename: None,
             drag: None,
             toast: None,
+            undo: Vec::new(),
         }
+    }
+
+    /// Keep `before`, the list as it was before a change, for Undo.
+    pub fn remember(&mut self, before: Layouts) {
+        self.undo.push(before);
+        if self.undo.len() > MANAGE_UNDO_DEPTH {
+            self.undo.remove(0);
+        }
+    }
+
+    /// Whether Undo has a change to take back.
+    pub fn can_undo(&self) -> bool {
+        !self.undo.is_empty()
     }
 }
 
@@ -225,6 +254,9 @@ pub enum ManageLayoutsMsg {
     DuplicateRequested,
     DeleteRequested,
     UndoDeleteRequested,
+    /// The Undo button next to Apply: the last change made in the dialog
+    /// is taken back (#2930).
+    UndoRequested,
     /// The toast of generation `.0` timed out; a newer toast stays.
     ToastExpired(u64),
     UpdateFromCurrentRequested,
@@ -257,8 +289,24 @@ impl ManageLayoutsMsg {
                 | Self::DuplicateRequested
                 | Self::DeleteRequested
                 | Self::UndoDeleteRequested
+                | Self::UndoRequested
                 | Self::UpdateFromCurrentRequested
                 | Self::ImportRequested
+                | Self::ImportRead { .. }
+        )
+    }
+
+    /// Whether Undo can take this change back: the messages that change the
+    /// list itself (the active mark Apply sets is the screen's, not undone).
+    pub fn is_undoable(&self) -> bool {
+        matches!(
+            self,
+            Self::RenameCommitted
+                | Self::DuplicateRequested
+                | Self::DeleteRequested
+                | Self::UndoDeleteRequested
+                | Self::UpdateFromCurrentRequested
+                | Self::GripReleased
                 | Self::ImportRead { .. }
         )
     }

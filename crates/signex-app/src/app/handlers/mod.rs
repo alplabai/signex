@@ -16,6 +16,7 @@ mod board_3d_model_tests;
 mod board_3d_screenshot;
 pub(crate) mod board_net_classes;
 mod board_sketch;
+mod board_sketch_refusal;
 pub mod canvas;
 pub mod clipboard_workflows;
 pub(crate) mod command_log;
@@ -34,6 +35,12 @@ mod dialog_window;
 pub mod dock;
 pub mod document_files;
 mod document_identity;
+pub(crate) mod document_pane_actions;
+#[cfg(test)]
+mod document_pane_actions_tests;
+pub(crate) mod document_panes;
+#[cfg(test)]
+pub(crate) mod document_panes_tests;
 pub mod document_tabs;
 #[cfg(test)]
 mod document_tabs_tests;
@@ -60,6 +67,9 @@ pub mod net_nav;
 mod object_list;
 mod object_list_edit;
 mod pan_zoom_bench;
+pub(crate) mod pane_views;
+#[cfg(test)]
+mod pane_views_tests;
 mod parameter_closed_sheets;
 pub mod parameter_manager;
 pub mod paste;
@@ -70,6 +80,8 @@ pub(crate) mod pcb_drc_fix;
 mod pcb_drc_results;
 #[cfg(test)]
 mod pcb_drc_results_tests;
+#[cfg(test)]
+mod pcb_drc_room_tests;
 pub(crate) mod pcb_dxf_import;
 pub(crate) mod pcb_dxf_sketch;
 pub(crate) use pcb_drc_check::DRC_CHECK;
@@ -166,3 +178,5 @@ pub mod window_geometry_events;
 pub mod window_placement;
 pub mod window_tiling;
 pub(crate) mod workspace_layouts;
+#[cfg(test)]
+mod workspace_layouts_undo_tests;

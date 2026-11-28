@@ -189,7 +189,9 @@ impl Signex {
         };
         let changed = match swap.sheet {
             Some(document) => {
-                let command = signex_engine::Command::ReplaceDocument { document };
+                let command = signex_engine::Command::ReplaceDocument {
+                    document: Box::new(document),
+                };
                 self.execute_on_sheet(path, command)?
             }
             None => false,

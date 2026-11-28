@@ -1,4 +1,4 @@
-//! Change Component's one dialog (mockup row 155): what the list compares
+//! Change Component's dialog (mockup rows 155 and 129): what the list compares
 //! rows with, the Same symbol / Same value chips, the pin counts of the
 //! listed rows (read off the update thread) and the Now / After table.
 //! Pure helpers, then the handlers of the dialog's own messages.
@@ -367,8 +367,9 @@ impl Signex {
         Task::none()
     }
 
-    /// A row of the list was clicked: pick it and read it. A row the chips
-    /// hide or whose pins differ is never picked.
+    /// A row of the list was clicked: pick it, read it for Next and read
+    /// its Symbol and Footprint tiles. A row the chips hide or whose pins
+    /// differ is never picked.
     pub(super) fn click_change_row(&mut self, row_id: Uuid) -> Task<Message> {
         let summary = self.library.open_libraries.iter().find_map(|lib| {
             lib.cached_components
@@ -390,7 +391,8 @@ impl Signex {
             return Task::none();
         }
         picker.selected = summary;
-        self.resolve_change_part()
+        let tiles = self.start_picker_preview_load();
+        Task::batch([tiles, self.resolve_change_part()])
     }
 
     pub(super) fn toggle_change_keep(&mut self, name: String) -> Task<Message> {

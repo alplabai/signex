@@ -32,6 +32,7 @@ mod fixtures;
 mod group;
 mod harness_snapshot;
 mod hierarchy;
+mod images;
 pub mod live;
 mod net_finding;
 mod overrides;
@@ -48,6 +49,7 @@ pub use context::ErcContext;
 pub use diagnostic::{Diagnostic, LocationSpace};
 pub use group::RuleGroup;
 pub use hierarchy::HierarchyMemo;
+pub use images::ErcImage;
 pub use net_finding::{NetFinding, NetFindingPin};
 pub use overrides::apply_overrides;
 pub use pin_matrix::{ErcConfig, PinAxis, PinMatrix};
@@ -169,6 +171,9 @@ pub enum RuleKind {
     /// One half of a differential pair (`USB_D_P`, or a net a pair
     /// directive marks) whose partner net is not on the sheet (#2951).
     DiffPairPartnerMissing,
+    /// An image on the sheet names a file that is gone, refused or holds
+    /// other content than the image placed (#1116).
+    ImageFileMissing,
 }
 
 impl RuleKind {
@@ -214,6 +219,7 @@ impl RuleKind {
             RuleKind::HarnessTypeConflict => "Harness type conflict",
             RuleKind::NetClassConflict => "Net class conflict",
             RuleKind::DiffPairPartnerMissing => "Differential pair partner missing",
+            RuleKind::ImageFileMissing => "Image file missing",
         }
     }
 
@@ -237,7 +243,7 @@ impl RuleKind {
     }
 
     /// Every built-in rule, in the order the ERC dialog lists them.
-    pub const ALL: [RuleKind; 39] = [
+    pub const ALL: [RuleKind; 40] = [
         RuleKind::UnusedPin,
         RuleKind::DuplicateRefDesignator,
         RuleKind::HierPortDisconnected,
@@ -277,6 +283,7 @@ impl RuleKind {
         RuleKind::HarnessTypeConflict,
         RuleKind::NetClassConflict,
         RuleKind::DiffPairPartnerMissing,
+        RuleKind::ImageFileMissing,
     ];
 
     /// The one source of truth for a rule's severity: [`Diagnostic::new`]
@@ -319,7 +326,8 @@ impl RuleKind {
             | RuleKind::HarnessEntryMismatch
             | RuleKind::HarnessTypeConflict
             | RuleKind::NetClassConflict
-            | RuleKind::DiffPairPartnerMissing => Severity::Warning,
+            | RuleKind::DiffPairPartnerMissing
+            | RuleKind::ImageFileMissing => Severity::Warning,
             RuleKind::NetMultipleNames => Severity::Info,
             RuleKind::MissingPowerFlag | RuleKind::SymbolOutsideSheet => Severity::Info,
             RuleKind::PartWithoutFootprint | RuleKind::PartWithoutValue | RuleKind::OffGrid => {

@@ -55,6 +55,9 @@ pub use gerber_viewer::{GerberViewerMsg, GerberViewerState};
 mod handlers;
 #[cfg(test)]
 pub(crate) mod hierarchy_fixture;
+// #1116: images placed on a sheet as project assets.
+pub(crate) mod images;
+pub use images::ImagesMsg;
 mod layer_stack_tab;
 pub(crate) mod layout_plan;
 mod length_matching_tab;
@@ -62,6 +65,7 @@ mod library_delete;
 mod load_gateway;
 mod mutation_gateway;
 pub(crate) mod new_project;
+pub(crate) mod output_job;
 // #2945, mockup row 201: Generate design notebook.
 pub(crate) mod notebook_generate;
 pub use notebook_generate::{NotebookGenerateMsg, NotebookGenerateUi};
@@ -92,6 +96,8 @@ mod project_tab;
 pub(crate) mod projector;
 pub(crate) mod rail_rename;
 pub use rail_rename::RailRenameMsg;
+// Mockup row 203 (#1114): rich text notes, their compiles and the editor.
+pub mod rich_note;
 pub(crate) mod rooms;
 mod rules_tab;
 pub(crate) mod sch_tables;
@@ -140,6 +146,7 @@ pub(crate) use state::volume_case::probe_directory_case;
 // The Library dialogs' window-size tests name the modal they open.
 #[cfg(test)]
 pub(crate) use state::ModalId;
+pub(crate) mod cross_refs;
 #[cfg(test)]
 mod draft_save_point_tests;
 #[cfg(test)]
@@ -176,6 +183,7 @@ pub use compare_board::{CompareBoardMsg, CompareBoardState, CompareRead, JumpSid
 pub use compiled_design::CompiledDesignMsg;
 pub use contracts::Board3dShot;
 pub use contracts::ErcProfileAction;
+pub use contracts::PaneMsg;
 pub use contracts::{
     AnnotateMsg, AppQuitConfirmState, Board3dGesture, Board3dModelsRead, Board3dMsg, BoardNetMsg,
     BoardSketchMsg, BoardToolsMsg, BomPreviewMsg, CommandPaletteMsg, ContextAction, ContextMenuMsg,
@@ -210,8 +218,13 @@ pub(crate) use handlers::document_files::is_pcb_path;
 pub(crate) use handlers::menu::export::tests::app_workspace;
 pub(crate) use handlers::selection_workflow::passes_filter;
 pub use handlers::window_geometry_events::GeometryReadout;
-pub use handlers::window_tiling::{Tile, TileLayout, TilePlan, tiles};
+pub use handlers::window_tiling::{Tile, TileLayout, TilePlan, grid_tiles, linear_tiles, tiles};
 pub use new_project::{NewProjectMsg, NewProjectState, ProfileUndo};
+pub use output_job::{
+    AutoMsg, Built, CheckCounts, JobDocMsg, JobRead, JobReport, JobTabMsg, JobWritten, ListPurpose,
+    NamingMode, OutputJobMsg, Packaged, PackagingSwitch, RunAsk, RunMsg, TabPage, TriggerEdit,
+    ValidateOutcome, WrittenOutput,
+};
 pub use sheet_numbering::{NumberingProblem, SheetNumberingMsg, SheetNumberingState};
 pub use sheet_swap::SheetSwapMsg;
 pub use sheet_sync::{SheetSyncMsg, SheetSyncProblem, SheetSyncState};
@@ -226,7 +239,7 @@ pub use state::pcb_edit::{BoardEditError, CheckedStep};
 pub use state::project_case::CaseProbeOutcome;
 pub use state::{
     CaseFold, DocumentState, DocumentViewState, InteractionState, KeymapRecorderState,
-    LoadedProject, PageSetupInputs, PreviewState, ProjectId, Signex, UiState,
+    KeymapStatus, LoadedProject, PageSetupInputs, PreviewState, ProjectId, Signex, UiState,
 };
 pub use symbol_draft::SymbolDraft;
 pub use symbol_history::SymbolHistorySnapshot;
@@ -276,6 +289,9 @@ impl Signex {
         // the active project.
         tasks.push(self.sync_closed_parameter_sheets());
         tasks.push(self.sync_compare_board());
+        // Rich text notes show their cached compile; a missing one compiles
+        // in a task (#1114, mockup row 203).
+        tasks.push(self.sync_rich_notes());
         // A board that opened takes its kept view; a changed view is saved
         // soon (#2480).
         tasks.push(self.sync_pcb_layer_views());

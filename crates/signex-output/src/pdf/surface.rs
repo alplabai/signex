@@ -36,11 +36,20 @@ const OPAQUE_LEVEL: u8 = u8::MAX;
 
 /// A finished page: its content stream and the stroke- and fill-alpha
 /// levels the stream names with `gs`, which the page's `/ExtGState` must
-/// define.
+/// define. `links` are the text links the page drew (#1298); the stream
+/// itself carries none.
 pub struct PageContent {
     pub bytes: Vec<u8>,
     pub stroke_alphas: BTreeSet<u8>,
     pub fill_alphas: BTreeSet<u8>,
+    pub links: Vec<super::links::PageLink>,
+    /// The pictures the stream paints, `/Im<index>` in this order (#1116).
+    pub images: Vec<std::sync::Arc<crate::svg::SvgPicture>>,
+}
+
+/// The `/XObject` resource name of a page's picture `index`, e.g. `Im0`.
+pub(super) fn image_name(index: usize) -> String {
+    format!("Im{index}")
 }
 
 /// Stroke alpha (0.0-1.0) as a 0-255 level, the precision a wire colour has.
@@ -96,6 +105,7 @@ pub struct PdfSurface<'a> {
     current_fill_g: f32,
     current_fill_b: f32,
     current_stroke_width: f32,
+    images: Vec<std::sync::Arc<crate::svg::SvgPicture>>,
 }
 
 impl<'a> PdfSurface<'a> {
@@ -115,7 +125,39 @@ impl<'a> PdfSurface<'a> {
             current_fill_g: 0.0,
             current_fill_b: 0.0,
             current_stroke_width: 0.0,
+            images: Vec::new(),
         }
+    }
+
+    /// Paint `picture` stretched over the box with its bottom-left corner at
+    /// (`x`, `y`) and size `w` × `h` (points), at `opacity`. One picture of
+    /// the same file is one `/XObject`, however often it is painted.
+    pub fn draw_image(
+        &mut self,
+        picture: &std::sync::Arc<crate::svg::SvgPicture>,
+        x: f32,
+        y: f32,
+        w: f32,
+        h: f32,
+        opacity: f32,
+    ) {
+        let index = match self
+            .images
+            .iter()
+            .position(|known| std::sync::Arc::ptr_eq(&known.bytes, &picture.bytes))
+        {
+            Some(index) => index,
+            None => {
+                self.images.push(std::sync::Arc::clone(picture));
+                self.images.len() - 1
+            }
+        };
+        // Set before `q`, so `Q` leaves the tracked alpha true.
+        self.set_fill_alpha(opacity);
+        self.write_operator(&format!(
+            "q\n{w} 0 0 {h} {x} {y} cm\n/{} Do\nQ\n",
+            image_name(index)
+        ));
     }
 
     /// Finish and return the encoded Content stream bytes.
@@ -136,6 +178,8 @@ impl<'a> PdfSurface<'a> {
             bytes: self.bytes,
             stroke_alphas: self.stroke_alphas,
             fill_alphas: self.fill_alphas,
+            links: Vec::new(),
+            images: self.images,
         }
     }
 

@@ -5,6 +5,7 @@
 
 mod copper_drawings;
 pub(crate) mod fixture;
+mod gerber_settings;
 mod ipc2581;
 mod layer_sizes;
 mod odb;

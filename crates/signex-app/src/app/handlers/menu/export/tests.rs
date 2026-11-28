@@ -1007,6 +1007,7 @@ mod class_assign;
 mod class_picker;
 mod class_shared;
 mod class_styles;
+mod cross_refs;
 mod directive_toggles;
 mod net_text_hierarchy;
 
@@ -1020,8 +1021,13 @@ mod exit_fixtures_not_fitted;
 mod export_status;
 mod lazy_preview;
 mod not_fitted;
+mod pages_field;
+mod pdf_command;
 mod sheet_numbering;
+mod stitch_once;
 mod tree_nesting_pins;
+mod variant_bom;
+mod variant_pdf;
 
 /// Append a second loaded project (`listed` sheets under `dir`) to `app`.
 pub(crate) fn add_project(app: &mut Signex, dir: &str, listed: &[&str]) {

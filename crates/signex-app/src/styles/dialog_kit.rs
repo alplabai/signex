@@ -44,6 +44,10 @@ pub enum DialogButtonKind {
     /// A text action in the accent ink with no fill or border at rest, nor
     /// when it has no action ("Clear all colors", mockup row 71).
     Link,
+    /// A secondary action that must not compete with Save: no fill or
+    /// border at rest, its label in the secondary ink, as every mockup's
+    /// `.btn.quiet` (Reload saved version, mockup row 130).
+    Quiet,
     /// The dismissing action of a footer (Cancel, Close, Later): drawn as
     /// Secondary, it sits first in the right-aligned row.
     Cancel,
@@ -400,6 +404,7 @@ mod tests {
                 DialogButtonKind::Accent,
                 DialogButtonKind::Ghost,
                 DialogButtonKind::Link,
+                DialogButtonKind::Quiet,
                 DialogButtonKind::Cancel,
             ] {
                 let ok = || signex_i18n::t!(i18n, signex_i18n::ids::DIALOG_BUTTON_OK);
@@ -452,6 +457,7 @@ mod tests {
             DialogButtonKind::Accent,
             DialogButtonKind::Ghost,
             DialogButtonKind::Link,
+            DialogButtonKind::Quiet,
         ] {
             assert_eq!(kind.resolved(), kind);
         }
@@ -588,6 +594,7 @@ mod tests {
                     DialogButtonKind::Accent,
                     DialogButtonKind::Ghost,
                     DialogButtonKind::Link,
+                    DialogButtonKind::Quiet,
                     DialogButtonKind::Cancel,
                 ] {
                     let style = disabled_button(kind, &tokens)(&Theme::Dark, status);

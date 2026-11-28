@@ -57,6 +57,7 @@ mod channels;
 #[cfg(test)]
 mod channels_tests;
 mod components;
+mod cross_refs;
 mod designators;
 mod members;
 mod name_changes;
@@ -68,6 +69,7 @@ mod sheet_numbers;
 pub use channels::{ChannelDesignators, EntryBuses, channel_uuid};
 pub(crate) use channels::{CompiledOccurrence, compiled_occurrences};
 pub use components::{ComponentPin, ComponentReport, PlacedPin, PlacedSymbol, UnconnectedPin};
+pub use cross_refs::{CrossRefPartner, PortCrossRef};
 pub use members::{NetMember, NetMemberKind, NetMembers};
 pub use name_changes::{
     ProjectNetChange, project_name_changes, project_name_changes_as_written,

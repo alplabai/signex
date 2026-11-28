@@ -283,6 +283,8 @@ impl Signex {
                         .filter(|h| passes_filter(h, snapshot, &filters))
                         .collect();
                     self.interaction_state.clicked_pin = None;
+                    // A boxed member brings its whole union along (#2745).
+                    self.expand_selection_to_unions();
                     self.interaction_state
                         .active_canvas_mut()
                         .clear_overlay_cache();
@@ -293,6 +295,7 @@ impl Signex {
                 if let Some(snapshot) = self.active_render_snapshot() {
                     let connected = signex_net::connected_net_items(snapshot, seed);
                     self.interaction_state.active_canvas_mut().selected = connected;
+                    self.expand_selection_to_unions();
                     self.interaction_state
                         .active_canvas_mut()
                         .clear_overlay_cache();
@@ -355,6 +358,7 @@ impl Signex {
                     .into_iter()
                     .filter(|h| passes_filter(h, snapshot, &filters))
                     .collect();
+            self.expand_selection_to_unions();
             self.update_selection_info();
         }
         self.sync_lasso_polygon_to_canvas();

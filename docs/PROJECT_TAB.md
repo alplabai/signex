@@ -8,7 +8,8 @@ history, which the ERC dialog and the Rules tab share.
 
 ## Page tabs (#2523)
 
-The Project, Rules, Layer Stack and Variant Manager tabs are page tabs:
+The Project, Rules, Layer Stack, Variant Manager and Design Checklist
+([DESIGN_CHECKLIST.md](DESIGN_CHECKLIST.md)) tabs are page tabs:
 document tabs that show one of a project's pages rather than a drawing. The
 later page kinds (Length Matching, Polygon Manager, BOM Studio, Export Job,
 Design Notebook) join them. Two rules hold for every page tab, in
@@ -37,7 +38,10 @@ in table…`) is a page of its symbol in the same way: its path is the
 `.snxsym`, it sits after the symbol editor's tab, Save, Undo and the dirty dot
 are the symbol's, and closing the symbol closes it (`app/pin_table_tab.rs`).
 Its title is `<symbol> · Pin table`, the symbol's own name rather than a
-project's.
+project's. Its bulk edit, Delete selected and Paste rows are the catalog
+command `edit_symbol_pins` for an agent or the CLI ([CLI.md](CLI.md),
+"Symbol pins"); what the command writes shows in the tab, and the ticks
+follow their pins.
 
 A shared page shell, `signex_widgets::doc_tab_shell`, holds the Layer Stack
 and Polygon Manager tabs; the Project and Rules tabs do not use it yet. It
@@ -50,6 +54,13 @@ no state: the caller passes the selected sub-tab and maps a press to its own
 message. The chrome catalog draws a sample of it.
 
 ## Sections (#1689-#1693)
+
+The section list at the left badges a row with its live state: the sheet,
+variant and library counts (a dot when a listed library is missing), the
+failed count of the last Requirements run, and on Version control the
+repository the last probe found, a green On with one and a neutral Off
+without (#2995). Commit every save does not change that badge, and it
+shows nothing until the first probe answers.
 
 - **Parameters** (#1080) — the values every sheet inherits, in one list
   with two groups, each folded shut by its header: Title block (the fifteen
@@ -170,7 +181,9 @@ message. The chrome catalog draws a sample of it.
   again (#2948). The Settings surface, alternate parts, the cell menu and
   the sheet preview are not built yet.
 - **Libraries** — the project's libraries in list order, with the path as
-  stored (cut from the start so the file name stays visible), the kind (in
+  stored (cut from the start so the file name stays visible; Name takes
+  three parts of the free width to Location's two, so a typical name shows
+  whole, #2994), the kind (in
   the project, shared, global) and the mount state read from the app as a
   pill (mounted, mounted read-only with a lock, missing at the last probe,
   not mounted); a missing library shows a warning glyph before its name.
@@ -221,7 +234,10 @@ message. The chrome catalog draws a sample of it.
   Font, Junction diameter (mm), then New shape fill. A number box carries
   its unit as a suffix and shows the built-in value in grey while empty.
   An edited field has an accent border and a reset button, which clears the
-  override exactly as emptying the field does. A typed value is never
+  override exactly as emptying the field does. The button's room is kept
+  beside every number box and the font box, empty while the field is
+  built-in, and a label wraps in a narrow card so the box and its button
+  always fit (#2996). A typed value is never
   clamped: one that is not a usable number or is outside the field's range
   is refused, the stored default stays and the box keeps the text, with an
   error border, a tinted fill and a warning icon; a number outside the range
@@ -294,6 +310,45 @@ run checked, or hold a typed value or a refusal, until the next run.
 The Board size card's Measured from names the board outline, the one
 reference the check measures, and its preview is read-only: the limits are
 typed in their fields (DECISIONS 2026-11-24, #2815).
+
+## Fonts (#1178)
+
+Font files carried with the project (mockup row 205), under Rules and
+defaults after Schematic defaults. The `.snxprj` `fonts` key lists one entry
+per family: `family`, `files` (each `path` relative to the project folder,
+`style`, `embedding`) and the `license` the person typed (an SPDX id or a
+license file name). A text still stores only its family name.
+
+Add font file... (the section header's button) picks a `.ttf`, `.otf` or
+`.ttc` file. Off the UI thread the file is read, checked and copied to
+`assets/fonts/<sha256>.<ext>`: the same bytes are one file however often
+they are added. Only then is the file listed under each family it holds,
+as one General undo step; the `.snxprj` is unsaved until Save, the copied
+file is on disk at once. Undo and Remove only change the list; the file
+stays in the folder. Messages says what was added, its embedding permission
+and the license the font names, if any.
+
+A project font arrives with someone else's project, so the file is read as
+untrusted: only the pure-Rust font reader opens it, a file over 32 MiB is
+refused before it is read, and one that does not parse is refused. The
+`OS/2.fsType` embedding bits are read before the copy: a font with
+Restricted license embedding (or a permission value the specification does
+not allow) is refused and nothing is copied; Preview & print, Editable and
+Installable are copied and shown in the Embedding column. A stored path is
+only ever read when it is a file directly in `assets/fonts/` with a font
+extension. WOFF2 is not taken: the font reader cannot open it.
+
+The list is read when used and otherwise kept as written, so a `fonts`
+value this build cannot read is saved back unchanged and the section
+refuses edits to it. The project's managed `.gitattributes` block marks the
+font extensions binary, and puts `assets/fonts/**` in Git LFS when LFS is
+on.
+
+Not built yet: drawing and exporting text in a project font (the canvas,
+the measured text boxes and the PDF still resolve a family against the
+installed fonts and fall back to the bundled face), the missing-font
+Messages actions, the Properties font picker's Project fonts group, and the
+board text default.
 
 ## Preferences and the project
 
@@ -373,7 +428,8 @@ default, `annotate_undo_effective`, `numbering` `continuous` /
 `preferences` / `unreadable`) and `version_control` (`commit_on_save`, `repository`
 `present` / `absent` / `unknown`, `pending_commits`) and the requirements:
 `requirements` (each entry as stored), `unreadable` (`index`, `reason` of
-each entry this build cannot read) and `list_unreadable`.
+each entry this build cannot read) and `list_unreadable`, and the fonts:
+`fonts` (the list as stored) and `fonts_unreadable`.
 
 Each edit runs the tab's own commit path and answers with its section plus
 `changed` (false when nothing changed, as for a move at the end of the
@@ -395,6 +451,14 @@ list):
 | `project_set_requirement` | `requirement` (its id), `field` (as the file names it), `value` as typed; empty clears an optional field |
 | `project_remove_requirement` | `requirement` |
 | `project_enable_requirement` | `requirement`, `on` |
+| `project_add_font` | `path` (the font file); answered once it is copied |
+| `project_remove_font` | `family` (compared without case) |
+| `project_set_font_license` | `family`, `value` as typed; empty clears it |
+
+A font edit answers with the fonts (as `project_settings` does) plus
+`changed`; `project_add_font` adds `added` (`file`, `path`, `faces`,
+`embedding`, `license_hint`, `copied`). It writes a file, so a CLI run
+needs `--save`, and it takes a path, so it is not on the agent channel.
 
 A requirement edit answers with the requirements (as `project_settings`
 does) plus `changed`; an id that names no entry, or more than one, is

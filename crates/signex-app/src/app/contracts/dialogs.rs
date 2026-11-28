@@ -576,6 +576,8 @@ pub enum ExportMsg {
         source: std::path::PathBuf,
         outcome: Box<ExportWriteOutcome>,
     },
+    /// An Export Job run or a PNG export (#1299).
+    OutputJob(crate::app::OutputJobMsg),
     /// A block diagram's SVG or PDF export (#2796).
     BlockDiagram(crate::app::BlockDiagramExportMsg),
     /// Export Design Notebook PDF (mockup row 202), routed to
@@ -732,6 +734,9 @@ pub enum EditMsg {
     RailRename(crate::app::RailRenameMsg),
     /// Schematic tables (#1300): contents sheet, CSV, cell edits.
     Tables(crate::app::TablesMsg),
+    /// Images as project assets (#1116): Place ▸ Graphic…, the picture
+    /// reads and the copy into the project on save.
+    Images(crate::app::ImagesMsg),
     /// Named unions (mockup row 158): the canvas menu rows, the keymap and the Create
     /// Union popover.
     Unions(crate::app::unions::UnionsMsg),

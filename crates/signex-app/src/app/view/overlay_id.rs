@@ -76,6 +76,8 @@ pub(crate) enum OverlayId {
     TabContextMenu,
     ProjectTreeContextMenu,
     ComponentsRowContextMenu,
+    /// The placed part's ⋯ menu in Properties (#3063).
+    PartMenu,
     /// Right-click menu of a Start screen project row (#2305).
     StartRowContextMenu,
     /// Right-click menu of a board layer tab (#2379).
@@ -94,6 +96,8 @@ pub(crate) enum OverlayId {
     FindReplace,
     FindSimilar,
     PasteArray,
+    /// Place ▸ Graphic…'s Place Image dialog (mockup row 204).
+    PlaceImage,
     /// The Create Union popover (mockup row 158).
     UnionPopover,
     /// Edit ▸ Paste Special (mockup row 155).
@@ -192,7 +196,7 @@ const PRE_BLOCKING: usize = 5;
 /// behaviour change to both the paint stack and the Esc precedence, and
 /// `paint_order_is_exhaustive_and_unique` keeps it honest about covering
 /// every [`OverlayId`] exactly once.
-pub(crate) const PAINT_ORDER: [OverlayId; 89] = [
+pub(crate) const PAINT_ORDER: [OverlayId; 91] = [
     OverlayId::ErrorNotice,
     OverlayId::NetlistIncompletePrompt,
     OverlayId::PrintPreview,
@@ -220,6 +224,7 @@ pub(crate) const PAINT_ORDER: [OverlayId; 89] = [
     OverlayId::TabContextMenu,
     OverlayId::ProjectTreeContextMenu,
     OverlayId::ComponentsRowContextMenu,
+    OverlayId::PartMenu,
     OverlayId::StartRowContextMenu,
     OverlayId::LayerTabContextMenu,
     OverlayId::GridPicker,
@@ -231,6 +236,7 @@ pub(crate) const PAINT_ORDER: [OverlayId; 89] = [
     OverlayId::FindReplace,
     OverlayId::FindSimilar,
     OverlayId::PasteArray,
+    OverlayId::PlaceImage,
     OverlayId::UnionPopover,
     OverlayId::SmartPaste,
     OverlayId::VariantPartEdit,
@@ -367,6 +373,7 @@ pub(crate) fn swallows_scroll(id: OverlayId) -> bool {
         | OverlayId::TabContextMenu
         | OverlayId::ProjectTreeContextMenu
         | OverlayId::ComponentsRowContextMenu
+        | OverlayId::PartMenu
         | OverlayId::StartRowContextMenu
         | OverlayId::LayerTabContextMenu
         | OverlayId::GridPicker
@@ -380,6 +387,7 @@ pub(crate) fn swallows_scroll(id: OverlayId) -> bool {
         | OverlayId::FindReplace
         | OverlayId::FindSimilar
         | OverlayId::PasteArray
+        | OverlayId::PlaceImage
         | OverlayId::UnionPopover
         | OverlayId::SmartPaste
         | OverlayId::VariantPartEdit
@@ -449,6 +457,7 @@ pub(crate) fn has_menu_backdrop(id: OverlayId) -> bool {
             | OverlayId::TabContextMenu
             | OverlayId::ProjectTreeContextMenu
             | OverlayId::ComponentsRowContextMenu
+            | OverlayId::PartMenu
             | OverlayId::StartRowContextMenu
             | OverlayId::LayerTabContextMenu
             | OverlayId::GridPicker
@@ -588,7 +597,11 @@ impl Signex {
             OverlayId::SymbolContextMenu => {
                 layers.extend(self.symbol_context_menu_overlay(window_id))
             }
-            OverlayId::TextEdit => layers.extend(self.text_edit_overlay(window_id)),
+            OverlayId::TextEdit => {
+                layers.extend(self.text_edit_overlay(window_id));
+                // The rich note editor is the in-place editor of a rich note.
+                layers.extend(self.rich_note_editor_overlay(window_id));
+            }
             OverlayId::ActiveBarMenu => layers.extend(scoped_to_window(
                 self.active_bar_menu_overlay(window_id),
                 self.overlay_owner(window_id),
@@ -605,6 +618,7 @@ impl Signex {
             OverlayId::ComponentsRowContextMenu => {
                 layers.extend(self.components_row_context_menu_overlay(window_id))
             }
+            OverlayId::PartMenu => layers.extend(self.part_menu_overlay(window_id)),
             OverlayId::StartRowContextMenu => {
                 layers.extend(self.start_row_context_menu_overlay(window_id))
             }
@@ -626,6 +640,7 @@ impl Signex {
             OverlayId::FindReplace => layers.extend(self.find_replace_overlay(window_id)),
             OverlayId::FindSimilar => layers.extend(self.find_similar_overlay()),
             OverlayId::PasteArray => layers.extend(self.paste_array_overlay()),
+            OverlayId::PlaceImage => layers.extend(self.place_image_overlay()),
             OverlayId::UnionPopover => layers.extend(self.union_popover_overlay()),
             OverlayId::SmartPaste => layers.extend(self.smart_paste_overlay()),
             OverlayId::VariantPartEdit => layers.extend(self.variant_part_edit_overlay(window_id)),
@@ -785,6 +800,7 @@ mod tests {
             OverlayId::TabContextMenu,
             OverlayId::ProjectTreeContextMenu,
             OverlayId::ComponentsRowContextMenu,
+            OverlayId::PartMenu,
             OverlayId::StartRowContextMenu,
             OverlayId::LayerTabContextMenu,
             OverlayId::GridPicker,

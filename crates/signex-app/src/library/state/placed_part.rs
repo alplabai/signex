@@ -1,6 +1,6 @@
 //! What the component picker modal is doing for a placed part: Change
-//! Component (#1260, mockup row 155) and the datasheet list (#1301). The
-//! default is the plain Place Component list.
+//! Component (#1260, mockup rows 155 and 129) and the datasheet list
+//! (#1301). The default is the plain Place Component list.
 
 use std::collections::{HashMap, HashSet};
 
@@ -16,14 +16,33 @@ pub enum PickerMode {
     /// Pick a part to place.
     #[default]
     Place,
-    /// Change Component with no replacement read yet: the part list, and an
-    /// empty comparison beside it.
+    /// Change Component with no replacement read yet: the part list, Next
+    /// disabled.
     ChangeComponent(Box<ChangeSession>),
     /// Change Component with the picked replacement read and checked: the
-    /// same list, and the comparison of the placed part with it.
+    /// same list with Next enabled, or the comparison Next leads to.
     ChangePreview(Box<ChangePreview>),
     /// Pick which of the part's documents to open.
     Datasheets(DatasheetChoice),
+}
+
+impl PickerMode {
+    /// Whether Change Component shows its compare step, where Esc goes
+    /// Back instead of closing.
+    pub fn is_comparing(&self) -> bool {
+        matches!(self, Self::ChangePreview(change) if change.step == ChangeStep::Compare)
+    }
+}
+
+/// The two steps of Change Component (mockup row 129, #3018).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum ChangeStep {
+    /// The list with the picked row and its Symbol and Footprint tiles;
+    /// Next is primary.
+    #[default]
+    Pick,
+    /// The comparison; Change is primary and Back returns to the pick.
+    Compare,
 }
 
 /// What Change Component knows of the placed part while the user picks,
@@ -157,6 +176,8 @@ pub struct ChangePreview {
     pub pins: Vec<PinMapRow>,
     /// The new part's pins an old pin can be mapped to.
     pub pin_choices: Vec<PinChoice>,
+    /// The step the dialog shows; a fresh read lands on the pick.
+    pub step: ChangeStep,
 }
 
 impl ChangePreview {
@@ -165,6 +186,14 @@ impl ChangePreview {
         match self.scope {
             ChangeScope::ThisPart => 1,
         }
+    }
+
+    /// Whether this comparison is of `shown`, the row the list shows
+    /// picked, and the chips do not hide it: only then do Next and Change
+    /// act.
+    pub fn compares_shown(&self, shown: Option<Uuid>) -> bool {
+        let row = self.resolved.row_id;
+        shown == Some(row) && !self.session.hidden.contains(&row)
     }
 }
 

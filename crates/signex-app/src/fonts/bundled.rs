@@ -21,9 +21,12 @@ pub const ROBOTO_REGULAR: &[u8] = include_bytes!("../../assets/fonts/Roboto-Regu
 pub const ROBOTO_BOLD: &[u8] = include_bytes!("../../assets/fonts/Roboto-Bold.ttf");
 
 /// Inter — the default UI chrome face (Graphite look). Static faces, unmodified.
+/// Every weight the chrome asks for (400, 500, 600, 700) is bundled: a weight
+/// with no Inter face draws in another family (#3004).
 pub const INTER_REGULAR: &[u8] = include_bytes!("../../assets/fonts/Inter-Regular.ttf");
 pub const INTER_MEDIUM: &[u8] = include_bytes!("../../assets/fonts/Inter-Medium.ttf");
 pub const INTER_SEMIBOLD: &[u8] = include_bytes!("../../assets/fonts/Inter-SemiBold.ttf");
+pub const INTER_BOLD: &[u8] = include_bytes!("../../assets/fonts/Inter-Bold.ttf");
 
 /// JetBrains Mono — chrome-only monospace (shortcuts, values, badges). Never
 /// canvas text: canvas extents depend on the Iosevka default.
@@ -33,7 +36,7 @@ pub const JETBRAINS_MONO_MEDIUM: &[u8] =
     include_bytes!("../../assets/fonts/JetBrainsMono-Medium.ttf");
 
 /// Every bundled face, in the order `main` registers them.
-pub const BUNDLED_FONTS: [&[u8]; 11] = [
+pub const BUNDLED_FONTS: [&[u8]; 12] = [
     IOSEVKA_REGULAR,
     IOSEVKA_BOLD,
     IOSEVKA_ITALIC,
@@ -43,6 +46,7 @@ pub const BUNDLED_FONTS: [&[u8]; 11] = [
     INTER_REGULAR,
     INTER_MEDIUM,
     INTER_SEMIBOLD,
+    INTER_BOLD,
     JETBRAINS_MONO_REGULAR,
     JETBRAINS_MONO_MEDIUM,
 ];
@@ -83,5 +87,33 @@ mod license_tests {
             checked += 1;
         }
         assert_eq!(checked, super::BUNDLED_FONTS.len());
+    }
+}
+
+#[cfg(test)]
+mod weight_tests {
+    /// #3004 — the bundled set, which the GUI registers and a headless run
+    /// measures with (`measure::install_hermetic`), holds an upright face of
+    /// the default UI family at every weight the chrome asks for (400, 500,
+    /// 600, 700), so no weight falls back to another family.
+    #[test]
+    fn the_ui_family_has_an_upright_face_at_every_chrome_weight() {
+        let mut db = fontdb::Database::new();
+        for face in super::BUNDLED_FONTS {
+            db.load_font_data(face.to_vec());
+        }
+        let family = signex_widgets::ui_font::DEFAULT_FAMILY;
+        let weights: Vec<u16> = db
+            .faces()
+            .filter(|face| face.style == fontdb::Style::Normal)
+            .filter(|face| face.families.iter().any(|(name, _)| name == family))
+            .map(|face| face.weight.0)
+            .collect();
+        for weight in [400, 500, 600, 700] {
+            assert!(
+                weights.contains(&weight),
+                "no {family} face at weight {weight}: {weights:?}"
+            );
+        }
     }
 }

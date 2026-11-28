@@ -73,10 +73,11 @@ pub(crate) fn region_from_json(region: &serde_json::Value) -> crate::dock::Regio
     let stored = region.get("panels").and_then(|v| v.as_array());
     for key in stored.into_iter().flatten().filter_map(|val| val.as_str()) {
         match parse_panel_kind(key) {
-            // Layer Stack is a document tab now, never docked. A stored
-            // SCH Filter panel reads as Filter, which covers it (mockup
-            // rows 40, 55); it is not shown twice.
-            Some(crate::panels::PanelKind::LayerStack) => {}
+            // Layer Stack and Export Jobs are document tabs now, never
+            // docked (mockup row 114). A stored SCH Filter panel reads as
+            // Filter, which covers it (mockup rows 40, 55); it is not shown
+            // twice.
+            Some(crate::panels::PanelKind::LayerStack | crate::panels::PanelKind::OutputJobs) => {}
             Some(kind) => panels.push(kind),
             None if crate::extension::is_extension_id(key) => {
                 kept.push(crate::dock::KeptPanelKey {

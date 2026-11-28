@@ -37,7 +37,6 @@ pub(super) fn push_symbol_sections<'a>(
         return super::pins::push_focused_pin_section(col, ctx, muted);
     };
     let get = |key: &str| info_row(&ctx.selection_info, key);
-    let lib_id = get("Library ID");
     let library_status = super::library_rows::LibraryStatus {
         drifted: get("Library Drift") == "Yes",
         older_instances: get("Library Older Version").parse().unwrap_or(0),
@@ -50,7 +49,7 @@ pub(super) fn push_symbol_sections<'a>(
         .iter()
         .any(|(k, _)| k == signex_engine::info_keys::FOCUSED_PIN);
 
-    col = super::part_panel::push_part_menu(col, ctx, id, &lib_id);
+    col = super::part_panel::push_part_menu(col, ctx, id);
     col = super::pins::push_focused_pin_section(col, ctx, muted);
     if let Some(banner) = super::library_rows::library_banner(id, library_status, &ctx.tokens) {
         col = col.push(banner);

@@ -91,10 +91,18 @@ impl Signex {
                 .preview
                 .as_ref()
                 .is_some_and(|p| p.panning.is_some())
+            || self
+                .ui_state
+                .workspace_layouts
+                .panes
+                .splitter_drag
+                .is_some()
     }
 
     pub(crate) fn handle_layout_drag_moved(&mut self, x: f32, y: f32) {
         self.interaction_state.last_mouse_pos = (x, y);
+        // Mockup row 207: a splitter between document panes.
+        self.drag_pane_splitter(x, y);
         // BOM column-resize drag: while a header's resize handle is
         // pressed, every mouse-move tick recomputes the column's
         // width as `start_width + (current_x - start_x)`. Min width

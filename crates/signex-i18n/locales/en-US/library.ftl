@@ -886,6 +886,32 @@ library-change-component-warn-refused = The pin mapping cannot be followed: { $r
 # The × that removes an applied range filter chip.
 library-range-filter-remove = ✕
 
+## Library dialog commands (#3013): why a command did nothing.
+
+library-command-needs = `{ $command }` needs the operand `{ $operand }`
+library-command-library-unknown = No open library is { $library }; name an open library by its id or its .snxlib path
+library-command-options-open = The Document Options dialog is open on { $name }; close it first
+library-command-sheet-color = `sheet_color` is one of black, white, dark_gray, light_gray, cream
+library-command-unit = `unit` is one of mm, mil, inch, um
+library-command-updates-none = No library updates wait for { $sheet }
+library-command-updates-designator = No library update waits for { $designator } on { $sheet }
+library-command-updates-field = `use_library` takes designator:field, the field one of footprint, manufacturer, mpn; { $item } is not one
+library-command-updates-no-conflict = { $designator } has no { $field } conflict with its library row
+library-command-stock-not-open = The stock library is not open
+library-command-stock-kind = `kind` is symbol or footprint
+library-command-stock-unknown = The stock library has no { $kind } named { $name }
+library-command-stock-many = { $count } stock primitives of that kind are named { $name }; nothing was copied
+library-command-stock-busy = The Copy to Library dialog is open for { $name }; finish it first
+library-command-stock-running = A copy of { $name } is already running
+library-command-recovery-action = `action` is one of locate, remove, skip, reinit, read_only
+library-command-recovery-located = `locate` needs the operand `located`, the .snxlib at its new place
+library-command-recovery-not-missing = { $path } is not a missing library of an open project
+library-command-recovery-other = The recovery of { $path } is open; answer it first
+library-command-recovery-no-git = No Git Repository Missing recovery is open for { $path }; open the library to raise it
+library-command-new-open = The New Library dialog is open for { $path }; finish it first
+library-command-new-lfs = `lfs=true` needs `git=true`: Git LFS works only in a Git repository
+library-command-new-not-registered = { $path } cannot be a library path; nothing was registered
+
 # Library import (#3113, #3114). $env is an environment variable.
 library-import-not-installed = No library converter was found. Install one as a program named signex-<format>-import on PATH, or list converter programs in { $env }.
 # $env is an environment variable, $path a file path.

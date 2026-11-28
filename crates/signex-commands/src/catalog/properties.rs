@@ -172,6 +172,109 @@ pub(super) const PROPERTIES: &[CommandMetadata] = &[
         operands: operands::SHEET_VARIABLE,
         ..CommandMetadata::DEFAULT
     },
+    // #1114, mockup row 203: a text note's Format row, Plain or Rich text.
+    CommandMetadata {
+        id: "set_text_note_format",
+        category: "edit",
+        label: command_ids::CMD_SET_TEXT_NOTE_FORMAT,
+        menu_label: None,
+        group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::MUTATES,
+        operands: operands::TEXT_NOTE_FORMAT,
+        ..CommandMetadata::DEFAULT
+    },
+    // #1114, mockup row 203: a rich note's Frame and Size sections, Apply of
+    // its in-place editor and the editor's actions (open, Cancel, a toolbar
+    // button, Ctrl+click on a link), and its compile with what it found.
+    CommandMetadata {
+        id: "set_text_note_frame",
+        category: "edit",
+        label: command_ids::CMD_SET_TEXT_NOTE_FRAME,
+        menu_label: None,
+        group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::MUTATES,
+        operands: operands::TEXT_NOTE_FRAME,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "set_text_note_size",
+        category: "edit",
+        label: command_ids::CMD_SET_TEXT_NOTE_SIZE,
+        menu_label: None,
+        group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::MUTATES,
+        operands: operands::TEXT_NOTE_SIZE,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "apply_rich_note_edit",
+        category: "edit",
+        label: command_ids::CMD_APPLY_RICH_NOTE_EDIT,
+        menu_label: None,
+        group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::MUTATES,
+        operands: operands::RICH_NOTE_APPLY,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "edit_rich_note",
+        category: "edit",
+        label: command_ids::CMD_EDIT_RICH_NOTE,
+        menu_label: None,
+        group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::NONE,
+        operands: operands::RICH_NOTE_EDIT,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "cancel_rich_note_edit",
+        category: "edit",
+        label: command_ids::CMD_CANCEL_RICH_NOTE_EDIT,
+        menu_label: None,
+        group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::NONE,
+        operands: operands::RICH_NOTE,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "wrap_rich_note_selection",
+        category: "edit",
+        label: command_ids::CMD_WRAP_RICH_NOTE_SELECTION,
+        menu_label: None,
+        group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::NONE,
+        operands: operands::RICH_NOTE_WRAP,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "open_rich_note_link",
+        category: "edit",
+        label: command_ids::CMD_OPEN_RICH_NOTE_LINK,
+        menu_label: None,
+        group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::NONE,
+        operands: operands::RICH_NOTE_LINK,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "compile_rich_note",
+        category: "edit",
+        label: command_ids::CMD_COMPILE_RICH_NOTE,
+        menu_label: None,
+        group: CommandGroup::Schematic,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::NONE,
+        operands: operands::RICH_NOTE,
+        ..CommandMetadata::DEFAULT
+    },
     // #1277: a part joins two named nets on purpose. No Properties row yet
     // (no mockup row); the CLI, an agent and placement from a Net Tie
     // library symbol set it.

@@ -92,21 +92,26 @@ fn export_pdf_task(
     options: signex_output::PdfOptions,
     path: PathBuf,
     source: PathBuf,
+    images: crate::app::images::export::ExportImageReads,
 ) -> Task<Message> {
     let target = path.clone();
     let failed_source = source.clone();
     Task::perform(
         async move {
-            tokio::task::spawn_blocking(move || build_and_write_pdf(&ctx, &options, &path, &source))
-                .await
-                .unwrap_or_else(|e| ExportWriteOutcome {
-                    path: target,
-                    result: Err(format!("PDF export failed: {e}")),
-                    success_log: String::new(),
-                    advisory: None,
-                    warnings: Vec::new(),
-                    preview_source: Some(failed_source),
-                })
+            tokio::task::spawn_blocking(move || {
+                // The placed images' files are read here, off the UI thread (#1116).
+                let options = images.into_options(options);
+                build_and_write_pdf(&ctx, &options, &path, &source)
+            })
+            .await
+            .unwrap_or_else(|e| ExportWriteOutcome {
+                path: target,
+                result: Err(format!("PDF export failed: {e}")),
+                success_log: String::new(),
+                advisory: None,
+                warnings: Vec::new(),
+                preview_source: Some(failed_source),
+            })
         },
         |outcome| Message::Export(ExportMsg::FileWritten(Box::new(outcome))),
     )
@@ -247,7 +252,8 @@ impl Signex {
         }
         // Held like any export write, so a folder rename waits for it.
         self.begin_project_write(&path);
-        export_pdf_task(ctx, options, path, source)
+        let images = self.export_image_reads(&ctx);
+        export_pdf_task(ctx, options, path, source, images)
     }
 
     /// An export failed for real (building or writing the file): the notice

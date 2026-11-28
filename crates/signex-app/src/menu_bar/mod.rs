@@ -246,6 +246,8 @@ pub struct MenuContext<'a> {
     /// What View ▸ Window ▸ Layouts lists: the active layout, your layouts
     /// and the Reset row (mockup row 166).
     pub(crate) layouts: crate::workspace_layouts::LayoutsMenu,
+    /// What each tile row of View ▸ Window previews (mockup row 207).
+    pub(crate) tile_previews: model::TilePreviews,
     /// The rows the installed extensions add, each at the end of its root
     /// menu (#2495). Empty in the Community binary.
     pub(crate) extension_rows: Vec<crate::extension::points::MenuRow>,
@@ -267,6 +269,7 @@ impl Default for MenuContext<'_> {
             notebook_badges: true,
             pcb_sync: None,
             layouts: Default::default(),
+            tile_previews: Default::default(),
             extension_rows: Vec::new(),
             extension_panels: Vec::new(),
         }
@@ -370,6 +373,7 @@ impl MenuColors {
 mod graphite;
 pub mod model;
 pub(crate) mod native;
+mod tile_preview;
 mod view;
 
 #[cfg(test)]

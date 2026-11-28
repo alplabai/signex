@@ -171,6 +171,13 @@ impl Signex {
                 None => Task::none(),
             };
         }
+        // mockup row 114: a `.snxout` row opens its Export Job tab.
+        if crate::app::output_job::opens_by_name(&label) {
+            return match self.tree_path_to_file_path(path) {
+                Some(file) => self.open_output_job_tab(file),
+                None => Task::none(),
+            };
+        }
         match self.open_project_tree_document(path, label) {
             Ok(task) => task,
             Err(error) => {
@@ -367,6 +374,11 @@ impl Signex {
                     return self.open_variant_manager(project_idx);
                 }
             }
+            ProjectTreeAction::OpenDesignChecklist(_) => {
+                if let Some(&project_idx) = tree_path.first() {
+                    return self.open_design_checklist_at(project_idx);
+                }
+            }
             ProjectTreeAction::AddExistingToProject(_) => {
                 return self.add_existing_to_project(tree_path);
             }
@@ -429,6 +441,7 @@ fn tree_row_opens(node: &signex_widgets::tree_view::TreeNode) -> bool {
             | TreeIcon::SnxSymbol
             | TreeIcon::SnxBlockDiagram
     ) || crate::app::gerber_viewer::opens_by_name(&node.label)
+        || crate::app::output_job::opens_by_name(&node.label)
         || crate::app::notebook_project::is_notebook_row(&node.label)
 }
 

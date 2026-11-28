@@ -406,14 +406,23 @@ fn body_fills(sheet: &SchematicSheet, tint: Option<(f32, f32, f32)>) -> Vec<(f32
         ..SchematicPalette::classic()
     };
     let mut out = Vec::new();
-    push_symbol_body_fills(&mut out, sheet, &xform, &palette, &HashSet::new());
+    push_symbol_body_fills(
+        &mut out,
+        sheet,
+        &xform,
+        &palette,
+        &NotFitted::default(),
+        &mut LayerSpans::default(),
+    );
     out.iter()
         .map(|e| match e {
             SvgElement::Path { style, .. } => {
                 assert_eq!(style.stroke_rgb, None, "the fill pass draws no outline");
                 style.fill_rgb.expect("a body fill")
             }
-            SvgElement::Text { .. } => panic!("the fill pass draws no text"),
+            SvgElement::Text { .. } | SvgElement::Image { .. } => {
+                panic!("the fill pass draws no text or image")
+            }
         })
         .collect()
 }
@@ -436,7 +445,7 @@ fn a_body_with_its_own_fill_keeps_it_over_the_tint() {
         .iter()
         .filter_map(|e| match e {
             SvgElement::Path { style, .. } => Some(style.fill_rgb),
-            SvgElement::Text { .. } => None,
+            SvgElement::Text { .. } | SvgElement::Image { .. } => None,
         })
         .collect();
     assert_eq!(own, vec![Some(SchematicPalette::classic().symbol_fill)]);

@@ -109,6 +109,7 @@ fn the_project_root_menu_has_the_m20_rows_in_order() {
             SEP,
             "Project Options...",
             "Variant Manager",
+            "Design Checklist",
             "Enable Version Control...",
             SEP,
             "Close Project Documents",
@@ -254,6 +255,24 @@ fn the_variant_manager_row_opens_the_variants_section() {
             .all(|tab| tab.kind.as_project().is_none()),
         "no Project tab opens on the way"
     );
+}
+
+/// Mockup row 206: the project row's Design Checklist opens that project's
+/// Design Checklist tab, through the catalog command.
+#[test]
+fn the_design_checklist_row_opens_the_projects_checklist_tab() {
+    let mut app = app_with_tree();
+    let id = app.document_state.projects[0].id;
+    // Who the user is, so opening the tab asks nothing of git.
+    app.ui_state.validation_panels.identity = crate::panels::UserIdentity::Known("j.berg".into());
+    let rows = rows_at(&app, &[0]);
+    let row = item(&rows, "Design Checklist");
+    assert!(!row.disabled);
+    assert!(row.icon.is_some());
+    let press = row.on_press.clone().expect("a live row");
+    let _ = app.update(press);
+    let tab = &app.document_state.tabs[app.document_state.active_tab];
+    assert!(matches!(tab.kind, crate::app::TabKind::DesignChecklist(p) if p == id));
 }
 
 /// The Planned flyout lists the four planned project features, each greyed

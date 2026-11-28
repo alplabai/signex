@@ -173,6 +173,7 @@ pub(super) fn menu_context_in(app: &Signex, window: Option<iced::window::Id>) ->
         notebook_badges: !app.ui_state.annotations.badges_hidden,
         pcb_sync: app.pcb_sync_label(window),
         layouts: app.layouts_menu(),
+        tile_previews: app.tile_previews(),
         extension_rows: app.extensions().menu_rows(),
         extension_panels: app.extensions().panels(),
     }

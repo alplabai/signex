@@ -410,6 +410,24 @@ pub enum FootprintEditorMsg {
     /// backdrop click, and Esc.
     AlignCancel,
 
+    /// #3013 — `footprint_move_pads`: move the pads at `pads` (indices
+    /// into `state.pads`) by (`dx`, `dy`) mm, one undo step. The edit
+    /// Move Selection By's Move makes on the selection.
+    PadsMoveRequested {
+        pads: Vec<usize>,
+        dx: f64,
+        dy: f64,
+    },
+
+    /// #3013 — `footprint_align_pads`: align the pads at `pads` on each
+    /// chosen axis, one undo step. The edit Align Selection's Align makes
+    /// on the selection.
+    PadsAlignRequested {
+        pads: Vec<usize>,
+        horizontal: Option<crate::library::editor::footprint::state::AlignOp>,
+        vertical: Option<crate::library::editor::footprint::state::AlignOp>,
+    },
+
     /// Active-bar Selection → Select All. Pads mode picks the first
     /// pad; Sketch mode picks the first sketch entity.
     ActiveBarSelectAll,

@@ -3,7 +3,8 @@
 //! sketch alike. Rows: Edit value, Make parameter and Convert to reference
 //! (dimensions only; a reference dimension shows Make driving instead and
 //! greys the value rows), Suppress, Select constrained entities, Show
-//! conflicts (only when the constraint is in one), Delete. A pattern glyph
+//! conflicts (greyed, "none", when the constraint is in no conflict),
+//! Delete. A pattern glyph
 //! opens the same card with the pattern's rows: one Edit row per value,
 //! then Delete pattern; a mirror glyph offers only Delete mirror. Greyed
 //! rows carry a tooltip that says why. Drawn with the shared dropdown
@@ -223,7 +224,35 @@ fn driven_rows(id: ConstraintId) -> [MenuRow; 3] {
     ]
 }
 
-/// The rows of constraint `id` of `kind`. `in_conflict` adds Show
+/// Suppress, greyed until a sketch can store a suppressed constraint
+/// (#2687). Its hint says so on the row, not only in the tooltip.
+fn suppress_row() -> MenuRow {
+    let mut row = MenuRow::greyed(
+        ids::SKETCH_CANVAS_MENU_SUPPRESS,
+        Why::plain(ids::SKETCH_CANVAS_MENU_SUPPRESS_WHY),
+    );
+    row.hint = Some(ids::SKETCH_CANVAS_MENU_SUPPRESS_HINT);
+    row
+}
+
+/// Show conflicts (mockup row 188), on every constraint: it selects the
+/// conflict when `id` is in one, else it is greyed with the hint "none".
+fn show_conflicts_row(id: ConstraintId, in_conflict: bool) -> MenuRow {
+    if in_conflict {
+        return MenuRow::new(
+            ids::SKETCH_CANVAS_MENU_SHOW_CONFLICTS,
+            SketchCanvasMsg::ConflictsShown(id),
+        );
+    }
+    let mut row = MenuRow::greyed(
+        ids::SKETCH_CANVAS_MENU_SHOW_CONFLICTS,
+        Why::plain(ids::SKETCH_CANVAS_MENU_SHOW_CONFLICTS_NONE_WHY),
+    );
+    row.hint = Some(ids::SKETCH_CANVAS_MENU_SHOW_CONFLICTS_NONE);
+    row
+}
+
+/// The rows of constraint `id` of `kind`. `in_conflict` enables Show
 /// conflicts.
 pub fn constraint_rows(
     id: ConstraintId,
@@ -250,20 +279,12 @@ fn rows_bound_to(
             rows.extend(driving_rows(id, bound));
         }
     }
-    rows.push(MenuRow::greyed(
-        ids::SKETCH_CANVAS_MENU_SUPPRESS,
-        Why::plain(ids::SKETCH_CANVAS_MENU_SUPPRESS_WHY),
-    ));
+    rows.push(suppress_row());
     rows.push(MenuRow::new(
         ids::SKETCH_CANVAS_MENU_SELECT_ENTITIES,
         SketchCanvasMsg::ConstrainedEntitiesSelected(id),
     ));
-    if in_conflict {
-        rows.push(MenuRow::new(
-            ids::SKETCH_CANVAS_MENU_SHOW_CONFLICTS,
-            SketchCanvasMsg::ConflictsShown(id),
-        ));
-    }
+    rows.push(show_conflicts_row(id, in_conflict));
     let mut delete = MenuRow::new(
         ids::SKETCH_CANVAS_MENU_DELETE,
         SketchCanvasMsg::ConstraintDeleted(id),
@@ -476,6 +497,7 @@ mod tests {
                 ids::SKETCH_CANVAS_MENU_CONVERT_REFERENCE,
                 ids::SKETCH_CANVAS_MENU_SUPPRESS,
                 ids::SKETCH_CANVAS_MENU_SELECT_ENTITIES,
+                ids::SKETCH_CANVAS_MENU_SHOW_CONFLICTS,
                 ids::SKETCH_CANVAS_MENU_DELETE,
             ]
         );
@@ -487,22 +509,60 @@ mod tests {
             [
                 ids::SKETCH_CANVAS_MENU_SUPPRESS,
                 ids::SKETCH_CANVAS_MENU_SELECT_ENTITIES,
+                ids::SKETCH_CANVAS_MENU_SHOW_CONFLICTS,
                 ids::SKETCH_CANVAS_MENU_DELETE,
             ]
         );
     }
 
+    /// #3015: Show conflicts is on every constraint's menu (mockup row 188);
+    /// it acts only on a constraint in conflict and says "none" otherwise.
     #[test]
-    fn show_conflicts_appears_only_for_a_constraint_in_conflict() {
+    fn show_conflicts_acts_in_a_conflict_and_is_greyed_with_none_outside_one() {
         let id = ConstraintId::new();
         let sketch = SketchData::default();
         let kind = distance(DimTarget::Literal(1.0));
-        let has = |rows: Vec<MenuRow>| {
-            rows.iter()
-                .any(|r| r.label == ids::SKETCH_CANVAS_MENU_SHOW_CONFLICTS)
+        let row = |in_conflict| {
+            constraint_rows(id, &kind, &sketch, in_conflict)
+                .into_iter()
+                .find(|r| r.label == ids::SKETCH_CANVAS_MENU_SHOW_CONFLICTS)
+                .expect("Show conflicts is on the menu")
         };
-        assert!(!has(constraint_rows(id, &kind, &sketch, false)));
-        assert!(has(constraint_rows(id, &kind, &sketch, true)));
+        let calm = row(false);
+        assert_eq!(calm.action, None);
+        assert_eq!(
+            calm.why,
+            Some(Why::plain(ids::SKETCH_CANVAS_MENU_SHOW_CONFLICTS_NONE_WHY))
+        );
+        assert_eq!(calm.hint, Some(ids::SKETCH_CANVAS_MENU_SHOW_CONFLICTS_NONE));
+        let fighting = row(true);
+        assert_eq!(
+            fighting.action,
+            Some(MenuAction::Canvas(SketchCanvasMsg::ConflictsShown(id)))
+        );
+        assert_eq!(fighting.why, None);
+        assert_eq!(fighting.hint, None);
+    }
+
+    /// #3015: Suppress says why it is unavailable on the row itself.
+    #[test]
+    fn suppress_is_greyed_with_its_reason_on_the_row() {
+        let rows = constraint_rows(
+            ConstraintId::new(),
+            &distance(DimTarget::Literal(1.0)),
+            &SketchData::default(),
+            false,
+        );
+        let suppress = rows
+            .iter()
+            .find(|r| r.label == ids::SKETCH_CANVAS_MENU_SUPPRESS)
+            .expect("Suppress is on the menu");
+        assert_eq!(suppress.action, None);
+        assert_eq!(
+            suppress.why,
+            Some(Why::plain(ids::SKETCH_CANVAS_MENU_SUPPRESS_WHY))
+        );
+        assert_eq!(suppress.hint, Some(ids::SKETCH_CANVAS_MENU_SUPPRESS_HINT));
     }
 
     #[test]
@@ -571,6 +631,7 @@ mod tests {
                 ids::SKETCH_CANVAS_MENU_MAKE_DRIVING,
                 ids::SKETCH_CANVAS_MENU_SUPPRESS,
                 ids::SKETCH_CANVAS_MENU_SELECT_ENTITIES,
+                ids::SKETCH_CANVAS_MENU_SHOW_CONFLICTS,
                 ids::SKETCH_CANVAS_MENU_DELETE,
             ]
         );
@@ -675,5 +736,42 @@ mod tests {
             assert_eq!(item.disabled, item.tooltip.is_some(), "{}", item.label);
         }
         assert!(matches!(&entries[0], DropdownEntry::Header(h) if h == "Distance"));
+    }
+
+    /// #3015: the rendered menu shows Show conflicts greyed with "none"
+    /// and Suppress greyed with its reason as the row hint, in en-US.
+    #[test]
+    fn the_rendered_menu_shows_show_conflicts_and_why_suppress_is_off() {
+        let mut state = FootprintEditorState::empty();
+        let id = ConstraintId::new();
+        let sketch = holding(id, distance(DimTarget::Literal(1.0)), false);
+        state.sketch_overlay.menu = Some(
+            crate::library::editor::footprint::state::sketch_overlay::CanvasMenu {
+                target: MenuTarget::Constraint(id),
+                x: 0.0,
+                y: 0.0,
+            },
+        );
+        let i18n = I18n::new(&signex_i18n::LanguagePref::Locale("en-US".into()));
+        let entries = entries(&state, &sketch, PathBuf::from("t"), &i18n).expect("open");
+        let item = |label: &str| {
+            entries
+                .iter()
+                .find_map(|e| match e {
+                    DropdownEntry::Item(item) if item.label == label => Some(item),
+                    _ => None,
+                })
+                .unwrap_or_else(|| panic!("{label} is on the menu"))
+        };
+        let show = item("Show conflicts");
+        assert!(show.disabled);
+        assert_eq!(show.shortcut.as_deref(), Some("none"));
+        assert_eq!(
+            show.tooltip.as_deref(),
+            Some("This constraint is in no conflict.")
+        );
+        let suppress = item("Suppress");
+        assert!(suppress.disabled);
+        assert_eq!(suppress.shortcut.as_deref(), Some("not available yet"));
     }
 }

@@ -2,8 +2,8 @@
 //! outline with its line width, pad clearance and pin 1 marker, and Assembly
 //! outline with the body size. A switch that is off greys its fields.
 
-use iced::widget::{Column, container, row, stack};
-use iced::{Element, Length, Padding, Widget as _};
+use iced::widget::{Column, container, row};
+use iced::{Element, Length, Widget as _};
 use signex_i18n::{ids, t};
 use signex_widgets::enable_section::EnableSection;
 use signex_widgets::{Label, text};
@@ -90,18 +90,18 @@ fn silk_section<'a>(cx: Ctx<'a, '_>) -> Element<'a, PanelMsg> {
     if fp.pin_one_dot_missing {
         body = body.push(pin_one_missing_note(cx));
     }
-    let section = EnableSection::new(
-        t!(i18n, ids::EDITORS_FP_PROPS_SILK_OUTLINE),
-        settings.silk_outline,
-    )
-    .on_toggle(|_| msg(Edit::SilkOutlineToggled))
-    .view(enable_section_style(tokens), body.boxed());
     let note = if fp.body_extent_mm.is_some() {
         t!(i18n, ids::EDITORS_FP_PROPS_SILK_CLIPPED)
     } else {
         t!(i18n, ids::EDITORS_FP_PROPS_NO_BODY)
     };
-    with_header_note(section, note, cx)
+    EnableSection::new(
+        t!(i18n, ids::EDITORS_FP_PROPS_SILK_OUTLINE),
+        settings.silk_outline,
+    )
+    .on_toggle(|_| msg(Edit::SilkOutlineToggled))
+    .trailing(header_note(note, cx))
+    .view(enable_section_style(tokens), body.boxed())
 }
 
 fn pin_one_row<'a>(cx: Ctx<'a, '_>) -> Element<'a, PanelMsg> {
@@ -141,12 +141,6 @@ fn assembly_section<'a>(cx: Ctx<'a, '_>) -> Element<'a, PanelMsg> {
         fp, tokens, i18n, ..
     } = cx;
     let body: Column<Element<'a, PanelMsg>> = Column::new().width(Length::Fill);
-    let section = EnableSection::new(
-        t!(i18n, ids::EDITORS_FP_PROPS_ILLUSTRATION_ASSEMBLY),
-        fp.generated.assembly_outline,
-    )
-    .on_toggle(|_| msg(Edit::AssemblyOutlineToggled))
-    .view(enable_section_style(tokens), body.boxed());
     let note = match fp.body_extent_mm {
         Some([x0, y0, x1, y1]) => t!(
             i18n,
@@ -156,24 +150,23 @@ fn assembly_section<'a>(cx: Ctx<'a, '_>) -> Element<'a, PanelMsg> {
         ),
         None => t!(i18n, ids::EDITORS_FP_PROPS_NO_BODY),
     };
-    with_header_note(section, note, cx)
+    EnableSection::new(
+        t!(i18n, ids::EDITORS_FP_PROPS_ILLUSTRATION_ASSEMBLY),
+        fp.generated.assembly_outline,
+    )
+    .on_toggle(|_| msg(Edit::AssemblyOutlineToggled))
+    .trailing(header_note(note, cx))
+    .view(enable_section_style(tokens), body.boxed())
 }
 
-/// `note` right-aligned on the section's header line.
-fn with_header_note<'a>(
-    section: Element<'a, PanelMsg>,
-    note: impl Into<Label<'a>>,
-    cx: Ctx<'a, '_>,
-) -> Element<'a, PanelMsg> {
-    let note = text(note).size(TS.caption).color(resolve(cx.tokens).ink4);
-    let note = container(note)
-        .padding(Padding {
-            top: SP.m,
-            right: SP.l,
-            bottom: 0.0,
-            left: 0.0,
-        })
+/// `note` for a section's header line: right-aligned in the room the
+/// header label leaves, wrapping there rather than running into the label
+/// (#3008).
+fn header_note<'a>(note: impl Into<Label<'a>>, cx: Ctx<'a, '_>) -> Element<'a, PanelMsg> {
+    text(note)
+        .size(TS.caption)
+        .color(resolve(cx.tokens).ink4)
         .width(Length::Fill)
-        .align_x(iced::alignment::Horizontal::Right);
-    stack![section, note].width(Length::Fill).boxed()
+        .align_x(iced::alignment::Horizontal::Right)
+        .boxed()
 }

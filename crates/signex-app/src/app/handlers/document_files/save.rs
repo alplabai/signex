@@ -23,6 +23,13 @@ pub(super) fn file_label(path: &std::path::Path) -> String {
     )
 }
 
+/// The Save Failed sentence for a write of `path` that failed: "<file> could
+/// not be written." (mockup row 11).
+pub(super) fn write_failed_sentence(path: &std::path::Path) -> signex_i18n::Translatable {
+    signex_i18n::Translatable::new(signex_i18n::ids::NOTICE_SAVE_FAILED_FILE)
+        .arg("file", file_label(path))
+}
+
 /// `text` cut to at most `max_bytes`, on a char boundary.
 fn clip_to_bytes(text: &str, max_bytes: usize) -> &str {
     let mut end = text.len().min(max_bytes);
@@ -83,6 +90,13 @@ impl Signex {
             && !self.settle_board_sketch_of(Some(shown.as_path()))
         {
             return Ok(iced::Task::none());
+        }
+        // An Export Job writes its draft (`app/output_job/document`).
+        if let Some(tab) = self.document_state.tabs.get(self.document_state.active_tab)
+            && tab.kind.is_output_job()
+        {
+            let job = tab.path.clone();
+            return Ok(self.write_output_job_draft(&job, None));
         }
         let key = match self.document_state.tabs.get(self.document_state.active_tab) {
             Some(tab) => {
@@ -255,6 +269,26 @@ impl Signex {
         }
     }
 
+    /// The write of `path` failed: [`Self::report_save_failure`], with the
+    /// card's sentence naming the file (mockup row 11). The path and the OS
+    /// error stay in its system block; `context` stays the log label.
+    pub(crate) fn report_write_failure(
+        &mut self,
+        path: &std::path::Path,
+        context: &str,
+        error: &anyhow::Error,
+    ) {
+        let raised_here = self.document_view.error_notice.is_none();
+        self.report_save_failure(context, error);
+        if !raised_here || crate::app::read_only_project::ReadOnlyProjectSave::find(error).is_some()
+        {
+            return;
+        }
+        if let Some(notice) = self.document_view.error_notice.as_mut() {
+            notice.detail = write_failed_sentence(path);
+        }
+    }
+
     /// Start the off-thread save of the loaded project whose `.snxprj` sits
     /// at `path`. Path-keyed for the Save-All-on-close/exit dispatcher, which
     /// iterates dirty paths and cannot assume the dirty `.snxprj` belongs to
@@ -286,6 +320,9 @@ impl Signex {
     ) -> Result<iced::Task<Message>> {
         self.refuse_save_while_path_op(path)?;
         self.refuse_save_while_restoring(path)?;
+        if self.document_state.output_jobs.contains_key(path) {
+            return Ok(self.write_output_job_draft(path, None));
+        }
         match self.document_state.document_key_for_path(path) {
             Some(DocumentKey::Schematic(_)) => match self.guard_spelling_save(path)? {
                 super::dir_case::SaveGuard::Clear => {

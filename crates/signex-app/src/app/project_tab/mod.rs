@@ -14,8 +14,10 @@
 
 mod agent_journals;
 mod bom_alternates;
+mod checklist;
 mod commands;
 mod erc_annotation;
+mod fonts;
 mod general;
 mod libraries;
 mod look;
@@ -57,11 +59,20 @@ mod setup_tests;
 mod undo_routing_tests;
 
 pub(crate) use bom_alternates::{bom_add_alternate, bom_remove_alternate, bom_set_alternate_order};
+pub use checklist::{ChecklistMsg, ChecklistTabState};
+pub(crate) use checklist::{
+    project_add_checklist_item, project_checklist_templates, project_export_checklist_csv,
+    project_import_checklist, project_open_checklist_link, project_remove_checklist_item,
+    project_reset_checklist, project_run_checklist, project_save_checklist_template,
+    project_set_checklist_item, project_set_checklist_state, project_start_checklist,
+};
 pub(crate) use commands::{
     project_add_variant, project_move_library, project_move_sheet, project_remove_variant,
     project_rename_variant, project_set_active_variant, project_set_annotate_numbering,
     project_set_annotate_undo, project_set_default_variant, project_set_version_control,
 };
+pub use fonts::{FontsTabState, ProjectFontsMsg};
+pub(crate) use fonts::{project_add_font, project_remove_font, project_set_font_license};
 pub use general::ProjectGeneralFacts;
 pub use parameters::ParameterGroup;
 #[cfg(test)]
@@ -101,6 +112,8 @@ pub enum ProjectSection {
     ErcAnnotation,
     /// Widths and sizes of unset schematic items (#2026).
     SchematicDefaults,
+    /// Font files carried in `assets/fonts/` (#1178).
+    Fonts,
     /// What new PCBs and sheets start from (#2232).
     Setup,
     /// The project's repository and commit on save (#1693).
@@ -111,7 +124,7 @@ pub enum ProjectSection {
 
 impl ProjectSection {
     /// Every section, in list order.
-    pub const ALL: [ProjectSection; 10] = [
+    pub const ALL: [ProjectSection; 11] = [
         ProjectSection::General,
         ProjectSection::Parameters,
         ProjectSection::Sheets,
@@ -119,6 +132,7 @@ impl ProjectSection {
         ProjectSection::Libraries,
         ProjectSection::ErcAnnotation,
         ProjectSection::SchematicDefaults,
+        ProjectSection::Fonts,
         ProjectSection::Setup,
         ProjectSection::VersionControl,
         ProjectSection::Requirements,
@@ -136,6 +150,7 @@ impl ProjectSection {
             ProjectSection::ErcAnnotation => ids::PROJECT_SECTION_ERC_ANNOTATION,
             ProjectSection::VersionControl => ids::PROJECT_SECTION_VERSION_CONTROL,
             ProjectSection::SchematicDefaults => ids::PROJECT_SECTION_SCHEMATIC_DEFAULTS,
+            ProjectSection::Fonts => ids::PROJECT_SECTION_FONTS,
             ProjectSection::Setup => ids::PROJECT_SECTION_SETUP,
             ProjectSection::Requirements => ids::PROJECT_SECTION_REQUIREMENTS,
         }
@@ -200,6 +215,12 @@ pub struct ProjectTabState {
     pub variant_manager: variants::VariantManagerUi,
     /// The Requirements section's drafts, refusal and last run (#2339).
     pub requirements: RequirementsTabState,
+    /// The Design Checklist tab's filter, selection, drafts and last run
+    /// (#1291).
+    pub checklist: ChecklistTabState,
+    /// The Fonts section's license drafts, refusal and add in progress
+    /// (#1178).
+    pub fonts: FontsTabState,
     /// The Parameters filter as typed (mockup row 30).
     pub parameter_filter: String,
     /// The Parameters Title block group is folded shut.
@@ -450,6 +471,21 @@ pub enum ProjectTabMsg {
     Requirements {
         project_id: ProjectId,
         msg: RequirementsMsg,
+    },
+    /// The Design Checklist tab (#1291, mockup row 206).
+    Checklist {
+        project_id: ProjectId,
+        msg: ChecklistMsg,
+    },
+    /// Project ▸ Design Checklist: the tab of `project`, else of the active
+    /// document's project, as Design ▸ Rules picks it.
+    ChecklistOpenRequested {
+        project: Option<ProjectId>,
+    },
+    /// The Fonts section (#1178).
+    Fonts {
+        project_id: ProjectId,
+        msg: ProjectFontsMsg,
     },
     /// A preview's value label, drag handle or larger window (mockup rows
     /// 31 and 36).

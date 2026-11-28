@@ -143,6 +143,7 @@ pdf-layer-parts = Parts
 pdf-layer-net-labels = Net labels and ports
 pdf-layer-power-ports = Power ports
 pdf-layer-title-block = Title block and border
+pdf-layer-not-fitted = Not-fitted parts (variant)
 pdf-layer-watermark = Watermark
 # Beside the Watermark layer while a watermark prints, and while none does.
 pdf-layer-watermark-locked = locked on in print
@@ -210,3 +211,24 @@ pdf-paper-size-b5 = B5
 # The pill beside a settings section that is new (mockup row 168); shown in
 # capitals.
 pdf-section-new = New
+
+## Why `export_schematic_pdf` (#1298, #2610, #2787) was refused.
+pdf-preview-command-needs-watermark = `{ $name }` needs `watermark`
+pdf-preview-command-watermark-text = `watermark` is draft, confidential or the text to print
+pdf-preview-command-watermark-opacity = `watermark_opacity` is a whole percent from 0 to 100, not `{ $value }`
+pdf-preview-command-watermark-angle = `watermark_angle` is degrees from -360 to 360, not `{ $value }`
+pdf-preview-command-watermark-pages = `watermark_pages` is all or first, not `{ $value }`
+pdf-preview-command-needs-document = needs the operand `document`
+pdf-preview-command-document = not an open sheet: { $reason }
+pdf-preview-command-not-a-sheet = { $name } is a { $kind }, not a schematic sheet
+pdf-preview-command-no-file = { $name } has no file
+pdf-preview-command-not-open = { $name } is not open: open the sheet first
+pdf-preview-command-needs-path = needs the operand `path`
+pdf-preview-command-sheet-closed = the sheet is not open
+pdf-preview-command-channel-naming = the project's channel naming cannot be read: fix it in Project Options
+pdf-preview-command-no-sheet = the document prints no sheet
+pdf-preview-command-bad-pages = `pages` is all, current or sheet numbers and ranges such as `1-2, 4`, not `{ $value }`
+pdf-preview-command-bad-layer = `{ $value }` is not a PDF layer (all, or one of { $layers })
+pdf-preview-command-no-layer = `layers` names no PDF layer
+pdf-preview-command-bad-variant = `variant` is one of { $variants }, not `{ $value }`
+pdf-preview-command-pages-not-printed = the pages cannot be printed: { $reason }

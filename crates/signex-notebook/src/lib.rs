@@ -55,6 +55,9 @@
 //! [`generate`] builds the design report of mockup row 201 from what the
 //! caller gathered about the project, as its own notebook file.
 //!
+//! [`note`] compiles a schematic sheet's rich text note (#1114, mockup row
+//! 203) in the same world and lowers it to vector paths.
+//!
 //! UI-free and IO-free: the caller reads the files.
 
 pub mod attachment;
@@ -64,6 +67,7 @@ pub mod edit;
 pub mod export;
 pub mod generate;
 pub mod measurement;
+pub mod note;
 pub mod report;
 pub mod scope;
 pub mod si;

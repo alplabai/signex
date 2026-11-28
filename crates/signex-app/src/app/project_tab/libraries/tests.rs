@@ -103,3 +103,68 @@ fn import_library_opens_the_dialog_for_this_project() {
     let state = app.library.import_dialog.as_deref().unwrap();
     assert!(!state.mount_for_all && state.project == Some(id));
 }
+
+/// #2994, mockup row 33: at the default tab width a typical library name
+/// shows whole in the Name column, while a long location is still cut from
+/// its start. Driven through `Signex::update` and the laid-out tab.
+#[test]
+fn a_typical_name_shows_whole_and_the_location_is_cut() {
+    use std::path::PathBuf;
+
+    use iced::Widget as _;
+    use signex_i18n::UserText;
+    use signex_types::project::{LibraryEntry, LibraryEntryKind};
+    use signex_widgets::text;
+
+    use super::super::look::mono_font;
+    use super::super::table::TS;
+    use crate::app::handlers::menu::export::tests::app_workspace;
+    use crate::app::{Message, ProjectMsg, ProjectSection, ProjectTabMsg};
+
+    /// The Project tab's area in the audit's 1440 × 900 window.
+    const TAB: iced::Size = iced::Size::new(888.0, 700.0);
+    const NAME: &str = "team-passives";
+    const STORED: &str = "../../shared/eda/libraries/team-passives.snxlib";
+    let dir = std::env::temp_dir().join(format!("signex-prj-libs-{}", uuid::Uuid::now_v7()));
+    let mut app = app_workspace(&dir.to_string_lossy(), &["a.snxsch"]);
+    app.document_state.projects[0].data.libraries = vec![LibraryEntry {
+        path: PathBuf::from(STORED),
+        kind: LibraryEntryKind::Shared,
+        library_id: None,
+        unknown: Default::default(),
+    }];
+    app.open_project_tab(0);
+    let id = app.document_state.projects[0].id;
+    let _ = app.update(Message::Project(ProjectMsg::Tab(
+        ProjectTabMsg::SectionSelected {
+            project_id: id,
+            section: ProjectSection::Libraries,
+        },
+    )));
+    let texts = crate::layout_probe::lay_out_texts(app.view_project_tab(id), TAB);
+    let name = crate::layout_probe::find(&texts, NAME).bounds;
+    let whole = crate::layout_probe::natural::<Message>(
+        text(UserText::new(NAME.to_string())).size(TS.body).boxed(),
+        NAME,
+    );
+    assert!(
+        name.width + 0.5 >= whole.width,
+        "the name is cut: {name:?} vs {whole:?}"
+    );
+    let location = crate::layout_probe::find(&texts, STORED).bounds;
+    let full = crate::layout_probe::natural::<Message>(
+        text(UserText::new(STORED.to_string()))
+            .size(TS.body)
+            .font(mono_font())
+            .boxed(),
+        STORED,
+    );
+    assert!(
+        location.width + 0.5 < full.width,
+        "the location must still be cut from its start: {location:?} vs {full:?}"
+    );
+    assert!(
+        name.x + name.width <= location.x,
+        "{name:?} runs into {location:?}"
+    );
+}

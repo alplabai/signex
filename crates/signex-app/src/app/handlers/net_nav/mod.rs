@@ -13,6 +13,7 @@ use super::super::*;
 use crate::app::state::net_nav::PendingNetAction;
 
 mod component_rows;
+mod cross_refs;
 mod highlight;
 mod hover;
 mod index_job;

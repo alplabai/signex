@@ -330,11 +330,15 @@ fn corner(window: iced::Size) -> iced::Point {
 }
 
 /// How many menus [`app_with_menu`] opens.
-const APP_MENUS: usize = 4;
+const APP_MENUS: usize = 5;
+
+/// The part whose ⋯ menu [`app_with_menu`] opens.
+const PART: uuid::Uuid = uuid::Uuid::from_u128(42);
 
 /// The app with the canvas menu, a Components row menu or the schematic
-/// Active Bar's Align menu open at (100, 100) in `window`, or the board
-/// Active Bar's Selection Filter flyout.
+/// Active Bar's Align menu open at (100, 100) in `window`, the board
+/// Active Bar's Selection Filter flyout, or a selected part's ⋯ menu in
+/// Properties (#3063), opened by its press.
 fn app_with_menu(which: usize, window: iced::Size) -> (Signex, iced::window::Id) {
     use crate::library::state::{ComponentsPanelRowKey, ComponentsRowMenu};
     let (mut app, main) = graphite_app();
@@ -354,9 +358,21 @@ fn app_with_menu(which: usize, window: iced::Size) -> (Signex, iced::window::Id)
             });
         }
         2 => app.interaction_state.active_bar_menu = Some(crate::active_bar::ActiveBarMenu::Align),
-        _ => app.interaction_state.pcb_bar_menu = Some(crate::app::PcbBarMenu::Filter),
+        3 => app.interaction_state.pcb_bar_menu = Some(crate::app::PcbBarMenu::Filter),
+        _ => {
+            app.interaction_state.last_mouse_pos = (100.0, 100.0);
+            let _ = app.update(part_message(crate::panels::PartPanelMsg::MenuToggled(PART)));
+            // The panel shows the part as selected.
+            app.document_view.panel_ctx.selected_uuid = Some(PART);
+        }
     }
     (app, main)
+}
+
+fn part_message(msg: crate::panels::PartPanelMsg) -> Message {
+    Message::Dock(crate::dock::DockMessage::Panel(
+        crate::panels::PanelMsg::Part(msg),
+    ))
 }
 
 /// The open menu's overlay layers, for [`app_with_menu`]'s `which`.
@@ -365,13 +381,14 @@ fn menu_layers(app: &Signex, which: usize, main: iced::window::Id) -> Vec<Elemen
         0 => app.context_menu_overlay(main),
         1 => app.components_row_context_menu_overlay(main),
         2 => app.active_bar_menu_overlay(main),
-        _ => vec![app.pcb_active_bar(true)],
+        3 => vec![app.pcb_active_bar(true)],
+        _ => app.part_menu_overlay(main),
     }
 }
 
-/// Mockup rows 53 and 61: the schematic canvas menu, a panel row menu and
-/// the schematic and board Active Bar menus all dim the window behind
-/// them, in one scrim.
+/// Mockup rows 53, 61 and 42: the schematic canvas menu, a panel row menu,
+/// the schematic and board Active Bar menus and the Properties part ⋯
+/// menu all dim the window behind them, in one scrim.
 #[test]
 fn every_menu_dims_the_window_behind_it_alike() {
     let window = iced::Size::new(1400.0, 900.0);
@@ -424,6 +441,14 @@ fn a_press_on_the_scrim_closes_each_menu() {
                 ))
             )
         },
+        |m| {
+            matches!(
+                m,
+                Message::Dock(crate::dock::DockMessage::Panel(
+                    crate::panels::PanelMsg::Part(crate::panels::PartPanelMsg::MenuDismissed)
+                ))
+            )
+        },
     ];
     for (which, is_close) in closed.iter().enumerate() {
         let (app, main) = app_with_menu(which, window);
@@ -438,6 +463,44 @@ fn a_press_on_the_scrim_closes_each_menu() {
             "menu {which}: a scrim press sent {messages:?}"
         );
     }
+}
+
+/// #3063: the part ⋯ menu is a card over the scrim, level with the press
+/// and inside the window; a row runs its part action; once the part is no
+/// longer selected the menu is gone.
+#[test]
+fn the_part_menu_opens_at_its_press_and_a_row_runs_its_action() {
+    let window = iced::Size::new(1400.0, 900.0);
+    let (mut app, main) = app_with_menu(APP_MENUS - 1, window);
+    let shown = lay_out_layers(app.part_menu_overlay(main), window);
+    let open = find(&shown, "Open Datasheet").bounds;
+    assert!(
+        (open.y - 100.0).abs() < 40.0,
+        "level with the press: {open:?}"
+    );
+    assert!(
+        open.x + open.width < window.width,
+        "inside the window: {open:?}"
+    );
+    let sent = messages_on_click_at(
+        stacked(app.part_menu_overlay(main)),
+        window,
+        None,
+        open.center(),
+    );
+    assert!(
+        sent.iter().any(|m| matches!(
+            m,
+            Message::Dock(crate::dock::DockMessage::Panel(
+                crate::panels::PanelMsg::Part(crate::panels::PartPanelMsg::MenuActionPicked(
+                    crate::library::PlacedPartAction::OpenDatasheet
+                ))
+            ))
+        )),
+        "{sent:?}"
+    );
+    app.document_view.panel_ctx.selected_uuid = None;
+    assert!(app.part_menu_overlay(main).is_empty());
 }
 
 /// How many menus [`in_canvas_menu`] opens.

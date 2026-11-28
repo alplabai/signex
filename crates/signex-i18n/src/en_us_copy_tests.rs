@@ -87,4 +87,9 @@ fn the_chrome_copy_of_the_settled_mockup_rows() {
         &[("board", "b.snxpcb".into())],
     );
     assert_eq!(subtitle, "Positional \u{00B7} b.snxpcb");
+    let unwritten = i18n.message_plain(
+        ids::NOTICE_SAVE_FAILED_FILE,
+        &[("file", "power.snxsch".into())],
+    );
+    assert_eq!(unwritten, "power.snxsch could not be written.");
 }

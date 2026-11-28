@@ -6,7 +6,7 @@ pub(crate) const EN_US: &str = "en-US";
 /// that are hardcoded or that overflow.
 pub(crate) const EN_XA: &str = "en-XA";
 
-pub(crate) const EN_US_SOURCES: [&str; 66] = [
+pub(crate) const EN_US_SOURCES: [&str; 69] = [
     include_str!("../locales/en-US/back_annotate.ftl"),
     include_str!("../locales/en-US/compare_board.ftl"),
     include_str!("../locales/en-US/board_query.ftl"),
@@ -55,6 +55,7 @@ pub(crate) const EN_US_SOURCES: [&str; 66] = [
     include_str!("../locales/en-US/board_panel.ftl"),
     include_str!("../locales/en-US/panel_body.ftl"),
     include_str!("../locales/en-US/requirements.ftl"),
+    include_str!("../locales/en-US/checklist.ftl"),
     include_str!("../locales/en-US/command_needs.ftl"),
     include_str!("../locales/en-US/gerber_viewer.ftl"),
     include_str!("../locales/en-US/passive_calculator.ftl"),
@@ -69,10 +70,12 @@ pub(crate) const EN_US_SOURCES: [&str; 66] = [
     include_str!("../locales/en-US/sketch_snap.ftl"),
     include_str!("../locales/en-US/sketch_bake.ftl"),
     include_str!("../locales/en-US/sketch_tools.ftl"),
+    include_str!("../locales/en-US/output_job.ftl"),
     include_str!("../locales/en-US/block_diagram.ftl"),
     include_str!("../locales/en-US/notebook_tab.ftl"),
     include_str!("../locales/en-US/notebook_measurements.ftl"),
     include_str!("../locales/en-US/parameter_io.ftl"),
+    include_str!("../locales/en-US/images.ftl"),
 ];
 
 /// Every locale negotiation may pick, in language-code order.

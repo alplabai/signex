@@ -39,6 +39,8 @@ compare-board-not-in-schematic = not in schematic
 compare-board-not-on-board = not on board
 # A pad on no net.
 compare-board-no-net = no net
+# Board side of a footprint that is on the board but not linked to its part.
+compare-board-not-linked = not linked
 # A part: its value and footprint.
 compare-board-part = { $value } · { $footprint }
 # One pin of a part.
@@ -49,7 +51,7 @@ compare-board-jump-board = Board
 
 # What the chosen direction does to a row.
 compare-board-action-add-to-board = Add to board
-compare-board-action-link-footprint = Link footprint
+compare-board-action-link-footprint = Link to its part
 compare-board-action-remove-from-board = Remove from board
 compare-board-action-add-net = Add net
 compare-board-action-remove-net = Remove net

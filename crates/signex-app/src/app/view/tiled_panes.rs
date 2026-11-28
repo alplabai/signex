@@ -3,14 +3,19 @@
 //! editor; every other pane draws its document and takes a press as "focus
 //! this one", so its first click never lands on the wrong document. Pane
 //! sizes are the split `canvas_bounds` reports, so overlays placed on the
-//! focused canvas line up. State: `UiState::document_tiling`,
-//! `InteractionState::tile_panes`; see `handlers::document_tiling`.
+//! focused canvas line up. After a tab was dropped on an edge (mockup row
+//! 207) the panes are the split's, each drawing one of its tabs, and a
+//! second view draws its document in two panes. Each pane has its own tab
+//! strip and the splitters between them drag (`pane_chrome`). State:
+//! `UiState::document_tiling`, `WorkspaceLayoutsState::panes`,
+//! `InteractionState::tile_panes`; see `handlers::document_tiling` and
+//! `handlers::document_panes`.
 
-use iced::widget::{Column, Row, Space, canvas, container, mouse_area, opaque, stack};
+use iced::widget::{Column, Space, canvas, container, mouse_area, opaque, stack};
 use iced::{Border, Element, Length, Widget as _};
 use std::path::Path;
 
-use crate::app::{Message, Signex, TileLayout, UiMsg, WindowMsg};
+use crate::app::{Message, Signex, UiMsg, WindowMsg};
 
 /// Width of the focused pane's ring; the other panes get a hairline.
 const FOCUS_RING: f32 = 2.0 * crate::styles::HAIRLINE;
@@ -24,66 +29,59 @@ impl Signex {
         window_id: iced::window::Id,
     ) -> Element<'_, Message> {
         let tiled = if self.ui_state.main_window_id == Some(window_id) {
-            self.tiled_panes()
+            self.tiled_pane_view()
         } else {
             None
         };
-        let Some((layout, panes)) = tiled else {
+        let Some(view) = tiled else {
             return self.view_center(window_id);
         };
         let area = self.document_area_in(None);
-        let tiles = crate::app::tiles(panes.len(), (area.width, area.height), layout);
-        let last = panes.len() - 1;
-        let active = self.document_state.active_tab;
-        let cells: Vec<Element<'_, Message>> = panes
+        let size = (area.width, area.height);
+        // Mockup row 207: each pane under its own tab strip, at the size a
+        // splitter drag left it; a grid fills rows of two.
+        let tiles = self.pane_cells(&view, size);
+        let lists = self.pane_tab_lists();
+        let cells: Vec<Element<'_, Message>> = view
+            .tabs
             .iter()
-            .zip(tiles)
             .enumerate()
-            .map(|(n, (&tab, tile))| {
-                let focused = tab == active;
+            .map(|(n, &tab)| {
+                // A second view repeats its tab: the focus is the pane's.
+                let focused = n == view.focused;
                 let content = if focused {
                     self.view_center(window_id)
                 } else {
                     self.view_unfocused_pane(tab, window_id)
                 };
-                // The last pane fills the rest, as the last tile takes the
-                // rounding remainder.
-                let along = |extent: f32| {
-                    if n == last {
-                        Length::Fill
-                    } else {
-                        Length::Fixed(extent)
-                    }
-                };
-                let (width, height) = match layout {
-                    TileLayout::SideBySide => (along(tile.size.0), Length::Fill),
-                    TileLayout::Stacked => (Length::Fill, along(tile.size.1)),
-                };
-                container(self.framed_pane(content, focused, tab))
-                    .width(width)
-                    .height(height)
-                    .boxed()
+                let alone = [tab];
+                let own = lists.get(n).map_or(&alone[..], Vec::as_slice);
+                Column::with_children([
+                    self.pane_strip(n, own, tab, focused),
+                    self.framed_pane(content, focused, n),
+                ])
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .boxed()
             })
             .collect();
-        match layout {
-            TileLayout::SideBySide => Row::with_children(cells)
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .boxed(),
-            TileLayout::Stacked => Column::with_children(cells)
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .boxed(),
-        }
+        stack![
+            super::pane_chrome::place_cells(cells, &tiles),
+            self.pane_splitters(&view, size),
+        ]
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .boxed()
     }
 
     /// `content` with its pane edge: the accent ring on the focused pane, the
     /// border hairline on the others, which also take a press to focus.
+    /// `pane` is its place among the panes.
     fn framed_pane<'a>(
         &'a self,
         content: Element<'a, Message>,
         focused: bool,
-        tab: usize,
+        pane: usize,
     ) -> Element<'a, Message> {
         let tokens = &self.document_view.panel_ctx.tokens;
         let (color, width) = if focused {
@@ -108,7 +106,7 @@ impl Signex {
         }
         let press = opaque(
             mouse_area(Space::new().width(Length::Fill).height(Length::Fill))
-                .on_press(Message::Window(WindowMsg::TilePanePressed(tab))),
+                .on_press(Message::Window(WindowMsg::TilePanePressed(pane))),
         );
         stack![content, press, edge].boxed()
     }
@@ -134,6 +132,10 @@ impl Signex {
                 .kind
                 .as_variant_manager()
                 .map(|id| self.view_variant_manager_tab(id)),
+            Some(tab) if tab.kind.as_design_checklist().is_some() => tab
+                .kind
+                .as_design_checklist()
+                .map(|id| self.view_design_checklist_tab(id)),
             Some(tab) if tab.kind.is_layer_stack() => Some(self.view_layer_stack_tab()),
             Some(tab) if tab.kind.is_polygon_manager() => Some(self.view_polygon_manager_tab()),
             Some(tab) if tab.kind.is_length_matching() => Some(self.view_length_matching_tab()),
@@ -198,7 +200,8 @@ impl Signex {
     }
 
     /// The board on its pane canvas: background and grid, the board drawn on
-    /// the CPU (the GPU board shader is the focused canvas's), its texts.
+    /// the CPU (the GPU board shader is the focused canvas's), its texts, and
+    /// the outline of what the focused pane has selected (mockup row 207).
     fn pane_board<'a>(
         &'a self,
         board: &'a crate::pcb_canvas::PcbCanvas,
@@ -212,6 +215,9 @@ impl Signex {
         let texts = canvas(board.text_layer())
             .width(Length::Fill)
             .height(Length::Fill);
-        stack![base, content, texts].boxed()
+        let outline = canvas(board.highlight_layer())
+            .width(Length::Fill)
+            .height(Length::Fill);
+        stack![base, content, texts, outline].boxed()
     }
 }

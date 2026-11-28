@@ -27,7 +27,9 @@ fn add_dirty_sheet(app: &mut Signex, path: &Path) {
         signex_engine::Engine::new(signex_types::schematic::SchematicSheet::default()).unwrap();
     let document = engine.document().clone();
     engine
-        .execute(signex_engine::Command::ReplaceDocument { document })
+        .execute(signex_engine::Command::ReplaceDocument {
+            document: Box::new(document),
+        })
         .unwrap();
     app.document_state
         .engines

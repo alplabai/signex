@@ -144,6 +144,10 @@ fn drawing_stores(drawing: &SchDrawing, after: &SchDrawing, live: &SchDrawing, k
             "center" | "radius" | "width" | "fill" | "stroke_color" | "locked"
         ),
         SchDrawing::Arc { .. } => matches!(key, "width" | "stroke_color" | "locked"),
+        // #1267: the shape is one typed value (its radius is clamped to it).
+        SchDrawing::Curve(_) => {
+            matches!(key, "shape" | "width" | "fill" | "stroke_color" | "locked")
+        }
         SchDrawing::Bezier(_) => matches!(
             key,
             "start"
@@ -169,6 +173,8 @@ fn drawing_stores(drawing: &SchDrawing, after: &SchDrawing, live: &SchDrawing, k
                     | "locked"
             ) || (key == "override_text" && d.override_text.is_some())
         }
+        // #1116: every key of an image is typed on its own.
+        SchDrawing::Image(_) => key != "position" && key != "uuid",
         SchDrawing::Table(t) => {
             // A source switched back keeps the other's columns; a CSV import
             // reuses the keys, so the titles must match too.

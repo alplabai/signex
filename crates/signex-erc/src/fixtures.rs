@@ -35,6 +35,7 @@ pub(crate) fn empty() -> ErcContext {
         harness: Default::default(),
         class_conflicts: Vec::new(),
         lone_pairs: Vec::new(),
+        images: Vec::new(),
     }
 }
 
@@ -308,6 +309,12 @@ pub(crate) fn context_for(kind: RuleKind) -> ErcContext {
         }
         RuleKind::NetClassConflict => return ErcContext::from_snapshot(&class_conflict_sheet()),
         RuleKind::DiffPairPartnerMissing => c.lone_pairs.push(lone_pair()),
+        RuleKind::ImageFileMissing => c.images.push(crate::images::ErcImage {
+            uuid: Uuid::now_v7(),
+            file: "assets/images/gone.png".into(),
+            centre: pt(10.0, 10.0),
+            missing: true,
+        }),
     }
     c
 }

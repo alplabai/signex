@@ -68,7 +68,8 @@ impl FootprintCanvas<'_> {
         bounds: Rectangle,
     ) -> Option<canvas::Action<LibraryMessage>> {
         if self.state.fit_pending && bounds.width > 0.0 && bounds.height > 0.0 {
-            if let Some(bbox) = self.state.content_bbox_mm() {
+            let target = self.state.fit_target_mm;
+            if let Some(bbox) = target.or_else(|| self.state.content_bbox_mm()) {
                 self.fit_clear_of_chrome(cstate, bbox, bounds);
             } else {
                 cstate.offset = Point::new(bounds.width / 2.0, bounds.height / 2.0);

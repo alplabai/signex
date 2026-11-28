@@ -6,6 +6,7 @@
 mod empty;
 mod layers;
 mod properties;
+mod run_banner;
 mod toolbar;
 
 use iced::widget::{Space, column, container, mouse_area, row, stack};
@@ -68,6 +69,13 @@ pub(super) fn tab<'a>(
     let body = match &viewer.open {
         Some(open) => package_body(look, viewer, open),
         None => empty::view(look, viewer),
+    };
+    // Opened from an Export Job run (mockup row 193b): its banner on top.
+    let body = match &viewer.from_run {
+        Some(origin) => column![run_banner::view(look, origin, viewer.run_missing), body]
+            .height(Length::Fill)
+            .boxed(),
+        None => body,
     };
     let body = drop_frame(look, viewer, with_open_menu(look, viewer, body));
     let shell = DocTabShell::new(body, DocTabShellStyle::from_tokens(look.tokens, TS.body))

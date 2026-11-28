@@ -1,5 +1,5 @@
 //! The Esc rungs of the editing cards on the canvas: Paste Array, the union
-//! popover, Smart Paste and the variant part edit (mockup rows 208, 209).
+//! popover, Smart Paste, the Place Image dialog and the variant part edit.
 
 use super::OpenOverlays;
 use crate::app::Message;
@@ -24,6 +24,11 @@ impl OpenOverlays {
             OverlayId::SmartPaste => self.smart_paste_open.then(|| {
                 Message::Edit(crate::app::EditMsg::SmartPasteDialog(
                     crate::smart_paste::SmartPasteMsg::Cancelled,
+                ))
+            }),
+            OverlayId::PlaceImage => self.place_image_open.then(|| {
+                Message::from(crate::app::ImagesMsg::Dialog(
+                    crate::app::images::PlaceDialogMsg::Closed,
                 ))
             }),
             OverlayId::VariantPartEdit => self

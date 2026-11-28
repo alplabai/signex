@@ -15,7 +15,11 @@ updates, the file tasks) and
 
 - Stored: the docked panels per dock and their order, each dock's collapsed
   flag, the left and right docks' widths, and the document-area split when
-  the main window is tiled (side by side or stacked).
+  the main window is tiled (side by side, stacked, or Tile Grid's
+  `"tile_grid"`, mockup row 207). Applying a layout with a split tiles the
+  documents that way. The pane sizes of a splitter drag are not part of a
+  layout: they stay with the project's kept panes (`docs/MENU_BAR.md`,
+  "Panes").
 - Not stored: open documents. Applying a layout never opens, closes or
   switches a document; it only arranges panels around them.
 - Not stored yet: extra windows and their monitors (a document or panel in a
@@ -128,7 +132,15 @@ An 820 × 520 dialog, "stored in your preferences, not in the project".
   renamed" / "… deleted". Then a 200 px thumbnail; Panels (one chip per
   panel), Windows ("1 · main"), Shortcut (greyed "None") and Saved ("date ·
   from the current arrangement", or "built-in" / "built-in · edited date");
-  Update from current and Apply. Apply keeps the dialog open.
+  Update from current, Apply and Undo. Apply keeps the dialog open.
+- Undo (a ghost button next to Apply, #2930) takes back the last change
+  made in the dialog: a rename, a duplicate, a delete or its toast Undo, a
+  reorder, Update from current or an import. Each change is a step, newest
+  first, up to 32; Undo is greyed with none left, and closing the dialog
+  drops them. The list goes back as it was and is written again. Apply is
+  not a step: the layout on screen keeps its check mark when the list still
+  has it. Undo closes the "Deleted layout" toast, so the delete is not put
+  back twice.
 - Delete removes the layout at once and shows a dark toast at the bottom
   centre, "Deleted layout "X"" with Undo, for eight seconds. Undo puts the
   layout back at its place. No confirmation is asked: the layouts are

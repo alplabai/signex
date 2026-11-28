@@ -98,13 +98,14 @@ impl Signex {
     }
 
     /// The grid a fragment's anchor snaps to.
-    fn fragment_grid_mm(&self) -> f64 {
+    pub(crate) fn fragment_grid_mm(&self) -> f64 {
         crate::canvas::grid::pitch_mm_exact(self.ui_state.grid_size_mm)
     }
 
     /// Put `copied` on the cursor of `target`: the next click places it as
-    /// one undo step, numbered as a paste is.
-    fn arm_fragment(&mut self, copied: CopiedSelection, target: &Path) {
+    /// one undo step, numbered as a paste is. Place ▸ Graphic… shares it
+    /// (#1116).
+    pub(crate) fn arm_fragment(&mut self, copied: CopiedSelection, target: &Path) {
         self.interaction_state.placement_epoch += 1;
         self.arm_placement_session(copied.payload, target, PlacementKind::Paste);
         self.refresh_paste_ghost();

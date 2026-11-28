@@ -52,7 +52,7 @@ pub(super) fn components_row_menu_entries(
 /// Where the row menu opens: right-aligned inside the dock that holds the
 /// panel, level with the pointer. A floating or bottom-docked panel keeps
 /// the pointer anchor. `area` is the document area between the docks.
-fn dock_menu_anchor(
+pub(super) fn dock_menu_anchor(
     site: Option<PanelSite>,
     area: iced::Rectangle,
     window_width: f32,

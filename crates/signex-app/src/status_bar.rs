@@ -81,6 +81,12 @@ pub(crate) struct SurfaceReadout {
     /// Skipped libraries still missing (mockup row 138); above zero the bar
     /// shows the Library Missing chip.
     pub missing_libraries: usize,
+    /// Image files the sheet's project names and cannot show (#1116, mockup
+    /// row 204); above zero the bar counts them in a warning pill.
+    pub missing_assets: usize,
+    /// The number of the pin a click picked on the part that is the whole
+    /// selection (mockup row 50): the selection summary names it.
+    pub focused_pin: Option<String>,
 }
 
 /// The board's active layer pill: a caption, the name and the colour the
@@ -123,9 +129,29 @@ impl Activity {
     }
 }
 
+/// The selection segment: the breakdown of the selection and, while a click
+/// has picked a pin of the selected part, that pin (#2998, mockup row 50).
+/// `None` when the selection is empty (the status bar omits the segment).
+fn selection_summary(
+    selected: &[SelectedItem],
+    focused_pin: Option<&str>,
+    i18n: &signex_i18n::I18n,
+) -> Option<Localized> {
+    let kinds = selection_kinds(selected, i18n)?;
+    Some(match focused_pin {
+        Some(pin) => signex_i18n::t!(
+            i18n,
+            signex_i18n::ids::PANELS_STATUS_BAR_SELECTION_PIN,
+            "selection" => kinds.into_string(),
+            "pin" => pin
+        ),
+        None => kinds,
+    })
+}
+
 /// Format a one-line breakdown of the active canvas selection.
-/// Returns `None` when the selection is empty (status bar omits the segment).
-fn selection_summary(selected: &[SelectedItem], i18n: &signex_i18n::I18n) -> Option<Localized> {
+/// Returns `None` when the selection is empty.
+fn selection_kinds(selected: &[SelectedItem], i18n: &signex_i18n::I18n) -> Option<Localized> {
     use signex_i18n::ids;
     if selected.is_empty() {
         return None;
@@ -199,7 +225,7 @@ pub(crate) fn view<'a>(
             unit,
             tool,
             grid_size_mm,
-            selection: selection_summary(selected, i18n),
+            selection: selection_summary(selected, surface.focused_pin.as_deref(), i18n),
             pending_git_commits,
             board_import,
             activity,
@@ -215,12 +241,46 @@ mod tests {
     use super::*;
 
     fn summary(kinds: &[SelectedKind]) -> Option<String> {
+        summary_with_pin(kinds, None)
+    }
+
+    fn summary_with_pin(kinds: &[SelectedKind], pin: Option<&str>) -> Option<String> {
         let selected: Vec<SelectedItem> = kinds
             .iter()
             .map(|kind| SelectedItem::new(uuid::Uuid::now_v7(), *kind))
             .collect();
-        selection_summary(&selected, &signex_i18n::I18n::en_us())
+        selection_summary(&selected, pin, &signex_i18n::I18n::en_us())
             .map(|text| text.into_string().replace(['\u{2068}', '\u{2069}'], ""))
+    }
+
+    /// #2998, mockup row 50: while a click has picked a pin of the selected
+    /// part, the segment names that pin after the breakdown.
+    #[test]
+    fn a_picked_pin_is_named_after_the_selection() {
+        assert_eq!(
+            summary_with_pin(&[SelectedKind::Symbol], Some("3")).as_deref(),
+            Some("Sel: 1 component · pin 3")
+        );
+        assert_eq!(
+            summary_with_pin(&[SelectedKind::Symbol], Some("A12")).as_deref(),
+            Some("Sel: 1 component · pin A12")
+        );
+        assert_eq!(summary_with_pin(&[], Some("3")), None, "no selection");
+    }
+
+    /// The pin segment goes through the catalog: another language reads it
+    /// in its own words.
+    #[test]
+    fn the_picked_pin_text_follows_the_language() {
+        let selected = [SelectedItem::new(
+            uuid::Uuid::now_v7(),
+            SelectedKind::Symbol,
+        )];
+        let xa = signex_i18n::I18n::new(&signex_i18n::LanguagePref::Locale("en-XA".into()));
+        let shown = selection_summary(&selected, Some("3"), &xa)
+            .map(|text| text.into_string().replace(['\u{2068}', '\u{2069}'], ""));
+        assert_ne!(shown.as_deref(), Some("Sel: 1 component · pin 3"));
+        assert!(shown.is_some_and(|s| s.contains('3')));
     }
 
     /// The selection segment reads as it did before the catalog (#2059).

@@ -78,3 +78,32 @@ overlay-read-only-badge-tooltip = This sheet was saved by a newer { -brand-name 
 overlay-text-edit-hint = Enter apply · Esc cancel
 # The same hint on a part's field that has a next field to Tab to.
 overlay-text-edit-hint-next-field = Enter apply · Esc cancel · Tab next field
+# The rich text note editor over the sheet (#1114, mockup row 203). Its title
+# names the sheet file and the note's position in mm.
+overlay-rich-note-title = Typst · { $sheet } note at { $x }, { $y }
+# Above the live preview: the width the note draws at, in mm.
+overlay-rich-note-preview = As drawn on the sheet · { $width } mm wide
+overlay-rich-note-compile-ms = { $ms } ms
+overlay-rich-note-compiling = Compiling…
+# The first compile error, under the source: its line and the compiler's words.
+overlay-rich-note-error = Line { $line }: { $message }
+# The key hint under the editor; $apply and $click are this OS's key names.
+overlay-rich-note-hint = { $apply } apply · Esc cancel · links open on { $click }
+overlay-rich-note-apply = Apply
+overlay-rich-note-cancel = Cancel
+# The toolbar: each wraps the selection in Typst markup.
+overlay-rich-note-wrap-bold = Bold
+overlay-rich-note-wrap-italic = Italic
+overlay-rich-note-wrap-heading = Heading
+overlay-rich-note-wrap-list = List
+overlay-rich-note-wrap-math = Math
+overlay-rich-note-wrap-link = Link
+overlay-rich-note-wrap-table = Table
+# A Messages line: a rich note whose source does not compile. The sheet keeps
+# its last good drawing with a red corner mark.
+overlay-rich-note-compile-error = The rich text note at { $x }, { $y } does not compile: line { $line }: { $message }
+# A Messages line: a note's link did not open.
+overlay-rich-note-link-failed = The link { $target } did not open: { $why }
+# The refusal of apply_rich_note_edit from a CLI or agent call without
+# `source`: such a call never takes the person's typing in the editor.
+overlay-rich-note-needs-source = `apply_rich_note_edit` needs the operand `source`, the note's full text; a command never applies the typing in the note editor

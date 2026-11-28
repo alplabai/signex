@@ -1,7 +1,10 @@
 //! A command's operands besides its id (#1934), for a CLI or an agent, in one
-//! naming convention (`OPERAND_CONVENTION`); the notebook's are in `notebook`.
+//! naming convention (`OPERAND_CONVENTION`); the notebook's are in `notebook`,
+//! a rich text note's in `rich_note`.
 mod notebook;
 pub use notebook::*;
+mod rich_note;
+pub use rich_note::*;
 
 /// The shape of one operand's value, as written in text.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -308,6 +311,12 @@ pub const SHEET_VARIABLE: &[Operand] = &[
     optional("remove", OperandKind::Bool),
     optional("document", OperandKind::Document),
 ];
+/// The `format` (`plain` or `typst`) of the text note `id` (#1114).
+pub const TEXT_NOTE_FORMAT: &[Operand] = &[
+    required("id", OperandKind::Text),
+    required("format", OperandKind::Text),
+    optional("document", OperandKind::Document),
+];
 /// The placed part `id` made a net tie (`on=true`) or an ordinary part
 /// (`on=false`, #1277).
 pub const NET_TIE: &[Operand] = &[
@@ -328,8 +337,19 @@ pub const PLACE_FILE: &[Operand] = &[
     required("at", OperandKind::Point),
     optional("document", OperandKind::Document),
 ];
+/// An image file `path` placed with its centre on `at` (#1116): the
+/// dialog's answer and the click. `width` is in mm (the height follows the
+/// aspect ratio); without it the image fills the sheet's free area.
+pub const PLACE_IMAGE: &[Operand] = &[
+    required("path", OperandKind::Path),
+    required("at", OperandKind::Point),
+    optional("width", OperandKind::Text),
+    optional("document", OperandKind::Document),
+];
 /// An open dialog's answer.
 pub const OPEN_PATH: &[Operand] = &[required("path", OperandKind::Path)];
+/// A folder, zip or file to read, or none (#2896: the Gerber Viewer).
+pub const OPTIONAL_PATH: &[Operand] = &[optional("path", OperandKind::Path)];
 /// A save dialog's answer; `overwrite` lets it replace an existing file.
 pub const SAVE_PATH: &[Operand] = &[
     required("path", OperandKind::Path),
@@ -554,6 +574,13 @@ pub const BOARD_STEP: &[Operand] = &[
     required("document", OperandKind::Document),
     required("path", OperandKind::Path),
     optional("schema", OperandKind::Text),
+];
+/// The pages of a schematic's project as PNG files (#1299): which sheet, the
+/// folder, and `dpi`, whole dots per inch from 36 to 1200 (300 if absent).
+pub const SHEET_PNG_EXPORT: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("path", OperandKind::Path),
+    optional("dpi", OperandKind::Text),
 ];
 /// `add_board_graphic` (#2424): a drawing of `kind` (`line`, `arc`,
 /// `circle`, `rectangle`, `text_frame`) on the board `document` names. A
@@ -1067,6 +1094,10 @@ pub const PROJECT_ENABLE_REQUIREMENT: &[Operand] = &[
     required("requirement", OperandKind::Text),
     required("on", OperandKind::Bool),
 ];
+// #1178: the Project tab's Fonts commands.
+mod fonts;
+pub use fonts::{PROJECT_ADD_FONT, PROJECT_FONT, PROJECT_FONT_LICENSE};
+
 /// `set_layer_stack` (#2401): the named board's whole stack, top to bottom,
 /// as JSON rows (`{"layers": [...]}` or the list); a copper row names the
 /// board layer it was, or none for a new layer.

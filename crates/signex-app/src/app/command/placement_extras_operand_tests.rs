@@ -84,6 +84,8 @@ fn write_block(dir: &Path) -> PathBuf {
         justify_h: HAlign::Left,
         justify_v: VAlign::Bottom,
         locked: false,
+        format: Default::default(),
+        rich: Default::default(),
     });
     block.drawings.push(SchDrawing::Line {
         uuid: Uuid::now_v7(),

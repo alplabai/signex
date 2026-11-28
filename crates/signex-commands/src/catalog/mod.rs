@@ -15,6 +15,7 @@ mod board;
 mod board_rule_operands;
 mod bom;
 mod categories;
+mod checklist;
 mod clipboard;
 mod closest;
 mod documents;
@@ -22,9 +23,12 @@ mod drawing;
 mod drc;
 mod erc;
 mod footprint_operands;
+mod gerber_viewer;
 mod grid;
 mod hierarchy;
 mod history;
+mod images;
+mod job_operands;
 mod layers;
 mod library;
 mod nets;
@@ -327,6 +331,7 @@ pub fn command_menu_message(command_id: &str) -> MessageId {
 /// `docs/audit/command-registry-action-surface-2026-07-25.md` §4.
 const TABLES: &[&[CommandMetadata]] = &[
     documents::DOCUMENTS,
+    checklist::CHECKLIST,
     query::QUERY,
     history::HISTORY,
     clipboard::CLIPBOARD,
@@ -337,6 +342,7 @@ const TABLES: &[&[CommandMetadata]] = &[
     reuse::REUSE,
     wiring::WIRING,
     drawing::DRAWING,
+    images::IMAGES,
     tool::TOOL,
     hierarchy::HIERARCHY,
     annotate::ANNOTATE,
@@ -352,6 +358,7 @@ const TABLES: &[&[CommandMetadata]] = &[
     grid::GRID,
     library::LIBRARY,
     workspace::WORKSPACE,
+    gerber_viewer::GERBER_VIEWER,
     block_diagram::BLOCK_DIAGRAM,
     notebook::NOTEBOOK,
     bom::BOM,
@@ -423,6 +430,16 @@ const GLOBAL_COMMANDS: &[&str] = &[
     "new_document",
     "new_project_with_profile",
     "open_document",
+    // #2896: the Gerber Viewer needs no editor; it opens from the start
+    // screen too.
+    "open_gerber_viewer",
+    // Mockup row 193: the viewer's states, set on the viewer tab, which is
+    // no editor.
+    "select_gerber_object",
+    "flip_gerber_view",
+    "show_gerber_drills_on_top",
+    "highlight_gerber_net",
+    "show_gerber_open_menu",
     "save_document",
     "save_document_as",
     "save_all",
@@ -433,7 +450,15 @@ const GLOBAL_COMMANDS: &[&str] = &[
     "close_all_documents",
     "tile_windows_horizontally",
     "tile_windows_vertically",
+    "tile_windows_grid",
     "untile_documents",
+    "split_pane_right",
+    "split_pane_down",
+    "open_second_view",
+    "move_tab_to_other_pane",
+    "close_pane",
+    "sync_pane_zoom",
+    "equalize_panes",
     "set_dock_panel",
     "apply_layout_schematic",
     "apply_layout_board",
@@ -480,6 +505,7 @@ const GLOBAL_COMMANDS: &[&str] = &[
     "new_pcb_document",
     "new_schematic_sheet",
     "open_rules",
+    "open_design_checklist",
     // The project's Design Notebook, from any tab (mockup rows 195, 201, 202).
     "open_design_notebook",
     "generate_design_notebook",
@@ -699,6 +725,7 @@ mod tests {
     fn every_catalog_entry_sets_enable_and_flags() {
         const TABLE_SRC: &[(&str, &str)] = &[
             ("documents.rs", include_str!("documents.rs")),
+            ("checklist.rs", include_str!("checklist.rs")),
             ("query.rs", include_str!("query.rs")),
             ("history.rs", include_str!("history.rs")),
             ("clipboard.rs", include_str!("clipboard.rs")),
@@ -708,6 +735,7 @@ mod tests {
             ("placement.rs", include_str!("placement.rs")),
             ("wiring.rs", include_str!("wiring.rs")),
             ("drawing.rs", include_str!("drawing.rs")),
+            ("images.rs", include_str!("images.rs")),
             ("tool.rs", include_str!("tool.rs")),
             ("hierarchy.rs", include_str!("hierarchy.rs")),
             ("annotate.rs", include_str!("annotate.rs")),
@@ -723,6 +751,7 @@ mod tests {
             ("grid.rs", include_str!("grid.rs")),
             ("library.rs", include_str!("library.rs")),
             ("workspace.rs", include_str!("workspace.rs")),
+            ("gerber_viewer.rs", include_str!("gerber_viewer.rs")),
             ("block_diagram.rs", include_str!("block_diagram.rs")),
             ("reuse.rs", include_str!("reuse.rs")),
             ("notebook.rs", include_str!("notebook.rs")),

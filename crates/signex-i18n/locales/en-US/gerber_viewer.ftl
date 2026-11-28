@@ -58,7 +58,7 @@ gerber-viewer-drop-files = { $count ->
    *[other] Drop to open { $count } files
 }
 gerber-viewer-reading = Reading…
-gerber-viewer-read-failed = Gerber Viewer: the package could not be read ({ $why }).
+gerber-viewer-read-failed = Gerber Viewer: { $file }: the package could not be read ({ $why }).
 gerber-viewer-read-zip-too-large = Gerber Viewer: { $file }: the files in the zip come to more than { $limit } MiB together; the package is not opened.
 gerber-viewer-open = Open
 gerber-viewer-open-tip = Open a folder, a zip package or files ({ $key })
@@ -143,3 +143,20 @@ gerber-viewer-footer-problems = { $count ->
 gerber-viewer-footer-note = Read only: the files are never changed.
 gerber-viewer-read-unopenable = Gerber Viewer: { $file }, line { $line }: the file cannot be opened ({ $why }); it is listed as Not read.
 gerber-viewer-read-too-large = Gerber Viewer: { $file }, line { $line }: the file is larger than { $limit } MiB; it is listed as Not read.
+
+# gerber-viewer-command
+## open_gerber_viewer (#2896): a read that a later open replaced, as the
+## command's refusal. $file is the package's first file or folder name.
+gerber-viewer-read-superseded = Gerber Viewer: { $file }: a later open replaced this read; nothing was opened from it.
+## The check of which recent packages are still on disk could not run, as
+## its Messages warning. $why is the system's reason.
+gerber-viewer-recent-check-failed = Gerber Viewer: could not check which recent packages are still there ({ $why }); the list is shown as it was.
+
+# gerber-viewer-view-command
+## The commands that set what the viewer shows (mockup row 193), as their
+## refusals. $layer is a file name of the package, $net an X2 net name.
+gerber-viewer-command-no-package = Gerber Viewer: no package is open; open one with open_gerber_viewer first.
+gerber-viewer-command-no-layer = Gerber Viewer: the open package has no layer read from { $layer }.
+gerber-viewer-command-layer-hidden = Gerber Viewer: the layer { $layer } is hidden; show it before selecting on it.
+gerber-viewer-command-at-not-a-point = Gerber Viewer: at must be a point, x,y in mm in the files' own frame.
+gerber-viewer-command-no-such-net = Gerber Viewer: no object in the open package is on the net { $net }.

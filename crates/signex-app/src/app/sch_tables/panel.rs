@@ -10,7 +10,7 @@ use crate::app::{Message, Signex};
 use crate::panels::{AnnotationPanelMsg, AnnotationPanelState};
 
 impl Signex {
-    /// The selected Bezier, dimension or table on the active sheet.
+    /// The selected Bezier, dimension, table or curve on the active sheet.
     fn selected_annotation(&self) -> Option<uuid::Uuid> {
         let ctx = &self.document_view.panel_ctx;
         if ctx.selected_kind != Some(SelectedKind::Drawing) {
@@ -22,11 +22,15 @@ impl Signex {
             .document()
             .drawings
             .iter()
-            .any(|d| d.uuid() == id && d.needs_format_1_3())
+            .any(|d| d.uuid() == id && (d.needs_format_1_3() || d.needs_curve_format()))
             .then_some(id)
     }
 
     pub(crate) fn handle_annotation_panel(&mut self, msg: AnnotationPanelMsg) -> Task<Message> {
+        // Properties ▸ Image has its own handlers (#1116).
+        if let AnnotationPanelMsg::Image(msg) = msg {
+            return self.handle_image_panel(msg);
+        }
         if self.is_dimension_tool_form_shown() {
             return self.handle_dimension_tool_panel(msg);
         }
@@ -68,6 +72,8 @@ impl Signex {
             AnnotationPanelMsg::CsvExportRequested => {
                 return self.dispatch_tables(TablesMsg::CsvExportRequested(id));
             }
+            // Routed above.
+            AnnotationPanelMsg::Image(_) => {}
         }
         Task::none()
     }
@@ -84,12 +90,14 @@ impl Signex {
         });
         let is_tool_paused_elsewhere = self.is_annotation_pause_of_another(None);
         let is_placement_form_idle = self.interaction_state.is_placement_form_idle();
+        let image = self.image_panel_state();
         let Some(engine) = self.document_state.active_engine() else {
             return AnnotationPanelState {
                 draft,
                 dimension_tool,
                 is_tool_paused_elsewhere,
                 is_placement_form_idle,
+                image,
                 ..AnnotationPanelState::default()
             };
         };
@@ -105,6 +113,7 @@ impl Signex {
             dimension_tool,
             is_tool_paused_elsewhere,
             is_placement_form_idle,
+            image,
         }
     }
 }

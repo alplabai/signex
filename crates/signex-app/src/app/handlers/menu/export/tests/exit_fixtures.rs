@@ -62,6 +62,8 @@ const FIXTURE_DAY: (i32, u32, u32) = (2026, 11, 26);
 pub(crate) fn open_fixture(project: &str) -> Signex {
     let (mut app, _task) = Signex::new();
     app.document_state.times.now = Some(fixture_noon(FIXTURE_DAY));
+    // A panel refresh reads the clock again: pin it too.
+    app.ui_state.io.clock = crate::io_ports::Clock::Fixed(fixture_noon(FIXTURE_DAY));
     let dir = fixture_dir(project);
     let path = dir.join(format!("{project}.snxprj"));
     assert!(

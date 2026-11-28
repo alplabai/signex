@@ -78,7 +78,9 @@ fn edit_engine(app: &mut Signex, path: &Path) {
         .engines
         .get_mut(path)
         .expect("engine")
-        .execute(signex_engine::Command::ReplaceDocument { document })
+        .execute(signex_engine::Command::ReplaceDocument {
+            document: Box::new(document),
+        })
         .expect("edit");
     app.document_state.mark_document_dirty(path);
 }

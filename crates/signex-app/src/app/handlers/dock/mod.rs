@@ -195,6 +195,17 @@ impl Signex {
             if let Some(task) = self.handle_dock_harness_message(panel_msg) {
                 return Task::batch([task, self.finish_update()]);
             }
+            // Edit… of a rich note: its editor, with the focus (#1114).
+            if let crate::panels::PanelMsg::PlacedEdit(
+                crate::panels::PlacedEditMsg::RichNoteEditRequested { item },
+            ) = panel_msg
+            {
+                let task = (self.request_rich_note_editor(item.uuid, 0)).unwrap_or_else(|why| {
+                    crate::diagnostics::log_warning(why);
+                    Task::none()
+                });
+                return Task::batch([task, self.finish_update()]);
+            }
             if self.handle_dock_library_browser_message(panel_msg)
                 || self.handle_dock_multi_edit_message(panel_msg)
                 || self.handle_dock_placed_edit_message(panel_msg)

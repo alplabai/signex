@@ -28,14 +28,15 @@ pub use signex_types::project::FabOutputKinds;
 
 pub use command::FabCommandRun;
 pub(crate) use command::fabrication_outputs;
+pub(crate) use documents::{DocumentsJob, assembly_pdf_options, step_file_name};
 pub use groups::{FabGroup, ticked_count};
-#[cfg(test)]
-pub(crate) use notes::note_text;
 pub use notes::{BoardNote, NoteSeverity};
+pub(crate) use notes::{board_note_text, note_text};
 pub(crate) use notes::{outcome_notes, problem_text, written_message, written_text};
 #[cfg(test)]
 pub(crate) use write::write_fab_outputs;
 pub use write::{FabWritten, Listed};
+pub(crate) use write::{GenerateJob, make_generate};
 
 impl From<FabOutputsMsg> for crate::app::Message {
     fn from(msg: FabOutputsMsg) -> Self {
@@ -119,6 +120,7 @@ pub fn fab_options(kinds: &FabOutputKinds, name: &str) -> FabOptions {
         ipc2581: kinds.ipc2581,
         odb: kinds.odb.then_some(form),
         designator_standard: None,
+        gerber_settings: Default::default(),
     }
 }
 

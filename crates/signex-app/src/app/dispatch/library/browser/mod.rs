@@ -14,6 +14,8 @@ mod grid;
 mod modal_reload;
 mod param_commit;
 mod preview_load;
+#[cfg(test)]
+mod preview_select_tests;
 mod row_delete;
 mod row_save;
 mod slot_param;

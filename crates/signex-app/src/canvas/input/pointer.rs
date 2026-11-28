@@ -50,7 +50,10 @@ impl SchematicCanvas<'_> {
             | Tool::HarnessWire
             | Tool::HarnessConnector
             | Tool::HarnessEntry
-            | Tool::NetParameters => true,
+            | Tool::NetParameters
+            | Tool::Ellipse
+            | Tool::EllipticalArc
+            | Tool::RoundRectangle => true,
         }
     }
 
@@ -123,6 +126,22 @@ impl SchematicCanvas<'_> {
                 && let Some(drag) = self.bezier_handle_at(cursor_pos, bounds, (wx, wy))
             {
                 state.bezier_drag = Some(drag);
+                state.wire_grip = None;
+                state.click_on_selected = false;
+                state.move_origin = None;
+                state.move_dragging = false;
+                state.move_current = None;
+                state.select_drag_start = None;
+                return Some(canvas::Action::capture());
+            }
+            // A press on a selected image's handle resizes it (`image_grip`).
+            state.image_drag = None;
+            if !self.drawing_mode
+                && !self.tool_places_on_click()
+                && !state.ctrl_held
+                && let Some(drag) = self.image_handle_at(cursor_pos, bounds, (wx, wy))
+            {
+                state.image_drag = Some(drag);
                 state.wire_grip = None;
                 state.click_on_selected = false;
                 state.move_origin = None;
@@ -249,6 +268,9 @@ impl SchematicCanvas<'_> {
         if let Some(drag) = state.bezier_drag.take() {
             return Some(drag.dropped());
         }
+        if let Some(drag) = state.image_drag.take() {
+            return Some(drag.dropped());
+        }
         self.drop_stale_float(state);
         // A click-click move keeps floating through the picking press's
         // release; only the next press drops it.
@@ -349,7 +371,7 @@ impl SchematicCanvas<'_> {
         // Abort a floating move or in-progress drag — matches Altium / Esc.
         // `pan_moved` makes the matching right-release read as a drag, so the
         // press that cancelled does not also open the context menu.
-        if state.bezier_drag.take().is_some() {
+        if state.bezier_drag.take().is_some() || state.image_drag.take().is_some() {
             state.pan_moved = true;
             return Some(canvas::Action::capture());
         }
@@ -460,6 +482,9 @@ impl SchematicCanvas<'_> {
         cursor: mouse::Cursor,
     ) -> Option<canvas::Action<Message>> {
         if let Some(action) = self.update_bezier_drag(state, bounds, cursor) {
+            return Some(action);
+        }
+        if let Some(action) = self.update_image_drag(state, bounds, cursor) {
             return Some(action);
         }
         self.drop_stale_float(state);

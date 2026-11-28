@@ -75,7 +75,7 @@ fn symbol_marks(is_power: bool, opts: &PdfOptions) -> (Vec<SvgStyle>, Vec<(f32, 
         match element {
             SvgElement::Path { style, .. } => styles.push(style),
             SvgElement::Text { fill_rgb, text, .. } if text == "GND" => texts.push(fill_rgb),
-            SvgElement::Text { .. } => {}
+            SvgElement::Text { .. } | SvgElement::Image { .. } => {}
         }
     }
     (styles, texts)

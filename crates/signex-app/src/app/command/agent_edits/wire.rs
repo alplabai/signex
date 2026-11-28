@@ -303,6 +303,16 @@ const PROJECT_WIDE: &[(&str, &str)] = &[
         "set_footprint_text",
         "it edits a board, which no sheet's undo step covers; run it as its own command",
     ),
+    // #2838: a symbol has its own editor's undo stack.
+    ("symbol_draw_elliptical_arc", SYMBOL_EDIT),
+    ("symbol_draw_bezier", SYMBOL_EDIT),
+    ("symbol_draw_round_rectangle", SYMBOL_EDIT),
+    ("symbol_draw_pie", SYMBOL_EDIT),
+    // #2817: one undo step on the symbol file it names.
+    (
+        "edit_symbol_pins",
+        "it edits a library symbol, which no sheet's undo step covers; run it as its own command",
+    ),
     // #2936: a footprint placed by id; a list form (`ids`) is one board step.
     (
         "set_footprint_position",
@@ -331,6 +341,15 @@ const PROJECT_WIDE: &[(&str, &str)] = &[
     ("create_rooms_from_sheets", BOARD_EDIT),
     ("arrange_in_room", BOARD_EDIT),
     ("auto_place", BOARD_EDIT),
+    // #3013: a footprint's pads, on the footprint's own undo stack.
+    ("footprint_move_pads", FOOTPRINT_EDIT),
+    ("footprint_align_pads", FOOTPRINT_EDIT),
+    // #3013: the update lands when the library symbols are read, one step
+    // per updated symbol.
+    (
+        "apply_library_updates",
+        "it reads the libraries off the UI thread and lands later, one step per symbol; run it as its own command",
+    ),
     // #2389: length tuning lands on the named board's own undo stack.
     (
         "tune_net_length",
@@ -438,6 +457,30 @@ const PROJECT_WIDE: &[(&str, &str)] = &[
         "project_enable_requirement",
         "it writes the project's settings, which no sheet's undo step covers",
     ),
+    (
+        "project_start_checklist",
+        "it writes the project's settings, which no sheet's undo step covers",
+    ),
+    (
+        "project_add_checklist_item",
+        "it writes the project's settings, which no sheet's undo step covers",
+    ),
+    (
+        "project_set_checklist_item",
+        "it writes the project's settings, which no sheet's undo step covers",
+    ),
+    (
+        "project_set_checklist_state",
+        "it writes the project's settings, which no sheet's undo step covers",
+    ),
+    (
+        "project_remove_checklist_item",
+        "it writes the project's settings, which no sheet's undo step covers",
+    ),
+    (
+        "project_reset_checklist",
+        "it writes the project's settings, which no sheet's undo step covers",
+    ),
     // #2665: the copy it pastes is the person's in this window, not the
     // agent's.
     (
@@ -453,6 +496,14 @@ const PROJECT_WIDE: &[(&str, &str)] = &[
     (
         "notebook_fix_reference",
         "it edits the project's Design Notebook, which no sheet's undo step covers; run it as its own command",
+    ),
+    (
+        "project_remove_font",
+        "it writes the project's settings, which no sheet's undo step covers",
+    ),
+    (
+        "project_set_font_license",
+        "it writes the project's settings, which no sheet's undo step covers",
     ),
     (
         "project_set_rail",
@@ -476,6 +527,12 @@ const PROJECT_WIDE: &[(&str, &str)] = &[
 const BOARD_EDIT: &str =
     "it edits a board, which no sheet's undo step covers; run it as its own command";
 
+const SYMBOL_EDIT: &str =
+    "it edits a symbol, which no sheet's undo step covers; run it as its own command";
+
+const FOOTPRINT_EDIT: &str =
+    "it edits a footprint, which no sheet's undo step covers; run it as its own command";
+
 /// Commands an agent runs as their own labelled step but an edit list does
 /// not carry yet: whether a list may carry them is not decided (#2326 slice
 /// 6.P2b, docs/DECISIONS.md).
@@ -488,6 +545,9 @@ const NOT_YET_IN_LISTS: &[&str] = &[
     // #1261: a schematic swap is its own step until a list is decided.
     "swap_schematic_pins",
     "swap_schematic_gates",
+    // #1114: a rich note's Apply runs as its own step until a list carrying
+    // it is decided (Caner, 2026-11-27).
+    "apply_rich_note_edit",
 ];
 
 /// Why `command` may not be one of the edits, or `None` when it may: it must
@@ -681,12 +741,18 @@ mod tests {
             "clear_all_net_colors",
             "color_net",
             "draw_bus",
+            // #1267: the curve drawings, placements like the rectangle.
+            "draw_ellipse",
+            "draw_elliptical_arc",
             "draw_graphic_line",
             "draw_line",
             "draw_rectangle",
+            "draw_round_rectangle",
             "draw_wire",
             "edit_blanket",
             "edit_no_erc_rules",
+            // #2836: the dimension tools from their operands.
+            "place_aligned_dimension",
             "place_blanket",
             "place_bus",
             "place_compile_mask",
@@ -695,6 +761,9 @@ mod tests {
             "place_global_label",
             "place_hierarchical_label",
             "place_junction",
+            // #2836: the dimension tools from their operands, as the other
+            // sheet placements.
+            "place_linear_dimension",
             "place_local_net_label",
             "place_net_label",
             "place_no_connect",
@@ -710,6 +779,8 @@ mod tests {
             "place_wire",
             // The sheet's bare pin touches get their dots.
             "repair_pin_junctions",
+            // #1116: one field of a placed image.
+            "set_image",
             // #1277: a part made a net tie or an ordinary part.
             "set_net_tie",
             "set_object_position",
@@ -719,6 +790,11 @@ mod tests {
             "set_sheet_symbol_size",
             "set_sheet_variable",
             "set_symbol_parameter",
+            // #1114: a text note's Format row.
+            "set_text_note_format",
+            // #1114: a rich note's Frame and Size sections.
+            "set_text_note_frame",
+            "set_text_note_size",
             // #1276; `to_sheet` brings the child into the list's step (#2501).
             "sync_sheet_entries",
             "sync_sheet_pins",
@@ -770,6 +846,8 @@ mod tests {
             ("send_drawings_backward", "does not carry it yet"),
             ("send_drawings_to_back", "does not carry it yet"),
             ("delete_selection", "does not carry it yet"),
+            // #2817: a symbol file's pins, on its own undo stack.
+            ("edit_symbol_pins", "edits a library symbol"),
             // #1261: a schematic swap runs on its own.
             ("swap_schematic_pins", "does not carry it yet"),
             ("swap_schematic_gates", "does not carry it yet"),

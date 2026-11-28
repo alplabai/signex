@@ -11,6 +11,8 @@ define_ids! {
     FILE_DIALOG_EXPORT_BOM = "file-dialog-export-bom";
     FILE_DIALOG_EXPORT_ERC_REPORT = "file-dialog-export-erc-report";
     FILE_DIALOG_EXPORT_NETLIST = "file-dialog-export-netlist";
+    FILE_DIALOG_RUN_OUTPUT_JOB = "file-dialog-run-output-job";
+    FILE_DIALOG_EXPORT_SHEET_PNG = "file-dialog-export-sheet-png";
     FILE_DIALOG_IMPORT_SHORTCUTS = "file-dialog-import-shortcuts";
     FILE_DIALOG_EXPORT_SHORTCUTS = "file-dialog-export-shortcuts";
     FILE_DIALOG_OPEN_LIBRARY = "file-dialog-open-library";
@@ -59,4 +61,5 @@ define_ids! {
     FILE_FILTER_XLSX_EXT = "file-filter-xlsx-ext";
     FILE_FILTER_NETLIST_LISTING = "file-filter-netlist-listing";
     FILE_FILTER_NETLIST_NET_TEXT = "file-filter-netlist-net-text";
+    FILE_FILTER_OUTPUT_JOB = "file-filter-output-job";
 }

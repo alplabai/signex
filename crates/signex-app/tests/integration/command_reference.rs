@@ -135,6 +135,10 @@ fn render() -> String {
          [baseline=<run>]` runs the project's requirements list as checks and\n\
          answers in the same shape; rules in [CLI.md](CLI.md), \"Requirement\n\
          checks\".\n\
+         `query_cross_references document=<sheet>` lists each Global label of an\n\
+         open sheet with the pages and frame zones its net continues on, the\n\
+         `[2/B3]` text the canvas and the PDF print beside it; it answers once the\n\
+         project's net index is current.\n\
          `list_annotations document=<project or one of its documents> [id=<block\n\
          id>] [kind=<kind>] [part=<designator>]` answers, once the notebook files\n\
          are read, with every annotation block of the project's Design Notebook\n\

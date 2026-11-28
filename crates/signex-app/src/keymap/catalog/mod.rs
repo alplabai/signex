@@ -208,7 +208,9 @@ mod tests {
             text("place_wire"),
             ("Place wire".to_string(), "Wire".to_string())
         );
-        assert_eq!(category_title(en, "pcb_sync"), "Pcb Sync");
+        // #3049: the board categories say PCB, as the rest of the app does.
+        assert_eq!(category_title(en, "pcb_sync"), "PCB Sync");
+        assert_eq!(category_title(en, "pcb"), "PCB");
         assert_eq!(category_title(en, "navigation"), "Navigation");
         assert_eq!(category_title(en, "uncategorized"), "Uncategorized");
     }

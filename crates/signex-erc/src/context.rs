@@ -358,6 +358,8 @@ pub struct ErcContext {
     /// Differential pair halves whose partner net is not on the sheet
     /// (#2951), from `signex_net::lone_pair_members`.
     pub lone_pairs: Vec<signex_net::LonePairMember>,
+    /// The sheet's images (#1116).
+    pub images: Vec<crate::images::ErcImage>,
 }
 
 impl ErcContext {
@@ -555,6 +557,7 @@ impl ErcContext {
             harness: ErcHarness::from_sheet(snapshot),
             class_conflicts: class_conflicts(snapshot),
             lone_pairs: signex_net::lone_pair_members(snapshot),
+            images: crate::images::ErcImage::of_sheet(&snapshot.drawings),
         }
     }
 }

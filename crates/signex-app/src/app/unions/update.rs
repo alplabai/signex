@@ -11,7 +11,7 @@ use signex_types::schematic::{SchUnion, SelectedItem};
 use uuid::Uuid;
 
 use super::state::{
-    CreateUnionPopover, ScopeSheet, UnionPopoverMsg, UnionScope, UnionsMsg, panel_view,
+    CreateUnionPopover, RenameDraft, ScopeSheet, UnionPopoverMsg, UnionScope, UnionsMsg, panel_view,
 };
 use crate::app::{Message, Signex};
 
@@ -307,7 +307,9 @@ impl Signex {
 
     /// Rename the picked union as the name is typed; the engine keeps the
     /// keystrokes of one union as one undo step and refuses a locked union.
-    /// A blank name is not sent.
+    /// The field shows the text as typed (a draft), so a trailing space or
+    /// an empty field stays; the trimmed text is sent, a blank one is not
+    /// (#2745).
     fn rename_picked_union(&mut self, name: String) {
         let Some((sheet, id)) = self.ui_state.unions.picked.clone() else {
             return;
@@ -315,16 +317,46 @@ impl Signex {
         let Some(found) = self.union_on(&sheet, id) else {
             return;
         };
-        if name.trim().is_empty() {
+        let trimmed = name.trim().to_string();
+        self.ui_state.unions.rename_draft = Some(RenameDraft {
+            sheet: sheet.clone(),
+            union: id,
+            text: name,
+        });
+        if trimmed.is_empty() || trimmed == found.name {
             return;
         }
         let command = Command::UpdateUnion {
             uuid: id,
-            name,
+            name: trimmed,
             tags: found.tags,
             locked: found.locked,
         };
         self.run_union_command(&sheet, command);
+    }
+
+    /// Drop the foot's draft name once it no longer stands for the picked
+    /// union's name: another union was picked, the union went or is locked,
+    /// or its name changed under the draft (undo, a refusal). A blank draft
+    /// stays until another union is picked.
+    fn settle_rename_draft(&mut self) {
+        let Some(draft) = self.ui_state.unions.rename_draft.as_ref() else {
+            return;
+        };
+        let picked = self
+            .ui_state
+            .unions
+            .picked
+            .as_ref()
+            .is_some_and(|(path, id)| *path == draft.sheet && *id == draft.union);
+        let text = draft.text.trim();
+        let keep = picked
+            && self
+                .union_on(&draft.sheet, draft.union)
+                .is_some_and(|u| !u.locked && (text.is_empty() || text == u.name));
+        if !keep {
+            self.ui_state.unions.rename_draft = None;
+        }
     }
 
     /// Select every member of `union`; a union on another sheet is picked
@@ -344,7 +376,9 @@ impl Signex {
         self.replace_selection(items);
     }
 
-    /// A click selected `hit`: grow it to the whole union it belongs to.
+    /// A canvas gesture added to the selection (a click, a box, a lasso,
+    /// Ctrl / Shift+click, Select Connected, a click-click move pick): grow
+    /// it to whole unions, so a union selects and moves as one (#2745).
     pub(crate) fn expand_selection_to_unions(&mut self) {
         let Some(path) = self.document_state.active_path.clone() else {
             return;
@@ -406,7 +440,7 @@ impl Signex {
             .map(|p| p.path.as_path());
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
         (active, owner, state.scope, &state.filter).hash(&mut hasher);
-        (&state.tags_on, &state.picked).hash(&mut hasher);
+        (&state.tags_on, &state.picked, &state.rename_draft).hash(&mut hasher);
         // Order-independent: the hidden unions, and the sheets in scope.
         let hidden = state.hidden.iter().map(stamp).fold(0u64, u64::wrapping_add);
         let project_wide = state.scope == UnionScope::Project && owner.is_some();
@@ -431,6 +465,7 @@ impl Signex {
     /// Rebuild the panel's view from the open sheets, when what it is built
     /// from changed. Cheap when the panel is closed: nothing is read.
     pub(crate) fn sync_unions_panel(&mut self) {
+        self.settle_rename_draft();
         if !self.is_panel_open(crate::panels::PanelKind::Unions) {
             self.document_view.panel_ctx.unions.built_from = None;
             return;

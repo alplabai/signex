@@ -57,6 +57,7 @@ impl Signex {
         variant: Option<String>,
     ) -> Task<Message> {
         self.commit_drafts_in_scope_of(Some(&source));
+        self.read_clock();
         self.report_part_field_issues_in_scope_of(&source);
         let variants = self
             .document_state
@@ -503,6 +504,8 @@ impl Signex {
             }
         };
 
+        // The BOM prints the date of this export (`read_clock`).
+        self.read_clock();
         let (mut ctx, issues) =
             match super::build_bom_export_scope_for_source(&self.document_state, &source) {
                 Some(c) => c,
@@ -526,7 +529,7 @@ impl Signex {
         // *wrong* subtree — wrong parts, wrong quantities. Surface it loudly,
         // once, from this user action, exactly like the PDF/netlist
         // deliverables (ADR-0002 D8: degradation is reported, never silent).
-        super::log_stitch_issues(&source, &ctx, &issues);
+        self.report_stitch_issues(&source, &ctx, &issues);
         crate::library::drift::apply_library_names(&mut ctx, &self.library.drift.names);
         // A project whose hierarchy could not be derived falls back to the
         // printed pages only, so child-sheet parts would be missing. Say so in
@@ -614,7 +617,7 @@ impl Signex {
     /// The parts whose footprint on the board of `source`'s project is of a
     /// type the BOM leaves out (#2365). Read from the board while it is
     /// open; a board that is not open leaves every part in.
-    fn board_left_out_of_bom(
+    pub(super) fn board_left_out_of_bom(
         &self,
         source: &std::path::Path,
     ) -> Vec<signex_types::pcb::SymbolLink> {

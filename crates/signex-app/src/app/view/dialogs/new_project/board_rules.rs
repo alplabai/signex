@@ -2,24 +2,27 @@
 //! (mockup rows 21 and 22): two tracks at their width and clearance and a
 //! via at its size and drill, on the board ground, with the values as
 //! editable labels and handles. Interaction: `app/new_project/preview.rs`.
+//! The Project tab's Board rules preview (mockup row 37) draws the same
+//! board with its values as tags that take no input.
 
 use std::sync::LazyLock;
 
 use iced::alignment::{Horizontal, Vertical};
-use iced::widget::{Space, canvas, column, container, mouse_area, opaque, row, stack, svg};
+use iced::widget::{Row, Space, canvas, column, container, mouse_area, opaque, row, stack, svg};
 use iced::{
     Background, Border, Color, Element, Length, Point, Rectangle, Renderer, Size, Theme,
     Widget as _, mouse,
 };
-use signex_i18n::{I18n, ids, t};
-use signex_types::project::PcbDefaults;
+use signex_i18n::{I18n, UserText, ids, t};
+use signex_types::project::{PcbDefaults, PcbField};
 use signex_types::theme::{CanvasColors, ThemeId, ThemeTokens, theme_tokens};
 use signex_widgets::dimension_label::DimensionLabelStyle;
-use signex_widgets::{button, text};
+use signex_widgets::{Translate, button, text};
 
 use super::{SP, TS, customize, preview};
 use crate::app::new_project::preview::{
-    CENTRE_Y, EXPANDED_ZOOM, RuleGeometry, TRACK_X, VIA_X, VIEW_H, VIEW_W, rule_labels,
+    CENTRE_Y, EXPANDED_ZOOM, LABEL_FIELDS, RuleGeometry, TRACK_X, VIA_X, VIEW_H, VIEW_W,
+    rule_labels,
 };
 use crate::app::new_project::{DialogPreview, NewProjectMsg, NewProjectState, SetupPreviewMsg};
 use crate::styles::board_palette::{BoardPalette, BoardSwatch};
@@ -55,7 +58,7 @@ impl BoardRules {
     fn of(pcb: &PcbDefaults, zoom: f32) -> Self {
         let palette = BoardPalette::new();
         let dark = theme_tokens(ThemeId::GraphiteDark);
-        let is_bad = pcb.via_drill_mm >= pcb.via_diameter_mm;
+        let is_bad = is_drill_refused(pcb);
         Self {
             geometry: RuleGeometry::of(pcb),
             zoom,
@@ -182,21 +185,22 @@ fn head<'a>(
     .boxed()
 }
 
-/// The drawing with its value labels at `zoom`; `is_live` leaves out the
-/// labels of a drawing that another view is editing.
-fn drawing<'a>(
-    state: &'a NewProjectState,
-    zoom: f32,
-    is_live: bool,
-    i18n: &'a I18n,
-) -> Element<'a, NewProjectMsg> {
+/// Whether `pcb`'s drill is at or above its via size, which the drawing
+/// shows in the error ink.
+fn is_drill_refused(pcb: &PcbDefaults) -> bool {
+    pcb.via_drill_mm >= pcb.via_diameter_mm
+}
+
+/// The board drawing at `zoom` and, while the drill is refused, the note
+/// over it in the error ink.
+fn board_layers<'a>(pcb: &PcbDefaults, zoom: f32, i18n: &I18n) -> Vec<Element<'a, NewProjectMsg>> {
     let (width, height) = (VIEW_W * zoom, VIEW_H * zoom);
-    let board: Element<'a, NewProjectMsg> = canvas(BoardRules::of(&state.setup.pcb, zoom))
+    let board: Element<'a, NewProjectMsg> = canvas(BoardRules::of(pcb, zoom))
         .width(Length::Fixed(width))
         .height(Length::Fixed(height))
         .boxed();
     let mut layers = vec![board];
-    if state.setup.pcb.via_drill_mm >= state.setup.pcb.via_diameter_mm {
+    if is_drill_refused(pcb) {
         let dark = theme_tokens(ThemeId::GraphiteDark);
         layers.push(
             container(
@@ -211,6 +215,79 @@ fn drawing<'a>(
             .boxed(),
         );
     }
+    layers
+}
+
+/// Gap between a tag's caption and its value, and its corner radius, in
+/// text-size units, as the dimension labels draw them.
+const TAG_GAP_EM: f32 = 0.35;
+const TAG_RADIUS_EM: f32 = 0.35;
+
+/// The drawing at its own size with each rule's value written on it as a
+/// tag that takes no input: the Project tab's Board rules preview (mockup
+/// row 37). The via's tags take the error ink while the drill is refused.
+pub(super) fn values_drawing<'a>(pcb: &PcbDefaults, i18n: &I18n) -> Element<'a, NewProjectMsg> {
+    let style = label_style(1.0);
+    let size = style.text_size;
+    let refused = is_drill_refused(pcb).then(|| ti(theme_tokens(ThemeId::GraphiteDark).error));
+    let mut layers = board_layers(pcb, 1.0, i18n);
+    for (field, label) in LABEL_FIELDS.iter().zip(rule_labels(pcb, 1.0, i18n)) {
+        let is_via = matches!(field, PcbField::ViaDrill | PcbField::ViaSize);
+        let ink = refused.filter(|_| is_via).unwrap_or(style.ink);
+        let mut words: Row<Element<'a, NewProjectMsg>> = Row::new()
+            .spacing(TAG_GAP_EM * size)
+            .align_y(Vertical::Center);
+        if let Some(caption) = &label.caption {
+            words = words.push(
+                text(UserText::new(caption.as_str().to_string()))
+                    .size(size)
+                    .font(iced::Font::MONOSPACE)
+                    .color(ink)
+                    .boxed(),
+            );
+        }
+        words = words.push(
+            text(UserText::new(label.value_text()))
+                .size(size)
+                .font(iced::Font::MONOSPACE)
+                .color(ink)
+                .boxed(),
+        );
+        let bounds = label.bounds(size);
+        let fill = style.fill;
+        let tag = container(words)
+            .width(bounds.width)
+            .height(bounds.height)
+            .align_x(Horizontal::Center)
+            .align_y(Vertical::Center)
+            .style(move |_: &Theme| container::Style {
+                background: Some(Background::Color(fill)),
+                border: Border {
+                    color: ink,
+                    width: 1.0,
+                    radius: (TAG_RADIUS_EM * size).into(),
+                    ..Border::default()
+                },
+                ..container::Style::default()
+            });
+        layers.push(Translate::new(tag.boxed(), (bounds.x, bounds.y)).boxed());
+    }
+    iced::widget::Stack::with_children(layers)
+        .width(Length::Fixed(VIEW_W))
+        .height(Length::Fixed(VIEW_H))
+        .boxed()
+}
+
+/// The drawing with its value labels at `zoom`; `is_live` leaves out the
+/// labels of a drawing that another view is editing.
+fn drawing<'a>(
+    state: &'a NewProjectState,
+    zoom: f32,
+    is_live: bool,
+    i18n: &'a I18n,
+) -> Element<'a, NewProjectMsg> {
+    let (width, height) = (VIEW_W * zoom, VIEW_H * zoom);
+    let mut layers = board_layers(&state.setup.pcb, zoom, i18n);
     if is_live {
         let shown = rule_labels(&state.setup.pcb, zoom, i18n);
         layers.push(

@@ -250,6 +250,7 @@ fn a_stale_answer_starts_the_newest_build_and_the_parked_command_still_runs() {
             base_dir: None,
             fold: Default::default(),
             classes: Vec::new(),
+            cross_refs: Default::default(),
         })),
         warnings: Vec::new(),
     };
@@ -395,6 +396,7 @@ fn empty_outcome(
                 base_dir: None,
                 fold: Default::default(),
                 classes: Vec::new(),
+                cross_refs: Default::default(),
             },
         )),
         warnings: Vec::new(),

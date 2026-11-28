@@ -121,8 +121,10 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
   ([CLI.md](CLI.md), "Board against schematic" and "Board status"),
   `query_rail_budget` (#2943), answered once its parts are read
   ([CLI.md](CLI.md), "Rail budgets"), the BOM's `bom_lines` (#1988;
-  [CLI.md](CLI.md), "BOM lines"), and `query_power_tree` (#1313), answered
-  once its run lands ([CLI.md](CLI.md), "Power tree");
+  [CLI.md](CLI.md), "BOM lines"), `query_power_tree` (#1313), answered
+  once its run lands ([CLI.md](CLI.md), "Power tree"), and the project's
+  image assets `list_image_assets` (#1116), answered once its scan lands
+  ([CLI.md](CLI.md), "Images");
 - a command that names its document with a required `document` operand and
   takes no file path (the placements' optional `document` does not count; they
   stay reachable through `apply_edits`): today `apply_edits`, `revert`, `color_net`,
@@ -181,6 +183,14 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
   the area as JSON, [CLI.md](CLI.md), "Board areas"), and `set_footprint_text` (#2368;
   a component's designator or comment placed, turned, sized or justified on
   its own, one board undo step, answered with the text as JSON), and the
+  symbol editor's curve shapes `symbol_draw_elliptical_arc`,
+  `symbol_draw_bezier`, `symbol_draw_round_rectangle` and `symbol_draw_pie`
+  (#2838; one undo step of the named symbol's editor, answered with the
+  graphic as JSON, [CLI.md](CLI.md) "Symbol shapes"), and
+  `edit_symbol_pins` (#2817; the Pin table's bulk edit and Paste rows on a
+  symbol file, one undo step on it, answered with the pins as JSON; an
+  agent names only an open project's documents, so a loose symbol file is
+  for the CLI; [CLI.md](CLI.md), "Symbol pins"), and the
   length tuning commands
   `tune_net_length` and `tune_diff_pair` (#2389; one undo step on the named
   board, answered with the tuned nets and their lengths as JSON), the pair
@@ -235,18 +245,36 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
   Schematic Apply for the rows named by id, one board undo step and one
   schematic undo group, answered once its reads land), and
   `project_set_rail` (#2943; one undo step of the project's history,
-  [CLI.md](CLI.md), "Rail budgets"). A test
+  [CLI.md](CLI.md), "Rail budgets"), and
+  the footprint editor's `footprint_move_pads` and `footprint_align_pads`
+  (#3013; one undo step of the named footprint, answered with its named
+  pads as JSON; [CLI.md](CLI.md), "Footprint pads"), and
+  `apply_library_updates` (#3013; the Library Updates dialog's Update
+  Selected Components for the named sheet; [CLI.md](CLI.md), "Library
+  dialogs"). The other library dialog commands take a file path or name no
+  document, so they stay off the channel. A test
   pins this set, so a catalog row that joins or leaves it is a visible
   decision.
   The window-layout commands `tile_windows_horizontally`,
-  `tile_windows_vertically` and `untile_documents` (#2249) name no document:
+  `tile_windows_vertically` and `untile_documents` (#2249), and the pane
+  commands `tile_windows_grid`, `split_pane_right`, `split_pane_down`,
+  `open_second_view`, `move_tab_to_other_pane`, `close_pane`,
+  `sync_pane_zoom` and `equalize_panes` (mockup row 207), name no document:
   they are open to agents by the maintainer's rule that everything is
-  AI-controllable, run the View ▸ Window menu row's handler (refused with its reason
-  when the row is greyed) and answer with the layout they left:
-  `{"tiled", "layout": "stacked" | "side_by_side" | null, "panes"}`, each
-  pane `{"focused", "document", "name"}` in pane order (`document` and
-  `name` are null for a pane outside an open project). They never change the
-  active tab. Two more name no document and act on the main window
+  AI-controllable, run the View ▸ Window menu row's or the pane menu row's
+  handler (refused with its reason when the row is greyed, and a pane
+  command with the pane's reason when it cannot act) and answer with the
+  layout they left:
+  `{"tiled", "layout": "stacked" | "side_by_side" | "grid" | null, "shares", "panes"}`,
+  `shares` the pane sizes after a splitter drag (null when equal; left out
+  when not tiled), each pane `{"focused", "document", "name", "tabs",
+  "zoom"}` in pane order (`document` and `name` are null for a pane outside
+  an open project; a second view names its document in two panes, one of
+  them focused; `tabs` names the pane's tabs; `zoom` is its zoom in percent,
+  null for a pane that shows no sheet or board). Split, Tile and Untile
+  never change the active tab; Move Tab and Close Pane keep it, in another
+  pane. Headless, they are refused like every window command. Two more
+  name no document and act on the main window
   (#2470): `zoom_to_fit` runs View ▸ Fit on the active tab's view and
   answers `{"fitted": {"document", "name"}}`, and `set_dock_panel
   panel=<key> state=open|close|collapse|expand` opens or closes a dock
@@ -272,9 +300,16 @@ Derived from the command catalog (`allow.rs`), not listed by hand:
   with `overwrite=true`; the fabrication folder may not be inside `.git`
   either. All three are answered once their files are written, so a write
   that is refused is refused on the socket too. They need the `export`
-  capability in `signex-cli`. `export_assembly_svg`, `export_board_step`
-  and `export_block_diagram` still take a path the channel does not check,
-  so they are CLI only.
+  capability in `signex-cli`. `export_assembly_svg`, `export_board_step`,
+  `export_block_diagram` and `export_schematic_pdf` still take a path the
+  channel does not check, so they are CLI only, as are the PNG pages
+  `export_sheet_png`, an Export Job run `run_output_job` and the Export Job
+  tab's commands (`new_output_job`, `open_output_job`, `read_output_job`,
+  `add_job_output`, `set_job_output`, `set_job_profile`, `set_job_triggers`,
+  `set_job_gerber_units`, `set_job_gerber_format`, `set_job_gerber_zeros`,
+  `set_job_gerber_layers`, `set_job_gerber_apertures`, `stop_output_job`,
+  `view_output_job_run`), which name the job by `path` (#1299,
+  `docs/OUTPUT_JOBS.md`).
 
 The last three are open to agents by the maintainer's decision (#1924):
 

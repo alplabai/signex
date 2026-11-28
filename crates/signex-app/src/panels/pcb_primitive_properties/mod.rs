@@ -53,6 +53,8 @@ use signex_widgets::property_illustration::IllustrationMsg;
 use signex_widgets::{button, text, text_input, tooltip};
 
 pub(crate) use dimension::{is_dimension_length, typed_length_mm};
+#[cfg(test)]
+pub(crate) use drawing::graphic::corner_notes;
 pub use facts::PairFacts;
 pub use facts::ViaTypeChoice;
 pub use facts::{

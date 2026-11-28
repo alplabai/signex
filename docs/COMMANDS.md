@@ -44,6 +44,10 @@ one board. Rules in [CLI.md](CLI.md), "Checks on demand".
 [baseline=<run>]` runs the project's requirements list as checks and
 answers in the same shape; rules in [CLI.md](CLI.md), "Requirement
 checks".
+`query_cross_references document=<sheet>` lists each Global label of an
+open sheet with the pages and frame zones its net continues on, the
+`[2/B3]` text the canvas and the PDF print beside it; it answers once the
+project's net index is current.
 `list_annotations document=<project or one of its documents> [id=<block
 id>] [kind=<kind>] [part=<designator>]` answers, once the notebook files
 are read, with every annotation block of the project's Design Notebook
@@ -96,12 +100,14 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 
 | command id | label | category | Signex Standard | Classic |
 | --- | --- | --- | --- | --- |
+| `add_job_output` | Add an output to an Export Job | design | — | — |
 | `apply_board_schematic_differences` | Apply board and schematic differences by id | pcb_sync | — | — |
 | `apply_edits` | Apply edits (agent) | edit | — | — |
 | `apply_layout_board` | Workspace layout: Layout | window | — | — |
 | `apply_layout_notebook` | Workspace layout: Notebook | window | — | — |
 | `apply_layout_review` | Workspace layout: Review | window | — | — |
 | `apply_layout_schematic` | Workspace layout: Schematic | window | — | — |
+| `apply_library_updates` | Apply the library updates waiting for a sheet | modify | — | — |
 | `attach_notebook_file` | Copy a file into the notebook as an attachment | design | — | — |
 | `autoplace_fields` | Autoplace fields | edit | — | `O` |
 | `block_add` | Add a block to a block diagram | edit | — | — |
@@ -132,9 +138,11 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `check_requirements` | Check project requirements | validation | — | — |
 | `close_active_document` | Close active document | file | `Ctrl+F4`, `Mod+W` (macOS) | — |
 | `close_all_documents` | Close all documents | window | — | — |
+| `close_pane` | Close the focused pane; its tabs join the next pane | window | — | — |
 | `compare_variants` | Compare two variants of the project | design | — | — |
 | `copy` | Copy | edit | `Mod+C` | `Mod+C` |
 | `copy_attributes_or_add_vertex` | Copy attributes from object under cursor or add vertex while drawing | interactive | `Insert`, `Alt+I` (macOS) | — |
+| `copy_stock_to_library` | Copy a stock symbol or footprint to a library | file | — | — |
 | `cross_probe` | Cross probe the selection to the board or schematic | select | `T C` | `Shift+C` |
 | `cut` | Cut | edit | `Mod+X` | `Mod+X` |
 | `cycle_fast_grid` | Cycle fast grid | view | — | `Alt+4` |
@@ -154,8 +162,10 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `edit_reference_designator` | Edit reference designator | edit | — | `U` |
 | `edit_selected_object_properties` | Properties / edit selected object | edit | — | `E` |
 | `edit_selected_symbol_in_symbol_editor` | Edit selected symbol in Symbol Editor | library | — | `Mod+E` |
+| `edit_symbol_pins` | Set a symbol's pins by number, or paste pin rows | edit | — | — |
 | `edit_text_in_place` | In-place edit selected text | edit | `F2` | — |
 | `edit_value` | Edit value | edit | — | `V` |
+| `equalize_panes` | Make the panes the same size | window | — | — |
 | `export_block_diagram` | Export a block diagram as an SVG or PDF file | reports | — | — |
 | `export_notebook_pdf` | Export the Design Notebook as PDF | file | — | — |
 | `export_notebook_timeline` | Export a measurement timeline as a CSV file | reports | — | — |
@@ -168,7 +178,9 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `find_previous` | Find previous | search | `Shift+F3` | `Shift+F3` |
 | `find_similar_objects` | Find Similar Objects | select | `Shift+F` | `Shift+F` |
 | `find_text` | Find text | search | — | — |
+| `flip_gerber_view` | Show the Gerber board from the bottom | view | — | — |
 | `generate_design_notebook` | Generate a design notebook from the project | design | — | — |
+| `highlight_gerber_net` | Highlight a net in the Gerber Viewer | view | — | — |
 | `home_view` | Reset the view rotation and Flip, then fit the board or sheet | view | — | — |
 | `import_graphics` | Import graphics | place | — | `Mod+Shift+F` |
 | `import_library` | Import a library made in another tool | file | — | — |
@@ -176,6 +188,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `keymap_clear` | Take a command's keys away in a custom keyboard profile | preferences | — | — |
 | `list_annotations` | List the annotation blocks of the project's Design Notebook | design | — | — |
 | `list_documents` | List documents | file | — | — |
+| `list_image_assets` | List the project's image assets | file | — | — |
 | `list_snippets` | List the snippets of the project and the library | file | — | — |
 | `list_templates` | List the sheet and project templates | file | — | — |
 | `manage_workspace_layouts` | Manage workspace layouts | window | — | — |
@@ -185,11 +198,14 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `mirror_y` | Mirror along Y-axis | modify | `Y` | `Y` |
 | `move_object` | Move object | modify | `M M` | — |
 | `move_selection` | Move selection | modify | — | `M` |
+| `move_tab_to_other_pane` | Move the active tab to the other pane | window | — | — |
 | `new_block_diagram` | New block diagram in the project | file | — | — |
 | `new_document` | New | file | `Mod+N` | `Mod+N` |
+| `new_library` | Create a library for a project | file | — | — |
+| `new_output_job` | New Export Job | file | — | — |
 | `new_project_with_profile` | New project from a profile | file | — | — |
 | `next_document_tab` | Next open document tab | window | `Ctrl+Tab` | — |
-| `next_grid` | Next grid | view | — | `N` |
+| `next_grid` | Next grid | view | `G` | `N` |
 | `notebook_attachments` | List the notebook's attachments and their stale marks | design | — | — |
 | `notebook_badges` | List the Notebook badges and their blocks | design | — | — |
 | `notebook_compile` | Compile the project's Design Notebook and report its pages and problems | reports | — | — |
@@ -204,17 +220,21 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `open_command_palette` | Open command palette | commands | `Mod+Shift+P` | `Ctrl+K`, `Mod+Shift+P` |
 | `open_compiled_design` | Open Compiled Design panel | panels | — | — |
 | `open_datasheet` | Open datasheet | edit | — | `D` |
+| `open_design_checklist` | Open the design checklist of the project | design | — | — |
 | `open_design_notebook` | Open the Design Notebook of the project (Wiki) | design | — | — |
 | `open_diff_pair_classes` | Open the project's differential pair classes | design | — | — |
 | `open_document` | Open document | file | `Mod+O` | `Mod+O` |
+| `open_gerber_viewer` | Open the Gerber Viewer | file | — | — |
 | `open_grid_picker` | Open grid picker | view | — | — |
 | `open_grid_properties` | Open grid properties | view | — | — |
 | `open_library_browser` | Open library browser | library | — | — |
 | `open_net_classes` | Open the project's Net Classes panel | design | — | — |
 | `open_net_classes_panel` | Open the Net Classes panel of the project | design | — | — |
 | `open_net_inspector` | Open Net Inspector panel | panels | `V N` | `Shift+I` |
+| `open_output_job` | Open the project's Export Job | panels | — | — |
 | `open_preferences` | Open preferences | preferences | `Mod+,` | `Mod+,` |
 | `open_schematic_preferences` | Open schematic preferences | preferences | `T P` | — |
+| `open_second_view` | Open a second view of the document on the right | window | — | — |
 | `paste` | Paste | edit | `Mod+V` | `Mod+V` |
 | `paste_array` | Paste array | edit | — | — |
 | `paste_special` | Paste special | edit | — | `Mod+Shift+V` |
@@ -223,20 +243,36 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `previous_document_tab` | Previous open document tab | window | `Ctrl+Shift+Tab` | — |
 | `previous_grid` | Previous grid | view | — | `Shift+N` |
 | `print` | Print | file | `Mod+P` | `Mod+P` |
+| `project_add_checklist_item` | Add an item to the design checklist | design | — | — |
+| `project_add_font` | Add a font file to the project | design | — | — |
 | `project_add_requirement` | Add a requirement to the project | design | — | — |
 | `project_add_variant` | Add a variant to the project | design | — | — |
+| `project_checklist` | Read the design checklist of the project | design | — | — |
+| `project_checklist_link_choices` | List what a design checklist item can link to | design | — | — |
+| `project_checklist_templates` | List the design checklist templates | design | — | — |
 | `project_duplicate_variant` | Duplicate a variant of the project | design | — | — |
 | `project_enable_requirement` | Turn a project requirement on or off | design | — | — |
+| `project_export_checklist_csv` | Export the design checklist as a CSV file | reports | — | — |
+| `project_import_checklist` | Start the design checklist from another project's checklist | design | — | — |
 | `project_move_library` | Move a library in the library order of the project | design | — | — |
 | `project_move_sheet` | Move a sheet in the page order of the project | design | — | — |
+| `project_open_checklist_link` | Show what a design checklist item links to | design | — | — |
+| `project_remove_checklist_item` | Remove an item from the design checklist | design | — | — |
+| `project_remove_font` | Remove a font from the project | design | — | — |
 | `project_remove_requirement` | Remove a requirement from the project | design | — | — |
 | `project_remove_variant` | Remove a variant of the project | design | — | — |
 | `project_rename_variant` | Rename a variant of the project | design | — | — |
+| `project_reset_checklist` | Reset the design checklist from its template | design | — | — |
+| `project_run_checklist` | Run the checks the design checklist links to | validation | — | — |
 | `project_run_requirements` | Run the project's requirement checks in the Project tab | validation | — | — |
+| `project_save_checklist_template` | Save the design checklist as a template | design | — | — |
 | `project_set_active_variant` | Choose the active variant of the project | design | — | — |
 | `project_set_annotate_numbering` | Set how Annotate numbers the designators of the project | design | — | — |
 | `project_set_annotate_undo` | Set how many undo steps an annotate run of the project is | design | — | — |
+| `project_set_checklist_item` | Set a field of a design checklist item | design | — | — |
+| `project_set_checklist_state` | Mark a design checklist item open, done or waived | design | — | — |
 | `project_set_default_variant` | Choose the default variant of the project | design | — | — |
+| `project_set_font_license` | Set the license of a project font | design | — | — |
 | `project_set_rail` | Set a power rail's voltage and tolerance | design | — | — |
 | `project_set_requirement` | Set a field of a project requirement | design | — | — |
 | `project_set_variant_alternate` | Set the alternate part a variant uses for a part of the project | design | — | — |
@@ -244,14 +280,18 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `project_set_variant_override` | Set a parameter value a variant gives a part of the project | design | — | — |
 | `project_set_version_control` | Turn commit on save on or off for the project | design | — | — |
 | `project_settings` | Read the settings of the project | design | — | — |
+| `project_start_checklist` | Start the design checklist of the project from a template | design | — | — |
 | `query_block_diagram` | Query a block diagram | search | — | — |
 | `query_bom` | Query the priced BOM | design | — | — |
+| `query_cross_references` | Query off-sheet cross references | file | — | — |
 | `query_library` | Query a library | library | — | — |
 | `query_net_ties` | Query net ties | file | — | — |
 | `query_pins` | Query pins | file | — | — |
 | `query_power_tree` | Query the project's power tree | design | — | — |
 | `query_rail_budget` | Query the project's rail budget | validation | — | — |
 | `read_document` | Read document | file | — | — |
+| `read_output_job` | Read an Export Job: its outputs, profiles, history and run | design | — | — |
+| `recover_library` | Recover a library that is missing or has lost its history | file | — | — |
 | `redo` | Redo | edit | `Mod+Shift+Z` (macOS), `Ctrl+Shift+Z`, `Ctrl+Y` | `Ctrl+Shift+Z`, `Mod+Shift+Z` (macOS), `Ctrl+Y` |
 | `refresh_view` | Refresh/redraw | view | `End` | `F5` |
 | `remove_last_vertex` | Remove last placed vertex while drawing | interactive | `Backspace` | — |
@@ -264,6 +304,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `rotate_clockwise` | Rotate clockwise by 90 degrees | modify | `Shift+Space` | `Shift+R` |
 | `rotate_counterclockwise` | Rotate counterclockwise by 90 degrees | modify | `Space` | `R` |
 | `rubber_stamp_copy` | Rubber-stamp copy / repeated paste | edit | `Mod+R` | — |
+| `run_output_job` | Run an Export Job: write the outputs its file lists | reports | — | — |
 | `save_all` | Save all unsaved documents | file | `Mod+Alt+S` | `Mod+Alt+S` |
 | `save_document` | Save document | file | `Mod+S` | `Mod+S` |
 | `save_document_as` | Save as | file | `Mod+Shift+S` | `Mod+Shift+S` |
@@ -271,14 +312,35 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `save_workspace_layout` | Save the panel arrangement as a workspace layout | window | — | — |
 | `search_parts` | Search parts by parameters | library | — | — |
 | `select_all` | Select all | select | `Mod+A` | `Mod+A` |
+| `select_gerber_object` | Select an object in the Gerber Viewer | select | — | — |
 | `send_drawings_backward` | Send drawings backward | edit | — | — |
 | `send_drawings_to_back` | Send drawings to back | edit | — | — |
 | `set_dock_panel` | Open, close, collapse or expand a dock panel | panels | — | — |
+| `set_job_gerber_apertures` | Set how an Export Job's Gerber output defines its apertures | design | — | — |
+| `set_job_gerber_format` | Set the number format of an Export Job's Gerber output | design | — | — |
+| `set_job_gerber_layers` | Set the layers an Export Job's Gerber output writes | design | — | — |
+| `set_job_gerber_units` | Set the units of an Export Job's Gerber output | design | — | — |
+| `set_job_gerber_zeros` | Set which zeros an Export Job's Gerber output leaves out | design | — | — |
+| `set_job_output` | Change or remove an Export Job output | design | — | — |
+| `set_job_profile` | Make, rename, remove or change an Export Job profile | design | — | — |
+| `set_job_triggers` | Set what runs an Export Job profile automatically | design | — | — |
+| `set_library_document_options` | Set the document options of a library | view | — | — |
 | `show_all_design_objects` | Show all design objects | view | — | — |
 | `show_current_command_hotkeys` | Show graphical editing hotkey list for current command | help | `F1` | — |
 | `show_current_command_shortcuts` | Show valid shortcuts for the current interactive command | help | `Shift+F1` | — |
+| `show_gerber_drills_on_top` | Draw the Gerber holes over everything | view | — | — |
+| `show_gerber_open_menu` | Show the Gerber Viewer's Open menu | file | — | — |
 | `smart_paste` | Smart Paste | edit | `Mod+Shift+V` | — |
+| `split_pane_down` | Move the document into a new pane below | window | — | — |
+| `split_pane_right` | Move the document into a new pane on the right | window | — | — |
+| `stop_output_job` | Stop the Export Job run going now | design | — | — |
 | `switch_segment_posture` | Flip the wire/bus corner: horizontal or vertical first | interactive | — | `/` |
+| `symbol_draw_bezier` | Draw a Bezier curve on a symbol | place | — | — |
+| `symbol_draw_elliptical_arc` | Draw an elliptical arc on a symbol | place | — | — |
+| `symbol_draw_pie` | Draw a pie chart on a symbol | place | — | — |
+| `symbol_draw_round_rectangle` | Draw a round rectangle on a symbol | place | — | — |
+| `sync_pane_zoom` | Give the other panes the focused pane's zoom | window | — | — |
+| `tile_windows_grid` | Tile documents in a grid of up to four panes | window | — | — |
 | `tile_windows_horizontally` | Tile windows one above the other | window | `W H` | `Shift+Alt+H` |
 | `tile_windows_vertically` | Tile windows side by side | window | `W V` | `Shift+Alt+V` |
 | `toggle_auto_focus` | Toggle AutoFocus | view | `F9` | `F9` |
@@ -297,6 +359,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `unselect_all` | Unselect all | select | — | `Mod+Shift+A` |
 | `untile_documents` | Untile documents | window | `W U` | `Shift+Alt+U` |
 | `variant_bom` | Read the BOM of a variant of the project | design | — | — |
+| `view_output_job_run` | View an Export Job run's files in the Gerber Viewer | view | — | — |
 | `zoom_in_at_cursor` | Zoom in at cursor | view | `PageUp` | `F1` |
 | `zoom_out_at_cursor` | Zoom out at cursor | view | `PageDown` | `F2` |
 | `zoom_to_all_objects` | Zoom to all objects | view | — | `Ctrl+Home` |
@@ -318,6 +381,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `align_vertical_centers` | Align vertical centers | modify | — | — |
 | `annotate_schematic` | Annotate schematic | design | `T A` | — |
 | `annotate_schematic_quietly` | Annotate schematic quietly | design | `Alt+A` | `Alt+A` |
+| `apply_rich_note_edit` | Apply the edit of a rich text note | edit | — | — |
 | `apply_selection_filter_preset` | Apply a selection filter preset | select | — | — |
 | `assign_footprint` | Set the footprint of a placed part | design | — | — |
 | `assign_footprints` | Assign footprints | design | — | — |
@@ -326,6 +390,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `break_union` | Break the selected union | edit | — | — |
 | `bring_to_front` | Bring to front | modify | — | — |
 | `bring_to_front_of` | Bring to front of | modify | — | — |
+| `cancel_rich_note_edit` | Cancel the edit of a rich text note | edit | — | — |
 | `change_component` | Change the selected part's component | edit | — | — |
 | `clear_all_net_colors` | Clear all net colors | view | — | — |
 | `clear_net_color` | Clear net color | view | — | — |
@@ -333,6 +398,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `color_net` | Color net | view | — | — |
 | `compare_board_with_schematic` | Compare board with schematic | pcb_sync | — | — |
 | `compile_project` | Compile the project | design | — | — |
+| `compile_rich_note` | Compile a rich text note | edit | — | — |
 | `create_sheet_from_sheet_symbol` | Create a child sheet from the selected sheet symbol | design | — | — |
 | `create_sheet_symbol_from_sheet` | Create a sheet symbol from a sheet file, with an entry for every port | design | — | — |
 | `create_union` | Create a union from the selection | edit | `Mod+G` | — |
@@ -355,7 +421,10 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `draw_wire` | Draw wire | place | — | — |
 | `edit_blanket` | Edit net blanket parameters | place | — | — |
 | `edit_no_erc_rules` | Edit No ERC rules | place | — | — |
+| `edit_rich_note` | Edit a rich text note in place | edit | — | — |
 | `export_parameters` | Export the active sheet's parameters to a CSV file | design | — | — |
+| `export_schematic_pdf` | Export the schematic's sheets to a PDF file | reports | — | — |
+| `export_sheet_png` | Export the schematic's pages as PNG images | reports | — | — |
 | `flip_selected_x` | Flip selected x | modify | — | — |
 | `flip_selected_y` | Flip selected y | modify | — | — |
 | `force_annotate_all_schematics` | Force annotate all schematics | design | `Shift+Alt+A` | `Shift+Alt+A` |
@@ -381,6 +450,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `open_net_color_palette` | Open net color palette | view | `F5` | — |
 | `open_parameter_manager` | Open Parameter Manager | design | — | — |
 | `open_project_options` | Open Project Options for the active project | file | — | — |
+| `open_rich_note_link` | Open a link of a rich text note | edit | — | — |
 | `open_selection_filter` | Open the selection filter of the sheet | select | — | — |
 | `place_aligned_dimension` | Place aligned dimension | place | — | — |
 | `place_blanket` | Place net blanket | place | — | — |
@@ -423,6 +493,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `previous_sheet` | Previous sheet | navigation | — | `PageUp` |
 | `query_footprint_assignments` | List the footprint of every part | design | — | — |
 | `regenerate_block_diagram` | Regenerate the block diagram from the sheet hierarchy | design | — | — |
+| `relink_image` | Point images at another image file | edit | — | — |
 | `remove_from_union` | Remove the selection from its union | edit | — | — |
 | `repair_pin_junctions` | Add a junction where a pin end touches a wire | validation | — | — |
 | `reset_schematic_designators` | Reset schematic designators | design | `T A E` | — |
@@ -435,6 +506,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `select_node_or_connection_item` | Select node / connection item under cursor | select | — | `Alt+3` |
 | `send_to_back` | Send to back | modify | — | — |
 | `send_to_back_of` | Send to back of | modify | — | — |
+| `set_image` | Set one field of a placed image | edit | — | — |
 | `set_net_tie` | Mark a placed part as a net tie | edit | — | — |
 | `set_object_position` | Set the position of a placed object | edit | — | — |
 | `set_object_rotation` | Set the rotation of a placed part or label | edit | — | — |
@@ -443,8 +515,12 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `set_sheet_symbol_size` | Set the size of a sheet symbol | edit | — | — |
 | `set_sheet_variable` | Set a sheet variable | edit | — | — |
 | `set_symbol_parameter` | Set a parameter of a placed part | edit | — | — |
+| `set_text_note_format` | Set a text note to plain or rich text | edit | — | — |
+| `set_text_note_frame` | Set the frame of a rich text note | edit | — | — |
+| `set_text_note_size` | Set the size of a rich text note | edit | — | — |
 | `sheet_navigation_back` | Sheet navigation back | navigation | — | `Alt+Left` |
 | `sheet_navigation_forward` | Sheet navigation forward | navigation | — | `Alt+Right` |
+| `show_image_in_folder` | Show an image's file in its folder | edit | — | — |
 | `swap_schematic_gates` | Swap two equivalent gates of a part on its schematic; Update PCB carries the swap to the board | modify | — | — |
 | `swap_schematic_pins` | Swap the nets of two equivalent pins of a part on its schematic; Update PCB carries the swap to the board | modify | — | — |
 | `sync_sheet_entries` | Synchronize the selected sheet symbol's entries and its sheet's ports, with a preview | design | — | — |
@@ -452,6 +528,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `toggle_notebook_badges` | Show or hide the Notebook badges on the schematic | view | `B` | — |
 | `tool_select` | Tool select | select | — | — |
 | `update_pcb_from_schematic` | Update PCB from schematic | pcb_sync | — | — |
+| `wrap_rich_note_selection` | Wrap the selection of a rich text note in Typst markup | edit | — | — |
 
 ## PCB
 
@@ -634,7 +711,9 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 
 | command id | label | category | Signex Standard | Classic |
 | --- | --- | --- | --- | --- |
+| `footprint_align_pads` | Align footprint pads | modify | — | — |
 | `footprint_mode_pads` | Switch footprint editor to Pads mode | library | `2` | `2` |
 | `footprint_mode_sketch` | Switch footprint editor to Sketch mode | library | `1` | `1` |
 | `footprint_mode_view_3d` | Switch footprint editor to 3D View mode | library | `3` | `3` |
+| `footprint_move_pads` | Move footprint pads by an offset | modify | — | — |
 | `footprint_recompute_courtyard_outline` | Recompute footprint courtyard outline from pads | library | — | — |

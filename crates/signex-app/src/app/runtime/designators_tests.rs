@@ -213,7 +213,9 @@ fn a_recorded_placement_the_walk_no_longer_reaches_is_not_shown() {
         .child_sheets
         .retain(|cs| cs.uuid != Uuid::from_u128(PLACEMENT_B));
     engine
-        .execute(signex_engine::Command::ReplaceDocument { document })
+        .execute(signex_engine::Command::ReplaceDocument {
+            document: Box::new(document),
+        })
         .expect("replace");
     app.refresh_panel_ctx();
     app.settle_navigator();

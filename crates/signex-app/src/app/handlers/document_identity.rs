@@ -42,6 +42,7 @@ impl Signex {
         }
         // A loose board's Layer Stack tab is titled by the board's file name.
         self.refresh_page_tab_titles();
+        self.rekey_output_job(old_path, new_path);
         // Pending drafts belong to the sheet, not to the name it had.
         self.document_view.drafts.rekey(old_path, new_path);
         if let Some(mut engine) = self.document_state.remove_engine(old_path) {

@@ -22,6 +22,15 @@ pub(super) const WINDOW_LAYOUT: &[&str] = &[
     "tile_windows_horizontally",
     "tile_windows_vertically",
     "untile_documents",
+    // Mockup row 207: the document area's panes.
+    "split_pane_right",
+    "split_pane_down",
+    "open_second_view",
+    "tile_windows_grid",
+    "move_tab_to_other_pane",
+    "close_pane",
+    "sync_pane_zoom",
+    "equalize_panes",
     "zoom_to_fit",
     "set_dock_panel",
 ];
@@ -154,6 +163,8 @@ mod tests {
                 // #2462: Compare Board with Schematic's Apply, by row id.
                 "apply_board_schematic_differences",
                 "apply_edits",
+                // #3013: Library Updates' Update Selected on the named sheet.
+                "apply_library_updates",
                 "arrange_in_box",
                 // #2457, #2941: the rooms commands, on the named board.
                 "arrange_in_room",
@@ -208,6 +219,8 @@ mod tests {
                 "check_requirements",
                 "clear_all_net_colors",
                 "close_active_document",
+                // Mockup row 207: the pane commands, as the window layout.
+                "close_pane",
                 "color_net",
                 // #2949: the Variant Manager's top bar actions.
                 "compare_variants",
@@ -215,6 +228,9 @@ mod tests {
                 "delete_net_class",
                 "delete_selection",
                 "document_info",
+                // #2817: the pins of the named symbol file, one undo step.
+                "edit_symbol_pins",
+                "equalize_panes",
                 // #2470: the board writers, into a path inside the project.
                 "export_board_pdf",
                 "export_board_report",
@@ -225,6 +241,10 @@ mod tests {
                 // #2940: the DRC fixes, on the named board.
                 "fix_drc",
                 "fix_drc_violation",
+                // #3013: Move Selection By and Align Selection on the named
+                // footprint's pads.
+                "footprint_align_pads",
+                "footprint_move_pads",
                 // #2945: the design report of the named project.
                 "generate_design_notebook",
                 "gloss_selected_routes",
@@ -244,6 +264,8 @@ mod tests {
                 // #2952: a query.
                 "list_diff_pairs",
                 "list_documents",
+                // #1116: a query, the named sheet's project's image assets.
+                "list_image_assets",
                 // #1283: the snippets and templates in view, as JSON.
                 "list_snippets",
                 "list_templates",
@@ -252,6 +274,7 @@ mod tests {
                 // attachments, and Mark still valid, on the named project.
                 "mark_notebook_attachment_valid",
                 "measure_board",
+                "move_tab_to_other_pane",
                 // #2795, mockup rows 195-199: the Design Notebook tab, its
                 // references, badges and measurements, on the named project.
                 "notebook_attachments",
@@ -265,6 +288,8 @@ mod tests {
                 "notebook_references",
                 "notebook_timeline",
                 "notebook_view",
+                // Mockup row 207: the panes, as the window layout.
+                "open_second_view",
                 "panelize_board",
                 // #2470: the routing tools, the via and the area tools, on
                 // the named board.
@@ -282,22 +307,38 @@ mod tests {
                 "place_board_route",
                 "place_board_track",
                 "place_board_via",
+                // #1291: the Design Checklist's read, edits and run.
+                "project_add_checklist_item",
                 // #2339: the Requirements section's edits and run.
                 "project_add_requirement",
                 "project_add_variant",
+                "project_checklist",
+                "project_checklist_link_choices",
+                "project_checklist_templates",
                 // #3038: the Variant Manager's part edits and Duplicate.
                 "project_duplicate_variant",
                 "project_enable_requirement",
                 "project_move_library",
                 "project_move_sheet",
+                "project_open_checklist_link",
+                "project_remove_checklist_item",
+                // #1178: the Fonts section's edits; `project_add_font`
+                // takes a file path, so it is not on the agent channel.
+                "project_remove_font",
                 "project_remove_requirement",
                 "project_remove_variant",
                 "project_rename_variant",
+                "project_reset_checklist",
+                "project_run_checklist",
                 "project_run_requirements",
+                "project_save_checklist_template",
                 "project_set_active_variant",
                 "project_set_annotate_numbering",
                 "project_set_annotate_undo",
+                "project_set_checklist_item",
+                "project_set_checklist_state",
                 "project_set_default_variant",
+                "project_set_font_license",
                 // #2943: the project's rails and their budget.
                 "project_set_rail",
                 "project_set_requirement",
@@ -306,11 +347,14 @@ mod tests {
                 "project_set_variant_override",
                 "project_set_version_control",
                 "project_settings",
+                "project_start_checklist",
                 // #2796: a block diagram as JSON.
                 "query_block_diagram",
                 "query_board_nets",
                 // #2938: the priced BOM of the named project.
                 "query_bom",
+                // #1273: a sheet's off-sheet cross references, as JSON.
+                "query_cross_references",
                 "query_footprint_assignments",
                 // #2944, #2939: an open library's rows; each part's height.
                 "query_library",
@@ -397,14 +441,23 @@ mod tests {
                 "show_layer_group",
                 "show_layer_set",
                 "show_used_layers_only",
+                "split_pane_down",
+                "split_pane_right",
                 "stitch_vias",
                 "swap_gates",
                 "swap_pins",
                 // #1261: the same swaps started on the named sheet.
                 "swap_schematic_gates",
                 "swap_schematic_pins",
+                // #2838: a curve shape drawn on the symbol named.
+                "symbol_draw_bezier",
+                "symbol_draw_elliptical_arc",
+                "symbol_draw_pie",
+                "symbol_draw_round_rectangle",
+                "sync_pane_zoom",
                 // #2249: the window layout, by the maintainer's rule that
                 // everything is AI-controllable.
+                "tile_windows_grid",
                 "tile_windows_horizontally",
                 "tile_windows_vertically",
                 // #2389: length tuning on the named board.
@@ -521,6 +574,9 @@ mod tests {
             "draw_line",
             "draw_graphic_line",
             "draw_rectangle",
+            "draw_ellipse",
+            "draw_elliptical_arc",
+            "draw_round_rectangle",
         ] {
             let meta = metadata_for(&id(name)).expect("in the catalog");
             assert!(

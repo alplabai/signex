@@ -36,7 +36,7 @@ impl Signex {
                     let is_note = item.kind == signex_types::schematic::SelectedKind::TextNote;
                     let note = (sheet.text_notes.iter())
                         .find(|n| is_note && n.uuid == item.uuid)
-                        .map(|n| (item, n.text.clone(), n.font_size));
+                        .map(|n| (item, n.text.clone(), n.font_size, n.rich));
                     (geometry.map(|_| item), geometry, locked, end, note)
                 }
                 _ => (None, None, None, None, None),
@@ -63,9 +63,10 @@ impl Signex {
         placed.geometry = geometry;
         placed.end = end;
         placed.locked = locked;
-        placed.note_size_mm = note.as_ref().map(|(_, _, size)| *size);
+        placed.note_size_mm = note.as_ref().map(|(_, _, size, _)| *size);
+        placed.note_rich = note.as_ref().map(|(_, _, _, rich)| *rich);
         let selected_note = match (&note, sheet_path.as_deref()) {
-            (Some((item, text, _)), Some(sheet)) => Some((sheet, *item, text.as_str())),
+            (Some((item, text, _, _)), Some(sheet)) => Some((sheet, *item, text.as_str())),
             _ => None,
         };
         placed.sync_note(selected_note);

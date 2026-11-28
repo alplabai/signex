@@ -134,6 +134,8 @@ mod tests {
             justify_h: HAlign::Left,
             justify_v: VAlign::Bottom,
             locked,
+            format: Default::default(),
+            rich: Default::default(),
         }
     }
 

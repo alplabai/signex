@@ -10,6 +10,9 @@ repository.workspace = true
 [dependencies]
 pcb-geom = { path = "../pcb-geom" }
 signex-bom = { path = "../signex-bom" }
+# Rich text notes (#1114): compiled and drawn as vector paths in the SVG and
+# PDF export, the same paths the canvas draws.
+signex-notebook = { path = "../signex-notebook" }
 signex-types = { path = "../signex-types" }
 thiserror = { workspace = true }
 serde = { workspace = true }
@@ -19,6 +22,12 @@ rust_xlsxwriter = { workspace = true }
 tiny-skia = { workspace = true }
 ttf-parser = { workspace = true }
 uuid = { workspace = true }
+# #1116: placed images in an export. The GIF's first frame is decoded, an
+# image stream is deflated, and an SVG picture becomes vector paths (no text
+# shaping: a picture's text is not drawn).
+gif = "0.14"
+miniz_oxide = "0.8"
+usvg = { version = "0.48", default-features = false }
 
 [[example]]
 name = "qa_harness"

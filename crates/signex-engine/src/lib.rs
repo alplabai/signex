@@ -6,6 +6,7 @@ mod annotation;
 mod annotation_placements;
 mod clipboard_harness;
 mod clipboard_text;
+mod curve_info;
 mod derived_ids;
 mod notice;
 pub use notice::{EngineNotice, NoticeMark, RefusedPinDot};
@@ -64,6 +65,8 @@ mod annotation_drawing_tests;
 mod annotation_placements_tests;
 #[cfg(test)]
 mod annotation_tests;
+#[cfg(test)]
+mod curve_drawing_tests;
 #[cfg(test)]
 mod document_id_tests;
 
@@ -166,8 +169,9 @@ pub use placement::PlacementPayload;
 pub use placement_sources::DesignBlock;
 pub use power_port::{place_power_port, restyle_power_port};
 pub use project_general::{
-    HISTORY_LIMIT as PROJECT_GENERAL_HISTORY_LIMIT, ProjectBomCommand, ProjectGeneralCommand,
-    ProjectGeneralHistory, ProjectRailCommand, ProjectRequirementCommand, ProjectSectionCommand,
+    HISTORY_LIMIT as PROJECT_GENERAL_HISTORY_LIMIT, ProjectBomCommand, ProjectChecklistCommand,
+    ProjectFontCommand, ProjectGeneralCommand, ProjectGeneralHistory, ProjectRailCommand,
+    ProjectRequirementCommand, ProjectSectionCommand,
 };
 pub use selection::{
     ClipboardSelection, SelectionAnchor, SelectionDetails, info_keys, partition_cuttable,
@@ -800,7 +804,7 @@ impl Engine {
 
     pub fn execute(&mut self, cmd: Command) -> Result<CommandResult, EngineError> {
         let incoming = match &cmd {
-            Command::ReplaceDocument { document } => Some(document),
+            Command::ReplaceDocument { document } => Some(&**document),
             _ => None,
         };
         self.refuse_if_read_only(incoming)?;
@@ -910,7 +914,7 @@ impl Engine {
             | Command::BreakUnion { .. } => self.exec_unions(before, cmd),
             Command::SetRunEnd { run, start, to } => self.set_run_end(before, run, start, to),
             Command::UpdateTextNoteProps { note_id, props } => {
-                Ok(self.update_text_note_props(before, note_id, props))
+                Ok(self.update_text_note_props(before, note_id, *props))
             }
         };
         self.prune_union_members(&mut result);
@@ -1093,7 +1097,7 @@ mod tests {
         let mut engine = Engine::new(test_sheet()).unwrap();
         let revision = engine.revision();
         let refused = engine.execute(Command::ReplaceDocument {
-            document: read_only_sheet(),
+            document: Box::new(read_only_sheet()),
         });
         assert!(matches!(refused, Err(EngineError::ReadOnly)));
         assert_eq!(engine.revision(), revision);

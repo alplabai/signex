@@ -22,6 +22,8 @@ pub(super) struct SheetKey {
     /// And on the active variant's own value (#2948).
     variant_values: Option<signex_output::DrawnValueMap>,
     designators: Designators,
+    /// Rich notes are boxed as they draw (#1114): a landed compile re-boxes.
+    rich_notes: Option<u64>,
 }
 
 impl SheetKey {
@@ -39,6 +41,7 @@ impl SheetKey {
             special_strings: widths.special_strings.cloned(),
             variant_values: widths.variant_values.cloned(),
             designators: designators.clone(),
+            rich_notes: widths.rich_notes.map(|r| r.revision()),
         }
     }
 
@@ -58,6 +61,7 @@ impl SheetKey {
             && self.special_strings.as_ref() == widths.special_strings
             && self.variant_values.as_ref() == widths.variant_values
             && self.designators == *designators
+            && self.rich_notes == widths.rich_notes.map(|r| r.revision())
     }
 }
 

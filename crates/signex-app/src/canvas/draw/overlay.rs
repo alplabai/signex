@@ -60,6 +60,8 @@ impl SchematicCanvas<'_> {
         self.draw_select_rect(&mut frame, state, bounds);
         self.draw_bezier_handles(&mut frame, state, sheet, bounds);
         self.draw_bezier_drag(&mut frame, state, bounds);
+        self.draw_image_handles(&mut frame, state, sheet, bounds);
+        self.draw_image_drag(&mut frame, state, bounds);
 
         frame.into_geometry()
     }

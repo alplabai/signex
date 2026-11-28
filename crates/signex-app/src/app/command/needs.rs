@@ -64,6 +64,9 @@ pub(crate) enum Needs {
     Canvas,
     FitTarget,
     FootprintEditor,
+    /// The symbol editor's shapes drawn from operands (#2838): a `.snxsym`
+    /// editor tab.
+    SymbolEditor,
     Pcb,
     /// A board edit tool (Place, Board Sketch): a board in view that is not
     /// read-only (#2405).
@@ -173,6 +176,7 @@ impl Needs {
             // The keystroke opens the footprint editor's grid picker and does
             // nothing elsewhere.
             Self::FootprintEditor => ctx.has_footprint_editor,
+            Self::SymbolEditor => ctx.has_symbol_editor,
             Self::Pcb => ctx.has_pcb,
             Self::NetClassTable => ctx.has_schematic || ctx.has_pcb,
             Self::EditablePcb => ctx.has_pcb && !ctx.pcb.read_only,
@@ -297,6 +301,7 @@ impl Needs {
             | Self::ActiveSheet
             | Self::Canvas
             | Self::FootprintEditor
+            | Self::SymbolEditor
             | Self::Pcb
             | Self::NetClassTable
             | Self::EditablePcb
@@ -340,6 +345,7 @@ impl Needs {
             Self::Sheets => ids::COMMAND_NEEDS_SHEETS,
             Self::ActiveSheet => ids::COMMAND_NEEDS_ACTIVE_SHEET,
             Self::FootprintEditor => ids::COMMAND_NEEDS_FOOTPRINT_EDITOR,
+            Self::SymbolEditor => ids::COMMAND_NEEDS_SYMBOL_EDITOR,
             Self::Pcb => ids::COMMAND_NEEDS_PCB,
             Self::EditablePcb => ids::COMMAND_NEEDS_EDITABLE_PCB,
             Self::MeasureTarget => ids::COMMAND_NEEDS_MEASURE_TARGET,
@@ -413,6 +419,12 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         // The Export menu row is gated on `has_schematic`; without an
         // engine the handler does nothing.
         "report_manager_bom" => Needs::Schematic,
+        // #1298, #2663: Export PDF of the sheet in view.
+        "export_schematic_pdf" => Needs::Schematic,
+        // #1299: the pages of the schematic in view as PNG; an Export Job
+        // belongs to an open project.
+        "export_sheet_png" => Needs::Schematic,
+        "run_output_job" | "open_output_job" | "new_output_job" => Needs::OpenProject,
         "leave_sheet" | "navigate_up_hierarchy" => Needs::ParentSheet,
         "delete_selection" => Needs::DeleteTarget,
         "rotate_clockwise"
@@ -491,6 +503,8 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         // #1667: the file rows place onto the sheet in view.
         | "place_design_block"
         | "import_graphics"
+        // #1116: an image lands on the sheet in view.
+        | "place_graphic"
         // #1283: a snippet is saved from, or placed onto, the sheet in view.
         | "save_snippet"
         | "place_snippet"
@@ -507,8 +521,11 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         | "assign_footprints"
         // Dots the bare pin touches of the sheet in view.
         | "repair_pin_junctions"
-        // #1267, #1300: the Bezier, dimension and table tools.
+        // #1267, #1300: the Bezier, curve, dimension and table tools.
         | "draw_bezier"
+        | "draw_ellipse"
+        | "draw_elliptical_arc"
+        | "draw_round_rectangle"
         | "place_table"
         | "place_linear_dimension"
         | "place_aligned_dimension"
@@ -627,6 +644,8 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         // #2462: gated like Update PCB.
         "compare_board_with_schematic" => Needs::PcbSync,
         "new_pcb_document" | "new_schematic_sheet" | "open_rules" => Needs::OpenProject,
+        // #1291: the checklist is a page of the project.
+        "open_design_checklist" => Needs::OpenProject,
         // #2796: the diagram goes in the project's folder.
         "new_block_diagram" => Needs::OpenProject,
         // #1282: the class dialog edits the project.
@@ -651,6 +670,11 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
             Needs::FitTarget
         }
         "cycle_snap_grid_forward" | "open_grid_picker" => Needs::FootprintEditor,
+        // #2838: the symbol editor's shapes, on the open symbol named.
+        "symbol_draw_elliptical_arc"
+        | "symbol_draw_bezier"
+        | "symbol_draw_round_rectangle"
+        | "symbol_draw_pie" => Needs::SymbolEditor,
         "toggle_ratsnest"
         // #2879: Shift+E on a board.
         | "cycle_board_snapping"
@@ -695,9 +719,17 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         "open_library_browser" => Needs::Library,
         "number_schematic_sheets" => Needs::ProjectSheet,
         "compile_project" => Needs::ProjectSheet,
+        "tile_windows_horizontally" | "tile_windows_vertically" | "tile_windows_grid" => {
+            Needs::TileableWindows
+        }
+        "untile_documents" | "move_tab_to_other_pane" | "close_pane" | "sync_pane_zoom"
+        | "equalize_panes" => Needs::Tiled,
+        // Mockup row 207: moving a tab out needs another to stay behind; a
+        // second view needs only a document. The handler refuses what the
+        // gate lets through (a lone tab beside undocked windows).
+        "split_pane_right" | "split_pane_down" => Needs::TileableWindows,
+        "open_second_view" => Needs::Document,
         "generate_block_diagram" | "regenerate_block_diagram" => Needs::ProjectSheet,
-        "tile_windows_horizontally" | "tile_windows_vertically" => Needs::TileableWindows,
-        "untile_documents" => Needs::Tiled,
         _ => return None,
     })
 }

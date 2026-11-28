@@ -53,6 +53,7 @@ impl Signex {
             change.dropped,
             change.scope,
             Some(pin_map),
+            change.step,
         );
         Task::none()
     }

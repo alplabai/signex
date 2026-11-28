@@ -21,6 +21,8 @@ impl Signex {
             justify_v: VAlign::default(),
             font_family: self.document_state.placed_font_family(),
             locked: false,
+            format: Default::default(),
+            rich: Default::default(),
         };
         self.apply_engine_command(
             signex_engine::Command::PlaceTextNote { text_note },

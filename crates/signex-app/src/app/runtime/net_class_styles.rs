@@ -42,6 +42,9 @@ pub(in crate::app) struct PlannedProject {
     pub(in crate::app) project_dir: PathBuf,
     /// The project's saved channel naming, hashed into `key.connectivity`.
     pub(in crate::app) naming: ChannelNaming,
+    /// The project's name, for the manual page numbers of the cross
+    /// references (#1273).
+    pub(in crate::app) project_name: String,
 }
 
 /// Everything a worker needs to stitch one project: owned, so it can leave
@@ -53,6 +56,7 @@ struct ProjectJob {
     seq: u64,
     project_dir: PathBuf,
     naming: ChannelNaming,
+    project_name: String,
     /// Shared with the net index job of the same project and key.
     stitch: StitchSlot,
 }
@@ -89,6 +93,7 @@ fn resolve_project(open: &OpenSheets, job: ProjectJob) -> ResolvedProject {
         seq,
         project_dir,
         naming,
+        project_name,
         stitch,
     } = job;
     let mut resolved = ResolvedProject {
@@ -112,6 +117,7 @@ fn resolve_project(open: &OpenSheets, job: ProjectJob) -> ResolvedProject {
             resolved.key.fold,
             Some(project_dir),
             &naming,
+            &project_name,
         )
     });
     resolved.warnings = stitched.warnings.clone();
@@ -193,6 +199,7 @@ pub(in crate::app) fn plan_projects(document: &DocumentState) -> Vec<PlannedProj
                 open_paths: entry.paths,
                 project_dir: project.dir().to_path_buf(),
                 naming,
+                project_name: project.data.name.clone(),
             })
         })
         .collect()
@@ -249,6 +256,7 @@ impl Signex {
                 key: project.key,
                 project_dir: project.project_dir,
                 naming: project.naming,
+                project_name: project.project_name,
                 stitch,
             });
         }
@@ -383,6 +391,7 @@ impl Signex {
                 .active_canvas()
                 .special_strings
                 .as_ref(),
+            rich_notes: Some(&self.ui_state.rich_notes.renders),
             variant_values: Some(&self.interaction_state.active_canvas().variant_values),
         }
     }

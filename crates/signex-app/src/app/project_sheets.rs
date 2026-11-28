@@ -1096,27 +1096,8 @@ pub(crate) fn normalize_clamped(path: &Path) -> PathBuf {
     out
 }
 
-/// Lexically normalize `path` — resolve `.` and `..` components without
-/// touching the filesystem (unlike `std::fs::canonicalize`, which needs the
-/// path to exist). A `..` with nothing left to pop is kept as a literal `..`
-/// component, so a reference that escapes its root still fails the caller's
-/// `starts_with(root)` check instead of silently collapsing onto the root.
-pub(crate) fn lexically_normalize(path: &Path) -> PathBuf {
-    let mut out = PathBuf::new();
-    for component in path.components() {
-        match component {
-            std::path::Component::CurDir => {}
-            std::path::Component::ParentDir => match out.components().next_back() {
-                Some(std::path::Component::Normal(_)) => {
-                    out.pop();
-                }
-                _ => out.push(".."),
-            },
-            other => out.push(other.as_os_str()),
-        }
-    }
-    out
-}
+/// The one lexical normalizer, shared with the PDF exporter's table links.
+pub(crate) use signex_types::lexical_path::lexically_normalize;
 
 /// A one-line, user-facing message for a cross-sheet stitch issue (ADR-0002 D7,
 /// part 3) — shown in the Messages panel alongside other diagnostics.

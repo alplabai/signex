@@ -53,12 +53,15 @@ impl DocumentKey {
                 ce.table.clone(),
                 ce.row_id,
             ))),
-            TabKind::Project(id) | TabKind::Rules(id) | TabKind::VariantManager(id) => {
-                Some(Self::Project(*id))
-            }
+            TabKind::Project(id)
+            | TabKind::Rules(id)
+            | TabKind::VariantManager(id)
+            | TabKind::DesignChecklist(id) => Some(Self::Project(*id)),
             TabKind::LibraryBrowser(_) => None,
             // Read-only fabrication files: nothing to save or undo.
             TabKind::GerberViewer => None,
+            // Saved by its own path (`app/output_job/document`); no undo.
+            TabKind::OutputJob => None,
             // Saved and undone by its own slice (`app::block_diagram`).
             TabKind::BlockDiagram(_) => None,
             // The notebook's text saves from its tab (Ctrl+S on the tab, Save

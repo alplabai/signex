@@ -116,6 +116,7 @@ pub(in crate::app) fn canvas_bounds(
 /// Pane `index` of `count` tile panes laid out in `layout` over `area`
 /// (#2249): the split Tile uses for windows, so the last pane takes the
 /// rounding remainder. `area` itself for an index past the panes.
+#[cfg(test)]
 pub(in crate::app) fn pane_bounds(
     area: Rectangle,
     count: usize,
@@ -124,12 +125,30 @@ pub(in crate::app) fn pane_bounds(
 ) -> Rectangle {
     crate::app::tiles(count, (area.width, area.height), layout)
         .get(index)
-        .map_or(area, |tile| Rectangle {
-            x: area.x + tile.position.0,
-            y: area.y + tile.position.1,
-            width: tile.size.0,
-            height: tile.size.1,
-        })
+        .map_or(area, |tile| pane_cell(area, tile))
+}
+
+/// `tile` (relative to the document area) placed in `area`, in window
+/// coordinates.
+pub(in crate::app) fn pane_cell(area: Rectangle, tile: &crate::app::Tile) -> Rectangle {
+    Rectangle {
+        x: area.x + tile.position.0,
+        y: area.y + tile.position.1,
+        width: tile.size.0,
+        height: tile.size.1,
+    }
+}
+
+/// The canvas of the pane on `tile`: the pane below its tab strip (mockup
+/// row 207), in window coordinates.
+pub(in crate::app) fn pane_canvas(area: Rectangle, tile: &crate::app::Tile) -> Rectangle {
+    let cell = pane_cell(area, tile);
+    let strip = crate::document_panes::PANE_STRIP_HEIGHT.min(cell.height);
+    Rectangle {
+        y: cell.y + strip,
+        height: cell.height - strip,
+        ..cell
+    }
 }
 
 /// Where hover cards may go: the canvas in the main window (its docks are

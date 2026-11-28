@@ -41,10 +41,13 @@ under the SIL Open Font License 1.1, as each file's name table states; see
 
 ## Inter (UI chrome default)
 
-`Inter-Regular.ttf`, `Inter-Medium.ttf` and `Inter-SemiBold.ttf` are the
-unmodified static faces of Inter 4.x, <https://github.com/rsms/inter>. They are
-full faces (not subset, layout features kept) so chrome text keeps kerning and
-tabular figures. Inter is licensed under the SIL Open Font License 1.1; see
+`Inter-Regular.ttf`, `Inter-Medium.ttf`, `Inter-SemiBold.ttf` and
+`Inter-Bold.ttf` are the unmodified static faces (`extras/ttf/`) of the Inter
+4.1 release `Inter-4.1.zip` (`Version 4.001` in the name table),
+<https://github.com/rsms/inter>. They are full faces (not subset, layout
+features kept) so chrome text keeps kerning and tabular figures. The chrome
+asks for weights 400, 500, 600 and 700, and each has its face here: a weight
+with no Inter face would draw in another family (#3004). Inter is licensed under the SIL Open Font License 1.1; see
 `OFL-Inter.md`. Inter is the UI font for anyone who never picked one; a stored
 choice is kept.
 

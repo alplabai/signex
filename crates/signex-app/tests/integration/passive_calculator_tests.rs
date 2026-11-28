@@ -1,6 +1,8 @@
 use signex_app::app::{Message, OverlayMsg, Signex};
 use signex_app::menu_bar::MenuMessage;
-use signex_widgets::passive_calculator::{CalculatorMessage, ComponentKind};
+use signex_widgets::passive_calculator::{
+    CalculatorMessage, CalculatorTab, ComponentKind, RkmEncoderMessage,
+};
 
 #[test]
 fn calculator_messages_update_the_dedicated_control_state() {
@@ -84,5 +86,35 @@ fn closing_the_modal_keeps_the_entered_state() {
         app.ui_state.passive_calculator.kind,
         ComponentKind::Inductor,
         "reopening should show the state the user left behind"
+    );
+}
+
+/// #2992 (mockup row 17): the RKM Value field is a text input; its text
+/// reaches the encoder through `Signex::update` and drives the code.
+#[test]
+fn a_typed_rkm_value_drives_the_code_through_the_app() {
+    let (mut app, _startup) = Signex::new();
+    let _ = app.update(Message::Menu(MenuMessage::OpenPassiveCalculator));
+    let _ = app.update(Message::PassiveCalculator(CalculatorMessage::TabChanged(
+        CalculatorTab::RkmEncoder,
+    )));
+
+    let task = app.update(Message::PassiveCalculator(CalculatorMessage::RkmEncoder(
+        RkmEncoderMessage::ValueInputChanged("4.7".to_string()),
+    )));
+    assert_eq!(task.units(), 0, "a typed value is pure state, no task");
+    let encoder = &app.ui_state.passive_calculator.rkm_encoder;
+    assert_eq!(encoder.value_input, "4.7");
+    assert_eq!(encoder.code().value_code(), "4K7");
+
+    let _ = app.update(Message::PassiveCalculator(CalculatorMessage::RkmEncoder(
+        RkmEncoderMessage::ValueInputChanged("4.".to_string()),
+    )));
+    let encoder = &app.ui_state.passive_calculator.rkm_encoder;
+    assert_eq!(encoder.value_input, "4.", "the mid-edit text is kept");
+    assert_eq!(
+        encoder.code().value_code(),
+        "4K7",
+        "a partial value keeps the last readable one"
     );
 }

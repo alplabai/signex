@@ -15,6 +15,13 @@ use super::forms::Form::{self, ActiveBar, Bridge, BridgeContextMenu, HeadlessWit
 use super::forms::Form::{AgentWindowLayout, Check, CloseInWindow, HeadlessNewDocument};
 use super::forms::Form::{Operand, Query, SplitCore, StillRunsRefusal, StillRunsUnavailable};
 use super::inputs::Input::{self, *};
+use super::plain_operands::{LIBRARY_DIALOGS, NAMED_DOCUMENT_ONLY, PLACEMENTS};
+
+mod checklist;
+mod gerber_viewer;
+mod output_job;
+mod rich_note;
+mod symbol_shape;
 
 /// `(ids, form, inputs)`: each id's row of `form` reads `inputs` too.
 pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
@@ -99,6 +106,13 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
         Operand,
         &[Settings],
     ),
+    // The PDF's printed text is in the UI locale (`print_text`); the sheet
+    // PDF draws in the theme's palette (`sheet_pdf_options`).
+    (
+        &["export_board_pdf", "export_schematic_pdf"],
+        Operand,
+        &[Settings],
+    ),
     // The routing tools from their operands (#2470): the rules the route
     // keeps come from `board_design_rules` -> `drc_inputs`; none reads the
     // person's tool form, corner rule or route mode (handlers/pcb_tool/
@@ -115,8 +129,6 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
         &[Settings],
     ),
     (&["place_board_via"], Operand, &[]),
-    // The PDF's printed text is in the UI locale (`print_text`).
-    (&["export_board_pdf"], Operand, &[Settings]),
     // Mockup row 202: the stale check reads the named project's design on
     // the worker (`notebook_design_inputs`), its open sheets as edited; the
     // dialog opens on the project in view.
@@ -153,6 +165,8 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "save_layer_set",
             "delete_layer_set",
             "set_layer_tab_names",
+            "project_checklist_templates",
+            "project_save_checklist_template",
         ],
         Operand,
         &[Settings],
@@ -182,129 +196,10 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
     // Read: they act on the named document and their operands only. A board
     // edit repaints the board's canvas when that board is in view; the
     // repaint is a projection and reads nothing into the result.
-    (
-        &[
-            "clear_all_net_colors",
-            "color_net",
-            "export_board_report",
-            "export_board_step",
-            "fabrication_outputs",
-            "export_assembly_svg",
-            "board_assembly_drawing",
-            "board_report_bom",
-            "board_report_components",
-            "board_report_net_length",
-            "board_report_netlist",
-            "add_net_class",
-            "rename_net_class",
-            "delete_net_class",
-            "set_net_class_rules",
-            "assign_board_net_class",
-            "set_layer_stack",
-            "lock_board_items",
-            "unlock_board_items",
-            "set_via_span",
-            "set_layer_sizes",
-            "set_pad_shape",
-            "set_pour_corners",
-            "set_pour_fill",
-            "set_pour_thermal_relief",
-            "set_pad_thermal_relief",
-            "length_matching",
-            "set_length_group",
-            "remove_length_group",
-            "set_teardrop_rule",
-            "set_pad_teardrop",
-            "set_pour_properties",
-            "hide_layer",
-            "highlight_layer",
-            "hide_layer_group",
-            "show_layer_group",
-            "set_layer_visible",
-            "set_active_layer",
-            "set_layer_color",
-            "show_used_layers_only",
-            "set_object_visible",
-            "set_object_transparency",
-            "set_board_graphic",
-            "set_footprint_text",
-            "repour_all",
-            "panelize_board",
-            "remove_board_panel",
-            "set_board_panel",
-            "layout_plan_set",
-            "swap_pins",
-            "swap_gates",
-            "swap_schematic_pins",
-            "swap_schematic_gates",
-            "save_board_reuse_block",
-            "place_board_reuse_block",
-            "autoplace_fields",
-            "sync_sheet_pins",
-            "set_sheet_symbol_size",
-            "set_symbol_parameter",
-            "set_net_tie",
-            "project_move_sheet",
-            "project_add_variant",
-            "project_rename_variant",
-            "project_remove_variant",
-            "project_set_active_variant",
-            "project_move_library",
-            "project_set_annotate_undo",
-            "project_set_annotate_numbering",
-            "project_set_default_variant",
-            // #3038: the Variant Manager's part edits and Duplicate.
-            "project_set_variant_fit",
-            "project_set_variant_alternate",
-            "project_set_variant_override",
-            "project_duplicate_variant",
-            "project_set_version_control",
-            "project_set_requirement",
-            "project_enable_requirement",
-            "project_set_rail",
-            "bring_drawings_forward",
-            "bring_drawings_to_front",
-            "send_drawings_backward",
-            "send_drawings_to_back",
-            "delete_selection",
-            // Mockup row 199: the named project's notebook files.
-            "export_notebook_timeline",
-            "mark_notebook_attachment_valid",
-            "attach_notebook_file",
-            // #2470: the area tools take their layer and net as operands,
-            // never the active layer or the tool's form.
-            "place_board_fill",
-            "place_board_region",
-            "place_board_polygon_pour",
-            "place_board_keepout",
-            "place_board_pour_cutout",
-            // #2936, #2937: a footprint placed, turned, flipped, assigned or
-            // swapped by its operands, never the selection.
-            "set_footprint_position",
-            "set_footprint_rotation",
-            "set_footprint_side",
-            "assign_footprint",
-            "change_footprint",
-            // #1297, #2938: the part swap and a BOM line's alternates.
-            "change_component",
-            "bom_add_alternate",
-            "bom_remove_alternate",
-            "bom_set_alternate_order",
-            // #2470, #2462: board numbering, back annotation and the board
-            // against schematic Apply, on the named board or project.
-            "reannotate_board",
-            "back_annotate_schematics",
-            "apply_board_schematic_differences",
-            // #2457, #2941: the rooms commands take the room, the sheets'
-            // parts and the weights from their operands and the board.
-            "place_board_room",
-            "create_rooms_from_sheets",
-            "arrange_in_room",
-            "auto_place",
-        ],
-        Operand,
-        &[],
-    ),
+    (NAMED_DOCUMENT_ONLY, Operand, &[]),
+    // #3013: the library dialogs' actions read the dialog they fill, the
+    // library state and their operands; nothing implicit.
+    (LIBRARY_DIALOGS, Operand, &[]),
     // #2457: from the palette, Arrange in Room acts on the room Properties
     // shows on the board in view.
     (
@@ -368,8 +263,13 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
         Operand,
         &[InProgressEdit],
     ),
-    // A run already going in the Project tab skips this one.
-    (&["project_run_requirements"], Operand, &[Window]),
+    // A run already going in the Project tab (or the Design Checklist tab)
+    // skips this one.
+    (
+        &["project_run_requirements", "project_run_checklist"],
+        Operand,
+        &[Window],
+    ),
     // #2795: a compile reads the project's notebook as its tab holds it (or
     // its file) and the view writes that tab's session, nothing implicit; an
     // insert lands at the tab's cursor unless `line` names one.
@@ -565,6 +465,8 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "compare_variants",
             "find_items",
             "find_similar_items",
+            // #1116: the named sheet's project, scanned off the UI thread.
+            "list_image_assets",
             // #2952: the named project's open sheets and classes.
             "list_diff_pairs",
             "layout_plan_get",
@@ -573,6 +475,7 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             // #2796: the named diagram, open or saved.
             "query_block_diagram",
             "query_board_nets",
+            "query_cross_references",
             "query_net_ties",
             "query_pins",
             // #1313: the project's sheets, read off the UI thread.
@@ -624,6 +527,14 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "tile_windows_horizontally",
             "tile_windows_vertically",
             "untile_documents",
+            "split_pane_right",
+            "split_pane_down",
+            "open_second_view",
+            "tile_windows_grid",
+            "move_tab_to_other_pane",
+            "close_pane",
+            "sync_pane_zoom",
+            "equalize_panes",
             // #2470: Fit frames the main window's active document.
             "zoom_to_fit",
         ],
@@ -745,37 +656,7 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
     // pre-placement form (#2326).
     (&["place_wire", "draw_wire"], Operand, &[ToolState]),
     (&["place_bus", "draw_bus"], Operand, &[ToolState]),
-    (
-        &[
-            "draw_line",
-            "draw_graphic_line",
-            "draw_rectangle",
-            "place_net_label",
-            "place_local_net_label",
-            "place_global_label",
-            "place_hierarchical_label",
-            "place_power_symbol",
-            "place_no_connect",
-            "place_junction",
-            "place_no_erc",
-            "place_text",
-            "place_text_string",
-            "place_blanket",
-            "edit_blanket",
-            "place_compile_mask",
-            "place_diff_pair",
-            "place_parameter_set",
-            "place_component",
-            "place_sheet_symbol",
-            "place_sheet_entry",
-            "place_design_block",
-            "import_graphics",
-            // #1283: a snippet is placed as a design block.
-            "place_snippet",
-        ],
-        Operand,
-        &[ToolState],
-    ),
+    (PLACEMENTS, Operand, &[ToolState]),
     // #1283: without `ids`, the selection on the sheet in view is saved.
     (&["save_snippet"], Operand, &[Selection]),
     // #2665: the in-app copy, and the grid its default offset is measured on.
@@ -1118,19 +999,24 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
     (PLANNED, StillRunsUnavailable, &[]),
 ];
 
-const PLANNED: &[&str] = &[
-    "draw_ellipse",
-    "draw_elliptical_arc",
-    "draw_round_rectangle",
-    "place_device_sheet_symbol",
-    "place_graphic",
-    "place_reuse_block",
-];
+const PLANNED: &[&str] = &["place_device_sheet_symbol", "place_reuse_block"];
+
+pub(super) type Annotation = (&'static [&'static str], Form, &'static [Input]);
+
+/// Every annotation: [`ANNOTATIONS`], then the tables split out by area.
+pub(super) fn all() -> impl Iterator<Item = &'static Annotation> {
+    ANNOTATIONS
+        .iter()
+        .chain(checklist::CHECKLIST)
+        .chain(gerber_viewer::GERBER_VIEWER)
+        .chain(output_job::OUTPUT_JOB)
+        .chain(rich_note::RICH_NOTE)
+        .chain(symbol_shape::SYMBOL_SHAPE)
+}
 
 /// The hand annotation of `(id, form)`, if any.
 pub(super) fn of(id: &str, form: Form) -> Option<&'static [Input]> {
-    ANNOTATIONS
-        .iter()
+    all()
         .find(|(ids, annotated, _)| *annotated == form && ids.contains(&id))
         .map(|(_, _, inputs)| *inputs)
 }

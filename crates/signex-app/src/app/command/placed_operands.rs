@@ -1,6 +1,6 @@
 //! The placed-object edits (#2418): `set_object_position`,
-//! `set_object_rotation`, `set_sheet_symbol_size`, `set_symbol_parameter`
-//! and `set_net_tie` (#1277).
+//! `set_object_rotation`, `set_sheet_symbol_size`, `set_symbol_parameter`,
+//! `set_net_tie` (#1277) and `set_text_note_format` (#1114).
 //! A Properties row and an operand run call the same `Signex` method here, so
 //! a typed value, a CLI call and an agent's edit end in one engine command
 //! and one undo step. Coordinates are stored mm (Y down from the paper's
@@ -13,7 +13,7 @@ pub(super) use text::set_object_text;
 
 use iced::Task;
 use serde_json::{Value, json};
-use signex_types::schematic::{Point, SchematicSheet, SelectedItem, SelectedKind};
+use signex_types::schematic::{Point, SchematicSheet, SelectedItem, SelectedKind, TextNoteFormat};
 
 use super::placement_operands::{run_edit, text};
 use super::{CommandArgs, CommandOutcome, OperandValue};
@@ -80,6 +80,26 @@ pub(super) fn set_symbol_parameter(app: &mut Signex, args: &CommandArgs) -> Ran 
         let name = text(args, "name")?;
         let value = text(args, "value").unwrap_or_default();
         answered(app.set_symbol_parameter(item, &name, &value))
+    })
+}
+
+/// `set_text_note_format id=.. format=plain|typst [document=..]`: the Format
+/// row of a text note. The text is kept as it is; the answer adds `format`.
+pub(super) fn set_text_note_format(app: &mut Signex, args: &CommandArgs) -> Ran {
+    run_edit(app, args, |app| {
+        let item = app.placed_item_operand(args)?;
+        let word = text(args, "format")?;
+        let format = TextNoteFormat::from_word(word.trim())
+            .ok_or_else(|| format!("`format` is `plain` or `typst`, got `{word}`"))?;
+        let props = signex_engine::TextNoteProps {
+            format: Some(format),
+            ..Default::default()
+        };
+        let mut answer = app
+            .set_text_note_props(item, props)
+            .map_err(|refusal| refusal.reason)?;
+        answer["format"] = json!(format.as_str());
+        Ok(CommandOutcome::Answered(answer))
     })
 }
 
@@ -164,7 +184,7 @@ fn kind_word(item: &SelectedItem, power: bool) -> &'static str {
 
 impl Signex {
     /// The placed object the `id` operand names on the sheet the edit acts on.
-    fn placed_item_operand(&self, args: &CommandArgs) -> Result<SelectedItem, String> {
+    pub(super) fn placed_item_operand(&self, args: &CommandArgs) -> Result<SelectedItem, String> {
         let id = text(args, "id")?;
         let uuid = uuid::Uuid::parse_str(id.trim())
             .map_err(|_| format!("`id` must be an object id (a uuid), got `{id}`"))?;
@@ -178,7 +198,10 @@ impl Signex {
 
     /// Run `command` on the sheet an edit acts on, unless a lock holds what
     /// it touches: the lock's reason then, with nothing sent.
-    fn apply_placed_edit(&mut self, command: signex_engine::Command) -> Result<(), PlacedRefusal> {
+    pub(crate) fn apply_placed_edit(
+        &mut self,
+        command: signex_engine::Command,
+    ) -> Result<(), PlacedRefusal> {
         let engine = self
             .document_state
             .edit_engine()
@@ -204,7 +227,7 @@ impl Signex {
     }
 
     /// The object's id, kind and geometry after an edit, as the answer.
-    pub(super) fn placed_answer(&self, item: SelectedItem) -> Placed {
+    pub(crate) fn placed_answer(&self, item: SelectedItem) -> Placed {
         let engine = self
             .document_state
             .edit_engine()
@@ -278,8 +301,9 @@ impl Signex {
         self.placed_answer(item)
     }
 
-    /// Set `props` on the text note `item` (its justification, turn or text
-    /// size): one engine edit, one undo step, none when nothing changes.
+    /// Set `props` on the text note `item` (its justification, turn, text
+    /// size or format): one engine edit, one undo step, none when nothing
+    /// changes.
     /// Refused while a lock holds the note.
     pub(crate) fn set_text_note_props(
         &mut self,

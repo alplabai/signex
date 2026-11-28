@@ -413,8 +413,14 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     ("number_schematic_sheets", "NumberSchematicSheets"),
     ("tile_windows_horizontally", "TileHorizontally"),
     ("tile_windows_vertically", "TileVertically"),
+    // Mockup row 207: fixture name only.
+    ("tile_windows_grid", "TileGrid"),
     // #2249: fixture name only.
     ("untile_documents", "UntileDocuments"),
+    // Mockup row 207: fixture names only.
+    ("split_pane_right", "SplitPaneRight"),
+    ("split_pane_down", "SplitPaneDown"),
+    ("open_second_view", "OpenSecondView"),
     // Mockup row 166: View ▸ Window ▸ Layouts, fixture names only.
     ("apply_layout_schematic", "ApplyLayoutSchematic"),
     ("apply_layout_board", "ApplyLayoutBoard"),
@@ -452,6 +458,8 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     ("toggle_cross_select_mode", "ToggleCrossSelectMode"),
     ("open_parameter_manager", "OpenParameterManager"),
     ("open_rules", "OpenRules"),
+    // #1291: Project ▸ Design Checklist, fixture name only.
+    ("open_design_checklist", "OpenDesignChecklist"),
     // The Design Notebook (mockup rows 195, 197, 201, 202): fixture names only.
     ("open_design_notebook", "OpenDesignNotebook"),
     ("generate_design_notebook", "GenerateDesignNotebook"),
@@ -510,6 +518,9 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     // #1267, #1300: the Bezier, table and dimension tools, and the contents
     // sheet, fixture names only.
     ("draw_bezier", "DrawBezier"),
+    ("draw_elliptical_arc", "DrawEllipticalArc"),
+    ("draw_ellipse", "DrawEllipse"),
+    ("draw_round_rectangle", "DrawRoundRectangle"),
     ("place_table", "PlaceTable"),
     ("place_linear_dimension", "PlaceLinearDimension"),
     ("place_aligned_dimension", "PlaceAlignedDimension"),
@@ -521,6 +532,8 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     // #1489, #1282: Net Parameters goes live; the diff-pair class dialog.
     ("place_parameter_set", "PlaceParameterSet"),
     ("open_diff_pair_classes", "OpenDiffPairClasses"),
+    // #1116: Graphic... goes live, fixture name only.
+    ("place_graphic", "PlaceGraphic"),
 ];
 
 fn action_name(action: &MenuMessage) -> String {
@@ -725,8 +738,9 @@ fn model_shortcuts_follow_the_active_keymap() {
     // Toggle Ratsnest and 3D Board (#2390, #2403, #2405) and Place ▸ Compile
     // Mask (#2420) add nine. Edit ▸ Origin ▸ Set adds `E O S` (2026-11-18).
     // File ▸ Save All adds `Mod+Alt+S` (#2844). View ▸ Notebook Badges
-    // adds `B` (mockup row 197).
-    assert_eq!(checked, 61, "the default profile labels 61 menu rows");
+    // adds `B` (mockup row 197). View ▸ Next Grid adds `G`, bound on
+    // boards in Signex Standard (#3062).
+    assert_eq!(checked, 62, "the default profile labels 62 menu rows");
 }
 
 fn check_shortcuts(menu: &Menu, ctx: &MenuContext, checked: &mut usize) {
@@ -833,7 +847,13 @@ fn reports_and_window_are_submenus_of_tools_and_view() {
         [
             "Tile Horizontally",
             "Tile Vertically",
+            // Mockup row 207: Tile Grid beside the other tile rows.
+            "Tile Grid",
             "Untile",
+            // Mockup row 207: the pane rows after the tiling rows.
+            "Split Right",
+            "Split Down",
+            "Open Second View",
             "---",
             // Mockup row 166: the Layouts submenu joins the old Window rows.
             "Layouts>",

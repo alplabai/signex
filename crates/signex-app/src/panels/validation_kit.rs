@@ -101,7 +101,9 @@ pub(super) fn run_button<'a>(
                 .boxed(),
         );
     }
-    button(container(face).center_x(Length::Fill))
+    // Centred both ways: a face centred only across sat on the top edge of
+    // the fixed-height button (#3057).
+    button(container(face).center(Length::Fill))
         .width(Length::Fill)
         .height(Length::Fixed(ChromeMetrics::DEFAULT.button))
         .padding([0.0, SP.m])

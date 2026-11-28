@@ -11,12 +11,12 @@ use signex_types::theme::ThemeTokens;
 use signex_widgets::{Label, button, raw, rich_text, segmented, span, text, text_input};
 
 use super::filter::{
-    Listing, ShownSection, cap_matches, column_split, label_runs, listing, trigger_caps,
+    Listing, ShownEntry, ShownSection, cap_matches, column_split, label_runs, listing, trigger_caps,
 };
 use super::{ShortcutScope, ShortcutSection, ShortcutSheet};
 use crate::about_modal::{GLYPH_THEME, px};
 use crate::app::{Message, OverlayMsg};
-use crate::keymap::{CompiledKeymap, KeymapEditorRow, ShortcutProfileSet, category_title};
+use crate::keymap::{CompiledKeymap, ShortcutProfileSet, category_title};
 use crate::styles::{self, ChromeMetrics, DialogButtonKind, TypeScale, ti};
 
 const TS: TypeScale = TypeScale::DEFAULT;
@@ -332,18 +332,19 @@ fn section_column<'a>(
             })
             .boxed(),
         );
-        for row in &section.rows {
-            list = list.push(shortcut_row(i18n, tokens, row, filter));
+        for entry in &section.entries {
+            list = list.push(shortcut_row(i18n, tokens, entry, filter));
         }
     }
     list.boxed()
 }
 
-/// One row: the action, its match on the accent-soft fill, and the key caps.
+/// One command: the action, its match on the accent-soft fill, and the key
+/// caps of each of its keys, a dot between two keys (#3047).
 fn shortcut_row<'a>(
     i18n: &I18n,
     tokens: &ThemeTokens,
-    row: &KeymapEditorRow,
+    entry: &ShownEntry<'_>,
     filter: &str,
 ) -> Element<'a, Message> {
     let r = styles::tokens::resolve(tokens);
@@ -352,7 +353,7 @@ fn shortcut_row<'a>(
         radius: styles::RADIUS.into(),
         ..Border::default()
     };
-    let spans: Vec<_> = label_runs(i18n, &row.label, filter)
+    let spans: Vec<_> = label_runs(i18n, entry.label(), filter)
         .into_iter()
         .map(|(run, hit)| {
             // raw: runs of the row's label, already rendered, split at the match.
@@ -377,13 +378,23 @@ fn shortcut_row<'a>(
                 .width(Length::Fill)
                 .boxed(),
         );
-    for cap in trigger_caps(row) {
-        // raw: a key or gesture as the keymap renders it.
-        line = line.push(key_cap(
-            raw(cap.to_string()),
-            cap_matches(i18n, cap, filter),
-            tokens,
-        ));
+    for (index, row) in entry.rows.iter().enumerate() {
+        if index > 0 {
+            line = line.push(
+                text(t!(i18n, ids::DIALOG_SHORTCUTS_KEY_SEPARATOR))
+                    .size(TS.caption)
+                    .color(r.ink4)
+                    .boxed(),
+            );
+        }
+        for cap in trigger_caps(row) {
+            // raw: a key or gesture as the keymap renders it.
+            line = line.push(key_cap(
+                raw(cap.to_string()),
+                cap_matches(i18n, cap, filter),
+                tokens,
+            ));
+        }
     }
     // At least a row tall; a long action wraps clear of its key caps.
     container(row![Space::new().height(ROW_H), line].align_y(Alignment::Center))
@@ -568,8 +579,9 @@ mod tests {
         let tokens = theme_tokens(ThemeId::GraphiteDark);
         let sections = sections();
         let mut sample = sections[0].rows[0].clone();
-        let height = |row: &KeymapEditorRow| {
-            let line = shortcut_row(i18n, &tokens, row, "");
+        let height = |row: &crate::keymap::KeymapEditorRow| {
+            let entry = ShownEntry { rows: vec![row] };
+            let line = shortcut_row(i18n, &tokens, &entry, "");
             crate::layout_probe::root_size(line, iced::Size::new(260.0, 400.0)).height
         };
         sample.label = "Move".into();
@@ -586,6 +598,33 @@ mod tests {
             height(&sample) > ROW_H,
             "an unbroken word takes a second line"
         );
+    }
+
+    /// Mockup row 13, #3047: a command with two keys draws one row with
+    /// both keys' caps and one dot between them, and the count says one
+    /// shortcut.
+    #[test]
+    fn a_command_with_two_keys_draws_one_row_with_both() {
+        let i18n = I18n::en_us_ref();
+        let first = sections()[0].rows[0].clone();
+        let mut second = first.clone();
+        second.trigger = "F12 F11".into();
+        second.trigger_english = "F12 F11".into();
+        second.trigger_config = "F12 F11".into();
+        let two_keys = vec![ShortcutSection {
+            category: first.category.clone(),
+            rows: vec![first, second],
+        }];
+        for id in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
+            let tokens = theme_tokens(id);
+            let open = sheet("", ShortcutScope::All);
+            let shown = texts(view(i18n, &tokens, &two_keys, &open, &facts()));
+            let count = |label: &str| shown.iter().filter(|t| *t == label).count();
+            assert_eq!(count("F12"), 1, "{shown:?}");
+            assert_eq!(count("F11"), 1, "{shown:?}");
+            assert_eq!(count("·"), 1, "one dot between the two keys: {shown:?}");
+            assert!(shown.iter().any(|t| t == "1 shortcut in All."), "{shown:?}");
+        }
     }
 
     #[test]

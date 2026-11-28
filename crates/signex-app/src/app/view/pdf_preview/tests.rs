@@ -421,6 +421,30 @@ fn the_watermark_layer_row_is_disabled_while_the_watermark_is_off() {
     assert!(!sent(&veiled, row), "{veiled:?}");
 }
 
+/// #2610: the layer list has a Not-fitted parts row (mockup row 168),
+/// visible when the PDF opens until unticked; it takes input while PDF
+/// layers are on.
+#[test]
+fn the_not_fitted_layer_row_hides_its_group_on_open() {
+    let (app, _task) = Signex::new();
+    let mut on = four_sheets();
+    on.dialog.layers.is_on = true;
+    let off = four_sheets();
+    assert!(on.dialog.layers.is_visible(PdfLayer::NotFittedParts));
+    let (live, veiled) = click_on_and_off(&app, &on, &off, "Not-fitted parts (variant)");
+    let row = |m: &PrintPreviewMsg| {
+        matches!(
+            m,
+            PrintPreviewMsg::PdfOption(PdfOptionMsg::PdfLayerVisibilityToggled(
+                PdfLayer::NotFittedParts,
+                false
+            ))
+        )
+    };
+    assert!(sent(&live, row), "{live:?}");
+    assert!(!sent(&veiled, row), "{veiled:?}");
+}
+
 /// #2690: Signal harnesses is a layer row of its own, right under Wires and
 /// buses, named from the catalog; unticking it hides that group on open.
 #[test]

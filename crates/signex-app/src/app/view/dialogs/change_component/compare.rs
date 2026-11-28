@@ -1,6 +1,6 @@
-//! The dialog's right half: Placed now and Replace with, the Now / After
-//! table with the Keep now boxes, the connection warnings, what is kept and
-//! Apply to. Until a part is read it says to pick one.
+//! The compare step (mockup row 129): Placed now and Replace with, the
+//! Now / After table with the Keep now boxes, the connection warnings, what
+//! is kept and Apply to.
 
 use iced::widget::text::{Ellipsis, Wrapping};
 use iced::widget::{Space, column, container, row, scrollable};
@@ -21,23 +21,11 @@ const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
 const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
 pub(super) fn view<'a>(
-    session: &'a ChangeSession,
-    change: Option<&'a ChangePreview>,
+    change: &'a ChangePreview,
     tokens: &'a ThemeTokens,
     i18n: &'a I18n,
 ) -> Element<'a, LibraryMessage> {
-    let Some(change) = change else {
-        let r = crate::styles::tokens::resolve(tokens);
-        let prompt = t!(
-            i18n,
-            ids::LIBRARY_CHANGE_COMPONENT_PICK_PROMPT,
-            "reference" => session.reference.as_str()
-        );
-        return container(text(prompt).size(TS.body).color(r.ink3))
-            .padding(SP.xl)
-            .center(Length::Fill)
-            .boxed();
-    };
+    let session = &change.session;
     let body = column![
         cards(session, change, tokens, i18n),
         heading(ids::LIBRARY_CHANGE_COMPONENT_PARAMETERS, tokens, i18n),

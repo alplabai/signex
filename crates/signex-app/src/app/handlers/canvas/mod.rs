@@ -44,11 +44,15 @@ mod pause_end;
 mod pause_end_tests;
 pub(crate) use dimension_tool::ends_held_resume_esc;
 mod place_bezier;
+mod place_curve;
+#[cfg(test)]
+mod place_curve_tests;
+pub(crate) use place_curve::curve_tool_of;
 mod place_dimension;
 pub(crate) use place_directive::{net_parameters_directive, parse_value};
 mod directive_panel;
 mod place_drawing;
-pub(crate) use place_dimension::AnnotationTool;
+pub(crate) use place_dimension::{AnnotationTool, DimensionToolStyle, dimension_from_clicks};
 mod place_label;
 mod place_table;
 pub(crate) use place_label::{GLOBAL_PORT_SHAPE, label_command};
@@ -367,6 +371,11 @@ impl Signex {
                 }
             }
             CanvasEvent::CtrlClicked { world_x, world_y } => {
+                // A link of a rich text note opens; elsewhere Ctrl+click
+                // adds to the selection (#1114, mockup row 203).
+                if let Some(open) = self.rich_note_link_at(world_x, world_y) {
+                    return open;
+                }
                 if let Some(snapshot) = self.active_render_snapshot()
                     && let Some(hit) = crate::schematic_runtime::hit_test::hit_test_styled(
                         snapshot,
@@ -397,6 +406,10 @@ impl Signex {
                             .active_canvas_mut()
                             .selected
                             .push(hit);
+                        // An added member brings its whole union along; taking
+                        // one off narrows the selection for Remove Selection
+                        // from Union (#2745, docs/SCHEMATIC_UNIONS.md).
+                        self.expand_selection_to_unions();
                     }
                     self.interaction_state
                         .active_canvas_mut()

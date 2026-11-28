@@ -107,6 +107,25 @@ const SAVES: &[&str] = &[
     "save_layer_set",
     // Writes the named workspace layout into the user's preferences (mockup row 166).
     "save_workspace_layout",
+    // Write an Export Job file: a new one, or an edit of one no tab holds
+    // (#1299, mockup row 114).
+    "new_output_job",
+    "add_job_output",
+    "set_job_output",
+    "set_job_profile",
+    "set_job_triggers",
+    "set_job_gerber_units",
+    "set_job_gerber_format",
+    "set_job_gerber_zeros",
+    "set_job_gerber_layers",
+    "set_job_gerber_apertures",
+    // Writes the design checklist as a template into the user's config
+    // folder (#1291, mockup row 206).
+    "project_save_checklist_template",
+    // Writes the copy of a stock primitive into a library (#3013).
+    "copy_stock_to_library",
+    // May re-create a library's Git history on disk (#3013).
+    "recover_library",
     // Write the project's block diagram file (#2968); a regenerate without
     // `apply` lists its changes and writes nothing.
     "generate_block_diagram",
@@ -119,6 +138,8 @@ const SAVES: &[&str] = &[
     // With `save`, writes notebook/generated/design-report.snxnbk (mockup
     // row 201).
     "generate_design_notebook",
+    // Copies the font file into the project's `assets/fonts` folder (#1178).
+    "project_add_font",
     // Write a binding into a custom profile of `keyboard_shortcuts.toml` (#2495).
     "keymap_assign",
     "keymap_clear",
@@ -251,6 +272,18 @@ mod tests {
         assert_eq!(cap("repour_all"), Capability::Edit);
     }
 
+    /// #3013: a library dialog's command that writes a file needs `save`; one
+    /// that changes a project or a sheet in memory needs `edit`; Document
+    /// Options, a view setting held for the session, needs `read`.
+    #[test]
+    fn the_library_dialog_commands_need_their_capability() {
+        assert_eq!(cap("copy_stock_to_library"), Capability::Save);
+        assert_eq!(cap("recover_library"), Capability::Save);
+        assert_eq!(cap("new_library"), Capability::Edit);
+        assert_eq!(cap("apply_library_updates"), Capability::Edit);
+        assert_eq!(cap("set_library_document_options"), Capability::Read);
+    }
+
     /// #2470: New PCB opens the board unsaved and the numbering commands
     /// change documents in memory: none writes a file, so none needs `save`.
     #[test]
@@ -349,19 +382,39 @@ mod tests {
             (Capability::Save, "save_snippet"),
             (Capability::Save, "save_layer_set"),
             (Capability::Save, "save_workspace_layout"),
+            (Capability::Save, "project_save_checklist_template"),
+            (Capability::Save, "copy_stock_to_library"),
+            (Capability::Save, "recover_library"),
             (Capability::Save, "generate_block_diagram"),
             (Capability::Save, "regenerate_block_diagram"),
             (Capability::Save, "mark_notebook_attachment_valid"),
             (Capability::Save, "attach_notebook_file"),
             (Capability::Save, "generate_design_notebook"),
+            (Capability::Save, "project_add_font"),
             (Capability::Save, "keymap_assign"),
             (Capability::Save, "keymap_clear"),
             (Capability::Export, "print"),
             (Capability::Export, "report_manager_bom"),
             (Capability::Export, "export_board_report"),
             (Capability::Export, "export_board_pdf"),
+            (Capability::Export, "export_schematic_pdf"),
             (Capability::Export, "export_assembly_svg"),
             (Capability::Export, "export_board_step"),
+            // #1299: PNG pages, and an Export Job's outputs.
+            (Capability::Export, "export_sheet_png"),
+            (Capability::Export, "run_output_job"),
+            // Mockup row 114: the Export Job edits write its file.
+            (Capability::Save, "new_output_job"),
+            (Capability::Save, "add_job_output"),
+            (Capability::Save, "set_job_output"),
+            (Capability::Save, "set_job_profile"),
+            (Capability::Save, "set_job_triggers"),
+            (Capability::Save, "set_job_gerber_units"),
+            (Capability::Save, "set_job_gerber_format"),
+            (Capability::Save, "set_job_gerber_zeros"),
+            (Capability::Save, "set_job_gerber_layers"),
+            (Capability::Save, "set_job_gerber_apertures"),
+            (Capability::Export, "project_export_checklist_csv"),
             (Capability::Export, "export_block_diagram"),
             (Capability::Export, "export_notebook_timeline"),
             (Capability::Export, "export_notebook_pdf"),

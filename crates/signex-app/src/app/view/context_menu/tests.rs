@@ -19,6 +19,7 @@ mod placement_extras_rows;
 mod project_tree_rows;
 mod row_effects;
 mod sheet_rules;
+mod tab_menu_rows;
 mod update_pcb_rows;
 
 const TID: ThemeId = ThemeId::GraphiteDark;

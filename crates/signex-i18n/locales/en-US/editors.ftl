@@ -1244,6 +1244,10 @@ editors-pin-table-length-refused = Pin length { $value } was not applied: a pin 
 # The header of the symbol editor's Place Pin dropdown (mockup row 141): the
 # type picked under it stays for every following pin.
 editors-symbol-bar-pin-type = Pin type
+# Why edit_symbol_pins (#2817) and the symbol_draw_* commands (#2838) did
+# nothing: the symbol file they name has no open editor.
+editors-symbol-file-not-open = the symbol file is not open
+editors-symbol-not-open = the symbol is not open
 # Messages panel (#3129): opening a symbol file removed a control character
 # that an older build had written into its pin table. $file is the file name,
 # $symbol the symbol's name, $pin the pin number, $column the pin table column

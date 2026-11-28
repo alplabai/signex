@@ -590,6 +590,103 @@ fn a_saved_profile_edit_changes_the_profile_only() {
     assert!(!setup_draft_open(&app), "the project's values show again");
 }
 
+/// The audit's Project tab width, tall enough for the whole Setup page.
+const TALL_TAB: iced::Size = iced::Size::new(888.0, 1600.0);
+
+/// The page's texts with the isolation marks around arguments removed.
+fn setup_texts(app: &Signex) -> Vec<(String, iced::Rectangle)> {
+    let project_id = app.document_state.projects[0].id;
+    crate::layout_probe::lay_out_texts(app.view_project_tab(project_id), TALL_TAB)
+        .into_iter()
+        .map(|t| (t.text.replace(['\u{2068}', '\u{2069}'], ""), t.bounds))
+        .collect()
+}
+
+fn shows(texts: &[(String, iced::Rectangle)], words: &str) -> bool {
+    texts.iter().any(|(text, _)| text == words)
+}
+
+fn top_of(texts: &[(String, iced::Rectangle)], words: &str) -> f32 {
+    texts
+        .iter()
+        .find(|(text, _)| text == words)
+        .unwrap_or_else(|| panic!("no text {words:?} on the page"))
+        .1
+        .y
+}
+
+fn stored_layers(app: &Signex) -> u8 {
+    let data = &app.document_state.projects[0].data;
+    crate::app::NewProjectState::of_project(data, &app.document_state.setup_profiles)
+        .setup
+        .pcb
+        .copper_layers
+}
+
+/// #2997, mockup row 37: the Board rules preview sits under the PCB rules
+/// and Schematic cards, above Agent journals, and writes every rule's value
+/// and the layer count on the board ground.
+#[test]
+fn the_board_rules_preview_sits_under_the_cards_with_every_value() {
+    use crate::app::new_project::preview::rule_labels;
+    let app = app();
+    let texts = setup_texts(&app);
+    let preview = top_of(&texts, "Board rules preview");
+    assert!(top_of(&texts, "PCB rules") < preview, "under the cards");
+    assert!(
+        preview < top_of(&texts, "Agent journals"),
+        "above the journals"
+    );
+    assert!(shows(&texts, "tracks, via and stack-up"));
+    let data = &app.document_state.projects[0].data;
+    let pcb = crate::app::NewProjectState::of_project(data, &app.document_state.setup_profiles)
+        .setup
+        .pcb;
+    let i18n = signex_i18n::I18n::en_us();
+    for label in rule_labels(&pcb, 1.0, &i18n) {
+        let value = label.value_text();
+        assert!(shows(&texts, &value), "the value {value} is on the drawing");
+        assert!(
+            top_of(&texts, &value) > preview,
+            "{value} is in the preview"
+        );
+    }
+    let layers = format!("{}-layer", pcb.copper_layers);
+    assert!(
+        top_of(&texts, &layers) > preview,
+        "the layer count is drawn"
+    );
+    assert!(
+        !shows(&texts, "drill ≥ via size"),
+        "good rules draw no error"
+    );
+}
+
+/// #2997: a card pick and a layer step redraw the preview, and a drill at
+/// the via's size is drawn with the error note.
+#[test]
+fn the_board_rules_preview_redraws_on_a_pick_a_step_and_a_bad_drill() {
+    let mut app = app();
+    edit(
+        &mut app,
+        NewProjectMsg::ProfilePicked(SetupProfile::Advanced),
+    );
+    let picked = stored_layers(&app);
+    assert!(shows(&setup_texts(&app), &format!("{picked}-layer")));
+    edit(&mut app, NewProjectMsg::LayersStepped(1));
+    let stepped = stored_layers(&app);
+    assert_ne!(stepped, picked, "the step changed the layer count");
+    let texts = setup_texts(&app);
+    assert!(shows(&texts, &format!("{stepped}-layer")));
+    assert!(!shows(&texts, &format!("{picked}-layer")));
+    // Advanced drills 0.2 mm: a 0.2 mm via is refused and drawn in error.
+    edit(
+        &mut app,
+        NewProjectMsg::RuleEdited(PcbField::ViaSize, "0.2".into()),
+    );
+    assert!(shows(&setup_texts(&app), "drill ≥ via size"));
+}
+
 fn saved_profile(app: &mut Signex) -> String {
     let setup = signex_types::project::ProjectSetup::default();
     signex_types::project::save_user_profile(

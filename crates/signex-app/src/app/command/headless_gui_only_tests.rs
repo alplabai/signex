@@ -42,6 +42,12 @@ const PANELS: &[&str] = &[
     "open_components_panel",
     "next_document_tab",
     "toggle_schematic_list_panel",
+    // Mockup row 207: the document area's panes.
+    "tile_windows_grid",
+    "move_tab_to_other_pane",
+    "close_pane",
+    "sync_pane_zoom",
+    "equalize_panes",
 ];
 
 /// Window UI that moves the view: zoom, grid, units, display toggles.

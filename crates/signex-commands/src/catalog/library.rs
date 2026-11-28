@@ -1,8 +1,134 @@
 //! Library commands: the library browser and Components panel, editing a
-//! library symbol, and the footprint editor modes.
+//! library symbol, the footprint editor modes and its pad moves, the
+//! symbol editor's curve shapes drawn from operands, and the actions of the
+//! library dialogs.
 
+use super::operands::{Operand, OperandKind, optional, required};
 use super::{CommandFlags, CommandGroup, CommandMetadata, DocumentKind, Enablement};
 use signex_i18n_ids::command_ids;
+
+const fn operand(name: &'static str, kind: OperandKind, required: bool) -> Operand {
+    Operand {
+        name,
+        kind,
+        required,
+    }
+}
+
+// #2838: each shape lands on the open symbol `document` names, in the
+// symbol's own mm, on the part and body the editor shows.
+
+/// An elliptical arc: the ellipse, then the angles, counter-clockwise.
+const SYMBOL_ELLIPTICAL_ARC: &[Operand] = &[
+    operand("document", OperandKind::Document, true),
+    operand("center", OperandKind::Point, true),
+    operand("radius_x", OperandKind::Length, true),
+    operand("radius_y", OperandKind::Length, true),
+    operand("start_angle", OperandKind::Turn, true),
+    operand("end_angle", OperandKind::Turn, true),
+];
+/// A cubic Bezier through its start, two control points and end.
+const SYMBOL_BEZIER: &[Operand] = &[
+    operand("document", OperandKind::Document, true),
+    operand("start", OperandKind::Point, true),
+    operand("control_1", OperandKind::Point, true),
+    operand("control_2", OperandKind::Point, true),
+    operand("end", OperandKind::Point, true),
+];
+/// A round rectangle: two opposite corners; the radius, left out, is the
+/// tool's default held to half the short side.
+const SYMBOL_ROUND_RECTANGLE: &[Operand] = &[
+    operand("document", OperandKind::Document, true),
+    operand("start", OperandKind::Point, true),
+    operand("end", OperandKind::Point, true),
+    operand("corner_radius", OperandKind::Length, false),
+];
+/// A pie: the circle, then the wedge's angles, counter-clockwise.
+const SYMBOL_PIE: &[Operand] = &[
+    operand("document", OperandKind::Document, true),
+    operand("center", OperandKind::Point, true),
+    operand("radius", OperandKind::Length, true),
+    operand("start_angle", OperandKind::Turn, true),
+    operand("end_angle", OperandKind::Turn, true),
+];
+/// `edit_symbol_pins` (#2817): the open `.snxsym` and, when it holds more
+/// than one, the `symbol` by name; then `pins`, a JSON object of pin number
+/// to the fields to set (or null to remove the pin), or `paste`, pin rows as
+/// the Pin table's Paste rows reads them (`\n` between rows, `\t` or two
+/// spaces between cells) with the column map `fields` and the paste `mode`
+/// (`update_by_number`, `append`, `replace_all`). `dry_run` answers without
+/// changing the symbol.
+const SYMBOL_PINS: &[Operand] = &[
+    operand("document", OperandKind::Document, true),
+    operand("symbol", OperandKind::Text, false),
+    operand("pins", OperandKind::Text, false),
+    operand("paste", OperandKind::Text, false),
+    operand("fields", OperandKind::Text, false),
+    operand("mode", OperandKind::Text, false),
+    operand("dry_run", OperandKind::Bool, false),
+];
+
+/// Move Selection By on named footprint pads (#3013): the open footprint
+/// `document`, the `pad_numbers` (comma separated) and the offset `by`.
+const FOOTPRINT_MOVE_PADS: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("pad_numbers", OperandKind::Text),
+    required("by", OperandKind::Point),
+];
+
+/// Align Selection on named footprint pads (#3013): `horizontal` is `left`,
+/// `center`, `right`, `space` or `none`; `vertical` is `top`, `center`,
+/// `bottom`, `space` or `none`. Left out: `none`.
+const FOOTPRINT_ALIGN_PADS: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("pad_numbers", OperandKind::Text),
+    optional("horizontal", OperandKind::Text),
+    optional("vertical", OperandKind::Text),
+];
+
+/// Document Options (mockup row 132): the open `library` (its id or
+/// `.snxlib` path) and the settings to change; one left out keeps its value.
+const LIBRARY_DOCUMENT_OPTIONS: &[Operand] = &[
+    required("library", OperandKind::Text),
+    optional("sheet_color", OperandKind::Text),
+    optional("grid", OperandKind::Bool),
+    optional("grid_spacing", OperandKind::Length),
+    optional("unit", OperandKind::Text),
+];
+
+/// Library Updates (mockup row 135): the sheet whose updates wait, the
+/// parts to update by designator (or `all`), and the conflicts that take
+/// the library's value (`<designator>:<field>`).
+const LIBRARY_UPDATES: &[Operand] = &[
+    required("document", OperandKind::Document),
+    optional("designators", OperandKind::Text),
+    optional("use_library", OperandKind::Text),
+];
+
+/// Copy to Library (mockup row 134): the stock primitive by `name` and
+/// `kind`, and the writable library `path` the copy goes to.
+const STOCK_COPY: &[Operand] = &[
+    required("name", OperandKind::Text),
+    required("kind", OperandKind::Text),
+    required("path", OperandKind::Path),
+];
+
+/// Library recovery (mockup row 138): the library `path`, the `action`,
+/// and for `locate` the library found at another place.
+const LIBRARY_RECOVERY: &[Operand] = &[
+    required("path", OperandKind::Path),
+    required("action", OperandKind::Text),
+    optional("located", OperandKind::Path),
+];
+
+/// New Library (mockup row 133): the project, the `.snxlib` path and the
+/// version-control options, off when left out.
+const NEW_LIBRARY: &[Operand] = &[
+    required("document", OperandKind::Document),
+    required("path", OperandKind::Path),
+    optional("git", OperandKind::Bool),
+    optional("lfs", OperandKind::Bool),
+];
 
 pub(super) const LIBRARY: &[CommandMetadata] = &[
     CommandMetadata {
@@ -85,6 +211,146 @@ pub(super) const LIBRARY: &[CommandMetadata] = &[
         group: CommandGroup::ThreeD,
         enable: Enablement::RequiresDocument(DocumentKind::Footprint),
         flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "symbol_draw_elliptical_arc",
+        category: "place",
+        label: command_ids::CMD_SYMBOL_DRAW_ELLIPTICAL_ARC,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::RequiresDocument(DocumentKind::Symbol),
+        flags: CommandFlags::MUTATES,
+        operands: SYMBOL_ELLIPTICAL_ARC,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "symbol_draw_bezier",
+        category: "place",
+        label: command_ids::CMD_SYMBOL_DRAW_BEZIER,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::RequiresDocument(DocumentKind::Symbol),
+        flags: CommandFlags::MUTATES,
+        operands: SYMBOL_BEZIER,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "symbol_draw_round_rectangle",
+        category: "place",
+        label: command_ids::CMD_SYMBOL_DRAW_ROUND_RECTANGLE,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::RequiresDocument(DocumentKind::Symbol),
+        flags: CommandFlags::MUTATES,
+        operands: SYMBOL_ROUND_RECTANGLE,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "symbol_draw_pie",
+        category: "place",
+        label: command_ids::CMD_SYMBOL_DRAW_PIE,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::RequiresDocument(DocumentKind::Symbol),
+        flags: CommandFlags::MUTATES,
+        operands: SYMBOL_PIE,
+        ..CommandMetadata::DEFAULT
+    },
+    // #2817: the Pin table tab's bulk edit and Paste rows (mockup row 122b)
+    // for an agent or the CLI; one undo step on the symbol file. A person
+    // uses the tab. No default key.
+    CommandMetadata {
+        id: "edit_symbol_pins",
+        category: "edit",
+        label: command_ids::CMD_EDIT_SYMBOL_PINS,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::RequiresDocument(DocumentKind::Symbol),
+        flags: CommandFlags::MUTATES,
+        operands: SYMBOL_PINS,
+        ..CommandMetadata::DEFAULT
+    },
+    // #3013: the edits of Move Selection By and Align Selection (mockup row
+    // 140) on the pads a caller names. One undo step of the footprint; the
+    // file is written only by a save.
+    CommandMetadata {
+        id: "footprint_move_pads",
+        category: "modify",
+        label: command_ids::CMD_FOOTPRINT_MOVE_PADS,
+        menu_label: None,
+        group: CommandGroup::ThreeD,
+        enable: Enablement::RequiresDocument(DocumentKind::Footprint),
+        flags: CommandFlags::MUTATES,
+        operands: FOOTPRINT_MOVE_PADS,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "footprint_align_pads",
+        category: "modify",
+        label: command_ids::CMD_FOOTPRINT_ALIGN_PADS,
+        menu_label: None,
+        group: CommandGroup::ThreeD,
+        enable: Enablement::RequiresDocument(DocumentKind::Footprint),
+        flags: CommandFlags::MUTATES,
+        operands: FOOTPRINT_ALIGN_PADS,
+        ..CommandMetadata::DEFAULT
+    },
+    // #3013: the library dialogs' actions (mockup rows 132-138), each run
+    // through the dialog's own messages. See docs/CLI.md, "Library dialogs".
+    CommandMetadata {
+        id: "set_library_document_options",
+        category: "view",
+        label: command_ids::CMD_SET_LIBRARY_DOCUMENT_OPTIONS,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: LIBRARY_DOCUMENT_OPTIONS,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "apply_library_updates",
+        category: "modify",
+        label: command_ids::CMD_APPLY_LIBRARY_UPDATES,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::MUTATES,
+        operands: LIBRARY_UPDATES,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "copy_stock_to_library",
+        category: "file",
+        label: command_ids::CMD_COPY_STOCK_TO_LIBRARY,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::NONE,
+        operands: STOCK_COPY,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "recover_library",
+        category: "file",
+        label: command_ids::CMD_RECOVER_LIBRARY,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::MUTATES_NOT_UNDOABLE,
+        operands: LIBRARY_RECOVERY,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "new_library",
+        category: "file",
+        label: command_ids::CMD_NEW_LIBRARY,
+        menu_label: None,
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::MUTATES_NOT_UNDOABLE,
+        operands: NEW_LIBRARY,
         ..CommandMetadata::DEFAULT
     },
 ];
