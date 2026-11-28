@@ -462,8 +462,7 @@ mod linked {
     /// exists, so the override stays; a key past the slot count goes.
     #[test]
     fn a_linked_linear_to_grid_keeps_an_inner_index_past_the_row() {
-        let (mut sketch, b) =
-            linked_to_linear_a(super::linear("2", "10mm", "0mm", vec![]));
+        let (mut sketch, b) = linked_to_linear_a(super::linear("2", "10mm", "0mm", vec![]));
         sketch.set_override(b, 1, 2, net("X"));
         sketch.set_override(b, 5, 0, net("STALE"));
         let before = netted(&sketch, "X");
@@ -481,8 +480,7 @@ mod linked {
     /// still slot k, not the never-baked slot 0.
     #[test]
     fn a_vertical_linked_linear_to_grid_keeps_the_override() {
-        let (mut sketch, b) =
-            linked_to_linear_a(super::linear("3", "0mm", "20mm", vec![]));
+        let (mut sketch, b) = linked_to_linear_a(super::linear("3", "0mm", "20mm", vec![]));
         sketch.set_override(b, 2, 0, net("X"));
         let before = netted(&sketch, "X");
         assert_eq!(before.len(), 1, "{before:?}");

@@ -233,9 +233,13 @@ are `updates/sketch/pattern_kind.rs`.
   editor state); after a reload a centre counts as drawn and stays.
 - **Centre.** Linear and Grid switch at once. Polar first asks for a centre
   through the Re-pick flow: the form shows "Click a Point… (Esc to
-  cancel)", and the next click on the canvas, under any tool, picks or
-  places the centre and switches the pattern. Esc, or the pattern's own
-  kind segment, cancels and leaves the pattern as it was.
+  cancel)", and the next press on the canvas, under any tool, picks or
+  places the centre and switches the pattern. The press is taken before
+  any grab, glyph or stroke pick (`canvas/input/centre_pick.rs`): on a
+  Point (the origin, a pad centre) it picks that Point; elsewhere it snaps
+  as a placement does and the centre is a new Point there. Esc, or the
+  pattern's own kind segment, cancels and leaves the pattern as it was. A pick whose pattern is gone or already Polar places
+  nothing and says so in the Messages panel.
 - **Instances.** The suppression list and the pattern's per-pad overrides
   follow their instance in the row-by-row walk: cell `(i, j)` of a grid
   `nx` wide is instance `j × nx + i` of a line. An entry with no place in

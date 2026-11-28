@@ -20,7 +20,7 @@ use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit
 
 /// An app on a footprint whose sketch repeats pad 1 four times along X,
 /// with instance 2 skipped.
-fn app_on_a_linear(path: &Path) -> (Signex, ArrayId) {
+pub(super) fn app_on_a_linear(path: &Path) -> (Signex, ArrayId) {
     let path = path.to_path_buf();
     let plane = PlaneId::new();
     let mut sketch = SketchData {
@@ -72,11 +72,11 @@ fn app_on_a_linear(path: &Path) -> (Signex, ArrayId) {
     (app, array_id)
 }
 
-fn editor<'a>(app: &'a Signex, path: &Path) -> &'a FootprintDocument {
+pub(super) fn editor<'a>(app: &'a Signex, path: &Path) -> &'a FootprintDocument {
     &app.document_state.footprint_editors[path]
 }
 
-fn sketch<'a>(app: &'a Signex, path: &Path) -> &'a SketchData {
+pub(super) fn sketch<'a>(app: &'a Signex, path: &Path) -> &'a SketchData {
     editor(app, path)
         .primitive()
         .sketch
@@ -84,16 +84,16 @@ fn sketch<'a>(app: &'a Signex, path: &Path) -> &'a SketchData {
         .expect("a sketch")
 }
 
-fn kind<'a>(app: &'a Signex, path: &Path, array_id: ArrayId) -> &'a ArrayKind {
+pub(super) fn kind<'a>(app: &'a Signex, path: &Path, array_id: ArrayId) -> &'a ArrayKind {
     let array = sketch(app, path).arrays.iter().find(|a| a.id == array_id);
     &array.expect("the pattern").kind
 }
 
-fn is_idle(app: &Signex, path: &Path) -> bool {
+pub(super) fn is_idle(app: &Signex, path: &Path) -> bool {
     matches!(editor(app, path).state.tool_pending, ToolPending::Idle)
 }
 
-fn send(app: &mut Signex, path: &Path, msg: FootprintEditorMsg) {
+pub(super) fn send(app: &mut Signex, path: &Path, msg: FootprintEditorMsg) {
     let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
         path: path.to_path_buf(),
         msg: PrimitiveEdit::Footprint(msg),
@@ -241,7 +241,7 @@ fn the_current_kind_cancels_a_waiting_centre_pick() {
     assert_eq!(editor(&app, &path).history.undo_len(), 0);
 }
 
-fn click(app: &mut Signex, path: &Path, snap_id: Option<SketchEntityId>) {
+pub(super) fn click(app: &mut Signex, path: &Path, snap_id: Option<SketchEntityId>) {
     send(
         app,
         path,
@@ -253,18 +253,18 @@ fn click(app: &mut Signex, path: &Path, snap_id: Option<SketchEntityId>) {
     );
 }
 
-fn polar_centre(app: &Signex, path: &Path, array_id: ArrayId) -> SketchEntityId {
+pub(super) fn polar_centre(app: &Signex, path: &Path, array_id: ArrayId) -> SketchEntityId {
     match kind(app, path, array_id) {
         ArrayKind::Polar { center, .. } => *center,
         other => panic!("a polar pattern, not {other:?}"),
     }
 }
 
-fn has_entity(app: &Signex, path: &Path, id: SketchEntityId) -> bool {
+pub(super) fn has_entity(app: &Signex, path: &Path, id: SketchEntityId) -> bool {
     sketch(app, path).entities.iter().any(|e| e.id == id)
 }
 
-fn sketch_mut<'a>(app: &'a mut Signex, path: &Path) -> &'a mut SketchData {
+pub(super) fn sketch_mut<'a>(app: &'a mut Signex, path: &Path) -> &'a mut SketchData {
     let doc = app.document_state.footprint_editors.get_mut(path).unwrap();
     doc.primitive_mut().sketch.as_mut().expect("a sketch")
 }

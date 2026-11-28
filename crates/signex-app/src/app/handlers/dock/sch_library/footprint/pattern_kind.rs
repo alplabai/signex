@@ -24,3 +24,7 @@ impl Signex {
 #[cfg(test)]
 #[path = "pattern_kind_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "pattern_kind_canvas_tests.rs"]
+mod canvas_tests;

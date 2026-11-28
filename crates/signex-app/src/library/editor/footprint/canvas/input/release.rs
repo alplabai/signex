@@ -359,14 +359,10 @@ impl FootprintCanvas<'_> {
             Some(SketchInference::Off) | None if !snapped_off_point => snap_id,
             _ => None,
         };
-        // A centre pick from the Pattern form takes the click under any
-        // tool, Select included (#2596).
-        let picks_centre = matches!(
-            self.state.tool_pending,
-            crate::library::editor::footprint::state::ToolPending::RepickPolarCenter { .. }
-        );
+        // An armed centre pick never gets here: its press took the click
+        // (`try_centre_pick`).
         let msg = match self.state.active_tool {
-            SketchTool::Select if !picks_centre => {
+            SketchTool::Select => {
                 EditorMsg::Footprint(FootprintEditorMsg::SketchSelect {
                     id: select_id,
                     shift: false,
@@ -406,7 +402,6 @@ impl FootprintCanvas<'_> {
             | SketchTool::Chamfer
             | SketchTool::Extend
             | SketchTool::LinearPattern
-            | SketchTool::Select
             // #372 — Break Track routes its single click through the
             // same SketchToolClick path as Trim; the dispatcher's edit
             // arm hit-tests the Line and hands off to `split_line`.

@@ -141,6 +141,10 @@ impl FootprintCanvas<'_> {
         cstate: &mut FootprintCanvasState,
         cursor_pos: Point,
     ) -> Option<canvas::Action<LibraryMessage>> {
+        // An armed centre pick takes the click before any tool does (#3232).
+        if let Some(a) = self.try_centre_pick(cstate, cursor_pos) {
+            return Some(a);
+        }
         if let Some(a) = self.try_lasso_add_vertex(cstate, cursor_pos) {
             return Some(a);
         }
@@ -224,7 +228,7 @@ impl FootprintCanvas<'_> {
 
     /// The footprint objects this canvas snaps to; the dragged pad, and the
     /// selection it carries, are left out.
-    fn object_targets(&self, moving: Option<(usize, bool)>) -> ObjectTargets<'_> {
+    pub(super) fn object_targets(&self, moving: Option<(usize, bool)>) -> ObjectTargets<'_> {
         ObjectTargets {
             silk_f: self.silk_f,
             silk_b: self.silk_b,

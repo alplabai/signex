@@ -102,16 +102,18 @@ pub fn switch_pattern_kind(
     array_id: ArrayId,
     target: KindTarget,
 ) -> Result<KindSwitched, KindSwitchRefused> {
+    if let Some(refused) = kind_switch_refusal(sketch, array_id, target.kind()) {
+        return Err(refused);
+    }
     let ctx = eval_context(sketch);
-    let old = sketch
+    let Some(old) = sketch
         .arrays
         .iter()
         .find(|a| a.id == array_id)
         .map(|a| a.kind.clone())
-        .ok_or(KindSwitchRefused::NoSuchPattern)?;
-    if PatternKind::of(&old) == target.kind() {
-        return Err(KindSwitchRefused::SameKind);
-    }
+    else {
+        return Err(KindSwitchRefused::NoSuchPattern);
+    };
     let layout = layout_of(&old, &ctx);
     let (mut new, line) = reshaped(&old, target, layout, &ctx);
     let remap = |cell: (u32, u32)| {
@@ -143,7 +145,10 @@ pub fn switch_pattern_kind(
     let is_linked = sketch
         .pattern_source_of(array_id)
         .is_some_and(|s| sketch.is_pattern(s));
-    let slot_count = layout.cols.zip(layout.rows).map(|(c, r)| c.saturating_mul(r));
+    let slot_count = layout
+        .cols
+        .zip(layout.rows)
+        .map(|(c, r)| c.saturating_mul(r));
     let remap_key = |(i, j): (u32, u32)| {
         if is_linked {
             slot_count.is_none_or(|n| i < n).then_some((i, j))
@@ -170,6 +175,20 @@ pub fn switch_pattern_kind(
         array.kind = new;
     }
     Ok(switched)
+}
+
+/// Why switching pattern `array_id` to `kind` would change nothing, or
+/// `None` when [`switch_pattern_kind`] would switch it.
+pub fn kind_switch_refusal(
+    sketch: &SketchData,
+    array_id: ArrayId,
+    kind: PatternKind,
+) -> Option<KindSwitchRefused> {
+    match sketch.arrays.iter().find(|a| a.id == array_id) {
+        None => Some(KindSwitchRefused::NoSuchPattern),
+        Some(a) if PatternKind::of(&a.kind) == kind => Some(KindSwitchRefused::SameKind),
+        Some(_) => None,
+    }
 }
 
 /// Remove `point` when nothing uses it: no entity, constraint, pattern or

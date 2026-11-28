@@ -8,7 +8,8 @@
 //! "Switching a pattern's kind".
 
 use signex_bake::array::{
-    KindSwitched, KindTarget, PatternKind, remove_unused_point, switch_pattern_kind,
+    KindSwitchRefused, KindSwitched, KindTarget, PatternKind, remove_unused_point,
+    switch_pattern_kind,
 };
 use signex_i18n::{I18n, ids};
 use signex_sketch::array::{ArrayId, ArrayKind};
@@ -84,8 +85,12 @@ pub(crate) fn switch_kind(
     let Some(sketch) = editor.primitive_mut().sketch.as_mut() else {
         return false;
     };
-    let Ok(switched) = switch_pattern_kind(sketch, array_id, target) else {
-        return false;
+    let switched = match switch_pattern_kind(sketch, array_id, target) {
+        Ok(switched) => switched,
+        Err(refused) => {
+            report_refused(target.kind(), refused);
+            return false;
+        }
     };
     let removed = minted_centre.filter(|&c| remove_unused_point(sketch, c));
     if let Some(centre) = removed {
@@ -119,6 +124,22 @@ fn report_dropped(kind: PatternKind, switched: &KindSwitched) {
     for line in dropped_lines(&I18n::en_us(), kind, switched) {
         crate::diagnostics::log_warning(line);
     }
+}
+
+/// The Messages line for a switch to `kind` that changed nothing: the
+/// pattern is gone (an undo took it) or already is `kind`. English under
+/// any UI language, as [`report_dropped`].
+pub(super) fn report_refused(kind: PatternKind, refused: KindSwitchRefused) {
+    crate::diagnostics::log_warning(refused_line(&I18n::en_us(), kind, refused));
+}
+
+pub(super) fn refused_line(i18n: &I18n, kind: PatternKind, refused: KindSwitchRefused) -> String {
+    let id = match refused {
+        KindSwitchRefused::NoSuchPattern => ids::EDITORS_ROLE_PATTERN_KIND_REFUSED_MISSING,
+        KindSwitchRefused::SameKind => ids::EDITORS_ROLE_PATTERN_KIND_REFUSED_SAME,
+    };
+    let name = i18n.message_plain(kind_label(kind), &[]);
+    i18n.message_plain(id, &[("kind", name.as_str().into())])
 }
 
 pub(super) fn dropped_lines(
