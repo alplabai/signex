@@ -20,6 +20,8 @@ mod harness_panel;
 pub(crate) use harness_panel::HARNESS_FACT_BUILDS;
 mod layout_persist;
 mod library_browser;
+#[cfg(test)]
+mod live_edit_persist_tests;
 mod multi_edit;
 mod navigator;
 mod net_classes;
