@@ -14,7 +14,7 @@
 //! the command catalog, the Libraries page the library messages. Pages,
 //! filters, pins and the row menu send [`StartScreenMsg`] (#2305).
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use chrono::{DateTime, Utc};
@@ -138,9 +138,10 @@ pub struct StartScreenState {
     /// Bumped by every read of [`Self::library_vcs`]; an older read's
     /// answer is dropped.
     pub library_vcs_generation: u64,
-    /// The library file whose Remove from Signex (#2592) waits for its
-    /// Close Library to unmount it; cleared when that close is cancelled.
-    pub removing_library: Option<PathBuf>,
+    /// The library files whose Remove from Signex (#2592) waits for their
+    /// Close Library to unmount them. Each leaves when its own close
+    /// finishes or is cancelled, so a second removal never drops a first.
+    pub removing_libraries: BTreeSet<PathBuf>,
 }
 
 impl StartScreenState {

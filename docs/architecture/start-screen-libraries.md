@@ -30,8 +30,8 @@ Signex. Stock and a project's own libraries have no ⋯ button.
 1. Remove from Signex opens a confirm card, before any Close Library prompt, (the notice card with
    `NoticeAction::RemoveLibraryFromSignex`). It says the files stay on disk
    and shows the path. Cancel changes nothing.
-2. Remove from Signex on the card records `StartScreenState::removing_library`
-   and runs the existing Close Library: it closes at once, waits for the
+2. Remove from Signex on the card adds the library to
+   `StartScreenState::removing_libraries` and runs the existing Close Library: it closes at once, waits for the
    library's writes, or first asks about unsaved edits (Save All / Discard
    All / Cancel). Its open Library Browser and Component Preview tabs close
    with it.
@@ -39,7 +39,9 @@ Signex. Stock and a project's own libraries have no ⋯ button.
    leaves the session's Installed list, and a Global library's entry leaves
    `global_libraries.toml` on a worker (`global_prefs::remove_path`). A
    failed write keeps the entry, so the library loads again at the next
-   start, and the save-failure notice says so.
+   start, and the save-failure notice says so. Several removals can wait at
+   once (one library's close waits for its writes while another is removed):
+   each library leaves the registry when its own close finishes (#3235).
 
 Cancel in the close prompt, a failed Save All, or a deferred close stopped by
 new edits drops the pending removal, and so does opening the library again

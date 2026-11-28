@@ -121,7 +121,7 @@ impl Signex {
     /// The confirm was accepted: the library closes through the existing
     /// Close Library (at once, once its writes are done, or after its
     /// unsaved-edits prompt), and leaves the registry once it is unmounted
-    /// (see [`Self::unregister_removed_library`]). A cancelled close removes
+    /// (see [`Self::unregister_removed_libraries`]). A cancelled close removes
     /// nothing.
     pub(crate) fn confirm_library_removal(&mut self, path: PathBuf) -> Task<Message> {
         let asked = self
@@ -136,7 +136,10 @@ impl Signex {
         if !self.is_removable_library(&path) {
             return Task::none();
         }
-        self.ui_state.start_screen.removing_library = Some(path.clone());
+        self.ui_state
+            .start_screen
+            .removing_libraries
+            .insert(path.clone());
         self.handle_close_library(path)
     }
 
@@ -150,30 +153,36 @@ impl Signex {
     /// prompt, a failed Save All, a deferred close that found new edits):
     /// the removal is dropped too, so a later plain close does not remove it.
     pub(crate) fn drop_library_removal(&mut self, root: &Path) {
-        let removing = &mut self.ui_state.start_screen.removing_library;
-        if removing.as_deref() == Some(root) {
-            *removing = None;
-        }
+        self.ui_state.start_screen.removing_libraries.remove(root);
     }
 
-    /// Libraries were unmounted: the one being removed leaves the session's
-    /// Installed list, and its Global entry leaves `global_libraries.toml`
-    /// on a worker. Its files on disk are not touched.
-    pub(super) fn unregister_removed_library(&mut self, unmounted: &[PathBuf]) -> Task<Message> {
-        let Some(path) = self.ui_state.start_screen.removing_library.clone() else {
-            return Task::none();
-        };
-        if !unmounted.contains(&path) || self.library.library_at(&path).is_some() {
-            return Task::none();
+    /// Libraries were unmounted: each one being removed leaves the session's
+    /// Installed list, and the Global entries leave `global_libraries.toml`
+    /// on one worker. Their files on disk are not touched. A
+    /// removal whose library is still mounted keeps waiting.
+    pub(super) fn unregister_removed_libraries(&mut self, unmounted: &[PathBuf]) -> Task<Message> {
+        let removed: Vec<PathBuf> = unmounted
+            .iter()
+            .filter(|p| self.ui_state.start_screen.removing_libraries.contains(*p))
+            .filter(|p| self.library.library_at(p).is_none())
+            .cloned()
+            .collect();
+        for path in &removed {
+            self.ui_state.start_screen.removing_libraries.remove(path);
         }
-        self.ui_state.start_screen.removing_library = None;
-        self.library.installed_libraries.retain(|p| *p != path);
-        if !self.library.global_libraries.iter().any(|e| e.path == path) {
+        self.library
+            .installed_libraries
+            .retain(|p| !removed.contains(p));
+        let global: Vec<PathBuf> = removed
+            .into_iter()
+            .filter(|p| self.library.global_libraries.iter().any(|e| e.path == *p))
+            .collect();
+        if global.is_empty() {
             return Task::none();
         }
         Task::perform(
             async move {
-                crate::app::path_op_jobs::run_blocking(move || global_prefs::remove_path(&path))
+                crate::app::path_op_jobs::run_blocking(move || remove_global_paths(&global))
                     .await
                     .and_then(|saved| saved)
             },
@@ -191,6 +200,26 @@ impl Signex {
             Ok(saved) => self.library.global_libraries = saved,
             Err(e) => self.report_global_libraries_save_failure("remove library", &e),
         }
+    }
+}
+
+/// Remove every one of `paths` from `global_libraries.toml`, one locked
+/// write each, so a failed one does not keep the others. The saved list
+/// after the last write, or the first failure. Blocking.
+fn remove_global_paths(paths: &[PathBuf]) -> Result<Vec<GlobalLibraryEntry>, String> {
+    let mut saved = Err(String::new());
+    let mut failure = None;
+    for path in paths {
+        match global_prefs::remove_path(path) {
+            Ok(list) => saved = Ok(list),
+            Err(e) => {
+                failure.get_or_insert(e);
+            }
+        }
+    }
+    match failure {
+        Some(e) => Err(e),
+        None => saved,
     }
 }
 
