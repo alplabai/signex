@@ -119,6 +119,7 @@ impl FootprintCanvas<'_> {
                         press_screen: cursor_pos,
                         moved: false,
                         with_selection: false,
+                        press_modifiers: cstate.current_modifiers,
                     });
                     return Some(canvas::Action::capture());
                 }
@@ -245,6 +246,7 @@ impl FootprintCanvas<'_> {
             press_screen: cursor_pos,
             moved: false,
             with_selection: false,
+            press_modifiers: cstate.current_modifiers,
         });
         Some(
             canvas::Action::publish(LibraryMessage::EditorEvent {
@@ -288,6 +290,7 @@ impl FootprintCanvas<'_> {
                 press_screen: cursor_pos,
                 moved: false,
                 with_selection: false,
+                press_modifiers: cstate.current_modifiers,
             });
             return Some(
                 canvas::Action::publish(LibraryMessage::EditorEvent {
@@ -378,6 +381,7 @@ impl FootprintCanvas<'_> {
                     press_screen: cursor_pos,
                     moved: false,
                     with_selection: false,
+                    press_modifiers: cstate.current_modifiers,
                 });
                 return Some(
                     canvas::Action::publish(LibraryMessage::EditorEvent {
@@ -487,6 +491,7 @@ impl FootprintCanvas<'_> {
                 // The drag carries the selection; Alt drags this pad alone
                 // (#2726).
                 with_selection: !modifiers.alt(),
+                press_modifiers: modifiers,
             });
             let Some(select_msg) = self.pad_press_selection(pad_idx, places_pad, modifiers) else {
                 return Some(canvas::Action::capture());

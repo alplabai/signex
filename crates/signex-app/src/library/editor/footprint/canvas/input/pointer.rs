@@ -281,6 +281,7 @@ impl FootprintCanvas<'_> {
             press_screen: cursor_pos,
             moved: false,
             with_selection: false,
+            press_modifiers: cstate.current_modifiers,
         });
         // v0.26-I + v0.27 — Select-tool empty-canvas press arms the
         // rubber-band rectangle for Pads mode + Sketch mode.
@@ -462,7 +463,7 @@ impl FootprintCanvas<'_> {
                 // the next frame settles.
                 self.cache.clear();
             } else {
-                return self.released_on_group_pad(cstate, drag.pad_idx);
+                return self.released_on_group_pad(&drag);
             }
         }
         None
