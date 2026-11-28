@@ -11,16 +11,13 @@ use signex_i18n::RenderTranslatable;
 
 impl Signex {
     /// Commit the pending drafts (title-block fields, sheet variables, typed
-    /// note text) of the sheets that belong to `project_id`, before a gate
-    /// reads which of them are unsaved (#2027).
+    /// note text, a drawing value being typed) of the sheets that belong to
+    /// `project_id`, before a gate reads which of them are unsaved (#2027,
+    /// #3194).
     pub(crate) fn commit_drafts_of_project(&mut self, project_id: ProjectId) {
         let owned: Vec<std::path::PathBuf> = self
-            .document_view
-            .drafts
-            .title_block_sheets()
+            .sheets_with_pending_drafts()
             .into_iter()
-            .chain(self.document_view.drafts.sheet_variable_sheets())
-            .chain(self.typed_note_sheets())
             .filter(|sheet| {
                 self.document_state
                     .document_project(sheet)
