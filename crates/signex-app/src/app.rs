@@ -149,6 +149,8 @@ pub(crate) use state::ModalId;
 pub(crate) mod cross_refs;
 #[cfg(test)]
 mod draft_save_point_tests;
+#[cfg(test)]
+mod footprint_selection_undo_tests;
 pub(crate) mod stitched_netlist;
 mod symbol_draft;
 mod symbol_history;
