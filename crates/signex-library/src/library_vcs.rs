@@ -68,15 +68,21 @@ fn executable_name(stem: &str) -> String {
     }
 }
 
-/// Read the state of the library folder `dir` against `tools`. Blocking:
-/// stats the folder and runs a `git status`.
-pub fn read_library_vcs_state(dir: &Path, tools: ToolsOnPath) -> LibraryVcsState {
-    // A folder git finds no repository in is off; any other open failure
-    // is a repository that needs attention.
-    let opened = git2::Repository::open(dir);
-    if matches!(&opened, Err(e) if e.code() == git2::ErrorCode::NotFound) {
+/// Read the state of the library folder `dir` against `tools`. The host
+/// says whether `dir` has a `.git` entry (`has_git_dir`); only a folder
+/// without one is off. Blocking: opens the repository and runs a
+/// `git status`.
+pub fn read_library_vcs_state(
+    dir: &Path,
+    has_git_dir: bool,
+    tools: ToolsOnPath,
+) -> LibraryVcsState {
+    if !has_git_dir {
         return LibraryVcsState::Off;
     }
+    // A `.git` git cannot open (HEAD, objects or refs missing reads as
+    // NotFound too) is a repository that cannot be read, never off.
+    let opened = git2::Repository::open(dir);
     let attention = LibraryVcsState::NeedsAttention;
     if !tools.git {
         return attention(VcsAttention::GitNotFound);
@@ -103,6 +109,13 @@ mod tests {
         git_lfs: true,
     };
 
+    /// The state of `dir`, with its `.git` presence read as the host reads
+    /// it.
+    fn read(dir: &Path, tools: ToolsOnPath) -> LibraryVcsState {
+        let has_git_dir = std::fs::symlink_metadata(dir.join(".git")).is_ok();
+        read_library_vcs_state(dir, has_git_dir, tools)
+    }
+
     fn committed_repo() -> tempfile::TempDir {
         let dir = tempfile::tempdir().unwrap();
         let repo = git2::Repository::init(dir.path()).unwrap();
@@ -121,22 +134,34 @@ mod tests {
     fn a_folder_without_git_is_off() {
         let dir = tempfile::tempdir().unwrap();
         assert_eq!(
-            read_library_vcs_state(dir.path(), ALL_TOOLS),
+            read(dir.path(), ALL_TOOLS),
             LibraryVcsState::Off
         );
+    }
+
+    /// Review #3235: a `.git` that git cannot open (here, no HEAD) needs
+    /// attention; only a missing `.git` is off.
+    #[test]
+    fn a_damaged_repository_needs_attention_and_is_not_off() {
+        let dir = committed_repo();
+        std::fs::remove_file(dir.path().join(".git").join("HEAD")).unwrap();
+        assert!(matches!(
+            read(dir.path(), ALL_TOOLS),
+            LibraryVcsState::NeedsAttention(VcsAttention::Unreadable(_))
+        ));
     }
 
     #[test]
     fn a_clean_repository_is_git_and_an_edit_needs_attention() {
         let dir = committed_repo();
         assert_eq!(
-            read_library_vcs_state(dir.path(), ALL_TOOLS),
+            read(dir.path(), ALL_TOOLS),
             LibraryVcsState::Git
         );
         std::fs::write(dir.path().join("lib.snxlib"), "edited").unwrap();
         std::fs::write(dir.path().join("new.tsv"), "row").unwrap();
         assert_eq!(
-            read_library_vcs_state(dir.path(), ALL_TOOLS),
+            read(dir.path(), ALL_TOOLS),
             LibraryVcsState::NeedsAttention(VcsAttention::Uncommitted(2))
         );
     }
@@ -149,7 +174,7 @@ mod tests {
             git_lfs: false,
         };
         assert_eq!(
-            read_library_vcs_state(dir.path(), no_git),
+            read(dir.path(), no_git),
             LibraryVcsState::NeedsAttention(VcsAttention::GitNotFound)
         );
         let no_lfs = ToolsOnPath {
@@ -158,16 +183,16 @@ mod tests {
         };
         // LFS matters only for a library that uses it.
         assert_eq!(
-            read_library_vcs_state(dir.path(), no_lfs),
+            read(dir.path(), no_lfs),
             LibraryVcsState::Git
         );
         std::fs::write(dir.path().join(".gitattributes"), "*.step filter=lfs\n").unwrap();
         assert_eq!(
-            read_library_vcs_state(dir.path(), no_lfs),
+            read(dir.path(), no_lfs),
             LibraryVcsState::NeedsAttention(VcsAttention::LfsNotFound)
         );
         assert_eq!(
-            read_library_vcs_state(dir.path(), ALL_TOOLS),
+            read(dir.path(), ALL_TOOLS),
             LibraryVcsState::NeedsAttention(VcsAttention::Uncommitted(1)),
             "with git-lfs present the new attributes file is the reason"
         );

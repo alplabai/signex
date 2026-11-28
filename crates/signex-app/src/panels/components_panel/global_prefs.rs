@@ -51,6 +51,10 @@ struct GlobalPrefsFile {
 /// platform can't resolve a config dir (very rare — a stripped-down
 /// headless environment). See [`crate::config_root::config_root`].
 pub fn prefs_path() -> Option<PathBuf> {
+    #[cfg(test)]
+    if let Some(root) = crate::config_root::isolated::current() {
+        return Some(root.join("global_libraries.toml"));
+    }
     let root = crate::config_root::config_root()?;
     Some(root.join("global_libraries.toml"))
 }

@@ -59,7 +59,7 @@ impl Signex {
             self.drop_library_removal(&root);
         }
         let unmounted = std::mem::take(&mut self.library.unmounted);
-        let mut tasks = vec![self.unregister_removed_library(&unmounted)];
+        let mut tasks = vec![self.unregister_removed_libraries(&unmounted)];
         for root in unmounted {
             if self.library.library_at(&root).is_some() {
                 continue;

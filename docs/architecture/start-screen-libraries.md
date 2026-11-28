@@ -22,6 +22,13 @@ folder. It is read when the Libraries page opens, and again while the page shows
 after Enable Version Control finishes or Add library… adds a library. Each read carries a
 generation; an older read that lands late is dropped.
 
+The app checks the `.git` entry (`std::fs::symlink_metadata`) and passes its
+presence to `read_library_vcs_state`, since the library crate does no file
+IO. Only a missing `.git` reads `off`. A `.git` git cannot open (HEAD,
+objects or refs missing) reads needs attention, "cannot be read", so its row
+never offers Enable Version Control, which refuses a folder that has a
+`.git` (#3235).
+
 ## Remove from Signex (#2592)
 
 A Global or Installed row has a ⋯ button; its menu holds Remove from
@@ -30,8 +37,8 @@ Signex. Stock and a project's own libraries have no ⋯ button.
 1. Remove from Signex opens a confirm card, before any Close Library prompt, (the notice card with
    `NoticeAction::RemoveLibraryFromSignex`). It says the files stay on disk
    and shows the path. Cancel changes nothing.
-2. Remove from Signex on the card records `StartScreenState::removing_library`
-   and runs the existing Close Library: it closes at once, waits for the
+2. Remove from Signex on the card adds the library to
+   `StartScreenState::removing_libraries` and runs the existing Close Library: it closes at once, waits for the
    library's writes, or first asks about unsaved edits (Save All / Discard
    All / Cancel). Its open Library Browser and Component Preview tabs close
    with it.
@@ -39,7 +46,9 @@ Signex. Stock and a project's own libraries have no ⋯ button.
    leaves the session's Installed list, and a Global library's entry leaves
    `global_libraries.toml` on a worker (`global_prefs::remove_path`). A
    failed write keeps the entry, so the library loads again at the next
-   start, and the save-failure notice says so.
+   start, and the save-failure notice says so. Several removals can wait at
+   once (one library's close waits for its writes while another is removed):
+   each library leaves the registry when its own close finishes (#3235).
 
 Cancel in the close prompt, a failed Save All, or a deferred close stopped by
 new edits drops the pending removal, and so does opening the library again
