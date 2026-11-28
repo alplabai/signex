@@ -485,6 +485,58 @@ fn in_stock_only_drops_parts_without_stock() {
     assert_eq!(drawn_parts(&state).len(), 9);
 }
 
+/// #3236: Stock reads every distributor, not the first: a part the first
+/// distributor is out of and the second has 5000 of shows 5000 and stays
+/// under In stock only, as the Change Part session's filter keeps it.
+#[test]
+fn stock_and_in_stock_only_read_every_distributor() {
+    use std::collections::BTreeMap;
+    let mut state = parts();
+    let lib = &mut state.open_libraries[0];
+    let rows = lib.tables.values_mut().next().expect("one table");
+    let c1 = rows
+        .iter_mut()
+        .find(|r| r.internal_pn.as_str() == "C1")
+        .expect("C1");
+    c1.supply = vec![
+        signex_library::DistributorListing::new("Mouser", "M-1"),
+        signex_library::DistributorListing::new("DigiKey", "D-1"),
+    ];
+    let row_id = c1.row_id;
+    let price = |sku: &str, stock| signex_library::CachedPricing {
+        sku: sku.into(),
+        currency: "USD".into(),
+        stock: Some(stock),
+        breaks: Vec::new(),
+        fetched_at: chrono::Utc::now(),
+    };
+    lib.pricing.insert(
+        row_id,
+        BTreeMap::from([
+            (
+                "Mouser".to_string(),
+                BTreeMap::from([("M-1".to_string(), price("M-1", 0))]),
+            ),
+            (
+                "DigiKey".to_string(),
+                BTreeMap::from([("D-1".to_string(), price("D-1", 5000))]),
+            ),
+        ]),
+    );
+    show(&mut state, "capacitor");
+    let table = &state.components_panel.table;
+    let c1 = table
+        .cache
+        .base
+        .iter()
+        .find(|r| r.row(&state.open_libraries).unwrap().internal_pn.as_str() == "C1")
+        .expect("C1 listed");
+    assert_eq!(c1.facts.stock, Some(5000));
+    apply(&mut state, M::InStockToggled(true));
+    apply(&mut state, M::ExpandAllPressed);
+    assert_eq!(drawn_parts(&state), ["C1"]);
+}
+
 /// The popovers toggle and only one is open.
 #[test]
 fn one_popover_at_a_time() {
@@ -567,6 +619,143 @@ fn details_pins_follow_the_parts_category_and_are_saved() {
     apply(&mut state, M::ShowAllParametersToggled);
     let (lines, _) = super::detail_lines(&state.components_panel.table, &i18n);
     assert_eq!(lines.len(), 6);
+}
+
+/// #3236: a release anywhere (over the Details pane, captured or not),
+/// the pointer leaving the window or the window losing focus ends a
+/// column resize, so a later move with no button held changes nothing.
+#[test]
+fn a_resize_ends_on_a_release_outside_the_table() {
+    use iced::mouse::{Button, Event as Mouse};
+    let released = iced::Event::Mouse(Mouse::ButtonReleased(Button::Left));
+    assert!(super::ends_column_resize(&released));
+    assert!(super::ends_column_resize(&iced::Event::Mouse(
+        Mouse::CursorLeft
+    )));
+    assert!(super::ends_column_resize(&iced::Event::Window(
+        iced::window::Event::Unfocused
+    )));
+    assert!(!super::ends_column_resize(&iced::Event::Mouse(
+        Mouse::CursorMoved {
+            position: iced::Point::new(10.0, 10.0)
+        }
+    )));
+    assert!(!super::ends_column_resize(&iced::Event::Mouse(
+        Mouse::ButtonReleased(Button::Right)
+    )));
+
+    let mut state = parts();
+    show(&mut state, "capacitor");
+    let start = state.components_panel.table.width_of(&p("value"));
+    apply(&mut state, M::ResizeStarted(p("value")));
+    apply(&mut state, M::ResizeMoved(200.0));
+    apply(&mut state, M::ResizeMoved(220.0));
+    // The window-level release the subscription turns into ResizeEnded.
+    let fx = apply(&mut state, M::ResizeEnded);
+    assert!(fx.save_prefs);
+    assert!(state.components_panel.table.resize.is_none());
+    apply(&mut state, M::ResizeMoved(400.0));
+    assert_eq!(
+        state.components_panel.table.width_of(&p("value")),
+        start + 20.0
+    );
+}
+
+/// #3236: a setup edit while a column's library is unmounted (the column
+/// is not offered) keeps that column in the saved setup, with its width.
+#[test]
+fn a_setup_edit_keeps_the_columns_of_an_unmounted_library() {
+    let mut state = parts();
+    show(&mut state, "capacitor");
+    let table = &mut state.components_panel.table;
+    let mut saved = table.cache.setup.clone();
+    saved.order.push(p("only_in_library_b"));
+    saved.widths.insert(p("only_in_library_b"), 80.0);
+    table.setups.insert("capacitor".into(), saved);
+    state.sync_view_caches();
+    assert!(
+        !state
+            .components_panel
+            .table
+            .cache
+            .setup
+            .order
+            .contains(&p("only_in_library_b"))
+    );
+    let fx = apply(
+        &mut state,
+        M::ColumnShown {
+            column: ColumnKey::Description,
+            shown: true,
+        },
+    );
+    assert!(fx.save_prefs);
+    let saved = &state.components_panel.table.setups["capacitor"];
+    assert!(
+        saved.order.contains(&p("only_in_library_b")),
+        "{:?}",
+        saved.order
+    );
+    assert_eq!(saved.widths.get(&p("only_in_library_b")), Some(&80.0));
+    assert!(!saved.hidden.contains(&ColumnKey::Description));
+    assert!(
+        state
+            .components_panel
+            .table
+            .cache
+            .setup
+            .visible_columns()
+            .contains(&ColumnKey::Description)
+    );
+}
+
+/// #3236: a part whose class pins nothing (an op-amp) still has
+/// parameters; Details offers them under Show all and does not say "No
+/// parameters." above it.
+#[test]
+fn details_without_pins_offer_show_all_not_no_parameters() {
+    let mut state = parts();
+    show(&mut state, "*");
+    state.components_panel.selected = Some(key_of(&state, "U1"));
+    state.sync_view_caches();
+    let i18n = signex_i18n::I18n::en_us();
+    let (lines, more) = super::detail_lines(&state.components_panel.table, &i18n);
+    assert!(lines.is_empty(), "the op-amp template pins nothing");
+    let all = more.expect("the op-amp has parameters");
+    let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::GraphiteLight);
+    let section = crate::panels::components_panel::details::parameters_section(
+        &state.components_panel.table,
+        &tokens,
+        &i18n,
+    );
+    let texts: Vec<String> =
+        crate::layout_probe::lay_out_texts(section, iced::Size::new(320.0, 400.0))
+            .into_iter()
+            .map(|t| t.text.replace(['\u{2068}', '\u{2069}'], ""))
+            .collect();
+    let no_parameters = i18n.message_plain(
+        signex_i18n::ids::PANELS_COMPONENTS_DETAILS_NO_PARAMETERS,
+        &[],
+    );
+    assert!(!texts.contains(&no_parameters), "{texts:?}");
+    let show_all = i18n.message_plain(
+        signex_i18n::ids::PANELS_COMPONENTS_SHOW_ALL,
+        &[("count", all.into())],
+    );
+    assert!(texts.contains(&show_all), "{texts:?}");
+
+    // A part with no parameters at all still says so.
+    state.components_panel.selected = None;
+    state.sync_view_caches();
+    let (lines, more) = super::detail_lines(&state.components_panel.table, &i18n);
+    assert!(lines.is_empty() && more.is_none());
+    let section = crate::panels::components_panel::details::parameters_section(
+        &state.components_panel.table,
+        &tokens,
+        &i18n,
+    );
+    let texts = crate::layout_probe::lay_out_texts(section, iced::Size::new(320.0, 400.0));
+    assert!(texts.iter().any(|t| t.text == no_parameters));
 }
 
 /// Caner, 2026-11-27: a min-to-max pair with one end set shows "≥ low" (or

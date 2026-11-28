@@ -138,7 +138,7 @@ pub use param_edit::{
 };
 pub use pricing::{
     CachedPricing, DroppedUpdate, PricingError, PricingUpdate, RowPricing, StoreOutcome, age_label,
-    current_pricing, distributor_key, format_price,
+    best_stock, current_pricing, distributor_key, format_price,
 };
 pub use pricing_refresh::{
     ClientResult, ClientUnavailable, FailureKind, PricingRefreshReport, RowFailure,

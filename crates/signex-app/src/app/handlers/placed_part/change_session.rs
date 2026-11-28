@@ -8,7 +8,7 @@ use std::path::PathBuf;
 
 use iced::Task;
 use signex_engine::ComponentReplacement;
-use signex_library::{ComponentRow, PrimitiveRef, RowPricing, TemplateRegistry, current_pricing};
+use signex_library::{ComponentRow, PrimitiveRef, RowPricing, TemplateRegistry, best_stock};
 use signex_types::schematic::{LibSymbol, SchematicSheet, Symbol, normalized_lib_id, pin_key};
 use uuid::Uuid;
 
@@ -89,13 +89,12 @@ fn draws_placed_symbol(row: &ComponentRow, placed: &PlacedNow) -> bool {
 }
 
 /// Whether a distributor last reported `row` in stock: a current cached
-/// price with a stock above zero.
+/// price with a stock above zero, from any distributor.
 fn in_stock(row: &ComponentRow, pricing: &HashMap<Uuid, RowPricing>) -> bool {
-    pricing.get(&row.row_id).is_some_and(|cached| {
-        current_pricing(row, cached)
-            .iter()
-            .any(|(_, price)| price.stock.is_some_and(|n| n > 0))
-    })
+    pricing
+        .get(&row.row_id)
+        .and_then(|cached| best_stock(row, cached))
+        .is_some_and(|n| n > 0)
 }
 
 /// Whether the switched-on chips leave `row` of `lib` out.

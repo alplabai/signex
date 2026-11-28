@@ -2,7 +2,10 @@
 //! the category shown last (Caner, 2026-11-27) and the column, sort and
 //! group setup of each category, saved per user. Written off the UI thread
 //! through `background_pref_write`; the write is the shared atomic
-//! read-modify-write, so other keys are kept.
+//! read-modify-write, so other keys are kept. Within the key, what this
+//! build cannot read is kept too: a setup that does not parse, fields of a
+//! setup it does not know and other subkeys (#3236), so a newer build's
+//! state sharing the file survives.
 //!
 //! ```json
 //! "components_panel_views": {
@@ -82,20 +85,65 @@ pub fn write_components_views_at(path: &Path, views: &ComponentsViews) {
             return;
         }
     };
-    let mut entry = serde_json::Map::new();
-    if let Some(category) = &views.category {
-        entry.insert(
-            "category".into(),
-            serde_json::Value::String(category.clone()),
-        );
-    }
-    entry.insert("setups".into(), setups);
     update_prefs_json(path, COMPONENTS_VIEWS_KEY, |prefs| {
-        prefs.insert(
-            COMPONENTS_VIEWS_KEY.to_string(),
-            serde_json::Value::Object(entry),
+        let entry = merged_entry(
+            prefs.get(COMPONENTS_VIEWS_KEY),
+            views.category.as_deref(),
+            setups,
         );
+        prefs.insert(COMPONENTS_VIEWS_KEY.to_string(), entry);
     })
+}
+
+/// The fields [`ViewSetup`] reads; any other field of a saved setup is a
+/// newer build's and is kept as written.
+const SETUP_FIELDS: [&str; 6] = ["order", "hidden", "widths", "sort", "group", "pinned"];
+
+/// The key's new value: `category` and `setups` (serialised from memory)
+/// over what `old` holds. A saved setup that does not parse is kept unless
+/// memory now has a setup for that category; unknown fields of a setup
+/// and other subkeys are kept.
+fn merged_entry(
+    old: Option<&serde_json::Value>,
+    category: Option<&str>,
+    setups: serde_json::Value,
+) -> serde_json::Value {
+    use serde_json::Value;
+    let mut entry = old.and_then(Value::as_object).cloned().unwrap_or_default();
+    let old_setups = entry
+        .get("setups")
+        .and_then(Value::as_object)
+        .cloned()
+        .unwrap_or_default();
+    let mut merged = match setups {
+        Value::Object(map) => map,
+        _ => serde_json::Map::new(),
+    };
+    for (key, old_setup) in old_setups {
+        let readable = serde_json::from_value::<ViewSetup>(old_setup.clone()).is_ok();
+        match merged.get_mut(&key).and_then(Value::as_object_mut) {
+            Some(new_setup) => {
+                if let Value::Object(old_fields) = old_setup {
+                    for (field, value) in old_fields {
+                        if !SETUP_FIELDS.contains(&field.as_str()) {
+                            new_setup.entry(field).or_insert(value);
+                        }
+                    }
+                }
+            }
+            // A readable setup memory no longer holds was reset: it goes.
+            None if !readable => {
+                merged.insert(key, old_setup);
+            }
+            None => {}
+        }
+    }
+    match category {
+        Some(category) => entry.insert("category".into(), Value::String(category.to_owned())),
+        None => entry.remove("category"),
+    };
+    entry.insert("setups".into(), Value::Object(merged));
+    Value::Object(entry)
 }
 
 #[cfg(test)]
@@ -140,6 +188,46 @@ mod tests {
             serde_json::from_slice(&std::fs::read(&path).expect("read")).expect("json");
         assert_eq!(json["theme"], "graphite_dark");
         assert_eq!(read_components_views_from(Some(&json)), views);
+    }
+
+    /// #3236: a write keeps what this build cannot read: a setup that
+    /// does not parse, a setup's unknown field and another subkey. A setup
+    /// it can read and no longer holds (reset) goes.
+    #[test]
+    fn a_write_keeps_the_setups_this_build_cannot_read() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("prefs.json");
+        let mut known = serde_json::to_value(setup()).expect("value");
+        known["density"] = serde_json::json!("compact");
+        let reset = serde_json::to_value(ViewSetup::default()).expect("value");
+        let seed = serde_json::json!({ COMPONENTS_VIEWS_KEY: {
+            "category": "capacitor",
+            "setups": {
+                "capacitor": known,
+                "inductor": { "order": 7, "layout": "cards" },
+                "resistor": reset,
+            },
+            "favourites": ["capacitor"],
+        }});
+        std::fs::write(&path, seed.to_string()).expect("seed");
+        let read = read_components_views_from(Some(&seed));
+        assert_eq!(read.setups.len(), 2, "the inductor setup does not parse");
+        let mut views = read.clone();
+        views.setups.remove("resistor");
+        views.category = Some("opamp".into());
+        write_components_views_at(&path, &views);
+        let json: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&path).expect("read")).expect("json");
+        let entry = &json[COMPONENTS_VIEWS_KEY];
+        assert_eq!(entry["category"], "opamp");
+        assert_eq!(entry["favourites"], serde_json::json!(["capacitor"]));
+        assert_eq!(
+            entry["setups"]["inductor"],
+            serde_json::json!({ "order": 7, "layout": "cards" })
+        );
+        assert_eq!(entry["setups"]["capacitor"]["density"], "compact");
+        assert!(entry["setups"].get("resistor").is_none());
+        assert_eq!(read_components_views_from(Some(&json)).setups, views.setups);
     }
 
     #[test]

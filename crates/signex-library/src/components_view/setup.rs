@@ -141,6 +141,48 @@ impl ViewSetup {
         self
     }
 
+    /// `self`, an edit of `shown` (the `saved` setup fitted to `offered`),
+    /// with what `saved` holds for columns not offered now put back: their
+    /// place in the order, hidden flag and width, and the saved sort or
+    /// grouping when the edit left that alone. An edit made while a
+    /// library is unmounted keeps its columns for when it returns (#3236).
+    pub fn keeping_unoffered(
+        mut self,
+        saved: &ViewSetup,
+        shown: &ViewSetup,
+        offered: &[ColumnKey],
+    ) -> ViewSetup {
+        let absent = |c: &ColumnKey| !offered.contains(c) && *c != ColumnKey::PartNumber;
+        // Each absent column goes back after the offered column it
+        // followed in the saved order.
+        let mut after: Option<usize> = None;
+        for column in &saved.order {
+            if !absent(column) {
+                if let Some(at) = self.order.iter().position(|c| c == column) {
+                    after = Some(at);
+                }
+            } else if !self.order.contains(column) {
+                let at = after.map_or(1, |i| i + 1).min(self.order.len());
+                self.order.insert(at, column.clone());
+                after = Some(at);
+            }
+        }
+        self.hidden
+            .extend(saved.hidden.iter().filter(|c| absent(*c)).cloned());
+        for (column, width) in &saved.widths {
+            if absent(column) {
+                self.widths.entry(column.clone()).or_insert(*width);
+            }
+        }
+        if self.sort == shown.sort {
+            self.sort = saved.sort.clone();
+        }
+        if self.group == shown.group {
+            self.group = saved.group.clone();
+        }
+        self
+    }
+
     /// The Columns picker's list: visible columns in order, then hidden
     /// ones in order, each with whether it shows.
     pub fn column_choices(&self) -> Vec<(ColumnKey, bool)> {
@@ -185,13 +227,18 @@ impl ViewSetup {
 
     /// Swap `column` with its neighbour `delta` places away among its
     /// peers (parameter columns among parameters, row fields among row
-    /// fields), as Alt+Up/Down in the Columns picker does.
+    /// fields), as Alt+Up/Down in the Columns picker does. The picker lists
+    /// visible columns, then hidden ones, so a visible column swaps only
+    /// with visible peers and a hidden one only with hidden peers (#3236).
     pub fn move_column_by(&mut self, column: &ColumnKey, delta: isize) {
         let is_param = column.param_name().is_some();
+        let is_hidden = self.hidden.contains(column);
         let peers: Vec<usize> = (0..self.order.len())
             .filter(|&i| {
                 let c = &self.order[i];
-                *c != ColumnKey::PartNumber && c.param_name().is_some() == is_param
+                *c != ColumnKey::PartNumber
+                    && c.param_name().is_some() == is_param
+                    && self.hidden.contains(c) == is_hidden
             })
             .collect();
         let Some(i) = peers.iter().position(|&i| self.order[i] == *column) else {

@@ -1143,6 +1143,9 @@ impl Signex {
             window_subscriptions::held_escape_end(
                 self.interaction_state.annotation_tool.is_resume_esc_held,
             ),
+            window_subscriptions::column_resize_end(
+                self.library.components_panel.table.resize.is_some(),
+            ),
             chord_cancel,
             chord_timeout,
             // The Start screen's minute clock; none while it is off screen.

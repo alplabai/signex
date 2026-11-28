@@ -49,10 +49,14 @@ pub(super) fn view<'a>(library: &'a LibraryState, ctx: &'a PanelContext) -> Kind
     }
 }
 
-/// The highlighted row, while its library is open, still holds it and the
-/// filter shows it: the toolbar never acts on a row nobody sees (#2747).
+/// The highlighted row, while its library is open, still holds it, is
+/// expanded and the filter shows it: the toolbar never acts on a row
+/// nobody sees (#2747; a collapsed library's rows are hidden too, #3236).
 fn highlighted(library: &LibraryState) -> Option<ComponentsPanelRowKey> {
     let key = library.panel_selected.as_ref()?;
+    if !is_expanded(library, &key.library_path) {
+        return None;
+    }
     let rows = library
         .library_at(&key.library_path)?
         .tables
@@ -125,7 +129,7 @@ fn list<'a>(library: &'a LibraryState, ctx: &'a PanelContext) -> Element<'a, Doc
             continue;
         }
         shown += 1;
-        let expanded = filtering || library.panel_expanded.contains(&lib.root);
+        let expanded = is_expanded(library, &lib.root);
         col = col.push(library_row(lib, expanded, tokens, i18n));
         if expanded {
             col = col.push(tables(lib, library, filtering, look, tokens, i18n));
@@ -142,6 +146,12 @@ fn list<'a>(library: &'a LibraryState, ctx: &'a PanelContext) -> Element<'a, Doc
         .padding([0.0, SP.s])
         .width(Length::Fill)
         .boxed()
+}
+
+/// Whether the library at `root` is drawn with its rows: the user expanded
+/// it, or a filter is set (which expands every library).
+fn is_expanded(library: &LibraryState, root: &std::path::Path) -> bool {
+    !library.panel_search.trim().is_empty() || library.panel_expanded.contains(root)
 }
 
 /// One library row: the chevron toggle, `name.snxlib`, the row-count pill

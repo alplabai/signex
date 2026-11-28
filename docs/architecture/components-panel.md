@@ -105,9 +105,15 @@ to columns, widths, sort, grouping or pins stores the category's setup in
 (decision 1). The category shown last is saved in the same entry and the
 panel opens on it (Caner, 2026-11-27):
 `{"category": "capacitor", "setups": {..}}`. At start the entry is read back; each setup is fitted to the
-columns the category offers now (`ViewSetup::fitted`). Reset to category
-default removes the category's setup (pins other than the template's stay).
-Filters are not saved.
+columns the category offers now (`ViewSetup::fitted`) for display only. An
+edit is made on the setup as shown and saved over the stored one with what
+that holds for columns not offered now (an unmounted library's) kept:
+their place, hidden flag and width, and the stored sort or grouping when
+the edit left it alone (`ViewSetup::keeping_unoffered`, #3236). The write
+keeps what this build cannot read: a setup that does not parse (unless the
+category now has a setup in memory), unknown fields of a setup, and other
+subkeys of the entry. Reset to category default removes the category's
+setup (pins other than the template's stay). Filters are not saved.
 
 ## Interactions
 
@@ -115,15 +121,15 @@ Filters are not saved.
 |---|---|---|
 | Header click / Shift+click | `HeaderPressed` | `ViewSetup::click_sort`; Shift is tracked from `ModifiersChanged` in `dispatch/input.rs` |
 | Header right-click | `HeaderRightClicked` | header menu: sort, add to / remove from sort, group by, hide, reset width, Columns… |
-| Handle drag | `ResizeStarted` / `ResizeMoved` / `ResizeEnded` | width from the pointer's travel, 44 to 420 px; saved on release |
+| Handle drag | `ResizeStarted` / `ResizeMoved` / `ResizeEnded` | width from the pointer's travel, 44 to 420 px; saved on release. A release anywhere, the pointer leaving the window or the window losing focus ends it (`window_subscriptions::column_resize_end`, #3236) |
 | Group line click | `GroupToggled` | open or close by path |
 | "+ Group", chip arrow, chip ✕ | `GroupAdded` / `GroupFlipped` / `GroupRemoved` | the setup's group levels |
-| Columns picker | `ColumnShown` / `ColumnMoved` / `ResetPressed` | show, hide, ↑ ↓, Reset to category default |
+| Columns picker | `ColumnShown` / `ColumnMoved` / `ResetPressed` | show, hide, ↑ ↓ (a visible column swaps with the next visible one of its kind, a hidden one with the next hidden one), Reset to category default |
 | Filter popover | `RangeFilter`, `BoundPrefixPicked`, `RangeTargetPicked`, `InStockToggled` | a new range filter starts on Any prefix and a min-to-max one on Covers |
 | Row press, right press, double-click | `ComponentsPanelRowPressed` / `RowRightClicked` / `ComponentsPanelPlace` | select and arm a drag, the row menu, place |
 | Hover Place (first column) | `ComponentsPanelPlace` | place |
 | Previews switch | `ComponentsPanelRowStylePicked` | thumbnail column and taller rows, saved as a preference |
-| Esc with a popover open | `PopoverDismissed` | closes the popover before anything else Esc does in the panel (`dispatch/escape.rs`); not from a detached modal's window, nor while a dialog takes the Esc |
+| Esc with a popover open | `PopoverDismissed` | closes the popover before anything else Esc does in the panel (`dispatch/escape.rs`) while the panel is shown (in front in the dock, or the detached window the key was typed in, #3236); not from a detached modal's window, nor while a dialog takes the Esc |
 | Details star | `PinToggled` | pin for the part's category |
 
 Not built yet (#3199): dragging a header to reorder it or onto the group
@@ -140,3 +146,10 @@ and "+ Group" cover the same edits meanwhile.
   or "≤ 5.5 V" (Caner, 2026-11-27); it still counts as not set for sort,
   group and filters.
 - °C is stored `degC` and shown `°C`; data rates show in bps with k, M, G.
+- Stock is the largest stock any of the part's distributors last reported
+  (`signex_library::best_stock`), so In stock only keeps a part any
+  distributor has, as the Change Part session's In stock filter does
+  (#3236). Price is the first offer's quantity-1 price.
+- Details lists the pinned parameters, the rest under Show all. A part with
+  parameters and no pins shows the Show all line alone; "No parameters." is
+  only for a part that has none (#3236).

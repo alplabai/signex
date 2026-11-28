@@ -179,15 +179,26 @@ impl ComponentsTable {
     }
 
     /// Change the category's setup and mark it saved per user (decision 1).
+    /// The edit is made on the setup as shown; what the saved setup holds
+    /// for columns not offered now (an unmounted library's) is kept
+    /// (#3236).
     fn edit_setup(&mut self, fx: &mut TableEffects, edit: impl FnOnce(&mut ViewSetup)) {
         let mut setup = self.cache.setup.clone();
         edit(&mut setup);
         if setup == self.cache.setup {
             return;
         }
-        self.cache.setup = setup.clone();
-        self.setups
-            .insert(self.category.pref_key().to_owned(), setup);
+        let key = self.category.pref_key().to_owned();
+        let saved = match self.setups.get(&key) {
+            Some(saved) => {
+                setup
+                    .clone()
+                    .keeping_unoffered(saved, &self.cache.setup, &self.cache.offered)
+            }
+            None => setup.clone(),
+        };
+        self.cache.setup = setup;
+        self.setups.insert(key, saved);
         fx.save_prefs = true;
     }
 
@@ -262,4 +273,18 @@ pub fn group_choices(setup: &ViewSetup) -> Vec<ColumnKey> {
         .filter(|c| !setup.group.iter().any(|k| k.column == **c))
         .cloned()
         .collect()
+}
+
+/// Whether `event`, seen anywhere in any window while a column is being
+/// resized, ends the resize: a left-button release (inside the table or
+/// not, captured or not), the pointer leaving the window, or the window
+/// losing focus. Otherwise a release outside the table is never seen and
+/// the width keeps following the pointer (#3236).
+pub(crate) fn ends_column_resize(event: &iced::Event) -> bool {
+    use iced::mouse::{Button, Event as Mouse};
+    matches!(
+        event,
+        iced::Event::Mouse(Mouse::ButtonReleased(Button::Left) | Mouse::CursorLeft)
+            | iced::Event::Window(iced::window::Event::Unfocused)
+    )
 }
