@@ -470,3 +470,64 @@ fn stale_staging_folders_are_swept_and_nothing_else() {
         assert!(outside.join("keep").is_file() && link.exists());
     }
 }
+
+/// A target of `length` characters inside `root`, its parent created.
+#[cfg(windows)]
+fn deep_target(root: &Path, length: usize) -> PathBuf {
+    let mut parent = root.to_path_buf();
+    let name = "Passives";
+    loop {
+        let left = length.saturating_sub(parent.as_os_str().len() + 2 + name.len());
+        if left == 0 {
+            break;
+        }
+        parent.push("d".repeat(left.min(60)));
+    }
+    std::fs::create_dir_all(&parent).unwrap();
+    parent.join(name)
+}
+
+/// Windows (#3234): a target of 230 characters puts its staging folder past
+/// 260. The folder's identity is still read, so the preview moves into
+/// place, is discarded, and is swept like any other.
+#[cfg(windows)]
+#[test]
+fn a_deep_target_past_the_windows_path_limit_still_stages_moves_and_discards() {
+    let dir = tempfile::tempdir().unwrap();
+    let target = deep_target(dir.path(), 230);
+    assert!(target.as_os_str().len() >= 228, "{}", target.display());
+    let moved = staged(&target);
+    assert!(moved.dir().as_os_str().len() > 260);
+    moved.move_into_place().unwrap();
+    assert!(target.join("P.snxlib").is_file(), "moved into place");
+
+    let other = deep_target(&dir.path().join("b"), 230);
+    let discarded = staged(&other);
+    assert!(discarded.discard(), "a deep preview is removed");
+    assert!(!discarded.dir().exists());
+
+    let third = deep_target(&dir.path().join("c"), 230);
+    let left = staged(&third);
+    let stale = left.dir().to_path_buf();
+    drop(left);
+    let swept = sweep_stale(&[third.parent().unwrap().to_path_buf()], far_future());
+    assert_eq!(swept, 1, "a deep stale preview is swept");
+    assert!(!stale.exists());
+}
+
+/// Windows (#3234): an empty target folder longer than 260 characters is
+/// read and receives the library, as it did before the staging work.
+#[cfg(windows)]
+#[test]
+fn an_empty_target_past_the_windows_path_limit_receives_the_library() {
+    let dir = tempfile::tempdir().unwrap();
+    let target = deep_target(dir.path(), 270);
+    std::fs::create_dir(&target).unwrap();
+    assert!(matches!(
+        TargetBefore::read(&target),
+        Ok(TargetBefore::Empty(_))
+    ));
+    let staged = staged(&target);
+    staged.move_into_place().unwrap();
+    assert!(target.join("symbols").join("R.snxsym").is_file());
+}

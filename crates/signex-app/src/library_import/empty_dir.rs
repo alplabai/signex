@@ -271,7 +271,6 @@ mod unix {
 #[cfg(windows)]
 mod windows {
     use std::io;
-    use std::os::windows::ffi::OsStrExt as _;
     use std::os::windows::fs::MetadataExt as _;
     use std::os::windows::io::{AsRawHandle as _, FromRawHandle as _, OwnedHandle};
     use std::path::Path;
@@ -298,7 +297,8 @@ mod windows {
         /// Open `path` itself, never following a reparse point, and refuse
         /// it (`NotADirectory`) unless it is a real folder.
         pub(super) fn open(path: &Path) -> io::Result<Self> {
-            let wide: Vec<u16> = path.as_os_str().encode_wide().chain([0]).collect();
+            // Extended-length, so a deep folder opens too (#3234).
+            let wide = crate::library_import::long_path::wide(path)?;
             // SAFETY: `wide` is NUL-terminated and outlives the call; no
             // security attributes and no template.
             let raw = unsafe {

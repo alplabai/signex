@@ -266,7 +266,13 @@ deleted meanwhile; a folder the run created (a staged preview's) is not
 held, since a hold would block its own removal and its rename into place,
 but its volume and file index are recorded and checked before it is
 removed, and an empty target is held while the staged entries move into
-it. Next waits ("The previous run is stopping…") while a preview left by
+it. The import's own Windows calls (`CreateFileW` for that hold and
+identity, `MoveFileExW` for the move) take the absolute path in
+extended-length form (`\\?\C:\…`, `\\?\UNC\server\share\…`;
+`library_import::long_path`), so a target near or past 260 characters,
+whose staging folder is 49 characters longer, stages, moves, is removed
+and is swept as any other, with long paths off machine-wide (#3234).
+Next waits ("The previous run is stopping…") while a preview left by
 Back or Close has not ended; its folder (a dry run's temp folder or a
 staging folder) is removed when it does.
 
