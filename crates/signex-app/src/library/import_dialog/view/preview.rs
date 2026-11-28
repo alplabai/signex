@@ -1,6 +1,8 @@
-//! Step 2, preview (mockup row 211): where the library goes, the dry run's
-//! counts, the severity chips and filter over the report's items, the
-//! selected item's details, and the amber strip for what will be skipped.
+//! Step 2, preview (mockup row 211): where the library goes, the preview's
+//! counts, for a new import the drawn parts ([`super::parts`], #3171) with
+//! the report items a tab away, the severity chips and filter over the
+//! report's items, the selected item's details, and the amber strip for
+//! what will be skipped.
 
 use iced::widget::text::{Ellipsis, Wrapping};
 use iced::widget::{Column, Space, column, container, row, scrollable};
@@ -10,6 +12,7 @@ use signex_types::theme::ThemeTokens;
 use signex_widgets::{button, text, text_input};
 
 use super::{ImportDialogContext, SP, TS, caption, chip, count_tile, mono, tag};
+use crate::library::import_dialog::parts::PreviewTab;
 use crate::library::import_dialog::preview::{MAX_ROWS, detail_lines};
 use crate::library::import_dialog::{ImportDialogMsg, ImportDialogState, PreviewState, msg};
 use crate::library::messages::LibraryMessage;
@@ -53,10 +56,12 @@ pub(super) fn body<'a>(
         column![route(state, tokens, i18n)].spacing(SP.l);
     match &state.preview {
         None | Some(PreviewState::Running) => {
-            col = col.push(caption(
-                t!(i18n, ids::LIBRARY_IMPORT_DIALOG_PREVIEW_RUNNING),
-                tokens,
-            ));
+            let running = if state.is_update() {
+                ids::LIBRARY_IMPORT_DIALOG_PREVIEW_RUNNING
+            } else {
+                ids::LIBRARY_IMPORT_DIALOG_STAGE_RUNNING
+            };
+            col = col.push(caption(t!(i18n, running), tokens));
             col = col.push(super::progress::current_line(state, ctx, tokens, i18n));
         }
         Some(PreviewState::Failed(problem)) => {
@@ -71,7 +76,7 @@ pub(super) fn body<'a>(
                 col = col.push(stderr);
             }
         }
-        Some(PreviewState::Ready(outcome)) => col = ready(col, state, outcome, tokens, i18n),
+        Some(PreviewState::Ready(outcome)) => col = ready(col, state, outcome, ctx, tokens, i18n),
     }
     col.boxed()
 }
@@ -105,6 +110,7 @@ fn ready<'a>(
     mut col: Column<Element<'a, LibraryMessage>>,
     state: &'a ImportDialogState,
     outcome: &'a RunOutcome,
+    ctx: ImportDialogContext<'a>,
     tokens: &'a ThemeTokens,
     i18n: &I18n,
 ) -> Column<Element<'a, LibraryMessage>> {
@@ -149,9 +155,20 @@ fn ready<'a>(
             tokens,
         ));
     }
-    col = col.push(filter_row(state, tokens, i18n));
-    col = col.push(item_list(state, tokens, i18n));
-    col = col.push(selected_detail(state, tokens, i18n));
+    if let Some(banner) = super::parts::move_problem(state, tokens, i18n) {
+        col = col.push(banner);
+    }
+    let drawn = state.has_drawn_preview();
+    if drawn {
+        col = col.push(super::parts::tabs(state.preview_tab, tokens, i18n));
+    }
+    if drawn && state.preview_tab == PreviewTab::Parts {
+        col = col.push(super::parts::body(state, ctx, tokens, i18n));
+    } else {
+        col = col.push(filter_row(state, tokens, i18n));
+        col = col.push(item_list(state, tokens, i18n));
+        col = col.push(selected_detail(state, drawn, tokens, i18n));
+    }
     if counts.skipped > 0 {
         let words = t!(
             i18n,
@@ -311,14 +328,20 @@ fn item_row<'a>(
 }
 
 /// The selected item's details: kind, source, code, what it was written
-/// as, its message and detail fields. A dry run draws no symbol or
-/// footprint; the caption under it says so.
+/// as, its message and detail fields. A dry run (an update's preview)
+/// draws no symbol or footprint, and the caption under it says so; a
+/// `drawn` preview shows them on its Parts tab.
 fn selected_detail<'a>(
     state: &'a ImportDialogState,
+    drawn: bool,
     tokens: &'a ThemeTokens,
     i18n: &I18n,
 ) -> Element<'a, LibraryMessage> {
-    let no_drawing = caption(t!(i18n, ids::LIBRARY_IMPORT_DIALOG_NO_DRAWING), tokens);
+    let no_drawing = if drawn {
+        Space::new().height(0.0).boxed()
+    } else {
+        caption(t!(i18n, ids::LIBRARY_IMPORT_DIALOG_NO_DRAWING), tokens)
+    };
     let Some(item) = state.selected_report_item() else {
         return column![
             caption(t!(i18n, ids::LIBRARY_IMPORT_DIALOG_DETAIL_HINT), tokens),
@@ -387,11 +410,13 @@ pub(super) fn footer<'a>(
         t!(i18n, ids::LIBRARY_IMPORT_DIALOG_IMPORT_PARTS, "count" => parts)
     };
     let ready = state.preview_outcome().is_some() && !state.checking_target;
+    let note = if state.is_update() {
+        t!(i18n, ids::LIBRARY_IMPORT_DIALOG_NOTHING_WRITTEN)
+    } else {
+        super::parts::staged_note(i18n)
+    };
     footer_strip(
-        vec![caption(
-            t!(i18n, ids::LIBRARY_IMPORT_DIALOG_NOTHING_WRITTEN),
-            tokens,
-        )],
+        vec![caption(note, tokens)],
         vec![
             secondary_btn(
                 t!(i18n, ids::DIALOG_BUTTON_BACK),

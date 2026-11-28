@@ -5,22 +5,28 @@
 //! opened once, without following a link, checked against the identity
 //! recorded when the run took it, and emptied through that handle: every
 //! entry is removed relative to its folder's descriptor, a link is unlinked
-//! itself and never followed. Elsewhere the walk goes by path, and a narrow
-//! race remains (see [`empty_folder`]).
+//! itself and never followed. On Windows the run holds the adopted folder
+//! open from the claim on ([`FolderHold`]), so it cannot be renamed or
+//! deleted meanwhile; each folder of the walk is opened without following a
+//! reparse point, checked, and kept open while its entries are removed by
+//! path (`windows` below).
 
 use std::fs::Metadata;
 use std::io;
 use std::path::Path;
 
 /// What tells the adopted folder from one swapped in at its path: device
-/// and inode on Unix. Windows has no stable std API for the file index, so
-/// nothing is recorded there and the walk relies on refusing reparse points.
+/// and inode on Unix, volume serial number and file index on Windows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct FolderId {
     #[cfg(unix)]
     dev: u64,
     #[cfg(unix)]
     ino: u64,
+    #[cfg(windows)]
+    volume: u32,
+    #[cfg(windows)]
+    index: u64,
 }
 
 /// The identity of the folder `meta` was read from.
@@ -33,11 +39,69 @@ pub fn folder_id(meta: &Metadata) -> FolderId {
     }
 }
 
-/// The identity of the folder `meta` was read from (none recorded here).
-#[cfg(not(unix))]
-pub fn folder_id(_meta: &Metadata) -> FolderId {
-    FolderId {}
+/// The identity of the real folder at `path`, as a claim records it: from
+/// its metadata on Unix (the caller has refused a link), from the folder
+/// opened without following a reparse point on Windows, which refuses one
+/// as `NotADirectory`.
+pub fn folder_id_at(path: &Path) -> io::Result<FolderId> {
+    #[cfg(unix)]
+    {
+        Ok(folder_id(&std::fs::symlink_metadata(path)?))
+    }
+    #[cfg(windows)]
+    {
+        Ok(windows::Dir::open(path)?.id)
+    }
 }
+
+/// A link, a junction or any other reparse point.
+pub(super) fn is_link(meta: &Metadata) -> bool {
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt as _;
+        const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
+        if meta.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+            return true;
+        }
+    }
+    meta.file_type().is_symlink()
+}
+
+/// The adopted folder held open (Windows): shared for reading and writing
+/// but not for deleting, so nobody can rename, move or delete it while the
+/// run holds it. Closed when the last clone drops.
+#[cfg(windows)]
+#[derive(Debug, Clone)]
+pub struct FolderHold {
+    dir: std::sync::Arc<windows::Dir>,
+}
+
+#[cfg(windows)]
+impl FolderHold {
+    /// Open and hold `folder`. A reparse point (a junction, a link) or
+    /// anything that is not a folder is refused as `NotADirectory`.
+    pub fn open(folder: &Path) -> io::Result<Self> {
+        let dir = windows::Dir::open(folder)?;
+        Ok(Self {
+            dir: std::sync::Arc::new(dir),
+        })
+    }
+
+    pub fn id(&self) -> FolderId {
+        self.dir.id
+    }
+}
+
+/// Two holds are equal when they hold the same folder.
+#[cfg(windows)]
+impl PartialEq for FolderHold {
+    fn eq(&self, other: &Self) -> bool {
+        self.id() == other.id()
+    }
+}
+
+#[cfg(windows)]
+impl Eq for FolderHold {}
 
 fn swapped(folder: &Path) -> io::Error {
     io::Error::other(format!(
@@ -61,13 +125,15 @@ pub fn empty_folder(folder: &Path, expected: &FolderId) -> io::Result<()> {
     unix::empty_through(&dir)
 }
 
-/// Remove everything inside `folder`, by path. Each folder is checked to
-/// be a real folder (not a link or another reparse point) right before it
-/// is read, but a narrow race remains between that check and the read: no
-/// std API here empties a folder through its own handle.
-#[cfg(not(unix))]
-pub fn empty_folder(folder: &Path, _expected: &FolderId) -> io::Result<()> {
-    walk::empty_by_path(folder)
+/// Remove everything inside `folder`, which must still be the folder
+/// identified by `expected`; on a mismatch nothing is removed.
+#[cfg(windows)]
+pub fn empty_folder(folder: &Path, expected: &FolderId) -> io::Result<()> {
+    let dir = windows::Dir::open(folder)?;
+    if dir.id != *expected {
+        return Err(swapped(folder));
+    }
+    windows::empty_held(folder, &dir)
 }
 
 #[cfg(unix)]
@@ -202,58 +268,113 @@ mod unix {
     }
 }
 
-#[cfg(not(unix))]
-mod walk {
-    use std::fs::Metadata;
+#[cfg(windows)]
+mod windows {
     use std::io;
+    use std::os::windows::fs::MetadataExt as _;
+    use std::os::windows::io::{AsRawHandle as _, FromRawHandle as _, OwnedHandle};
     use std::path::Path;
 
-    /// A link, a junction or any other reparse point.
-    fn is_link(meta: &Metadata) -> bool {
-        #[cfg(windows)]
-        {
-            use std::os::windows::fs::MetadataExt as _;
-            const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
-            if meta.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
-                return true;
+    use windows_sys::Win32::Foundation::INVALID_HANDLE_VALUE;
+    use windows_sys::Win32::Storage::FileSystem::{
+        BY_HANDLE_FILE_INFORMATION, CreateFileW, FILE_ATTRIBUTE_DIRECTORY,
+        FILE_ATTRIBUTE_REPARSE_POINT, FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT,
+        FILE_LIST_DIRECTORY, FILE_READ_ATTRIBUTES, FILE_SHARE_READ, FILE_SHARE_WRITE,
+        GetFileInformationByHandle, OPEN_EXISTING,
+    };
+
+    use super::FolderId;
+
+    /// A real folder, open without `FILE_SHARE_DELETE`: while it is open
+    /// it cannot be renamed, moved or deleted, so its path keeps naming it.
+    #[derive(Debug)]
+    pub(super) struct Dir {
+        _handle: OwnedHandle,
+        pub(super) id: FolderId,
+    }
+
+    impl Dir {
+        /// Open `path` itself, never following a reparse point, and refuse
+        /// it (`NotADirectory`) unless it is a real folder.
+        pub(super) fn open(path: &Path) -> io::Result<Self> {
+            // Extended-length, so a deep folder opens too (#3234).
+            let wide = crate::library_import::long_path::wide(path)?;
+            // SAFETY: `wide` is NUL-terminated and outlives the call; no
+            // security attributes and no template.
+            let raw = unsafe {
+                CreateFileW(
+                    wide.as_ptr(),
+                    FILE_LIST_DIRECTORY | FILE_READ_ATTRIBUTES,
+                    FILE_SHARE_READ | FILE_SHARE_WRITE,
+                    std::ptr::null(),
+                    OPEN_EXISTING,
+                    FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT,
+                    std::ptr::null_mut(),
+                )
+            };
+            if raw == INVALID_HANDLE_VALUE {
+                return Err(io::Error::last_os_error());
             }
+            // SAFETY: `raw` was just returned by CreateFileW; nothing else
+            // owns it.
+            let handle = unsafe { OwnedHandle::from_raw_handle(raw) };
+            let mut info = BY_HANDLE_FILE_INFORMATION::default();
+            // SAFETY: the handle is open and `info` is the structure the
+            // call fills.
+            if unsafe { GetFileInformationByHandle(handle.as_raw_handle(), &raw mut info) } == 0 {
+                return Err(io::Error::last_os_error());
+            }
+            let real_folder = info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY != 0
+                && info.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT == 0;
+            if !real_folder {
+                return Err(io::Error::new(
+                    io::ErrorKind::NotADirectory,
+                    format!("{} is a link or not a folder", path.display()),
+                ));
+            }
+            let id = FolderId {
+                volume: info.dwVolumeSerialNumber,
+                index: (u64::from(info.nFileIndexHigh) << 32) | u64::from(info.nFileIndexLow),
+            };
+            Ok(Self {
+                _handle: handle,
+                id,
+            })
         }
-        meta.file_type().is_symlink()
     }
 
-    /// `dir` is a real folder now.
-    fn check_real_folder(dir: &Path) -> io::Result<()> {
-        let meta = std::fs::symlink_metadata(dir)?;
-        if is_link(&meta) || !meta.is_dir() {
-            return Err(super::swapped(dir));
-        }
-        Ok(())
-    }
-
-    pub(super) fn empty_by_path(dir: &Path) -> io::Result<()> {
-        check_real_folder(dir)?;
+    /// Remove everything inside the folder at `path`, which `dir` holds.
+    pub(super) fn empty_held(path: &Path, _dir: &Dir) -> io::Result<()> {
         let mut first_error = None;
-        for entry in std::fs::read_dir(dir)? {
-            if let Err(e) = entry.and_then(|entry| remove_by_path(&entry.path())) {
+        for entry in std::fs::read_dir(path)? {
+            if let Err(e) = entry.and_then(|entry| remove_entry(&entry.path())) {
                 first_error.get_or_insert(e);
             }
         }
         first_error.map_or(Ok(()), Err)
     }
 
-    /// A link is removed itself (a link to a folder as a folder); a real
-    /// folder is emptied, checked again and removed.
-    fn remove_by_path(path: &Path) -> io::Result<()> {
-        let meta = std::fs::symlink_metadata(path)?;
-        if is_link(&meta) {
-            return std::fs::remove_file(path)
-                .or_else(|e| std::fs::remove_dir(path).map_err(|_| e));
+    /// A reparse point (a junction, a link) is removed itself, never its
+    /// target: `RemoveDirectoryW` on a junction removes the junction. A
+    /// real folder is held, emptied and removed once empty.
+    fn remove_entry(path: &Path) -> io::Result<()> {
+        let attributes = std::fs::symlink_metadata(path)?.file_attributes();
+        let is_folder = attributes & FILE_ATTRIBUTE_DIRECTORY != 0;
+        if attributes & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+            return if is_folder {
+                std::fs::remove_dir(path)
+            } else {
+                std::fs::remove_file(path)
+            };
         }
-        if !meta.is_dir() {
+        if !is_folder {
             return std::fs::remove_file(path);
         }
-        empty_by_path(path)?;
-        check_real_folder(path)?;
+        let sub = Dir::open(path)?;
+        empty_held(path, &sub)?;
+        // Our handle shares no delete, so it is closed first; a link swapped
+        // in meanwhile is removed as a link, a full folder is refused.
+        drop(sub);
         std::fs::remove_dir(path)
     }
 }

@@ -17,6 +17,7 @@ use crate::library::modal_chrome::header_with_note_closing;
 use crate::library_import::run_state::ImportRun;
 use crate::styles::{HAIRLINE, PillTone, Radii, Spacing, TypeScale, pill, pill_colors, ti, tokens};
 
+mod parts;
 mod preview;
 mod progress;
 mod result;
@@ -45,6 +46,8 @@ pub struct ImportDialogContext<'a> {
     /// The finished import's library is open, so Open in Library Browser
     /// can show it.
     pub library_open: bool,
+    /// How step 2 draws a part's symbol (#3171).
+    pub(crate) look: crate::library::browser::PreviewLook,
 }
 
 pub fn view<'a>(

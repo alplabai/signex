@@ -21,12 +21,8 @@ pub enum PanelMsg {
     /// A Properties action button was pressed: the catalog command it runs
     /// (a sheet symbol's Open Sheet, Create Sheet…).
     CommandButtonPressed(&'static str),
-    /// v0.14.2 — Properties panel toggle for the active footprint
-    /// editor's Auto-fit Courtyard setting. Routes through
-    /// `handle_dock_sch_library_message` (same dispatcher every other
-    /// `Sym*` / `FpEditor*` panel msg uses) which resolves the active
-    /// footprint editor by tab and flips its `auto_fit_courtyard`
-    /// flag via the existing `FootprintToggleAutoFit` path.
+    /// Properties: toggle the active footprint editor's Auto-fit Courtyard
+    /// (through the `FootprintToggleAutoFit` path).
     FpEditorToggleAutoFitCourtyard,
     /// The Board section of a board sketch entity was edited (#2234).
     BoardSketch(BoardSketchAttrMsg),
@@ -69,13 +65,9 @@ pub enum PanelMsg {
         idx: usize,
         value: String,
     },
-    /// v0.20 — Altium-parity Pad Properties / Pad Stack / Pad Features
-    /// form for the next placed pad. Each variant maps to one row in
-    /// the right-dock Properties panel; the dispatcher writes the
-    /// parsed value into `editor.state.next_pad_defaults` (or the
-    /// matching sub-struct) so the next `add_pad_at` picks it up.
-    /// String-typed inputs preserve the per-field typing buffer
-    /// behaviour we use for size_x / size_y / rotation.
+    /// Next-pad form rows (Pad Properties, Stack, Features): each writes
+    /// `editor.state.next_pad_defaults` for the next `add_pad_at`; text
+    /// rows keep their typing buffer.
     FpEditorSetNextPadShape(signex_library::PadShape),
     FpEditorSetNextPadKind(signex_library::PadKind),
     FpEditorSetNextPadDrillDiameter(String),
@@ -398,24 +390,15 @@ pub enum PanelMsg {
     FpEditorEditPadInSketch {
         pad_idx: usize,
     },
-    /// v0.24 Phase 3 (Track A2) — Properties-panel parametric handle
-    /// row edit. The handler looks up `pad.shape_params[key]` to
-    /// resolve the bound parameter name, writes `value` into
-    /// `sketch.parameters[parameter_name]`, then dispatches a sketch
-    /// `ForceRebuild` so the solver re-runs and every entity bound to
-    /// that parameter (e.g. all 4 corner Arcs of a RoundRect) updates
-    /// in lockstep.
+    /// Properties: edit the sketch parameter `pad.shape_params[key]` binds,
+    /// then rebuild so every entity bound to it updates together.
     FpEditorEditPadShapeParam {
         pad_idx: usize,
         key: String,
         value: String,
     },
-    /// v0.24 Phase 3 (Track A3) — sketch-canvas right-click action.
-    /// "Unlink corner radius" mints a fresh per-corner parameter and
-    /// rebinds the clicked Arc to it so the user can override that
-    /// one corner independently. The other three corners stay on the
-    /// shared `corner_r` parameter. No-op when the Arc isn't part of
-    /// any pad's `shape_params` graph.
+    /// Canvas menu Unlink corner radius: give the clicked corner Arc its own
+    /// parameter (the others keep `corner_r`); no-op off a pad's shape.
     FpEditorUnlinkCornerRadius {
         arc_entity_id: signex_sketch::id::SketchEntityId,
     },
@@ -435,12 +418,8 @@ pub enum PanelMsg {
     FpEditorSelectSketchEntity {
         id: signex_sketch::id::SketchEntityId,
     },
-    /// v0.22 Phase 8.5 — Right-dock History panel "Restore this
-    /// version" button. The handler resolves the active tab's
-    /// owning project, opens `LocalGitProjectAdapter`, and runs
-    /// `restore_at(rel_path, oid)` to overwrite the working-tree
-    /// file with the historical blob. Marks the file dirty so the
-    /// next save commits the restored content.
+    /// History: Restore this version writes the blob at `oid` over the
+    /// working file (`restore_at`) and marks it dirty.
     HistoryRestoreClicked {
         sha: String,
     },
@@ -455,12 +434,8 @@ pub enum PanelMsg {
     FpEditorRestorePadStackDefaults,
     /// #1073 — dismiss the open-time pad-stack offer for this editor tab.
     FpEditorDismissPadStackOffer,
-    /// Per-row hover on a Properties
-    /// panel "Conflicts" list row. `Some(constraint_id)` highlights
-    /// the specific constraint at full red and dims everything else
-    /// (including other over-constraints) so the user can isolate a
-    /// single offender. `None` clears the isolation back to the
-    /// default rendering.
+    /// Hover on a Properties Conflicts row: `Some` isolates that constraint
+    /// in full red and dims the rest; `None` clears it.
     FpEditorHoverOverConstraint {
         constraint: Option<signex_sketch::id::ConstraintId>,
     },
@@ -558,6 +533,11 @@ pub enum PanelMsg {
     FpEditorBeginRepickPolarCenter {
         array_id: signex_sketch::array::ArrayId,
     },
+    /// #2596 — a kind segment was picked; Polar asks for a centre first.
+    FpEditorPatternKindPicked(
+        signex_sketch::array::ArrayId,
+        signex_bake::array::PatternKind,
+    ),
     /// v0.23 — Toggle a single (i, j) instance in a Grid array's
     /// `GridDepopulation.suppressed_instances`. `value=true` re-enables
     /// the instance; `value=false` suppresses it.
@@ -1049,6 +1029,10 @@ pub enum PanelMsg {
     SchLibraryDeleteConfirmed(usize),
     /// The user backed out of that Delete.
     SchLibraryDeleteCancelled,
+    /// Re-bind rows the warning lists to a picked symbol (#2572).
+    SchLibraryDeleteRebind(crate::panels::SymbolDeleteRebind),
+    /// List every row the warning names, not only the first ones.
+    SchLibraryDeleteShowAllRows,
     UpdateDrawingEdit(crate::app::contracts::DrawingFieldEdit),
     /// Numeric text_input keystroke for a drawing field. The string is
     /// stored verbatim in panel_ctx.drawing_edit_buf so empty / partial

@@ -39,8 +39,7 @@
 use std::collections::{BTreeMap, HashMap};
 
 use signex_expr::ExprNode;
-use signex_expr::UnitFamily;
-use signex_expr::parse;
+use signex_expr::{LiteralContext, UnitFamily, parse};
 use signex_library::primitive::footprint::{
     ChamferedCorners as LibChamferedCorners, Drill as LibDrill, LayerId, Pad as LibPad,
     PadKind as LibPadKind, PadShape as LibPadShape, Polygon as LibPolygon,
@@ -59,7 +58,7 @@ use signex_types::pcb::Point;
 use signex_types::pcb_layer::{CopperLayer, PcbLayer, TechnicalLayer};
 use signex_types::pcb_pad_shape::trapezoid_corners;
 
-use crate::eval_util::{eval_length, opt_eval_length, strip_eq_prefix};
+use crate::eval_util::{eval_length, opt_eval_length, parse_in, strip_eq_prefix};
 use crate::layer_label::layer_id;
 
 /// Bake every entity tagged with [`PadAttr`] into a [`LibPad`]. Adds
@@ -125,11 +124,11 @@ fn claimed_array_sources(
         .filter(|array| {
             let mut placed = Vec::new();
             let mut skipped = Vec::new();
-            let baked = crate::array::bake_one_array(
-                array,
-                params_ast,
+            let baked = crate::array::bake_pattern(
+                array.id,
                 sketch,
                 solve,
+                params_ast,
                 &mut placed,
                 &mut skipped,
             );
@@ -324,8 +323,7 @@ fn warn_trapezoid_without_copper(
 fn rotation_deg(expr: &Option<String>, ctx: &EvalContext) -> Result<f64, SketchError> {
     match expr.as_deref() {
         Some(e) => {
-            let body = strip_eq_prefix(e);
-            let ast = parse(body).map_err(SketchError::Expr)?;
+            let ast = parse_in(e, LiteralContext::Angle)?;
             let q = eval(&ast, ctx).map_err(SketchError::Expr)?;
             match q.unit.family() {
                 UnitFamily::Angle => {

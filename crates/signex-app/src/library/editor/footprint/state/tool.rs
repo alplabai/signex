@@ -179,9 +179,11 @@ pub enum ToolPending {
         end: signex_sketch::id::SketchEntityId,
     },
     /// "Re-pick centre" affordance from the Pattern Properties
-    /// sub-form.
+    /// sub-form. With `is_kind_switch` the pick switches a Linear or Grid
+    /// pattern to Polar about the picked Point (#2596).
     RepickPolarCenter {
         array_id: signex_sketch::array::ArrayId,
+        is_kind_switch: bool,
     },
     /// Tangent Arc, first endpoint placed.
     TangentArcFirst {

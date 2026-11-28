@@ -458,6 +458,13 @@ pub struct DistributorSettings {
     pub preferred_order_drag: Option<DistributorSource>,
     /// The row under the pointer while that drag is on.
     pub preferred_order_drop_target: Option<DistributorSource>,
+    /// Bumped by every order save; a save result from an older generation
+    /// is ignored, so the caption reflects the newest order (#2626).
+    pub preferred_order_save_generation: u64,
+    /// The newest save generation a worker has written. Workers take this
+    /// lock around the write, and one older than the value skips, so the
+    /// last order saved is the one left on disk.
+    pub preferred_order_written: std::sync::Arc<std::sync::Mutex<u64>>,
 }
 
 impl Default for DistributorSettings {
@@ -486,6 +493,8 @@ impl Default for DistributorSettings {
             preferred_order_path: None,
             preferred_order_drag: None,
             preferred_order_drop_target: None,
+            preferred_order_save_generation: 0,
+            preferred_order_written: std::sync::Arc::default(),
         }
     }
 }

@@ -94,7 +94,7 @@ mod footprint_place_block;
 mod footprint_properties_msg;
 pub use footprint_properties_msg::FpPropertiesMsg;
 mod footprint_subform_msg;
-pub use footprint_subform_msg::{FpSubformMsg, expansion_buffer_key};
+pub use footprint_subform_msg::{FpSubformMsg, expansion_buffer_key, pour_corner_size_buffer_key};
 mod field_dropdown;
 mod field_edits;
 pub(crate) mod form_look;
@@ -266,9 +266,9 @@ pub(super) use properties::{
     PROPERTY_ROW_PAD_X, view_properties,
 };
 pub use symbol_context::{
-    GraphicFieldId, GraphicKindSummary, GraphicSummary, SymbolDeleteWarning, SymbolDisplayOptions,
-    SymbolEditorPanelContext, SymbolEditorSelection, SymbolFileEntry, SymbolPinDetails,
-    SymbolPinSummary,
+    GraphicFieldId, GraphicKindSummary, GraphicSummary, SymbolDeleteRebind, SymbolDeleteWarning,
+    SymbolDisplayOptions, SymbolEditorPanelContext, SymbolEditorSelection, SymbolFileEntry,
+    SymbolPinDetails, SymbolPinSummary, SymbolUsageEntry, SymbolUsageKey,
 };
 pub(super) use widgets::{
     collapsible_section_header, form_edit_row_f64, is_section_collapsed, part_tree_row,

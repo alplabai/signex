@@ -62,6 +62,10 @@ it is a full scan with a miss.
   in-process cache of the library, not a cold disk.
 - Components panel thumbnails and the rest of the app's frame. The list the
   panel shows is built; drawing it is virtualised and not measured here.
+- The Components panel table (#2785) is built in the same `sync_view_caches`:
+  the category's rows, then the search, filters, sort and grouping, each stage
+  only when its inputs change (docs/architecture/components-panel.md). The
+  figures above predate it; rerun the bench to include its first build.
 - A library under git history: the generated one is written by
   `LibraryWriter`, which does no git operation, so `LocalGitAdapter::open`
   reads a library with no commits. A library with a long history opens with the

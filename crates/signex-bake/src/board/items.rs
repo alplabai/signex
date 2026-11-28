@@ -118,8 +118,10 @@ fn pours(ctx: &Context<'_>, nets: &[NetDef]) -> Result<Vec<Zone>, BoardBakeError
             // board edits.
             shelved: false,
             unfilled: false,
-            corners: Default::default(),
-            corner_size: 0.0,
+            // The sketch's Corners (#2598), never the old zone's; the
+            // board fill shapes them (`Zone::pour_corner_shape`).
+            corners: attr.corners,
+            corner_size: corner_size_mm(attr.corner_size),
             fill_mode: Default::default(),
             hatch_width: 0.0,
             hatch_gap: 0.0,
@@ -135,6 +137,16 @@ fn pours(ctx: &Context<'_>, nets: &[NetDef]) -> Result<Vec<Zone>, BoardBakeError
         }
     }
     Ok(out)
+}
+
+/// A stored corner size the board zone can hold: a number from 0, else 0
+/// (Sharp), as the board's own edit refuses anything else.
+fn corner_size_mm(size: f64) -> f64 {
+    if size.is_finite() && size > 0.0 {
+        size
+    } else {
+        0.0
+    }
 }
 
 /// A mechanical edge at its solved place.
@@ -418,6 +430,8 @@ mod tests {
             clearance_expr: Some("0.3mm".into()),
             min_thickness_expr: None,
             priority: 3,
+            corners: Default::default(),
+            corner_size: 0.0,
         }
     }
 
@@ -440,6 +454,46 @@ mod tests {
         assert!((zone.clearance - 0.3).abs() < 1e-12);
         assert!((zone.thermal_gap - 0.508).abs() < 1e-12);
         assert_eq!(zone.outline.len(), 4);
+    }
+
+    /// #2598: the baked zone takes the sketch pour's Corners and Corner
+    /// size for each style, Sharp and 0 by default.
+    #[test]
+    fn a_pour_bakes_its_corners_into_the_zone() {
+        use signex_types::zone_pour_shape::PourCorners;
+        for (corners, size) in [
+            (PourCorners::Sharp, 0.0),
+            (PourCorners::Rounded, 0.5),
+            (PourCorners::Chamfer, 1.0),
+        ] {
+            let mut s = Sketch::new();
+            let edges = s.rect(0.0, 0.0, 10.0, 5.0);
+            let mut attr = pour(PcbLayer::Copper(CopperLayer::Top), None);
+            attr.corners = corners;
+            attr.corner_size = size;
+            s.get(edges[0]).pour = Some(attr);
+            let zone = &s.items().unwrap().zones[0];
+            assert_eq!((zone.corners, zone.corner_size), (corners, size));
+            assert_eq!(zone.outline.len(), 4, "the fill shapes it, not the bake");
+            assert_eq!(zone.has_pour_shape(), corners != PourCorners::Sharp);
+        }
+    }
+
+    /// A size the zone cannot hold bakes as 0, so the board saves.
+    #[test]
+    fn a_pour_corner_size_that_is_no_length_bakes_as_zero() {
+        use signex_types::zone_pour_shape::PourCorners;
+        for size in [-1.0, f64::NAN, f64::INFINITY] {
+            let mut s = Sketch::new();
+            let edges = s.rect(0.0, 0.0, 10.0, 5.0);
+            let mut attr = pour(PcbLayer::Copper(CopperLayer::Top), None);
+            attr.corners = PourCorners::Rounded;
+            attr.corner_size = size;
+            s.get(edges[0]).pour = Some(attr);
+            let zone = &s.items().unwrap().zones[0];
+            assert_eq!(zone.corner_size, 0.0, "{size}");
+            assert_eq!(zone.corners, PourCorners::Rounded);
+        }
     }
 
     #[test]

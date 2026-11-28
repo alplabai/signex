@@ -50,6 +50,19 @@ pub struct ImportState {
     /// The session's converter discovery, handed back to the next one so
     /// an unchanged PATH asks no converter again.
     pub discovered: Option<super::discovery::DiscoveryCache>,
+    /// When this session started: a staging folder last changed before it
+    /// is a crash's leftover (`staging::sweep_stale`).
+    pub session_started: SessionStart,
+}
+
+/// The time the library state was made, at app start.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SessionStart(pub std::time::SystemTime);
+
+impl Default for SessionStart {
+    fn default() -> Self {
+        Self(std::time::SystemTime::now())
+    }
 }
 
 const WORKING: u8 = 0;

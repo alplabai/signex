@@ -12,8 +12,8 @@
 use std::path::PathBuf;
 
 use signex_library::{
-    AlternateStatus, BodyShape, ComponentClass, DistributorSource, LifecycleState, PrimitiveRef,
-    SimKind, SimModel,
+    AlternateStatus, BodyShape, ComponentClass, DistributorSource, LifecycleState,
+    ManufacturerLifecycle, PrimitiveRef, SimKind, SimModel,
 };
 use uuid::Uuid;
 
@@ -26,12 +26,14 @@ use super::state::PreviewTab;
 pub type ComponentId = Uuid;
 pub type Version = u32;
 
+mod components_table;
 mod datasheet;
 mod import;
 mod library_message;
 mod placed_part;
 mod range_filter;
 pub use crate::app::core::resolved_placement::ResolvedPlacement;
+pub use components_table::{ComponentsTableMsg, HeaderAction};
 pub use datasheet::{DatasheetMsg, PickedFile, PickedPdf};
 pub use import::LibraryImportMsg;
 pub use library_message::{
@@ -208,6 +210,18 @@ pub enum EditorMsg {
     /// Drop the alternate row at `idx`.
     SupplyAlternateRemove {
         idx: usize,
+    },
+    /// The hand-entered stock of the alternate at `idx` was typed (#3046);
+    /// empty clears it, so a fetched value shows again.
+    SupplyAlternateStockEdited {
+        idx: usize,
+        value: String,
+    },
+    /// A hand-entered lifecycle was picked for the alternate at `idx`;
+    /// `None` uses the fetched one.
+    SupplyAlternateLifecyclePicked {
+        idx: usize,
+        value: Option<ManufacturerLifecycle>,
     },
 
     // Distributor listings
@@ -671,6 +685,13 @@ pub enum PrimitivePickerMsg {
         pick: crate::library::state::CopyTarget,
         result: Result<PrimitiveRef, String>,
     },
+    /// The picked symbol's current version was read on a worker (#2572):
+    /// bind it to the rows of `target`, pinned at it, or say why not.
+    SymbolVersionRead {
+        target: crate::library::state::PrimitivePickerTarget,
+        symbol: PrimitiveRef,
+        version: Result<String, String>,
+    },
 }
 
 /// Settings → Library → Distributor APIs panel messages.
@@ -709,4 +730,9 @@ pub enum SettingsMsg {
     PreferenceDropped(DistributorSource),
     /// The mouse button was released anywhere on the page: the drag ends.
     PreferenceDragEnded,
+    /// The background save of the order `generation` finished.
+    PreferenceOrderSaved {
+        generation: u64,
+        result: Result<(), String>,
+    },
 }

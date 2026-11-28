@@ -141,6 +141,10 @@ impl FootprintCanvas<'_> {
         cstate: &mut FootprintCanvasState,
         cursor_pos: Point,
     ) -> Option<canvas::Action<LibraryMessage>> {
+        // An armed centre pick takes the click before any tool does (#3232).
+        if let Some(a) = self.try_centre_pick(cstate, cursor_pos) {
+            return Some(a);
+        }
         if let Some(a) = self.try_lasso_add_vertex(cstate, cursor_pos) {
             return Some(a);
         }
@@ -222,12 +226,15 @@ impl FootprintCanvas<'_> {
         }
     }
 
-    /// The footprint objects this canvas snaps to; `moving_pad` is left out.
-    fn object_targets(&self, moving_pad: Option<usize>) -> ObjectTargets<'_> {
+    /// The footprint objects this canvas snaps to; the dragged pad, and the
+    /// selection it carries, are left out.
+    pub(super) fn object_targets(&self, moving: Option<(usize, bool)>) -> ObjectTargets<'_> {
         ObjectTargets {
             silk_f: self.silk_f,
             silk_b: self.silk_b,
-            moving_pad,
+            body: self.body_3d,
+            moving_pad: moving.map(|(idx, _)| idx),
+            moving_selection: moving.is_some_and(|(_, with_selection)| with_selection),
         }
     }
 
@@ -277,6 +284,8 @@ impl FootprintCanvas<'_> {
             last_world: world,
             press_screen: cursor_pos,
             moved: false,
+            with_selection: false,
+            press_modifiers: cstate.current_modifiers,
         });
         // v0.26-I + v0.27 — Select-tool empty-canvas press arms the
         // rubber-band rectangle for Pads mode + Sketch mode.
@@ -457,6 +466,8 @@ impl FootprintCanvas<'_> {
                 // CursorMoved tick — release just clears the cache so
                 // the next frame settles.
                 self.cache.clear();
+            } else {
+                return self.released_on_group_pad(&drag);
             }
         }
         None
@@ -543,14 +554,16 @@ impl FootprintCanvas<'_> {
                 sketch_snap_except(self.sketch, cstate, target, &carried)
             };
             let infer = self.snap_infers(cstate);
-            let moving_pad = object_drag.filter(|_| pad_drag).map(|d| d.pad_idx);
+            let moving = object_drag
+                .filter(|_| pad_drag)
+                .map(|d| (d.pad_idx, d.with_selection));
             let result = snap::snap_cursor_among(
                 target,
                 self.sketch,
                 self.state,
                 point_hit,
                 infer,
-                Some(self.object_targets(moving_pad)),
+                Some(self.object_targets(moving)),
             );
             cstate.last_snap = Some(result);
             result.pos
@@ -632,6 +645,7 @@ impl FootprintCanvas<'_> {
                         idx: drag.pad_idx,
                         x_mm: world.0,
                         y_mm: world.1,
+                        with_selection: drag.with_selection,
                     }),
                 }));
             }

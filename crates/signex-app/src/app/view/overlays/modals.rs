@@ -504,6 +504,16 @@ impl Signex {
             .boxed()
     }
 
+    /// How a library dialog draws a symbol preview.
+    fn preview_look(&self) -> crate::library::browser::PreviewLook {
+        let ctx = &self.document_view.panel_ctx;
+        crate::library::browser::PreviewLook {
+            canvas_colors: ctx.canvas_colors,
+            grid: self.sheet_grid(),
+            device_px_per_logical_px: ctx.device_px_per_logical_px,
+        }
+    }
+
     /// The card of a library dialog, shared by the in-window overlay (on a
     /// scrim) and the dialog's own window (centred, no scrim). `owner` names the
     /// browser for the two per-browser dialogs; `None` there means the first
@@ -524,11 +534,7 @@ impl Signex {
                 tokens,
                 &self.ui_state.i18n,
                 windowed,
-                crate::library::browser::PreviewLook {
-                    canvas_colors: self.document_view.panel_ctx.canvas_colors,
-                    grid: self.sheet_grid(),
-                    device_px_per_logical_px: self.document_view.panel_ctx.device_px_per_logical_px,
-                },
+                self.preview_look(),
             )
             .map(Message::Library)
             .boxed(),
@@ -538,11 +544,7 @@ impl Signex {
                 tokens,
                 &self.ui_state.i18n,
                 windowed,
-                crate::library::browser::PreviewLook {
-                    canvas_colors: self.document_view.panel_ctx.canvas_colors,
-                    grid: self.sheet_grid(),
-                    device_px_per_logical_px: self.document_view.panel_ctx.device_px_per_logical_px,
-                },
+                self.preview_look(),
             )
             .map(Message::Library)
             .boxed(),
@@ -602,17 +604,12 @@ impl Signex {
                 crate::library::import_dialog::ImportDialogContext {
                     running: lib.import.running.as_ref(),
                     project_open: self.document_state.active_project.is_some()
-                        || lib
-                            .import_dialog
-                            .as_deref()
-                            .and_then(|d| d.project)
+                        || (lib.import_dialog.as_deref().and_then(|d| d.project))
                             .is_some_and(|id| self.document_state.project_by_id(id).is_some()),
-                    library_open: lib
-                        .import_dialog
-                        .as_deref()
-                        .and_then(|d| d.finished())
+                    library_open: (lib.import_dialog.as_deref().and_then(|d| d.finished()))
                         .and_then(|r| r.library_file.as_deref())
                         .is_some_and(|file| lib.library_at(file).is_some()),
+                    look: self.preview_look(),
                 },
                 tokens,
                 &self.ui_state.i18n,
@@ -774,10 +771,14 @@ impl Signex {
     }
 
     /// "Delete Symbol?" (mockup row 137): shown while the active symbol
-    /// editor holds a current in-use warning, the same one the Esc ladder reads.
+    /// editor holds a current in-use warning, the same one the Esc ladder reads,
+    /// except while its Re-bind's symbol picker is open (#2572).
     pub(in crate::app::view) fn symbol_delete_confirm_overlay(
         &self,
     ) -> Option<Element<'_, Message>> {
+        if self.library.primitive_picker.is_some() {
+            return None;
+        }
         let ctx = &self.document_view.panel_ctx;
         let warning = ctx.symbol_editor.as_ref()?.delete_warning.as_ref()?;
         let card = crate::library::symbol_delete::view(warning, &ctx.tokens, &self.ui_state.i18n)

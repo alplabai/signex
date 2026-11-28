@@ -5,10 +5,11 @@
 //! click into a [`ToolClickCtx`] (the sketch plane, the snapped-or-minted
 //! click Point, the raw coords, the sticky construction / centerline
 //! flags) through three named steps —
-//! [`resolve_effective_click`] (numeric-placement-input override),
-//! [`resolve_click_point`] (snap/mint the click into an entity id), and
-//! [`try_consume_repick_polar_center`] (the Pattern re-pick intercept) —
-//! then dispatches to the per-tool sub-modules. Bodies moved verbatim.
+//! [`resolve_effective_click`] (numeric-placement-input override) and
+//! [`resolve_click_point`] (snap/mint the click into an entity id) — then
+//! dispatches to the per-tool sub-modules. An armed centre pick (the
+//! Pattern form's Re-pick centre or Polar) takes the click before all of
+//! them ([`centre_pick`]).
 //! Clicks that pick an existing Line by its stroke (Chamfer, Extend) go
 //! first, through [`try_stroke_pick`], and mint no click Point; nor does a
 //! Mirror click, which is a pick for the Mirror card. The card's OK
@@ -17,6 +18,7 @@
 //! ([`slot_polygon::try_closing_click`]). A click that took an inference
 //! snap lands its constraint ([`inference`]).
 
+mod centre_pick;
 mod chamfer_extend;
 mod draw;
 mod edit;
@@ -269,6 +271,13 @@ fn handle_tool_click(
 ) {
     use crate::library::editor::footprint::state::SketchTool;
 
+    // An armed centre pick takes the click before any tool does, TAB
+    // pause included: it places nothing for the tool (#3232).
+    if centre_pick::try_answer(editor, (x_mm, y_mm), snap_id) {
+        editor.canvas_cache.clear();
+        return;
+    }
+
     // v0.14-footprint — TAB-pause is the single source of truth
     // for "suppress click-commit". The canvas layer also gates
     // on `placement_paused` before publishing this message, but
@@ -335,12 +344,6 @@ fn handle_tool_click(
         construction_mode,
         centerline_mode,
     );
-
-    if try_consume_repick_polar_center(editor, resolved_id) {
-        editor.canvas_cache.clear();
-        editor.mark_dirty();
-        return;
-    }
 
     // A pinned click left the snap behind, and with it the inference.
     let inference = inference.filter(|_| !used_placement_input);
@@ -748,35 +751,4 @@ fn resolve_click_point(
             id
         }
     }
-}
-
-// v0.23 — RepickPolarCenter intercept. Triggered by the Pattern
-// sub-form's "Re-pick centre" button. The next click on a Point
-// overwrites the array's `center`, independent of the active tool.
-// `resolved_id` is either an existing Point (when snap hit) or a
-// freshly-minted Point at the click location. Returns `true` when the
-// click was consumed by the intercept (caller must skip the per-tool
-// dispatch below).
-fn try_consume_repick_polar_center(
-    editor: &mut crate::app::FootprintDocument,
-    resolved_id: SketchEntityId,
-) -> bool {
-    use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
-    use crate::library::editor::footprint::sketch_mode::SketchEdit;
-    use crate::library::editor::footprint::state::ToolPending;
-
-    let ToolPending::RepickPolarCenter { array_id } = editor.state.tool_pending else {
-        return false;
-    };
-    if let Some(sketch) = editor.primitive_mut().sketch.as_mut()
-        && let Some(array) = sketch.arrays.iter_mut().find(|a| a.id == array_id)
-        && let signex_sketch::array::ArrayKind::Polar { center, .. } = &mut array.kind
-    {
-        *center = resolved_id;
-    }
-    editor.with_parts(|state, primitive| {
-        apply_sketch_edit_with_warnings(state, primitive, SketchEdit::ForceRebuild);
-    });
-    editor.state.tool_pending = ToolPending::Idle;
-    true
 }

@@ -63,7 +63,7 @@ pub(crate) mod updates;
 // The footprint preview the rest of the app draws (component details and
 // the Properties footprint card), named here so callers outside the slice do
 // not reach into `canvas`.
-pub use canvas::PreviewFootprint;
+pub use canvas::{FootprintCanvas, FootprintCanvasState, PreviewFootprint};
 pub(crate) use canvas::{SketchInk, graphite_look_for};
 
 // What board sketch mode (#2234) hosts the sketch tool with: the tool and
@@ -72,7 +72,7 @@ pub use state::{BoardBackdrop, EditorMode, FpActiveBarMenu, SketchTool, ToolPend
 
 // What the app's Esc handling, placement pause and Custom Selection Filter
 // dialog name: the pad tool, the next-pad defaults and the filter kinds.
-pub use state::{NextPadDefaults, PadsTool, SelectionFilterKind};
+pub use state::{FootprintContextAction, NextPadDefaults, PadsTool, SelectionFilterKind};
 pub(crate) use updates::apply_footprint_primitive_edit;
 
 // What the footprint Properties panel, the Grid Properties dialog, the pad
@@ -97,6 +97,7 @@ pub use state::{
 };
 pub use state::{InstanceOverrides, PadAttribute, PadThermalField};
 pub(crate) use updates::hold_patterned_pad_edit;
+pub(crate) use updates::pattern_kind_picked;
 
 #[cfg(test)]
 mod tests;

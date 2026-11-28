@@ -12,11 +12,14 @@
 //! [`RangeVerdict::Excluded`], not silently "outside": callers drop it
 //! while the filter is active and must tell the user how many were dropped.
 //!
-//! Bounds are inclusive. `=` uses [`EQUALS_RELATIVE_TOLERANCE`].
+//! Bounds are inclusive. `=` uses [`EQUALS_RELATIVE_TOLERANCE`]. A bound is a
+//! base value or, for "Any prefix", the number a value displays
+//! ([`FilterBound`]); a min-to-max value is judged on its whole range, its
+//! low or high end, or whether it covers the bound ([`RangeOn`]).
 
 use std::cmp::Ordering;
 
-use signex_types::quantity::{Quantity, Unit, compare_for_sort};
+use signex_types::quantity::{Quantity, QuantityRange, Unit, compare_for_sort};
 
 use crate::param::ParamValue;
 
@@ -81,12 +84,43 @@ pub enum RangeVerdict {
     Excluded,
 }
 
-/// A validated range over one unit. Build with [`RangeFilter::new`].
+/// One end of a filter.
+#[derive(Clone, Debug, PartialEq)]
+pub enum FilterBound {
+    /// A picked prefix: a true base-value comparison.
+    Base(Quantity),
+    /// "Any prefix": the number a value displays, in whatever prefix it
+    /// displays in, so `100` takes 100 pF, 100 nF and 100 µF
+    /// (mockup row 52).
+    Displayed(f64),
+}
+
+/// Which part of a min-to-max value a filter tests (mockup row 52).
+/// A plain measurement is always judged on its value.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum RangeOn {
+    /// The whole range: `between` needs both ends inside, `≥` tests the
+    /// low end and `≤` the high end.
+    #[default]
+    Value,
+    /// The range contains the low bound ("runs at 3.3 V"); the operator is
+    /// not used.
+    Covers,
+    /// The operator over a min-to-max value's low end.
+    Min,
+    /// The operator over a min-to-max value's high end.
+    Max,
+}
+
+/// A validated range over one unit. Build with [`RangeFilter::new`] or
+/// [`RangeFilter::with_bounds`].
 #[derive(Clone, Debug, PartialEq)]
 pub struct RangeFilter {
     op: RangeOp,
-    low: Quantity,
-    high: Quantity,
+    unit: Unit,
+    low: FilterBound,
+    /// Equal to `low` unless the operator is [`RangeOp::Between`].
+    high: FilterBound,
 }
 
 impl RangeFilter {
@@ -94,23 +128,56 @@ impl RangeFilter {
     /// `None` if a bound is missing or the two bounds are in different
     /// units. A reversed pair is put in order.
     pub fn new(op: RangeOp, low: Quantity, high: Option<Quantity>) -> Option<RangeFilter> {
+        let unit = low.unit().clone();
+        RangeFilter::with_bounds(
+            op,
+            unit,
+            FilterBound::Base(low),
+            high.map(FilterBound::Base),
+        )
+    }
+
+    /// [`RangeFilter::new`] with either kind of bound, in `unit`. `None` if
+    /// a needed bound is missing, a base bound is in another unit, or a
+    /// displayed number is not finite. Two bounds of the same kind in
+    /// reverse order are put in order; a base and a displayed bound cannot
+    /// be ordered and are kept as given.
+    pub fn with_bounds(
+        op: RangeOp,
+        unit: Unit,
+        low: FilterBound,
+        high: Option<FilterBound>,
+    ) -> Option<RangeFilter> {
+        let fits = |b: &FilterBound| match b {
+            FilterBound::Base(q) => q.unit() == &unit,
+            FilterBound::Displayed(n) => n.is_finite(),
+        };
+        if !fits(&low) {
+            return None;
+        }
         if !op.is_between() {
             return Some(RangeFilter {
                 op,
+                unit,
                 high: low.clone(),
                 low,
             });
         }
-        let high = high?;
-        if low.unit() != high.unit() {
-            return None;
-        }
-        let (low, high) = if compare_for_sort(&low, &high) == Ordering::Greater {
-            (high, low)
-        } else {
-            (low, high)
+        let high = high.filter(fits)?;
+        let reversed = match (&low, &high) {
+            (FilterBound::Base(a), FilterBound::Base(b)) => {
+                compare_for_sort(a, b) == Ordering::Greater
+            }
+            (FilterBound::Displayed(a), FilterBound::Displayed(b)) => a > b,
+            _ => false,
         };
-        Some(RangeFilter { op, low, high })
+        let (low, high) = if reversed { (high, low) } else { (low, high) };
+        Some(RangeFilter {
+            op,
+            unit,
+            low,
+            high,
+        })
     }
 
     pub fn op(&self) -> RangeOp {
@@ -119,37 +186,109 @@ impl RangeFilter {
 
     /// The unit every compared value must be in.
     pub fn unit(&self) -> &Unit {
-        self.low.unit()
+        &self.unit
+    }
+
+    pub fn low(&self) -> &FilterBound {
+        &self.low
+    }
+
+    /// The upper bound; the same as [`RangeFilter::low`] unless the
+    /// operator is between.
+    pub fn high(&self) -> &FilterBound {
+        &self.high
     }
 
     /// Judge `value`, a row's cell (`None` when the row has no such key).
     pub fn verdict(&self, value: Option<&ParamValue>) -> RangeVerdict {
-        let Some(q) = value.and_then(ParamValue::as_quantity) else {
-            return RangeVerdict::Excluded;
-        };
-        if q.unit() != self.unit() {
-            return RangeVerdict::Excluded;
-        }
-        if self.accepts(&q) {
-            RangeVerdict::Matches
-        } else {
-            RangeVerdict::Outside
+        match value.and_then(ParamValue::as_quantity) {
+            Some(q) => self.verdict_quantity(&q),
+            None => RangeVerdict::Excluded,
         }
     }
 
+    /// Judge one measurement.
+    pub fn verdict_quantity(&self, q: &Quantity) -> RangeVerdict {
+        if q.unit() != self.unit() {
+            return RangeVerdict::Excluded;
+        }
+        verdict_of(self.accepts(q))
+    }
+
+    /// Judge a min-to-max value, testing what `on` names.
+    pub fn verdict_range(&self, range: &QuantityRange, on: RangeOn) -> RangeVerdict {
+        if range.unit() != self.unit() {
+            return RangeVerdict::Excluded;
+        }
+        verdict_of(match on {
+            RangeOn::Min => self.accepts(range.low()),
+            RangeOn::Max => self.accepts(range.high()),
+            RangeOn::Covers => covers(range, &self.low),
+            RangeOn::Value => self.accepts_whole(range),
+        })
+    }
+
     fn accepts(&self, q: &Quantity) -> bool {
-        let at_or_above_low = compare_for_sort(q, &self.low) != Ordering::Less;
-        let at_or_below_high = compare_for_sort(q, &self.high) != Ordering::Greater;
+        let at_or_above_low = order(q, &self.low) != Ordering::Less;
+        let at_or_below_high = order(q, &self.high) != Ordering::Greater;
         match self.op {
             RangeOp::AtLeast => at_or_above_low,
             RangeOp::AtMost => at_or_below_high,
             RangeOp::Between => at_or_above_low && at_or_below_high,
-            RangeOp::Equals => approx_equal(q.base(), self.low.base()),
+            RangeOp::Equals => equals(q, &self.low),
+        }
+    }
+
+    fn accepts_whole(&self, range: &QuantityRange) -> bool {
+        let low_in = order(range.low(), &self.low) != Ordering::Less;
+        let high_in = order(range.high(), &self.high) != Ordering::Greater;
+        match self.op {
+            RangeOp::AtLeast => low_in,
+            RangeOp::AtMost => high_in,
+            RangeOp::Between => low_in && high_in,
+            RangeOp::Equals => equals(range.low(), &self.low) && equals(range.high(), &self.low),
         }
     }
 }
 
-fn approx_equal(a: f64, b: f64) -> bool {
+fn verdict_of(accepted: bool) -> RangeVerdict {
+    if accepted {
+        RangeVerdict::Matches
+    } else {
+        RangeVerdict::Outside
+    }
+}
+
+/// Where `q` stands against `bound`.
+fn order(q: &Quantity, bound: &FilterBound) -> Ordering {
+    match bound {
+        FilterBound::Base(b) => compare_for_sort(q, b),
+        FilterBound::Displayed(n) => q.displayed_number().total_cmp(n),
+    }
+}
+
+fn equals(q: &Quantity, bound: &FilterBound) -> bool {
+    match bound {
+        FilterBound::Base(b) => approx_equal(q.base(), b.base()),
+        FilterBound::Displayed(n) => approx_equal(q.displayed_number(), *n),
+    }
+}
+
+/// Covers with a displayed number reads both ends in the high end's
+/// display prefix, as the cell shows them (`3 to 3.6 V` covers `3.3`).
+fn covers(range: &QuantityRange, bound: &FilterBound) -> bool {
+    match bound {
+        FilterBound::Base(b) => range.covers(b),
+        FilterBound::Displayed(n) => {
+            let prefix = range.high().eng_parts().1;
+            range.low().number_in(prefix) <= *n && *n <= range.high().number_in(prefix)
+        }
+    }
+}
+
+/// `=` within [`EQUALS_RELATIVE_TOLERANCE`]; zero equals only zero. The one
+/// tolerance rule for range filters and value-aware search.
+pub fn approx_equal(a: f64, b: f64) -> bool {
     if a == b {
         return true;
     }
@@ -287,5 +426,167 @@ mod tests {
         ];
         assert_eq!(column_unit(cells.iter()), Some(Unit::Ohm));
         assert_eq!(column_unit([ParamValue::Text("x".into())].iter()), None);
+    }
+
+    fn base(b: f64, unit: Unit) -> Quantity {
+        Quantity::new(b, unit).unwrap()
+    }
+
+    fn span(lo: f64, hi: f64, unit: Unit) -> QuantityRange {
+        QuantityRange::new(base(lo, unit.clone()), base(hi, unit)).unwrap()
+    }
+
+    fn any(op: RangeOp, unit: Unit, lo: f64, hi: Option<f64>) -> RangeFilter {
+        RangeFilter::with_bounds(
+            op,
+            unit,
+            FilterBound::Displayed(lo),
+            hi.map(FilterBound::Displayed),
+        )
+        .unwrap()
+    }
+
+    /// mockup row 52: on Any prefix, 100 finds 100 pF, 100 nF
+    /// and 100 µF.
+    #[test]
+    fn any_prefix_compares_the_displayed_number() {
+        let f = any(RangeOp::Equals, Unit::Farad, 100.0, None);
+        for kept in [m(100e-12, "F"), m(100.0, "nF"), m(100e-6, "F")] {
+            assert_eq!(f.verdict(Some(&kept)), RangeVerdict::Matches, "{kept:?}");
+        }
+        assert_eq!(f.verdict(Some(&m(10e-9, "F"))), RangeVerdict::Outside);
+        let at_least = any(RangeOp::AtLeast, Unit::Farad, 100.0, None);
+        assert_eq!(
+            at_least.verdict(Some(&m(470e-9, "F"))),
+            RangeVerdict::Matches
+        );
+        assert_eq!(at_least.verdict(Some(&m(1e-6, "F"))), RangeVerdict::Outside);
+        let between = any(RangeOp::Between, Unit::Farad, 470.0, Some(100.0));
+        assert_eq!(between.low(), &FilterBound::Displayed(100.0));
+        assert_eq!(
+            between.verdict(Some(&m(220e-12, "F"))),
+            RangeVerdict::Matches
+        );
+        assert_eq!(between.verdict(Some(&m(1e-6, "F"))), RangeVerdict::Outside);
+    }
+
+    #[test]
+    fn with_bounds_refuses_a_bound_that_cannot_compare() {
+        let ohm = base(1.0, Unit::Ohm);
+        assert!(
+            RangeFilter::with_bounds(RangeOp::AtLeast, Unit::Farad, FilterBound::Base(ohm), None)
+                .is_none()
+        );
+        let nan = FilterBound::Displayed(f64::NAN);
+        assert!(RangeFilter::with_bounds(RangeOp::AtLeast, Unit::Farad, nan, None).is_none());
+        let one = FilterBound::Displayed(1.0);
+        assert!(RangeFilter::with_bounds(RangeOp::Between, Unit::Farad, one, None).is_none());
+        // A base and a displayed bound are kept as given.
+        let mixed = RangeFilter::with_bounds(
+            RangeOp::Between,
+            Unit::Volt,
+            FilterBound::Displayed(5.0),
+            Some(FilterBound::Base(base(1.0, Unit::Volt))),
+        )
+        .unwrap();
+        assert_eq!(mixed.low(), &FilterBound::Displayed(5.0));
+    }
+
+    /// mockup row 52: Supply voltage filters on Covers, for
+    /// example parts that run at 3.3 V.
+    #[test]
+    fn covers_keeps_ranges_that_contain_the_bound() {
+        let f = RangeFilter::new(RangeOp::Equals, base(3.3, Unit::Volt), None).unwrap();
+        let on = RangeOn::Covers;
+        let v = Unit::Volt;
+        assert_eq!(
+            f.verdict_range(&span(3.0, 3.6, v.clone()), on),
+            RangeVerdict::Matches
+        );
+        assert_eq!(
+            f.verdict_range(&span(2.3, 5.5, v.clone()), on),
+            RangeVerdict::Matches
+        );
+        assert_eq!(
+            f.verdict_range(&span(4.5, 5.5, v.clone()), on),
+            RangeVerdict::Outside
+        );
+        assert_eq!(
+            f.verdict_range(&span(-40.0, 85.0, Unit::DegreeCelsius), on),
+            RangeVerdict::Excluded
+        );
+        // Any prefix reads both ends in the high end's prefix.
+        let shown = any(RangeOp::Equals, v.clone(), 3.3, None);
+        assert_eq!(
+            shown.verdict_range(&span(0.5, 5.5, v.clone()), on),
+            RangeVerdict::Matches
+        );
+        let mv = any(RangeOp::Equals, v.clone(), 600.0, None);
+        assert_eq!(
+            mv.verdict_range(&span(0.5, 5.5, v), on),
+            RangeVerdict::Outside
+        );
+    }
+
+    #[test]
+    fn min_and_max_test_one_end() {
+        let c = Unit::DegreeCelsius;
+        let f = RangeFilter::new(RangeOp::AtLeast, base(105.0, c.clone()), None).unwrap();
+        let industrial = span(-40.0, 85.0, c.clone());
+        let automotive = span(-40.0, 125.0, c.clone());
+        assert_eq!(
+            f.verdict_range(&industrial, RangeOn::Max),
+            RangeVerdict::Outside
+        );
+        assert_eq!(
+            f.verdict_range(&automotive, RangeOn::Max),
+            RangeVerdict::Matches
+        );
+        assert_eq!(
+            f.verdict_range(&automotive, RangeOn::Min),
+            RangeVerdict::Outside
+        );
+        let cold = RangeFilter::new(RangeOp::AtMost, base(-40.0, c), None).unwrap();
+        assert_eq!(
+            cold.verdict_range(&industrial, RangeOn::Min),
+            RangeVerdict::Matches
+        );
+    }
+
+    #[test]
+    fn value_on_a_range_needs_the_whole_range_inside() {
+        let c = Unit::DegreeCelsius;
+        let f = RangeFilter::new(
+            RangeOp::Between,
+            base(-40.0, c.clone()),
+            Some(base(125.0, c.clone())),
+        )
+        .unwrap();
+        let on = RangeOn::Value;
+        assert_eq!(
+            f.verdict_range(&span(-40.0, 85.0, c.clone()), on),
+            RangeVerdict::Matches
+        );
+        assert_eq!(
+            f.verdict_range(&span(-55.0, 125.0, c.clone()), on),
+            RangeVerdict::Outside
+        );
+        let at_least = RangeFilter::new(RangeOp::AtLeast, base(-40.0, c.clone()), None).unwrap();
+        assert_eq!(
+            at_least.verdict_range(&span(-40.0, 85.0, c.clone()), on),
+            RangeVerdict::Matches
+        );
+        assert_eq!(
+            at_least.verdict_range(&span(-55.0, 85.0, c), on),
+            RangeVerdict::Outside
+        );
+    }
+
+    #[test]
+    fn approx_equal_is_the_half_percent_rule() {
+        assert!(approx_equal(4700.0, 4720.0));
+        assert!(!approx_equal(4700.0, 4750.0));
+        assert!(approx_equal(0.0, 0.0));
+        assert!(!approx_equal(0.0, 1e-300));
     }
 }

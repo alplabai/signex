@@ -162,11 +162,32 @@ impl LibraryState {
             version,
             &self.components_panel.filter,
         );
+        self.sync_components_table(i18n);
         // The Library panel's Parts filter matches rows the same way
         // (mockup row 119).
         self.library_panel
             .rows
             .sync(i18n, &self.open_libraries, version, &self.panel_search);
+    }
+}
+
+impl LibraryState {
+    /// Rebuild what the Components panel table shows, if its inputs
+    /// changed (the search must be current first).
+    pub(super) fn sync_components_table(&mut self, i18n: &signex_i18n::I18n) {
+        let panel = &mut self.components_panel;
+        let recent: Vec<ComponentsPanelRowKey> =
+            panel.recent.parts().iter().map(|p| p.key.clone()).collect();
+        let src = crate::panels::components_panel::table::TableSource {
+            libraries: &self.open_libraries,
+            rows: &panel.rows,
+            registry: &self.template_registry,
+            data_version: self.data_version,
+            needle: &panel.filter,
+            selected: panel.selected.as_ref(),
+            recent: &recent,
+        };
+        crate::panels::components_panel::table::sync(&mut panel.table, &src, i18n);
     }
 }
 

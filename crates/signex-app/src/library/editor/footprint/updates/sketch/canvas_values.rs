@@ -291,20 +291,9 @@ fn request_parameter(editor: &mut FootprintDocument, id: ConstraintId) {
 /// A click on a pattern glyph (mockup row 179e): the pattern is selected
 /// and, with the Select tool, so is its source, which opens the pattern
 /// form in Properties. An armed tool keeps its selection (Mirror's line).
-/// A mirror has no form; its glyph only selects it.
+/// A mirror has no form; its glyph only selects it. The source is selected
+/// first, since selecting an entity drops the selected pattern.
 fn select_pattern(editor: &mut FootprintDocument, array: Option<ArrayId>) {
-    let overlay = &mut editor.state.sketch_overlay;
-    overlay.selected_pattern = array;
-    let editing_other_pattern = overlay
-        .value_edit
-        .as_ref()
-        .is_some_and(|e| matches!(e.target, ValueTarget::Pattern(a, _) if Some(a) != array));
-    if editing_other_pattern {
-        overlay.value_edit = None;
-    }
-    if !matches!(editor.state.active_tool, SketchTool::Select) {
-        return;
-    }
     let source = array.and_then(|id| {
         let sketch = sketch(editor)?;
         sketch
@@ -313,7 +302,9 @@ fn select_pattern(editor: &mut FootprintDocument, array: Option<ArrayId>) {
             .find(|a| a.id == id)
             .map(|a| a.kind.source())
     });
-    if let Some(source) = source {
+    if let Some(source) = source
+        && matches!(editor.state.active_tool, SketchTool::Select)
+    {
         super::ui::apply(
             editor,
             FootprintEditorMsg::SketchSelect {
@@ -321,6 +312,15 @@ fn select_pattern(editor: &mut FootprintDocument, array: Option<ArrayId>) {
                 shift: false,
             },
         );
+    }
+    let overlay = &mut editor.state.sketch_overlay;
+    overlay.selected_pattern = array;
+    let editing_other_pattern = overlay
+        .value_edit
+        .as_ref()
+        .is_some_and(|e| matches!(e.target, ValueTarget::Pattern(a, _) if Some(a) != array));
+    if editing_other_pattern {
+        overlay.value_edit = None;
     }
 }
 
@@ -345,8 +345,8 @@ fn delete_pattern(editor: &mut FootprintDocument, array: ArrayId) {
     });
 }
 
-/// A click on an instance slot of the selected pattern. A linear pattern
-/// has no suppression list, so its slots never toggle.
+/// A click on an instance slot of the selected pattern suppresses it or
+/// brings it back, as one undo step.
 fn toggle_instance(editor: &mut FootprintDocument, array: ArrayId, i: u32, j: u32) {
     record_sketch_change(editor, |state, fp| {
         mutate_solve_or_revert(state, fp, |fp| {
@@ -442,6 +442,7 @@ mod tests {
                         count_expr: "4".into(),
                         dx_expr: "1mm".into(),
                         dy_expr: "0mm".into(),
+                        depopulation: None,
                     },
                     numbering: NumberingScheme::default(),
                 },
@@ -679,8 +680,10 @@ mod tests {
         assert_eq!(editor.history.undo_len(), undo_before + 2);
     }
 
+    /// #2688: a linear pattern's instance toggles as a grid's does, one undo
+    /// step each way, and an undo brings it back.
     #[test]
-    fn a_linear_pattern_instance_does_not_toggle() {
+    fn a_linear_instance_click_suppresses_it_and_undo_brings_it_back() {
         let Fixture {
             mut editor, linear, ..
         } = fixture();
@@ -696,8 +699,10 @@ mod tests {
             },
         );
 
+        assert!(array_kind(&editor, linear).is_instance_suppressed(1, 0));
+        assert_eq!(editor.history.undo_len(), undo_before + 1);
+        assert!(editor.undo(), "the step undoes");
         assert_eq!(array_kind(&editor, linear), before);
-        assert_eq!(editor.history.undo_len(), undo_before);
     }
 
     #[test]
@@ -745,6 +750,39 @@ mod tests {
         send(&mut editor, SketchCanvasMsg::PatternSelected(Some(linear)));
         assert_eq!(editor.state.sketch_overlay.selected_pattern, Some(linear));
         assert_eq!(editor.state.selected_sketch, None);
+    }
+
+    /// #2859 (decision 16): selecting an entity, by click or by box, drops
+    /// the selected pattern, so a tool armed next cannot take it stale.
+    #[test]
+    fn selecting_an_entity_drops_the_selected_pattern() {
+        let Fixture {
+            mut editor, linear, ..
+        } = fixture();
+        let p1 = sketch(&editor).expect("sketch").entities[0].id;
+        let select_p1 = [
+            FootprintEditorMsg::SketchSelect {
+                id: Some(p1),
+                shift: false,
+            },
+            FootprintEditorMsg::SketchSelect {
+                id: Some(p1),
+                shift: true,
+            },
+            FootprintEditorMsg::SketchSelectMany(vec![p1]),
+        ];
+        for select in select_p1 {
+            send(&mut editor, SketchCanvasMsg::PatternSelected(Some(linear)));
+            assert_eq!(editor.state.sketch_overlay.selected_pattern, Some(linear));
+            apply_footprint_primitive_edit(&mut editor, select.clone());
+            assert_eq!(
+                editor.state.sketch_overlay.selected_pattern, None,
+                "{select:?}"
+            );
+            let state = &editor.state;
+            let selected = [state.selected_sketch, state.selected_sketch_secondary];
+            assert!(selected.contains(&Some(p1)), "{select:?}");
+        }
     }
 
     /// Mockup row 179e: a glyph click opens that pattern's form in

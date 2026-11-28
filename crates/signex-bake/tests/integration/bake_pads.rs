@@ -531,6 +531,7 @@ fn bake_linear_array_3_pads_along_x() {
             count_expr: "3".into(),
             dx_expr: "1mm".into(),
             dy_expr: "0mm".into(),
+            depopulation: None,
         },
         numbering: NumberingScheme::LinearIncrement {
             start_expr: "1".into(),

@@ -16,13 +16,14 @@ define_ids! {
     LIBRARY_SYMBOL_DELETE_CHECKING = "library-symbol-delete-checking";
     LIBRARY_SYMBOL_DELETE_MAY_BE_IN_USE = "library-symbol-delete-may-be-in-use";
     LIBRARY_SYMBOL_DELETE_IN_USE = "library-symbol-delete-in-use";
+    LIBRARY_SYMBOL_DELETE_NOT_IN_USE = "library-symbol-delete-not-in-use";
     LIBRARY_CREATE_OPTIONS_CREATE = "library-create-options-create";
     LIBRARY_EDIT_ROW_RELOAD = "library-edit-row-reload";
     LIBRARY_EDIT_ROW_KEEP_EDITING = "library-edit-row-keep-editing";
     LIBRARY_EDIT_ROW_RELOAD_SAVED = "library-edit-row-reload-saved";
     LIBRARY_PICKER_NEXT = "library-picker-next";
     LIBRARY_PRIMITIVE_PICKER_BROWSE = "library-primitive-picker-browse";
-    LIBRARY_PRIMITIVE_PICKER_OPEN_LIBRARY = "library-primitive-picker-open-library";
+    LIBRARY_PRIMITIVE_PICKER_LIBRARY_NOT_OPEN = "library-primitive-picker-library-not-open";
     LIBRARY_RECOVERY_REMOVE_FROM_PROJECT = "library-recovery-remove-from-project";
     LIBRARY_RECOVERY_LOCATE = "library-recovery-locate";
     LIBRARY_RECOVERY_RESTORE_REMOTE = "library-recovery-restore-remote";
@@ -177,6 +178,7 @@ define_ids! {
     LIBRARY_PRIMITIVE_PICKER_GROUP_NO_LIBRARY = "library-primitive-picker-group-no-library";    LIBRARY_PRIMITIVE_PICKER_NO_LIBRARIES = "library-primitive-picker-no-libraries";
     LIBRARY_PRIMITIVE_PICKER_NO_MATCH = "library-primitive-picker-no-match";
     LIBRARY_PRIMITIVE_PICKER_THIS_LIBRARY = "library-primitive-picker-this-library";
+    LIBRARY_PRIMITIVE_PICKER_SEVERAL_LIBRARIES = "library-primitive-picker-several-libraries";
     LIBRARY_PRIMITIVE_PICKER_COPY_TITLE = "library-primitive-picker-copy-title";
     LIBRARY_PRIMITIVE_PICKER_COPY_LOOSE = "library-primitive-picker-copy-loose";
     LIBRARY_PRIMITIVE_PICKER_COPY_LOOSE_DETAIL = "library-primitive-picker-copy-loose-detail";
@@ -304,6 +306,15 @@ define_ids! {
     LIBRARY_RANGE_FILTER_DONE = "library-range-filter-done";
     // symbol-delete-modal
     LIBRARY_SYMBOL_DELETE_TITLE = "library-symbol-delete-title";
+    LIBRARY_SYMBOL_DELETE_CONSEQUENCE = "library-symbol-delete-consequence";
+    LIBRARY_SYMBOL_DELETE_KEY_ROWS = "library-symbol-delete-key-rows";
+    LIBRARY_SYMBOL_DELETE_KEY_OPEN_SHEETS = "library-symbol-delete-key-open-sheets";
+    LIBRARY_SYMBOL_DELETE_KEY_CLOSED_SHEETS = "library-symbol-delete-key-closed-sheets";
+    LIBRARY_SYMBOL_DELETE_KEY_NOT_CHECKED = "library-symbol-delete-key-not-checked";
+    LIBRARY_SYMBOL_DELETE_CHECKING_CLOSED = "library-symbol-delete-checking-closed";
+    LIBRARY_SYMBOL_DELETE_REBIND_ROW = "library-symbol-delete-rebind-row";
+    LIBRARY_SYMBOL_DELETE_REBIND_ALL = "library-symbol-delete-rebind-all";
+    LIBRARY_SYMBOL_DELETE_SHOW_ALL = "library-symbol-delete-show-all";
     // picker-and-change-component
     LIBRARY_CHANGE_COMPONENT_NOTE = "library-change-component-note";
     LIBRARY_CHANGE_COMPONENT_SEARCH = "library-change-component-search";
@@ -378,6 +389,10 @@ define_ids! {
     LIBRARY_IMPORT_UPDATE_RESTORED = "library-import-update-restored";
     LIBRARY_IMPORT_UPDATE_NOT_RESTORED = "library-import-update-not-restored";
     LIBRARY_IMPORT_ID_CLASH = "library-import-id-clash";
+    LIBRARY_IMPORT_STAGING_EXISTS = "library-import-staging-exists";
+    LIBRARY_IMPORT_TARGET_CHANGED = "library-import-target-changed";
+    LIBRARY_IMPORT_MOVE_FAILED = "library-import-move-failed";
+    LIBRARY_IMPORT_LIBRARY_SPLIT = "library-import-library-split";
     // Import Library dialog (mockup row 211, #3117–#3120)
     LIBRARY_IMPORT_DIALOG_STEP_NOTE = "library-import-dialog-step-note";
     LIBRARY_IMPORT_DIALOG_STEP_SOURCE = "library-import-dialog-step-source";
@@ -446,6 +461,33 @@ define_ids! {
     LIBRARY_IMPORT_DIALOG_DETAIL_NOT_WRITTEN = "library-import-dialog-detail-not-written";
     LIBRARY_IMPORT_DIALOG_DETAIL_HINT = "library-import-dialog-detail-hint";
     LIBRARY_IMPORT_DIALOG_NO_DRAWING = "library-import-dialog-no-drawing";
+    // Drawn preview of a new import (#3171)
+    LIBRARY_IMPORT_DIALOG_TAB_PARTS = "library-import-dialog-tab-parts";
+    LIBRARY_IMPORT_DIALOG_TAB_ITEMS = "library-import-dialog-tab-items";
+    LIBRARY_IMPORT_DIALOG_STAGE_RUNNING = "library-import-dialog-stage-running";
+    LIBRARY_IMPORT_DIALOG_STAGED_NOTE = "library-import-dialog-staged-note";
+    LIBRARY_IMPORT_DIALOG_PARTS_READING = "library-import-dialog-parts-reading";
+    LIBRARY_IMPORT_DIALOG_PARTS_FAILED = "library-import-dialog-parts-failed";
+    LIBRARY_IMPORT_DIALOG_PARTS_FILTER = "library-import-dialog-parts-filter";
+    LIBRARY_IMPORT_DIALOG_PARTS_EMPTY = "library-import-dialog-parts-empty";
+    LIBRARY_IMPORT_DIALOG_PARTS_NONE_MATCH = "library-import-dialog-parts-none-match";
+    LIBRARY_IMPORT_DIALOG_PARTS_CAPTION = "library-import-dialog-parts-caption";
+    LIBRARY_IMPORT_DIALOG_COL_PART = "library-import-dialog-col-part";
+    LIBRARY_IMPORT_DIALOG_COL_SYMBOL = "library-import-dialog-col-symbol";
+    LIBRARY_IMPORT_DIALOG_COL_FOOTPRINT = "library-import-dialog-col-footprint";
+    LIBRARY_IMPORT_DIALOG_COL_ALTERNATE = "library-import-dialog-col-alternate";
+    LIBRARY_IMPORT_DIALOG_NONE_MARK = "library-import-dialog-none-mark";
+    LIBRARY_IMPORT_DIALOG_PART_HINT = "library-import-dialog-part-hint";
+    LIBRARY_IMPORT_DIALOG_PART_READING = "library-import-dialog-part-reading";
+    LIBRARY_IMPORT_DIALOG_PART_FAILED = "library-import-dialog-part-failed";
+    LIBRARY_IMPORT_DIALOG_PART_NO_SYMBOL = "library-import-dialog-part-no-symbol";
+    LIBRARY_IMPORT_DIALOG_PART_NO_FOOTPRINT = "library-import-dialog-part-no-footprint";
+    LIBRARY_IMPORT_DIALOG_PART_MANUFACTURER = "library-import-dialog-part-manufacturer";
+    LIBRARY_IMPORT_DIALOG_PART_SUPPLIERS = "library-import-dialog-part-suppliers";
+    LIBRARY_IMPORT_DIALOG_PART_PARAMETERS = "library-import-dialog-part-parameters";
+    LIBRARY_IMPORT_DIALOG_PART_PAIR = "library-import-dialog-part-pair";
+    LIBRARY_IMPORT_DIALOG_PART_NONE_LISTED = "library-import-dialog-part-none-listed";
+    LIBRARY_IMPORT_DIALOG_MOVING = "library-import-dialog-moving";
     LIBRARY_IMPORT_DIALOG_SKIPPED_BANNER = "library-import-dialog-skipped-banner";
     LIBRARY_IMPORT_DIALOG_REPORT_MISSING = "library-import-dialog-report-missing";
     LIBRARY_IMPORT_DIALOG_NOTHING_WRITTEN = "library-import-dialog-nothing-written";
@@ -524,4 +566,13 @@ define_ids! {
     LIBRARY_IMPORT_DIALOG_PARTIAL = "library-import-dialog-partial";
     LIBRARY_IMPORT_DIALOG_UNREADABLE_HINT = "library-import-dialog-unreadable-hint";
     LIBRARY_BROWSER_IMPORT = "library-browser-import";
+    LIBRARY_MFR_LIFECYCLE_ACTIVE = "library-mfr-lifecycle-active";
+    LIBRARY_MFR_LIFECYCLE_NRND = "library-mfr-lifecycle-nrnd";
+    LIBRARY_MFR_LIFECYCLE_EOL = "library-mfr-lifecycle-eol";
+    LIBRARY_MFR_LIFECYCLE_UNKNOWN = "library-mfr-lifecycle-unknown";
+    LIBRARY_SUPPLY_MANUAL = "library-supply-manual";
+    LIBRARY_SUPPLY_FETCHED = "library-supply-fetched";
+    LIBRARY_SUPPLY_MANUAL_OVER_FETCHED = "library-supply-manual-over-fetched";
+    LIBRARY_SUPPLY_NONE = "library-supply-none";
+    LIBRARY_SUPPLY_LIFECYCLE_FETCHED = "library-supply-lifecycle-fetched";
 }

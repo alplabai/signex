@@ -1,7 +1,8 @@
 //! The Import Library dialog end to end, headless: a fake converter on a
-//! temp PATH is discovered, previewed with `--dry-run` into a temp folder,
-//! then imported, committed and mounted. The converter is run as
-//! `/bin/sh <script>`, so no test execs a file it has just written.
+//! temp PATH is discovered, previewed into a staging folder beside the
+//! target (#3171), its parts drawn, then moved into place, committed and
+//! mounted with no second run. The converter is run as `/bin/sh <script>`,
+//! so no test execs a file it has just written.
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -19,11 +20,13 @@ fn fixture_library() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/fixtures/library-format/library")
 }
 
-/// Answers `describe`; a dry run writes only the report, an import copies
-/// the conformance library too.
-fn script() -> String {
+/// Answers `describe`; a dry run writes only the report, any other run
+/// copies the conformance library too. Each `library` run adds a line to
+/// `counter`.
+fn script(counter: &Path) -> String {
     format!(
         r#"{PREAMBLE}if [ "$1" = describe ]; then echo '{DESCRIBE}'; exit 0; fi
+echo "$*" >> '{counter}'
 dry=no; for a in "$@"; do [ "$a" = "--dry-run" ] && dry=yes; done
 echo '{{"event":"phase","phase":"read","total":1}}'
 echo '{{"event":"progress","done":1,"total":1,"item":"Fake:R1"}}'
@@ -32,6 +35,7 @@ if [ "$dry" = no ]; then mkdir -p "$out" && cp -R '{fixture}/.' "$out/"; fi
 exit 0
 "#,
         fixture = fixture_library().display(),
+        counter = counter.display(),
         report = write_report_line(),
         summary = summary("ok", true),
     )
@@ -42,7 +46,7 @@ exit 0
 fn install_fake(bin: &Path) -> crate::library_import::DiscoveryCache {
     use std::os::unix::fs::PermissionsExt;
     let program = bin.join("signex-fake-import");
-    std::fs::write(&program, script()).unwrap();
+    std::fs::write(&program, script(&runs_log(bin))).unwrap();
     std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
     let env = DiscoveryEnv {
         path: Some(bin.as_os_str().to_owned()),
@@ -55,6 +59,20 @@ fn install_fake(bin: &Path) -> crate::library_import::DiscoveryCache {
             leading_args: vec![path.into()],
         }
     })
+}
+
+/// Where the fake converter of `bin` counts its `library` runs.
+fn runs_log(bin: &Path) -> PathBuf {
+    bin.join("runs.log")
+}
+
+/// The `library` runs the fake converter of `bin` made, one line each.
+fn runs(bin: &Path) -> Vec<String> {
+    std::fs::read_to_string(runs_log(bin))
+        .unwrap_or_default()
+        .lines()
+        .map(str::to_string)
+        .collect()
 }
 
 fn d(m: ImportDialogMsg) -> Message {
@@ -93,7 +111,8 @@ fn discover_preview_and_import_through_the_dialog() {
     assert_eq!(state.name, "Passives");
     assert_eq!(state.blocker(), None);
 
-    // Step 2: the dry run writes only its report, into a temp folder.
+    // Step 2: the converter writes the library into a staging folder
+    // beside the target, and its parts are drawn from there.
     settle(&mut app, d(ImportDialogMsg::NextPressed));
     let state = app.library.import_dialog.as_deref().unwrap();
     assert_eq!(state.step, Step::Preview);
@@ -104,21 +123,33 @@ fn discover_preview_and_import_through_the_dialog() {
     );
     assert_eq!(state.parts_to_import(), 3);
     assert_eq!(state.report_items().len(), 3);
-    let preview_dir = state.preview_dir.clone().expect("a temp folder");
-    assert!(preview_dir.join("import-report.json").exists());
-    assert!(!out.exists(), "nothing is written before Import");
+    assert_eq!(state.preview_dir, None, "no dry run");
+    let staged = state.staged.as_deref().expect("a staged preview");
+    let preview_dir = staged.dir().to_path_buf();
+    assert_eq!(preview_dir.parent(), out.parent(), "beside the target");
+    assert!(preview_dir.join("Conformance.snxlib").exists());
+    assert_eq!(state.preview_parts().len(), 3, "{:?}", state.parts);
+    assert!(
+        !out.exists(),
+        "nothing is in the library folder before Import"
+    );
     assert!(app.library.import.last.as_ref().is_some());
+    let previewed = runs(&bin);
+    assert_eq!(previewed.len(), 1, "{previewed:?}");
+    assert!(!previewed[0].contains("--dry-run"), "a real run");
 
-    // Step 3: the import writes, commits and mounts; the dialog ends on
-    // the result card with the run's report.
+    // Step 3: Import moves the preview into place, commits and mounts with
+    // no second converter run; the dialog ends on the result card.
     settle(&mut app, d(ImportDialogMsg::ImportPressed));
+    assert_eq!(runs(&bin).len(), 1, "the converter ran once");
     let state = app.library.import_dialog.as_deref().expect("the result");
     let result = state.finished().expect("finished");
     let facts = result.run.as_ref().expect("a run's result");
     assert_eq!(facts.mounted, Some(super::result::Mounted::AllProjects));
     assert!(facts.commit.is_some(), "the import is the first commit");
     assert_eq!(state.report_items().len(), 3);
-    assert!(!preview_dir.exists(), "the temp folder is gone");
+    assert!(!preview_dir.exists(), "the staging folder was moved");
+    assert!(state.staged.is_none());
     let last = app.library.import.last.as_ref().unwrap();
     let outcome = last.result.as_ref().expect("imported");
     assert_eq!(outcome.run.summary.counts.parts, 3);
@@ -175,12 +206,20 @@ fn an_import_into_an_imported_library_offers_an_update_and_runs_it() {
     assert_eq!(state.blocker(), Some(super::source::Blocker::UpdateOffered));
     assert!(app.library.import.running.is_none(), "nothing ran");
 
-    // Taken: the preview, then the update.
+    // Taken: the preview, still a dry run into a temp folder (#3171
+    // stages only a new import), then the update.
+    assert_eq!(runs(&bin).len(), 1, "the first import ran once");
     settle(&mut app, d(ImportDialogMsg::UpdateAccepted));
     let state = app.library.import_dialog.as_deref().unwrap();
     assert_eq!(state.step, Step::Preview);
     assert!(state.is_update());
+    assert!(state.staged.is_none() && state.preview_dir.is_some());
+    let previewed = runs(&bin);
+    assert!(previewed[1].contains("--dry-run"), "{previewed:?}");
     settle(&mut app, d(ImportDialogMsg::ImportPressed));
+    let ran = runs(&bin);
+    assert_eq!(ran.len(), 3, "{ran:?}");
+    assert!(ran[2].contains("--update"), "{ran:?}");
     let state = app.library.import_dialog.as_deref().unwrap();
     let facts = state
         .finished()
@@ -246,6 +285,7 @@ fn cancel_gives_the_window_back_whatever_the_converter_does() {
             },
             group: Default::default(),
             stage: Default::default(),
+            adopt: None,
         };
         let (mut app, _boot) = Signex::new();
         let task = app.start_library_import(job, MountScope::AllProjects);
@@ -321,6 +361,7 @@ fn a_crash_and_a_fatal_exit_show_the_end_of_the_error_output() {
             },
             group: Default::default(),
             stage: Default::default(),
+            adopt: None,
         };
         let (mut app, _boot) = Signex::new();
         let task = app.start_library_import(job, MountScope::AllProjects);
@@ -345,4 +386,70 @@ fn a_crash_and_a_fatal_exit_show_the_end_of_the_error_output() {
         assert!(stderr_tail.contains(tail), "{body}: {stderr_tail}");
         assert!(!out.exists(), "{body}: what it wrote is gone");
     }
+}
+
+/// #3171: a library folder that appears after the preview refuses the
+/// move, both at the dialog's folder check (it holds a file) and at the
+/// engine's own check just before the move (an empty folder that was not
+/// there); the preview stays on step 2 for another try, which then moves
+/// it in with still one converter run. Back removes a preview.
+#[test]
+fn a_folder_that_appeared_after_the_preview_keeps_it_for_another_try() {
+    signex_library::git_identity::test_identity::install();
+    let dir = tempfile::tempdir().unwrap();
+    let bin = dir.path().join("bin");
+    std::fs::create_dir(&bin).unwrap();
+    let source = dir.path().join("Passives.fakelib");
+    std::fs::write(&source, "source").unwrap();
+    let out = dir.path().join("libs").join("Passives");
+    let (mut app, _boot) = Signex::new();
+    import_through_the_dialog(&mut app, &bin, &source, &out);
+    let staged_dir = |app: &Signex| {
+        let state = app.library.import_dialog.as_deref().unwrap();
+        state.staged.as_deref().map(|s| s.dir().to_path_buf())
+    };
+    let preview = staged_dir(&app).expect("staged");
+
+    std::fs::create_dir(&out).unwrap();
+    std::fs::write(out.join("mine.txt"), "keep").unwrap();
+    settle(&mut app, d(ImportDialogMsg::ImportPressed));
+    let state = app.library.import_dialog.as_deref().unwrap();
+    assert_eq!(state.step, Step::Preview);
+    assert!(state.move_problem.is_some());
+    assert_eq!(staged_dir(&app), Some(preview.clone()));
+    assert!(preview.join("Conformance.snxlib").exists());
+    assert_eq!(
+        std::fs::read_to_string(out.join("mine.txt")).unwrap(),
+        "keep"
+    );
+
+    // Empty now, but it was not there when the preview ran.
+    std::fs::remove_file(out.join("mine.txt")).unwrap();
+    settle(&mut app, d(ImportDialogMsg::ImportPressed));
+    let state = app.library.import_dialog.as_deref().unwrap();
+    assert_eq!(state.step, Step::Preview, "{:?}", state.import_end);
+    let problem = state.move_problem.as_ref().expect("refused");
+    assert_eq!(
+        problem.id(),
+        Some(signex_i18n::ids::LIBRARY_IMPORT_TARGET_CHANGED)
+    );
+    assert!(preview.join("Conformance.snxlib").exists(), "kept");
+
+    std::fs::remove_dir(&out).unwrap();
+    settle(&mut app, d(ImportDialogMsg::ImportPressed));
+    let state = app.library.import_dialog.as_deref().unwrap();
+    assert!(state.finished().is_some(), "{:?}", state.import_end);
+    assert!(out.join("Conformance.snxlib").exists());
+    assert!(!preview.exists());
+    assert_eq!(runs(&bin).len(), 1, "never converted again");
+
+    // A second preview, left by Back: its folder goes.
+    drop(app.update(d(ImportDialogMsg::Closed)));
+    let other = dir.path().join("libs").join("Other");
+    import_through_the_dialog(&mut app, &bin, &source, &other);
+    let preview = staged_dir(&app).expect("staged");
+    settle(&mut app, d(ImportDialogMsg::BackPressed));
+    assert!(!preview.exists(), "Back removes the preview");
+    assert!(staged_dir(&app).is_none());
+    assert!(!other.exists());
 }

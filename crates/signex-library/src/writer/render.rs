@@ -81,6 +81,7 @@ pub(super) fn table(draft: &TableDraft) -> Result<LibraryTable, LibraryError> {
         rows,
         column_types: draft.column_types.clone(),
         pricing: draft.pricing.clone(),
+        alternate_supply: draft.alternate_supply.clone(),
     })
 }
 

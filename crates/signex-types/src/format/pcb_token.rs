@@ -75,10 +75,26 @@ pub const SNXPCB_FORMAT_V1_11: &str = "snxpcb/1.11";
 /// 1.12 read-only. A board with none keeps its token, byte for byte.
 pub const SNXPCB_FORMAT_V1_12: &str = "snxpcb/1.12";
 
+/// Written while the board holds any 1.13 content ([`needs_1_13`]): a build
+/// that knows only 1.12 would lose it on save, so it opens 1.13 read-only.
+/// A board without any keeps its token, byte for byte.
+pub const SNXPCB_FORMAT_V1_13: &str = "snxpcb/1.13";
+
+/// Whether `board` holds content only [`SNXPCB_FORMAT_V1_13`] carries. One rule for
+/// every 1.13 trigger: a board sketch whose linear pattern has a
+/// suppression list (#2688), or whose pour has corners other than Sharp
+/// (#2598).
+fn needs_1_13(board: &PcbBoard) -> bool {
+    board.sketch.as_ref().is_some_and(|stored| {
+        stored.sketch.has_linear_suppression() || stored.sketch.has_pour_corners()
+    })
+}
+
 /// The token a save of `board` writes, from its content, highest need
-/// first: a layout plan, a length-matching group, a teardrop rule or a
-/// shaped pour (corners or hatch) needs [`SNXPCB_FORMAT_V1_12`], a pour
-/// cutout, a
+/// first: a board sketch's linear suppression list or pour corners need
+/// [`SNXPCB_FORMAT_V1_13`]; a layout plan, a length-matching group, a
+/// teardrop rule or a shaped pour (corners or hatch)
+/// [`SNXPCB_FORMAT_V1_12`]; a pour cutout, a
 /// dimension look, drawn copper or an unfilled pour
 /// [`SNXPCB_FORMAT_V1_11`],
 /// stack materials [`SNXPCB_FORMAT_V1_10`], a shelved pour
@@ -101,7 +117,9 @@ pub fn snxpcb_token(board: &PcbBoard) -> &'static str {
     let look = super::board_uses_dimension_style(board);
     let shaped = board.zones.iter().any(|zone| zone.has_pour_shape());
     let options = &board.options;
-    if shaped
+    if needs_1_13(board) {
+        SNXPCB_FORMAT_V1_13
+    } else if shaped
         || !options.layout_plan.is_empty()
         || !options.length_groups.is_empty()
         || !options.teardrops.is_default()
@@ -129,7 +147,7 @@ pub fn snxpcb_token(board: &PcbBoard) -> &'static str {
 /// `.snxpcb` version policy: a newer minor opens read-only. A save writes
 /// the lowest token its content needs ([`snxpcb_token`]).
 pub const SNXPCB_VERSION: FormatVersion = FormatVersion {
-    current: SNXPCB_FORMAT_V1_12,
+    current: SNXPCB_FORMAT_V1_13,
     readable: &[
         "snxpcb/1",
         "snxpcb/1.1",
@@ -144,6 +162,7 @@ pub const SNXPCB_VERSION: FormatVersion = FormatVersion {
         SNXPCB_FORMAT_V1_10,
         SNXPCB_FORMAT_V1_11,
         SNXPCB_FORMAT_V1_12,
+        SNXPCB_FORMAT_V1_13,
     ],
     newer_minor: NewerMinor::ReadOnly,
     missing: MissingToken::Refused,

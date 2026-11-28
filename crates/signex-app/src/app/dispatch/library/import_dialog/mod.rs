@@ -1,8 +1,9 @@
 //! The Import Library dialog's handlers (mockup row 211, #3117–#3121). The
 //! dialog's model is `crate::library::import_dialog`; the converter search,
-//! the pickers and the folder check run as tasks, and both runs (the dry
-//! run and the import) go through [`Signex::start_library_import`]. The
-//! result's report actions are in [`report`].
+//! the pickers and the folder check run as tasks, and every run (the
+//! staged preview or dry run, and the import) goes through
+//! [`Signex::start_library_import`]. The staged preview's reads and
+//! removal are in [`staged`], the result's report actions in [`report`].
 
 use std::path::PathBuf;
 use std::sync::atomic::Ordering;
@@ -10,6 +11,7 @@ use std::sync::atomic::Ordering;
 use signex_i18n::{Translatable, ids};
 
 use super::*;
+use crate::ignore::IgnoreResult as _;
 use crate::library::import_dialog::notices::RunProblem;
 use crate::library::import_dialog::progress::{ends_item, item_in_flight};
 use crate::library::import_dialog::result::{ImportResult, Mounted, RequiredLibrary};
@@ -19,11 +21,14 @@ use crate::library::import_dialog::{
 };
 use crate::library_import::run_state::{ImportFinished, MountTarget};
 use crate::library_import::snapshot::default_libraries_root;
+use crate::library_import::staging::stale_cutoff;
 use crate::library_import::{MountScope, ProgressEvent, RunMode};
 
 mod report;
+mod staged;
 mod target;
 
+pub(super) use staged::discard_staged;
 pub(crate) use target::check_target;
 
 /// The temp folders of dry runs are named with this prefix; only such a
@@ -37,23 +42,32 @@ fn dialog_message(m: ImportDialogMsg) -> Message {
 /// Remove a dry run's temp folder on a worker; anything not named like one
 /// is left alone.
 pub(super) fn remove_preview_dir(dir: PathBuf) -> Task<Message> {
+    Task::future(async move {
+        tokio::task::spawn_blocking(move || remove_dry_run_dir_now(&dir))
+            .await
+            .ignore("the removal logs its own failure");
+    })
+    .discard()
+}
+
+/// Remove a dry run's temp folder now, when it is named like one.
+/// Blocking.
+fn remove_dry_run_dir_now(dir: &std::path::Path) {
     let ours = dir
         .file_name()
         .and_then(|n| n.to_str())
         .is_some_and(|n| n.starts_with(PREVIEW_DIR_PREFIX));
     if !ours {
-        return Task::none();
+        return;
     }
-    Task::future(async move {
-        let shown = dir.display().to_string();
-        let removed = tokio::task::spawn_blocking(move || std::fs::remove_dir_all(&dir)).await;
-        if let Ok(Err(e)) = removed
-            && e.kind() != std::io::ErrorKind::NotFound
-        {
-            log::warn!("Library import: could not remove the preview {shown}: {e}");
-        }
-    })
-    .discard()
+    if let Err(e) = std::fs::remove_dir_all(dir)
+        && e.kind() != std::io::ErrorKind::NotFound
+    {
+        log::warn!(
+            "Library import: could not remove the preview {}: {e}",
+            dir.display()
+        );
+    }
 }
 
 impl Signex {
@@ -130,6 +144,22 @@ impl Signex {
             ImportDialogMsg::ItemSelected(index) => {
                 self.edit_import_dialog(|d| d.selected_item = Some(index))
             }
+            ImportDialogMsg::PreviewTabPicked(tab) => {
+                self.edit_import_dialog(|d| d.preview_tab = tab)
+            }
+            ImportDialogMsg::PartsRead { dir, parts } => self.preview_parts_read(dir, parts),
+            ImportDialogMsg::PartFilterEdited(text) => {
+                self.edit_import_dialog(|d| d.part_filter = text)
+            }
+            ImportDialogMsg::PartSelected(index) => self.preview_part_selected(index),
+            ImportDialogMsg::PartDrawingRead { dir, index, read } => {
+                self.preview_part_drawing_read(dir, index, read)
+            }
+            ImportDialogMsg::PartFootprintPicked(reference) => self.edit_import_dialog(|d| {
+                if let Some(view) = d.part_view.as_mut() {
+                    view.footprint = Some(reference);
+                }
+            }),
             ImportDialogMsg::CancelPressed | ImportDialogMsg::Closed => self.import_dialog_closed(),
             ImportDialogMsg::ResultTabPicked(tab) => {
                 self.edit_import_dialog(|d| d.result_tab = tab)
@@ -177,7 +207,22 @@ impl Signex {
             state.mount_for_all = false;
         }
         self.library.import_dialog = Some(Box::new(state));
-        self.discover_converters()
+        Task::batch([self.discover_converters(), self.sweep_stale_previews()])
+    }
+
+    /// Remove, on a worker, the staging folders a crash left (#3171) in the
+    /// default library folder; Next sweeps the chosen folder's parent.
+    fn sweep_stale_previews(&self) -> Task<Message> {
+        let roots: Vec<PathBuf> = default_libraries_root().into_iter().collect();
+        let started = stale_cutoff(self.library.import.session_started.0);
+        Task::future(async move {
+            tokio::task::spawn_blocking(move || {
+                crate::library_import::staging::sweep_stale(&roots, started)
+            })
+            .await
+            .ignore("the sweep logs what it removes or keeps");
+        })
+        .discard()
     }
 
     /// The converter search on a worker, answered from the session's cache
@@ -267,18 +312,28 @@ impl Signex {
         d.checking_target = true;
         d.pending_run = Some(mode);
         let location = d.location_path();
+        // Next also sweeps the chosen folder's parent for staging folders a
+        // crash left (#3171), before the new preview is staged there.
+        let sweep: Vec<PathBuf> = match mode {
+            RunMode::Preview => location.parent().map(PathBuf::from).into_iter().collect(),
+            _ => Vec::new(),
+        };
+        let started = stale_cutoff(self.library.import.session_started.0);
         Task::perform(
             async move {
                 let checked = location.clone();
-                let check = tokio::task::spawn_blocking(move || check_target(&checked))
-                    .await
-                    .unwrap_or_else(|e| {
-                        TargetCheck::Refused(
-                            Translatable::new(ids::LIBRARY_IMPORT_DIALOG_TARGET_UNREADABLE)
-                                .arg("path", location.display().to_string())
-                                .arg("error", e.to_string()),
-                        )
-                    });
+                let check = tokio::task::spawn_blocking(move || {
+                    crate::library_import::staging::sweep_stale(&sweep, started);
+                    check_target(&checked)
+                })
+                .await
+                .unwrap_or_else(|e| {
+                    TargetCheck::Refused(
+                        Translatable::new(ids::LIBRARY_IMPORT_DIALOG_TARGET_UNREADABLE)
+                            .arg("path", location.display().to_string())
+                            .arg("error", e.to_string()),
+                    )
+                });
                 (location, check)
             },
             |(location, check)| dialog_message(ImportDialogMsg::TargetChecked { location, check }),
@@ -286,15 +341,30 @@ impl Signex {
     }
 
     /// Import on step 2: the dry run's temp folder goes, then the folder
-    /// check, then the import.
+    /// check, then the import. A staged preview is kept for the import to
+    /// move into place; one whose options no longer match the dialog's is
+    /// removed and the preview runs again.
     fn import_pressed(&mut self) -> Task<Message> {
-        let ready = self
-            .library
-            .import_dialog
-            .as_deref()
-            .is_some_and(|d| d.step == Step::Preview && d.preview_outcome().is_some());
-        if !ready {
+        let Some(d) = self.library.import_dialog.as_deref_mut() else {
             return Task::none();
+        };
+        if d.step != Step::Preview || d.preview_outcome().is_none() {
+            return Task::none();
+        }
+        d.move_problem = None;
+        if let Some(staged) = d.staged.as_deref() {
+            let current = d.request(RunMode::Stage, d.location_path());
+            if current.as_ref() != Some(&staged.request) {
+                let cleanup = self.take_staged_preview();
+                self.with_import_dialog(|d| {
+                    d.step = Step::Source;
+                    d.preview = None;
+                });
+                return Task::batch([
+                    cleanup,
+                    self.check_import_target(Step::Source, RunMode::Preview),
+                ]);
+            }
         }
         let cleanup = self.take_preview_dir();
         Task::batch([
@@ -303,13 +373,19 @@ impl Signex {
         ])
     }
 
-    /// Start the dry run (into a new temp folder) or the import (into the
-    /// chosen folder), and move to its step when the engine took it.
+    /// Start the preview or the import, and move to its step when the
+    /// engine took it. A new import's preview is staged beside the chosen
+    /// folder (#3171) and its Import moves that into place; an update's
+    /// preview is a dry run into a new temp folder.
     fn start_dialog_run(&mut self, mode: RunMode) -> Task<Message> {
         let Some(d) = self.library.import_dialog.as_deref() else {
             return Task::none();
         };
-        let for_all = mode == RunMode::Preview || d.mount_for_all;
+        let mode = match mode {
+            RunMode::Preview if !d.is_update() => RunMode::Stage,
+            other => other,
+        };
+        let for_all = mode.is_preview() || d.mount_for_all;
         // The project the dialog was opened for, while it is loaded.
         let project = d
             .project
@@ -319,11 +395,16 @@ impl Signex {
             RunMode::Preview => {
                 std::env::temp_dir().join(format!("{PREVIEW_DIR_PREFIX}{}", uuid::Uuid::now_v7()))
             }
-            RunMode::Import | RunMode::Update => d.location_path(),
+            RunMode::Import | RunMode::Update | RunMode::Stage => d.location_path(),
         };
-        let Some(job) = d.job(mode, output.clone()) else {
+        let Some(mut job) = d.job(mode, output.clone()) else {
             return Task::none();
         };
+        // The engine gets its own copy; the dialog keeps the preview until
+        // the run says whether it was moved.
+        if mode == RunMode::Import {
+            job.adopt = d.staged.clone();
+        }
         let task = match project {
             Some(path) if !for_all => {
                 self.start_library_import_into(job, MountTarget::Project(path))
@@ -344,11 +425,14 @@ impl Signex {
             d.cancel_pending = false;
             d.phases.clear();
             d.import_end = None;
-            if mode == RunMode::Preview {
+            if mode.is_preview() {
                 d.step = Step::Preview;
                 d.preview = Some(PreviewState::Running);
-                d.preview_dir = Some(output);
+                if mode == RunMode::Preview {
+                    d.preview_dir = Some(output);
+                }
                 d.selected_item = None;
+                d.clear_drawn_preview();
             } else {
                 d.step = Step::Import;
             }
@@ -367,7 +451,7 @@ impl Signex {
             return Task::none();
         }
         self.stop_dialog_preview();
-        let cleanup = self.take_preview_dir();
+        let cleanup = Task::batch([self.take_preview_dir(), self.take_staged_preview()]);
         self.with_import_dialog(|d| {
             d.step = Step::Source;
             d.preview = None;
@@ -390,7 +474,7 @@ impl Signex {
             return Task::none();
         }
         self.stop_dialog_preview();
-        let cleanup = self.take_preview_dir();
+        let cleanup = Task::batch([self.take_preview_dir(), self.take_staged_preview()]);
         self.library.import_dialog = None;
         cleanup
     }
@@ -408,7 +492,7 @@ impl Signex {
             return Task::none();
         }
         self.stop_dialog_preview();
-        let cleanup = self.take_preview_dir();
+        let cleanup = Task::batch([self.take_preview_dir(), self.take_staged_preview()]);
         self.library.import_dialog = None;
         cleanup
     }
@@ -441,12 +525,12 @@ impl Signex {
         let Some(d) = self.library.import_dialog.as_deref_mut() else {
             return;
         };
-        if d.awaiting != Some(RunMode::Preview) {
+        if !d.awaiting.is_some_and(RunMode::is_preview) {
             return;
         }
         d.awaiting = None;
         if let Some(run) = &self.library.import.running
-            && run.mode == RunMode::Preview
+            && run.mode.is_preview()
         {
             run.cancel.store(true, Ordering::Relaxed);
             d.run_stopping = true;
@@ -524,18 +608,35 @@ impl Signex {
         d.cancel_pending = false;
         d.stop_requested = false;
         match (mode, &finished.result) {
-            (Some(RunMode::Preview), Ok(outcome)) => {
+            (Some(mode), Ok(outcome)) if mode.is_preview() => {
                 d.preview = Some(PreviewState::Ready(Box::new(outcome.run.clone())));
+                d.staged = outcome.staged.clone();
+                d.preview_tab = Default::default();
             }
-            (Some(RunMode::Preview), Err(failure)) => {
+            (Some(mode), Err(failure)) if mode.is_preview() => {
                 d.preview = Some(PreviewState::Failed(Box::new(RunProblem::of(failure))));
             }
+            // Import refused the staged preview before moving it (the
+            // folder changed, or it was cancelled first): back to step 2
+            // with the preview, for another try.
+            (Some(RunMode::Import), Err(failure)) if failure.preview_kept && d.staged.is_some() => {
+                d.step = Step::Preview;
+                d.move_problem = Some(failure.error.to_translatable());
+            }
             (Some(mode), Ok(outcome)) => {
+                // A staged preview was moved into place.
+                d.staged = None;
+                d.clear_drawn_preview();
                 let output = d.location_path();
                 d.show_result(ImportResult::of_run(mode, outcome, &output));
             }
             (None, Ok(_)) => {}
             (_, Err(failure)) => {
+                // A staged preview the import did not keep is gone.
+                if !failure.preview_kept {
+                    d.staged = None;
+                    d.clear_drawn_preview();
+                }
                 let folder = FolderAfter::of(failure);
                 d.import_end = Some(match *failure.error {
                     // Refused before the converter started: the folder,

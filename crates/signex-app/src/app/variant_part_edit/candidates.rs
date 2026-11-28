@@ -5,7 +5,9 @@
 
 use std::path::PathBuf;
 
-use signex_library::{AlternateStatus, ComponentRow, LibraryAdapter, LifecycleState, RowPricing};
+use signex_library::{
+    AlternateStatus, AlternateSupply, ComponentRow, LibraryAdapter, LifecycleState, RowPricing,
+};
 use uuid::Uuid;
 
 /// Search results listed at most; the heading says how many matched.
@@ -41,9 +43,13 @@ pub struct Candidate {
     /// `(number, name)` of its symbol's pins, sorted, each once; `None`
     /// when the symbol could not be read.
     pub pins: Option<Vec<(String, String)>>,
-    /// Units in stock from the cached prices; `None` when unknown.
+    /// Units in stock: a search result's from its cached prices, a library
+    /// alternate's from [`Self::supply`]; `None` when unknown.
     pub stock: Option<u64>,
     pub status: CandidateStatus,
+    /// A library alternate's stock and lifecycle, hand-entered and fetched
+    /// (#3046); `None` for a search result.
+    pub supply: Option<AlternateSupply>,
 }
 
 /// What one read found.
@@ -143,6 +149,7 @@ pub fn collect(
     let library = adapter.library_id();
     for table in tables {
         let pricing = adapter.table_pricing(&table).unwrap_or_default();
+        let fetched = adapter.table_alternate_supply(&table).unwrap_or_default();
         let Ok(rows) = adapter.read_table(&table) else {
             continue;
         };
@@ -151,15 +158,19 @@ pub fn collect(
                 out.library = Some(name.to_string());
                 let facts = RowFacts::read(row, adapter, other);
                 out.alternates
-                    .extend(row.alternates.iter().map(|alternate| Candidate {
-                        source: CandidateSource::LibraryAlternate,
-                        mpn: alternate.mpn.clone(),
-                        manufacturer: alternate.manufacturer.clone(),
-                        value: facts.value.clone(),
-                        footprint: facts.footprint.clone(),
-                        pins: facts.pins.clone(),
-                        stock: None,
-                        status: CandidateStatus::Alternate(alternate.status),
+                    .extend(row.alternates.iter().map(|alternate| {
+                        let supply = AlternateSupply::of(alternate, fetched.get(&row.row_id));
+                        Candidate {
+                            source: CandidateSource::LibraryAlternate,
+                            mpn: alternate.mpn.clone(),
+                            manufacturer: alternate.manufacturer.clone(),
+                            value: facts.value.clone(),
+                            footprint: facts.footprint.clone(),
+                            pins: facts.pins.clone(),
+                            stock: supply.stock().map(u64::from),
+                            status: CandidateStatus::Alternate(alternate.status),
+                            supply: Some(supply),
+                        }
                     }));
                 continue;
             }
@@ -178,6 +189,7 @@ pub fn collect(
                     pins: facts.pins,
                     stock: pricing.get(&row.row_id).and_then(stock_of),
                     status: CandidateStatus::Lifecycle(row.state),
+                    supply: None,
                 });
             }
         }

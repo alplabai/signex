@@ -275,6 +275,7 @@ fn a_hole_whose_pattern_instance_leaves_the_board_is_named() {
             count_expr: "3".into(),
             dx_expr: "5mm".into(),
             dy_expr: "0mm".into(),
+            depopulation: None,
         },
         numbering: NumberingScheme::default(),
     });

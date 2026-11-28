@@ -586,7 +586,9 @@ the pour's own holes and every cut-out around other copper keep the shape
 the outline and the clearance give them, so the fill never reaches past the
 drawn outline nor nearer other copper than the clearance (open question
 for the maintainer; this is the conservative default). Sharp, or a size of
-0, fills the outline as drawn.
+0, fills the outline as drawn. A footprint sketch pour bakes its outline
+with the same rule (#2598, `pcb_geom::shaped_outline_mm`;
+`docs/FOOTPRINT_SKETCH.md`, "Role sub-forms").
 
 **Fill Mode** (#2579, `Zone::fill_mode`): Solid or Hatched; there is no
 None, since the outline-only state is Shelve. A hatched fill is the solid

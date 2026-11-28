@@ -179,7 +179,14 @@ impl Signex {
                 idx,
                 start,
                 to,
-            } => self.run_pad_drag(path, targets, *idx, (to.0 - start.0, to.1 - start.1)),
+                with_selection,
+            } => self.run_pad_drag(
+                path,
+                targets,
+                *idx,
+                (to.0 - start.0, to.1 - start.1),
+                *with_selection,
+            ),
             ReplayInput::EditorPanel {
                 path,
                 targets,

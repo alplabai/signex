@@ -22,8 +22,10 @@ impl Signex {
         // `update_row` on the target's library; a read-only mount
         // refuses up front with the plain-language card instead of
         // opening a picker whose result could only fail silently.
-        if let Some(library_path) = target.library_path()
-            && self.refuse_read_only_write(library_path)
+        if target
+            .library_paths()
+            .into_iter()
+            .any(|library_path| self.refuse_read_only_write(library_path))
         {
             return Task::none();
         }
@@ -116,6 +118,11 @@ impl Signex {
             PrimitivePickerMsg::CopyFinished { pick, result } => {
                 self.handle_copy_finished(pick, result)
             }
+            PrimitivePickerMsg::SymbolVersionRead {
+                target,
+                symbol,
+                version,
+            } => self.symbol_version_read(target, symbol, version),
         }
     }
 
@@ -125,8 +132,11 @@ impl Signex {
         let Some(picker) = self.library.primitive_picker.take() else {
             return Task::none();
         };
-        if let Some(library_path) = picker.target.library_path()
-            && self.refuse_read_only_write(library_path)
+        if picker
+            .target
+            .library_paths()
+            .into_iter()
+            .any(|library_path| self.refuse_read_only_write(library_path))
         {
             return Task::none();
         }
@@ -154,13 +164,23 @@ impl Signex {
                     modal.error = None;
                 }
             }
+            // A symbol is pinned at its current version, read first (#2572).
+            target @ (PrimitivePickerTarget::BrowserRow(_)
+            | PrimitivePickerTarget::BrowserRows { .. })
+                if picker.kind == PrimitiveKind::Symbol =>
+            {
+                return self.read_symbol_version_then(target, primitive_ref);
+            }
             PrimitivePickerTarget::BrowserRow(address) => {
                 return self.apply_primitive_pick_to_browser_row(
                     address,
                     picker.kind,
                     primitive_ref,
+                    None,
                 );
             }
+            // Only a symbol pick re-binds rows.
+            PrimitivePickerTarget::BrowserRows { .. } => {}
             PrimitivePickerTarget::PreviewAlternate(address) => {
                 return self.add_alternate_symbol_from_pick(address, primitive_ref);
             }
@@ -240,38 +260,29 @@ impl Signex {
     /// Preview tab open (the user picked from the inline preview /
     /// Properties area). Updates the row, re-hashes, persists via
     /// `adapter.update_row`, refreshes the cache.
+    ///
+    /// A symbol bound with `symbol_version` is pinned at it (#2572): the
+    /// picked symbol's current version, read by `read_symbol_version_then`.
+    /// `None` leaves the row's pin as it is.
     pub(super) fn apply_primitive_pick_to_browser_row(
         &mut self,
         address: EditorAddress,
         kind: PrimitiveKind,
         primitive_ref: PrimitiveRef,
+        symbol_version: Option<String>,
     ) -> Task<Message> {
         // 1. Read the row from the library cache.
-        let mut row = match self
-            .library
-            .library_at(&address.library_path)
-            .and_then(|lib| lib.tables.get(&address.table))
-            .and_then(|rows| {
-                rows.iter()
-                    .find(|r| RowId::from_uuid(r.row_id) == address.row_id)
-            })
-            .cloned()
-        {
-            Some(r) => r,
-            None => {
-                tracing::warn!(
-                    target: "signex::library",
-                    library = %address.library_path.display(),
-                    table = %address.table,
-                    row_id = %address.row_id,
-                    "primitive pick: row not found in cache"
-                );
-                return Task::none();
-            }
+        let Some(mut row) = self.cached_browser_row(&address) else {
+            return Task::none();
         };
         // 2. Apply.
         match kind {
-            PrimitiveKind::Symbol => row.bind_default_symbol(primitive_ref),
+            PrimitiveKind::Symbol => {
+                row.bind_default_symbol(primitive_ref);
+                if let Some(version) = &symbol_version {
+                    row.symbol_version = version.clone();
+                }
+            }
             PrimitiveKind::Footprint => row.footprint_ref = Some(primitive_ref),
             PrimitiveKind::Sim => row.sim_ref = Some(primitive_ref),
             _ => return Task::none(),
@@ -295,7 +306,12 @@ impl Signex {
         let row_id = address.row_id;
         let bound = row.clone();
         let patch: RowPatch = Box::new(move |stored| match kind {
-            PrimitiveKind::Symbol => stored.bind_default_symbol(primitive_ref),
+            PrimitiveKind::Symbol => {
+                stored.bind_default_symbol(primitive_ref);
+                if let Some(version) = symbol_version {
+                    stored.symbol_version = version;
+                }
+            }
             PrimitiveKind::Footprint => stored.footprint_ref = bound.footprint_ref,
             _ => stored.sim_ref = bound.sim_ref,
         });
@@ -309,6 +325,178 @@ impl Signex {
             message: commit_msg,
         };
         row_edit_task(&mut self.library, &library_path, kind_done, edit)
+    }
+
+    /// The row at `address` as the library cache holds it.
+    fn cached_browser_row(&self, address: &EditorAddress) -> Option<signex_library::ComponentRow> {
+        let row = self
+            .library
+            .library_at(&address.library_path)
+            .and_then(|lib| lib.tables.get(&address.table))
+            .and_then(|rows| {
+                rows.iter()
+                    .find(|r| RowId::from_uuid(r.row_id) == address.row_id)
+            })
+            .cloned();
+        if row.is_none() {
+            tracing::warn!(
+                target: "signex::library",
+                library = %address.library_path.display(),
+                table = %address.table,
+                row_id = %address.row_id,
+                "primitive pick: row not found in cache"
+            );
+        }
+        row
+    }
+
+    /// The in-use symbol Delete's Re-bind (#2572): `new`, pinned at
+    /// `version`, takes the place of `old` in the row at `address`, as
+    /// default and as alternate (`ComponentRow::replace_symbol`), written
+    /// like a browser row's bind. A row that no longer binds `old` is not
+    /// written.
+    fn replace_symbol_in_browser_row(
+        &mut self,
+        address: EditorAddress,
+        old: PrimitiveRef,
+        new: PrimitiveRef,
+        version: String,
+    ) -> Task<Message> {
+        let Some(mut row) = self.cached_browser_row(&address) else {
+            return Task::none();
+        };
+        if !row.replace_symbol(&old, new, &version) {
+            return Task::none();
+        }
+        match signex_library::hash_row_content(&row) {
+            Ok(h) => row.content_hash = h,
+            Err(e) => {
+                crate::diagnostics::log_warning(format!(
+                    "Row {} was not re-bound: its content could not be hashed ({e}).",
+                    address.row_id
+                ));
+                return Task::none();
+            }
+        }
+        let library_path = address.library_path.clone();
+        let patch: RowPatch = Box::new(move |stored| {
+            stored.replace_symbol(&old, new, &version);
+        });
+        let edit = RowEdit {
+            table: address.table.clone(),
+            row_id: address.row_id,
+            start: RowStart::Full(Box::new(row)),
+            patch: Some(patch),
+            assets: Vec::new(),
+            message: bind_message(PrimitiveKind::Symbol),
+        };
+        let done = WriteKind::BrowserRowBound {
+            address,
+            kind: PrimitiveKind::Symbol,
+        };
+        row_edit_task(&mut self.library, &library_path, done, edit)
+    }
+
+    /// Read the current version of the picked `symbol` on a worker, then
+    /// bind it to the rows of `target` pinned at it (`symbol_version_read`).
+    fn read_symbol_version_then(
+        &mut self,
+        target: PrimitivePickerTarget,
+        symbol: PrimitiveRef,
+    ) -> Task<Message> {
+        let Some(adapter) = self.library.set.get_shared(symbol.library_id) else {
+            crate::diagnostics::log_warning(
+                "The symbol was not bound: the library that holds it is not open.",
+            );
+            self.sync_diagnostics_panel_ctx();
+            return Task::none();
+        };
+        Task::perform(
+            async move {
+                tokio::task::spawn_blocking(move || {
+                    adapter
+                        .get_symbol(symbol.uuid)
+                        .map(|s| s.version)
+                        .map_err(|e| e.to_string())
+                })
+                .await
+                .unwrap_or_else(|e| Err(format!("the read task failed: {e}")))
+            },
+            move |version| {
+                Message::Library(LibraryMessage::PrimitivePicker(
+                    PrimitivePickerMsg::SymbolVersionRead {
+                        target: target.clone(),
+                        symbol,
+                        version,
+                    },
+                ))
+            },
+        )
+    }
+
+    /// The picked symbol's version was read: bind it, pinned at that
+    /// version. An unreadable version binds nothing.
+    fn symbol_version_read(
+        &mut self,
+        target: PrimitivePickerTarget,
+        symbol: PrimitiveRef,
+        version: Result<String, String>,
+    ) -> Task<Message> {
+        let version = match version {
+            Ok(version) => version,
+            Err(why) => {
+                crate::diagnostics::log_warning(format!(
+                    "The symbol was not bound: its current version could not be read ({why})."
+                ));
+                self.sync_diagnostics_panel_ctx();
+                return Task::none();
+            }
+        };
+        // The library may have become read-only while the version was read.
+        if target
+            .library_paths()
+            .into_iter()
+            .any(|library_path| self.refuse_read_only_write(library_path))
+        {
+            return Task::none();
+        }
+        match target {
+            PrimitivePickerTarget::BrowserRow(address) => self.apply_primitive_pick_to_browser_row(
+                address,
+                PrimitiveKind::Symbol,
+                symbol,
+                Some(version),
+            ),
+            PrimitivePickerTarget::BrowserRows { rows, replacing } => {
+                let binds: Vec<_> = rows
+                    .into_iter()
+                    .map(|address| {
+                        self.replace_symbol_in_browser_row(
+                            address,
+                            replacing,
+                            symbol,
+                            version.clone(),
+                        )
+                    })
+                    .collect();
+                Task::batch(binds)
+            }
+            // A symbol's version is read only for a Library Browser row
+            // pick; any other target reaching here is a bug, said in the
+            // log rather than dropped silently.
+            other @ (PrimitivePickerTarget::PreviewRow(_)
+            | PrimitivePickerTarget::EditRowModal(_)
+            | PrimitivePickerTarget::PreviewAlternate(_)
+            | PrimitivePickerTarget::DesignPart { .. }
+            | PrimitivePickerTarget::BoardFootprint { .. }
+            | PrimitivePickerTarget::SketchParameters { .. }) => {
+                tracing::warn!(
+                    target: "signex::library",
+                    "symbol version read for a picker target that does not bind by version: {other:?}"
+                );
+                Task::none()
+            }
+        }
     }
 
     /// The browser row's primitive bind finished.

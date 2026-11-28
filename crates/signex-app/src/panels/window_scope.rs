@@ -231,6 +231,7 @@ impl PanelMsg {
             | Self::FpEditorSetBgaStartCol { .. }
             | Self::FpEditorDeleteArray { .. }
             | Self::FpEditorBeginRepickPolarCenter { .. }
+            | Self::FpEditorPatternKindPicked(..)
             | Self::FpEditorToggleArrayInstance { .. }
             | Self::FpEditorToggleSnapOption { .. }
             | Self::FpEditorSetSnapGridStep { .. }
@@ -366,6 +367,8 @@ impl PanelMsg {
             | Self::SchLibraryDeleteSymbol { .. }
             | Self::SchLibraryDeleteConfirmed { .. }
             | Self::SchLibraryDeleteCancelled { .. }
+            | Self::SchLibraryDeleteRebind { .. }
+            | Self::SchLibraryDeleteShowAllRows { .. }
             | Self::UpdateDrawingEdit { .. }
             | Self::DrawingFieldTyping { .. }
             | Self::DrawingFieldLeft { .. }

@@ -13,8 +13,10 @@ use signex_library::import_snapshot::{
 use super::error::ImportError;
 use super::events::ProgressEvent;
 use super::run::{
-    ConverterCommand, LibraryRunRequest, RunFailure, RunLimits, RunMode, RunOutcome, run_library_in,
+    ConverterCommand, LibraryRunRequest, RunFailure, RunLimits, RunMode, RunOutcome,
+    run_library_claimed, run_library_in,
 };
+use super::staging::{StagedLibrary, TargetBefore, staging_dir_for};
 
 /// Where the library is mounted after the import.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -75,13 +77,16 @@ pub struct ImportJob {
     pub group: super::process::ProcessGroup,
     /// How far [`Self::run`] has got, for the quit wait.
     pub stage: super::run_state::JobStage,
+    /// A staged preview (#3171) to move into `request.output` and commit
+    /// in place of a converter run; only for [`RunMode::Import`].
+    pub adopt: Option<Box<StagedLibrary>>,
 }
 
 /// A finished import (or preview).
 #[derive(Debug, Clone, PartialEq)]
 pub struct ImportJobOutcome {
     pub run: RunOutcome,
-    /// The `.snxlib` to mount; `None` for a preview.
+    /// The `.snxlib` to mount; `None` for a preview (a staged one too).
     pub library_file: Option<PathBuf>,
     /// The new commit; `None` for a preview or an unchanged re-import.
     pub commit: Option<String>,
@@ -91,14 +96,19 @@ pub struct ImportJobOutcome {
     pub library_id: Option<uuid::Uuid>,
     /// The library ids its manifest `requires`, to mount with it.
     pub requires: Vec<uuid::Uuid>,
+    /// A staged preview's library (#3171), now the caller's to adopt or
+    /// discard; `None` for every other run.
+    pub staged: Option<Box<StagedLibrary>>,
 }
 
 impl ImportJob {
     /// Run the job. An update is refused before the converter starts unless
     /// the library is a clean repository; it holds the library's write lock
     /// until its commit, and a failed update puts the tree back to its last
-    /// import. The stage is marked done once everything, the write lock
-    /// included, is released.
+    /// import. A [`RunMode::Stage`] job writes a staged preview beside the
+    /// target; a job with [`Self::adopt`] moves one into place instead of
+    /// running the converter (#3171). The stage is marked done once
+    /// everything, the write lock included, is released.
     pub fn run(
         &self,
         cancel: &AtomicBool,
@@ -106,6 +116,12 @@ impl ImportJob {
     ) -> Result<ImportJobOutcome, RunFailure> {
         // Declared first, so dropped last.
         let _done = self.stage.done_on_drop();
+        if self.request.mode == RunMode::Stage {
+            return self.run_staged(cancel, on_event);
+        }
+        if let Some(staged) = &self.adopt {
+            return self.adopt_staged(staged, cancel);
+        }
         let (local_commits, _write_lock) = match self.request.mode {
             RunMode::Update => {
                 let output = &self.request.output;
@@ -120,7 +136,7 @@ impl ImportJob {
                 let check = check_update(output).map_err(RunFailure::refused)?;
                 (check.local_commits, Some(lock))
             }
-            RunMode::Import | RunMode::Preview => (0, None),
+            RunMode::Import | RunMode::Preview | RunMode::Stage => (0, None),
         };
         let run = run_library_in(
             &self.command,
@@ -140,20 +156,24 @@ impl ImportJob {
                 local_commits,
                 library_id: None,
                 requires: Vec::new(),
+                staged: None,
             });
         };
-        let keep_run = |error: ImportError, run: &RunOutcome| RunFailure {
-            error: Box::new(error),
-            report: run.report.clone().map(Box::new),
-            stderr_tail: run.stderr_tail.clone(),
-            removed_output: false,
-            restored: None,
-            refused: false,
-        };
-        let library_file = find_library_file(&library_dir).map_err(|e| keep_run(e, &run))?;
+        self.commit_written(run, &library_dir, local_commits)
+    }
+
+    /// Find the library file in `library_dir`, commit it and read its
+    /// identity. A failure here keeps the library: it was written.
+    fn commit_written(
+        &self,
+        run: RunOutcome,
+        library_dir: &Path,
+        local_commits: usize,
+    ) -> Result<ImportJobOutcome, RunFailure> {
+        let library_file = find_library_file(library_dir).map_err(|e| keep_run(e, &run))?;
         let message = self.commit_message(&library_file);
         self.stage.settling();
-        let commit = record_snapshot(&library_dir, &message).map_err(|e| keep_run(e, &run))?;
+        let commit = record_snapshot(library_dir, &message).map_err(|e| keep_run(e, &run))?;
         let (library_id, requires) = read_library_identity(&library_file);
         Ok(ImportJobOutcome {
             run,
@@ -162,7 +182,101 @@ impl ImportJob {
             local_commits,
             library_id,
             requires,
+            staged: None,
         })
+    }
+
+    /// The drawn preview (#3171): the converter writes the library into a
+    /// new staging folder beside `request.output`, which is left as it is.
+    /// Nothing is committed or mounted. A stop requested while the run
+    /// ended (quitting) discards the staging folder, so none is left.
+    fn run_staged(
+        &self,
+        cancel: &AtomicBool,
+        on_event: &mut dyn FnMut(&ProgressEvent),
+    ) -> Result<ImportJobOutcome, RunFailure> {
+        let target = &self.request.output;
+        let target_before = TargetBefore::read(target).map_err(RunFailure::refused)?;
+        let staging = staging_dir_for(target).ok_or_else(|| {
+            RunFailure::refused(ImportError::OutputUnusable {
+                path: target.clone(),
+                detail: "no parent folder".to_string(),
+            })
+        })?;
+        let inner = LibraryRunRequest {
+            output: staging,
+            ..self.request.clone()
+        };
+        let (run, claimed) = run_library_claimed(
+            &self.command,
+            &inner,
+            self.limits,
+            cancel,
+            &self.group,
+            &self.stage,
+            on_event,
+        )?;
+        let discard = |error: ImportError, run: &RunOutcome| {
+            let mut failure = keep_run(error, run);
+            failure.removed_output = claimed.discard();
+            failure
+        };
+        if cancel.load(std::sync::atomic::Ordering::Relaxed) {
+            return Err(discard(ImportError::Cancelled, &run));
+        }
+        let library_dir = run.library.clone().unwrap_or_else(|| inner.output.clone());
+        let library_file = find_library_file(&library_dir).map_err(|e| discard(e, &run))?;
+        let staged = StagedLibrary {
+            claimed: claimed.clone(),
+            target: target.clone(),
+            target_before,
+            request: self.request.clone(),
+            run: run.clone(),
+            library_file,
+        };
+        // No library file: a staged preview is never mounted.
+        Ok(ImportJobOutcome {
+            run,
+            library_file: None,
+            commit: None,
+            local_commits: 0,
+            library_id: None,
+            requires: Vec::new(),
+            staged: Some(Box::new(staged)),
+        })
+    }
+
+    /// Import of a staged preview: the converter does not run again. The
+    /// staging folder is moved to `request.output` (refused, the preview
+    /// kept, when that folder was created or changed since the preview),
+    /// then committed as a run's library is.
+    fn adopt_staged(
+        &self,
+        staged: &StagedLibrary,
+        cancel: &AtomicBool,
+    ) -> Result<ImportJobOutcome, RunFailure> {
+        let kept = |error: ImportError| RunFailure {
+            preview_kept: true,
+            ..RunFailure::refused(error)
+        };
+        if self.request.mode != RunMode::Import || staged.target != self.request.output {
+            return Err(kept(ImportError::TargetChanged {
+                path: self.request.output.clone(),
+            }));
+        }
+        if cancel.load(std::sync::atomic::Ordering::Relaxed) {
+            return Err(kept(ImportError::Cancelled));
+        }
+        // From here the library is being put in place; quitting waits.
+        self.stage.settling();
+        staged.move_into_place().map_err(|failure| {
+            let mut run_failure = keep_run(failure.error, &staged.run);
+            run_failure.refused = failure.preview_kept;
+            run_failure.preview_kept = failure.preview_kept;
+            run_failure
+        })?;
+        let run = staged.run_in_target();
+        self.commit_written(run, &staged.target, 0)
     }
 
     /// An update failed after `check_update` found the tree clean: whatever
@@ -202,6 +316,20 @@ impl ImportJob {
     }
 }
 
+/// A failure after the converter wrote a library: the run's report and
+/// error output are kept with it.
+fn keep_run(error: ImportError, run: &RunOutcome) -> RunFailure {
+    RunFailure {
+        error: Box::new(error),
+        report: run.report.clone().map(Box::new),
+        stderr_tail: run.stderr_tail.clone(),
+        removed_output: false,
+        restored: None,
+        refused: false,
+        preview_kept: false,
+    }
+}
+
 /// `git init` when needed, the footprint diff setup, and one commit.
 pub fn record_snapshot(library_dir: &Path, message: &str) -> Result<Option<String>, ImportError> {
     let git = |e: signex_library::LibraryError| ImportError::Git {
@@ -222,7 +350,7 @@ pub fn commit_message(
 ) -> String {
     let verb = match mode {
         RunMode::Update => "Update",
-        RunMode::Import | RunMode::Preview => "Import",
+        RunMode::Import | RunMode::Preview | RunMode::Stage => "Import",
     };
     let file_names: Vec<String> = sources
         .iter()

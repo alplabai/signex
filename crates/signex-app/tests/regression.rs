@@ -349,6 +349,9 @@ mod footprint_pad_fields_persist;
 // Mockup row 126: the keepout layer and the sketch pad expansions of the role sub-forms.
 #[path = "regression/footprint_role_subforms.rs"]
 mod footprint_role_subforms;
+// #2598 — a footprint sketch pour's Corners and Corner size.
+#[path = "regression/footprint_pour_corners.rs"]
+mod footprint_pour_corners;
 // #2242 — a trapezoid delta without copper is named when the file opens.
 #[path = "regression/footprint_trapezoid_warning.rs"]
 mod footprint_trapezoid_warning;
@@ -578,6 +581,9 @@ mod library_stock_editable;
 mod library_stock_place;
 #[path = "regression/library_symbol_delete_closed.rs"]
 mod library_symbol_delete_closed;
+// #2572 — an in-use symbol Delete counts the rows and re-binds them.
+#[path = "regression/library_symbol_delete_rebind.rs"]
+mod library_symbol_delete_rebind;
 #[path = "regression/library_symbol_drift.rs"]
 mod library_symbol_drift;
 #[path = "regression/library_symbol_missing.rs"]
@@ -909,6 +915,9 @@ mod sketch_parameters;
 // mockup row 187 / mockup row 191: the sketch canvas's pattern values and instance suppression.
 #[path = "regression/sketch_canvas_values.rs"]
 mod sketch_canvas_values;
+// #2688: a linear pattern's Mask field, as a polar pattern's.
+#[path = "regression/sketch_linear_mask.rs"]
+mod sketch_linear_mask;
 // #2518 / Graphite mockup row 179: a board sketch snaps to the board under it; Snap ▾
 // board rows turn that off without an undo step.
 #[path = "regression/sketch_snap_board.rs"]
@@ -949,3 +958,7 @@ mod board_sketch_router;
 // the 3D toggle that returns to the mode it came from.
 #[path = "regression/editor_mode_switch.rs"]
 mod editor_mode_switch;
+// #2596: a footprint pattern switches kind with its count, and the
+// instances that keep a place keep their skips and overrides.
+#[path = "regression/pattern_kind_switch.rs"]
+mod pattern_kind_switch;

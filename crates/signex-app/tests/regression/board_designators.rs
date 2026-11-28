@@ -137,7 +137,7 @@ fn open_board_as(newer: bool) -> Fixture {
     let path = tmp.path().join("board.snxpcb");
     let mut text = SnxPcb::new(board()).write_string().unwrap();
     if newer {
-        text = text.replacen(signex_types::format::SNXPCB_FORMAT_V1, "snxpcb/1.13", 1);
+        text = text.replacen(signex_types::format::SNXPCB_FORMAT_V1, "snxpcb/1.15", 1);
     }
     std::fs::write(&path, text).unwrap();
     let (mut app, _boot) = Signex::new();

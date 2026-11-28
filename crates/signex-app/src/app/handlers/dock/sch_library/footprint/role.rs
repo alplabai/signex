@@ -1,16 +1,18 @@
 //! The role sub-form edits that have no flat `FpEditor*` message (mockup row 126):
-//! the keepout layer and the sketch pad's paste and mask expansions. Each
+//! the keepout layer, the pour's corners (#2598) and the sketch pad's paste
+//! and mask expansions. Each
 //! edit goes through the editor's undo history, re-solves and re-bakes the
 //! sketch, and marks the tab dirty, like the keepout kinds in `shape.rs`.
 
 use super::super::*;
 
 use super::shape::{rebuild_sketch, sketch_entity_mut};
-use crate::panels::{FpSubformMsg, expansion_buffer_key};
+use crate::panels::{FpSubformMsg, expansion_buffer_key, pour_corner_size_buffer_key};
 use signex_sketch::id::SketchEntityId;
 use signex_sketch::parameter::ParameterTable;
 use signex_sketch::unit::UnitFamily;
 use signex_types::pcb_layer::{BoardSide, PcbLayer};
+use signex_types::zone_pour_shape::PourCorners;
 
 /// Which expansion of a sketch pad a field edits.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -27,6 +29,12 @@ impl Signex {
         match msg {
             FpSubformMsg::KeepoutLayerPicked { id, layer } => {
                 self.fp_keepout_layer_picked(*id, *layer)
+            }
+            FpSubformMsg::PourCornersPicked { id, corners } => {
+                self.fp_pour_corners_picked(*id, *corners)
+            }
+            FpSubformMsg::PourCornerSizeEdited { id, value } => {
+                self.fp_pour_corner_size_edited(*id, value)
             }
             FpSubformMsg::SketchPadPasteExpansionEdited { id, side, value } => {
                 self.fp_sketch_pad_expansion_edited(*id, Expansion::Paste, *side, value)
@@ -51,6 +59,60 @@ impl Signex {
                 true
             });
         }
+        self.refresh_panel_ctx();
+        true
+    }
+
+    /// The pour's Corners, one undo step; the bake shapes the outline.
+    fn fp_pour_corners_picked(&mut self, id: SketchEntityId, corners: PourCorners) -> bool {
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            editor.record_edit(None, |editor| {
+                let Some(p) = sketch_entity_mut(editor, id).and_then(|e| e.pour.as_mut()) else {
+                    return false;
+                };
+                if p.corners == corners {
+                    return false;
+                }
+                p.corners = corners;
+                // Sharp corners take no size, so a pour switched back to
+                // Sharp writes neither key, as one that never had corners.
+                if corners == PourCorners::Sharp {
+                    p.corner_size = 0.0;
+                }
+                rebuild_sketch(editor);
+                true
+            });
+        }
+        self.refresh_panel_ctx();
+        true
+    }
+
+    /// The pour's Corner size in mm: a number from 0 is stored (keystrokes
+    /// share one undo step), other text is kept in the field buffers, where
+    /// the field shows it refused, and the pour keeps its size.
+    fn fp_pour_corner_size_edited(&mut self, id: SketchEntityId, value: &str) -> bool {
+        let key = pour_corner_size_buffer_key(id);
+        let size = crate::numeric_field::parse_field_f64(value).filter(|v| *v >= 0.0);
+        let Some(editor) = self.active_footprint_editor_mut() else {
+            return true;
+        };
+        let Some(size) = size else {
+            editor.state.numeric_buffers.insert(key, value.to_owned());
+            self.refresh_panel_ctx();
+            return true;
+        };
+        editor.state.numeric_buffers.remove(&key);
+        editor.record_edit(Some(("pour_corner_size", id.0.as_u128())), |editor| {
+            let Some(p) = sketch_entity_mut(editor, id).and_then(|e| e.pour.as_mut()) else {
+                return false;
+            };
+            if p.corner_size == size {
+                return false;
+            }
+            p.corner_size = size;
+            rebuild_sketch(editor);
+            true
+        });
         self.refresh_panel_ctx();
         true
     }

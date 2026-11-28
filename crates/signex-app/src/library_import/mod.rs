@@ -13,6 +13,8 @@
 //! - [`run`] — one `library` run, with the 120 s silence rule.
 //! - [`output`] — the folder a new run takes, and what a failed one removes.
 //! - [`snapshot`] — git setup, the import commit, the default location.
+//! - [`staging`] — a new import's staged preview and its move into place.
+//! - [`preview_lock`] — the lock a staged preview's owner holds against a sweep.
 //! - [`run_state`] — what the app keeps about a run.
 //! - [`error`] — every refusal, as translatable text.
 
@@ -20,14 +22,25 @@ pub mod confine;
 pub mod describe;
 pub mod discovery;
 mod empty_dir;
+#[cfg(all(test, windows))]
+mod empty_dir_tests;
 pub mod error;
 pub mod events;
+#[cfg(windows)]
+mod job;
+#[cfg(all(test, windows))]
+mod job_tests;
+#[cfg(any(windows, test))]
+mod long_path;
 pub mod output;
+mod place;
+mod preview_lock;
 mod process;
 pub mod report;
 pub mod run;
 pub mod run_state;
 pub mod snapshot;
+pub mod staging;
 pub mod stream;
 
 #[cfg(all(test, unix))]
@@ -38,6 +51,8 @@ mod output_tests;
 pub(crate) mod run_tests;
 #[cfg(all(test, unix))]
 mod snapshot_tests;
+#[cfg(test)]
+mod staging_tests;
 
 pub use describe::{ConverterDescription, InputKind, InputKindClass, PickerFilter};
 pub use discovery::{DiscoveredConverter, Discovery, DiscoveryCache, DiscoveryEnv};
@@ -49,3 +64,4 @@ pub use run::{
     ConverterCommand, LibraryRunRequest, ModelsMode, RunFailure, RunLimits, RunMode, RunOutcome,
 };
 pub use snapshot::{ImportJob, ImportJobOutcome, MountScope, UpdateCheck};
+pub use staging::StagedLibrary;

@@ -662,7 +662,10 @@ impl Signex {
                             .keymap_shortcut_label("show_current_command_hotkeys"),
                         recent: &self.ui_state.recent_projects,
                         pinned: &self.ui_state.pinned_projects,
-                        libraries: start_screen::loaded_libraries(&self.library),
+                        libraries: start_screen::loaded_libraries(
+                            &self.library,
+                            &self.ui_state.start_screen,
+                        ),
                         thumbnails: &self.ui_state.project_thumbnails,
                         state: &self.ui_state.start_screen,
                         // `update` stamps it whenever the screen shows.

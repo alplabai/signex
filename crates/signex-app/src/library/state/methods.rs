@@ -89,6 +89,7 @@ impl Default for LibraryState {
             global_libraries: Vec::new(),
             stock_library: None,
             stock_library_root: None,
+            stock_expected: false,
             stock_editable: false,
             stock_copies_refused: Vec::new(),
             id_clash_notices: Vec::new(),
@@ -106,6 +107,7 @@ impl Default for LibraryState {
             closing: Default::default(),
             history_missing: Default::default(),
             unmounted: Vec::new(),
+            reopened: Vec::new(),
             clock: chrono::Utc::now(),
             refresh_generations: HashMap::new(),
             refresh_generation_counter: 0,
@@ -503,7 +505,7 @@ impl LibraryState {
         project_paths: &[PathBuf],
     ) -> Result<(), LibraryError> {
         if self.library_at(&root).is_some() {
-            self.cancel_pending_close(&root, "it was opened again");
+            self.note_reopened(&root);
             return Ok(());
         }
         let adapter = LocalGitAdapter::open(&root)?;
@@ -538,6 +540,7 @@ impl LibraryState {
             observed_stamp: None,
             dangling: Default::default(),
             pricing: Default::default(),
+            alternate_supply: Default::default(),
             own_edit_stamp: None,
             display: LibraryDisplaySettings::seeded(&self.new_library_defaults),
             provenance,
@@ -793,6 +796,9 @@ pub struct OpenLibrary {
     /// [`LibraryState::refresh_components`] read them. `view` reads this;
     /// it never asks the adapter.
     pub pricing: HashMap<Uuid, signex_library::RowPricing>,
+    /// What a distributor refresh fetched for each row's alternates, by
+    /// `row_id`, read with `pricing` (#3046). `view` reads this.
+    pub alternate_supply: HashMap<Uuid, signex_library::RowAlternateSupply>,
     /// The manifest's licence, source, converter and required libraries
     /// (#3112), read on mount.
     pub provenance: signex_library::LibraryProvenance,
@@ -883,6 +889,7 @@ impl OpenLibrary {
             tables,
             summaries,
             pricing,
+            alternate_supply,
             unreadable,
         } = super::table_scan::scan_tables(
             adapter,
@@ -908,6 +915,7 @@ impl OpenLibrary {
         self.tables = tables;
         self.dangling.unreadable_tables = unreadable;
         self.pricing = pricing;
+        self.alternate_supply = alternate_supply;
         self.cached_components = summaries;
         self.cached_classes = adapter.library_classes();
         self.observed_stamp = stamp;

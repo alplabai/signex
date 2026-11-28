@@ -32,6 +32,7 @@ fn published(logical: &str, code: Code) -> Option<FootprintEditorMsg> {
         trackpad_pan: false,
         wheel_mode: Default::default(),
         mirror_card: None,
+        body_3d: None,
     };
     let action = fpc.on_key_pressed(
         &Key::Character(logical.into()),

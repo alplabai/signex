@@ -244,6 +244,7 @@ fn the_result_says_where_the_library_was_mounted_and_what_it_requires() {
         local_commits: 0,
         library_id: Some(uuid::Uuid::from_u128(1)),
         requires: vec![required],
+        staged: None,
     };
     drop(app.update(import(LibraryImportMsg::Finished(Box::new(
         ImportFinished {

@@ -14,6 +14,7 @@
 //! the command catalog, the Libraries page the library messages. Pages,
 //! filters, pins and the row menu send [`StartScreenMsg`] (#2305).
 
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use chrono::{DateTime, Utc};
@@ -36,7 +37,7 @@ mod projects;
 mod projects_page;
 
 pub use hint::{HintFacts, hint_view};
-pub use libraries_page::{LoadedLibrary, loaded_libraries};
+pub use libraries_page::{LoadedLibrary, is_removable, library_folder, loaded_libraries};
 pub use projects::opened_label;
 pub use projects_page::{ProjectListing, project_listing};
 
@@ -130,6 +131,17 @@ pub struct StartScreenState {
     /// when the screen shows and on [`StartScreenMsg::ClockTicked`]; it is
     /// `None` while the screen is off, so `view` never reads the clock.
     pub now: Option<DateTime<Utc>>,
+    /// The version-control state of each library folder, read off the UI
+    /// thread when the Libraries page opens and after Enable Version
+    /// Control finishes (#2591). A folder not read yet has no entry.
+    pub library_vcs: BTreeMap<PathBuf, signex_library::library_vcs::LibraryVcsState>,
+    /// Bumped by every read of [`Self::library_vcs`]; an older read's
+    /// answer is dropped.
+    pub library_vcs_generation: u64,
+    /// The library files whose Remove from Signex (#2592) waits for their
+    /// Close Library to unmount them. Each leaves when its own close
+    /// finishes or is cancelled, so a second removal never drops a first.
+    pub removing_libraries: BTreeSet<PathBuf>,
 }
 
 impl StartScreenState {
@@ -250,6 +262,26 @@ pub enum StartScreenMsg {
     /// The minute tick fired while the screen shows; carries the time the
     /// last-opened column is read against.
     ClockTicked(DateTime<Utc>),
+    /// The off-thread read of the libraries' version control finished
+    /// (#2591): each library folder with its state, or why the read failed.
+    LibraryVcsRead {
+        generation: u64,
+        result: Result<Vec<(PathBuf, signex_library::library_vcs::LibraryVcsState)>, String>,
+    },
+    /// "off" was pressed in a library row's Version control cell: open
+    /// Enable Version Control on that library file.
+    LibraryVcsEnableClicked(PathBuf),
+    /// A library row's ⋯ button was pressed: open its menu at the pointer.
+    LibraryMenuOpened(PathBuf),
+    /// Remove from Signex was picked in a library row's menu: ask first.
+    LibraryRemoveRequested(PathBuf),
+    /// The Remove from Signex confirm was accepted for this library file.
+    LibraryRemoveConfirmed(PathBuf),
+    /// A removed library's entry left `global_libraries.toml` on a worker:
+    /// the list now saved, or why the write failed.
+    GlobalLibraryUnregistered(
+        Result<Vec<crate::panels::components_panel::global_prefs::GlobalLibraryEntry>, String>,
+    ),
 }
 
 /// How often the last-opened column ("today 14:05", "yesterday") is
@@ -266,12 +298,21 @@ pub fn clock_subscription(shown: bool) -> iced::Subscription<Message> {
     }
 }
 
-/// The open right-click menu of a Start screen project row.
+/// The open menu of a Start screen row: a project row's right-click menu,
+/// or a library row's ⋯ menu (#2592).
 #[derive(Debug, Clone, PartialEq)]
 pub struct StartRowMenu {
     pub path: PathBuf,
+    pub kind: StartRowKind,
     pub x: f32,
     pub y: f32,
+}
+
+/// Which list a [`StartRowMenu`] belongs to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StartRowKind {
+    Project,
+    Library,
 }
 
 fn recent_label(path: &Path) -> String {
@@ -315,6 +356,8 @@ pub(crate) fn strip_centre_from_hero(hero_left: f32) -> f32 {
     hero_left - graphite::MAIN_PAD_X - nav_strip::STRIP_W / 2.0
 }
 
+#[cfg(test)]
+mod library_tests;
 #[cfg(test)]
 mod page_tests;
 #[cfg(test)]

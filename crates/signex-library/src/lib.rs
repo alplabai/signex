@@ -10,6 +10,7 @@ pub mod adapter;
 pub mod adapters;
 #[cfg(feature = "ai-stub")]
 pub mod ai_stub;
+pub mod alternate_supply;
 pub mod alternate_symbol;
 pub mod alternate_symbol_edit;
 pub(crate) mod board_footprint;
@@ -17,6 +18,7 @@ pub mod cascade;
 #[cfg(feature = "local-git")]
 pub mod check;
 pub mod component;
+pub mod components_view;
 pub mod dangling;
 pub mod datasheet_asset;
 pub mod diff;
@@ -33,6 +35,8 @@ pub mod identity;
 #[cfg(feature = "local-git")]
 pub mod import_snapshot;
 pub mod library_file;
+#[cfg(feature = "local-git")]
+pub mod library_vcs;
 pub mod lifecycle;
 pub mod manifest;
 pub mod manufacturer;
@@ -73,6 +77,10 @@ pub use adapters::library_set::{LibrarySet, UnresolvedRefs, absence_is_none};
 pub use adapters::read_only::ReadOnlyAdapter;
 #[cfg(feature = "ai-stub")]
 pub use ai_stub::{PinGuess, PinoutGuess, extract_pinout};
+pub use alternate_supply::{
+    AlternateSupply, AlternateSupplyUpdate, Fetched, FetchedSupply, RowAlternateSupply,
+    SupplySource,
+};
 pub use alternate_symbol::{
     AlternateSymbol, AlternateSymbolIssue, PinCompatibility, SymbolChoice, alternate_symbol_issues,
     check_pin_compatibility,
@@ -120,7 +128,9 @@ pub use manifest::{
     LibraryMeta, LibraryMode, Manifest, TableConfig, UserEntry, UsersConfig, WorkflowConfig,
     WorkflowMode,
 };
-pub use manufacturer::{AlternateStatus, DistributorListing, ManufacturerPart};
+pub use manufacturer::{
+    AlternateStatus, DistributorListing, ManufacturerLifecycle, ManufacturerPart,
+};
 pub use param::{ParamMap, ParamValue};
 pub use param_edit::{
     MeasurementParts, blank_slot_value, commit_measurement, commit_slot_measurement,
@@ -128,7 +138,7 @@ pub use param_edit::{
 };
 pub use pricing::{
     CachedPricing, DroppedUpdate, PricingError, PricingUpdate, RowPricing, StoreOutcome, age_label,
-    current_pricing, distributor_key, format_price,
+    best_stock, current_pricing, distributor_key, format_price,
 };
 pub use pricing_refresh::{
     ClientResult, ClientUnavailable, FailureKind, PricingRefreshReport, RowFailure,
@@ -145,14 +155,16 @@ pub use primitive::{
     normalize_arc_endpoints_deg, step_model_hash, textconv_footprint_text, unique_copy_name,
 };
 pub use range_filter::{
-    EQUALS_RELATIVE_TOLERANCE, RangeFilter, RangeOp, RangeVerdict, column_unit,
+    EQUALS_RELATIVE_TOLERANCE, FilterBound, RangeFilter, RangeOn, RangeOp, RangeVerdict,
+    approx_equal, column_unit,
 };
 pub use search::{Facet, FacetOp, SearchIndex, SearchQuery};
 #[cfg(feature = "search-tantivy")]
 pub use search_index::{TantivyIndexError, TantivySearchIndex};
 pub use tables::{ALTERNATE_SYMBOLS_COLUMN, TABLE_HEADER, TableSchema};
 pub use templates::{
-    ParamKind, ParamSlot, ParameterTemplate, TemplateRegistry, TemplateViolation, slot_violations,
+    CategoryView, ColumnKey, ParamKind, ParamSlot, ParameterTemplate, RangeSlot, SortKey,
+    TemplateRegistry, TemplateViolation, slot_violations,
 };
 pub use validate::validate_row_for_write;
 pub use where_used::{UseSite, WhereUsedIndex};

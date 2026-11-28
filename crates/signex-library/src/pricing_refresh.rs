@@ -5,6 +5,11 @@
 //! IO through [`DistributorAdapter`] clients, so callers run it off the UI
 //! thread; nothing here touches app state.
 //!
+//! Each distributor a row lists is also asked, by MPN, for the stock and
+//! lifecycle of the row's manufacturer alternates (#3046); what it reports
+//! goes to the `alternate_supply` cache, never to the alternate's
+//! hand-entered values.
+//!
 //! Rows are visited one distributor at a time and one row at a time. The
 //! community clients space their own requests (their `polite_wait`), so
 //! sequential calls are what keeps a distributor's rate limit honoured. An
@@ -16,9 +21,10 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 
 use crate::adapter::{LibraryAdapter, LibraryError};
+use crate::alternate_supply::{AlternateSupplyUpdate, FetchedSupply};
 use crate::component::ComponentRow;
 use crate::distributor::{DistributorAdapter, DistributorError, DistributorPart};
 use crate::param::ParamMap;
@@ -80,10 +86,14 @@ pub struct PricingRefreshReport {
     pub rows_considered: usize,
     /// Prices fetched, ready for [`LibraryAdapter::store_pricing`].
     pub updates: Vec<PricingUpdate>,
+    /// Alternate stock and lifecycle fetched, ready for
+    /// [`LibraryAdapter::store_supply`] with the prices.
+    pub alternate_updates: Vec<AlternateSupplyUpdate>,
     pub failures: Vec<RowFailure>,
     /// The cancel flag stopped the run before every row was visited.
     pub cancelled: bool,
-    /// Filled by [`refresh_library_pricing`] once the write-back ran.
+    /// Filled by [`refresh_library_pricing`] once the write-back ran: prices
+    /// and alternate records together.
     pub store: StoreOutcome,
 }
 
@@ -116,6 +126,9 @@ struct Target<'a> {
     /// The listing's distributor text, and its trimmed SKU when it has one.
     distributor: &'a str,
     sku: Option<String>,
+    /// Set for an alternate's lookup: its MPN, asked of the distributor the
+    /// row lists, in place of the row's own part.
+    alternate: Option<usize>,
 }
 
 /// Fetch prices for every eligible row in `rows`.
@@ -145,12 +158,34 @@ pub fn refresh_pricing_for_rows(
                 continue;
             }
             any = true;
-            groups.entry(key).or_default().push(Target {
+            let targets = groups.entry(key).or_default();
+            // The row's alternates are asked of each distributor once, after
+            // its listings, by MPN only: a listing's SKU names the row's part.
+            let asked = targets
+                .iter()
+                .any(|t| t.alternate.is_some() && std::ptr::eq(t.row, row));
+            targets.push(Target {
                 table,
                 row,
                 distributor: &l.distributor,
                 sku: (!sku.is_empty()).then(|| sku.to_string()),
+                alternate: None,
             });
+            if !asked {
+                targets.extend(
+                    row.alternates
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, a)| !a.mpn.trim().is_empty())
+                        .map(|(i, _)| Target {
+                            table,
+                            row,
+                            distributor: &l.distributor,
+                            sku: None,
+                            alternate: Some(i),
+                        }),
+                );
+            }
         }
         if !any {
             report.failures.push(RowFailure {
@@ -164,10 +199,13 @@ pub fn refresh_pricing_for_rows(
     }
 
     for targets in groups.values() {
+        // A distributor that cannot be asked is reported once per listing;
+        // the row's alternates add no line of their own.
+        let listings = || targets.iter().filter(|t| t.alternate.is_none());
         let client = match resolve(targets[0].distributor) {
             Ok(c) => c,
             Err(unavail) => {
-                for t in targets {
+                for t in listings() {
                     report.failures.push(unavailable_failure(t, &unavail));
                 }
                 continue;
@@ -177,7 +215,7 @@ pub fn refresh_pricing_for_rows(
         // every row; say what is true instead.
         if !client.supports_pricing() {
             let detail = format!("{} does not return prices yet", client.name());
-            for t in targets {
+            for t in listings() {
                 report
                     .failures
                     .push(failure(t, FailureKind::NotConfigured, detail.clone()));
@@ -193,17 +231,23 @@ pub fn refresh_pricing_for_rows(
                 continue;
             }
             if let Some((kind, detail)) = &halted {
-                report.failures.push(failure(t, *kind, detail.clone()));
+                if t.alternate.is_none() {
+                    report.failures.push(failure(t, *kind, detail.clone()));
+                }
                 continue;
             }
-            match fetch_one(client.as_ref(), t) {
-                Ok(update) => report.updates.push(update),
-                Err((kind, detail)) => {
-                    if matches!(kind, FailureKind::Auth | FailureKind::RateLimited) {
-                        halted = Some((kind, detail.clone()));
-                    }
-                    report.failures.push(failure(t, kind, detail));
+            // One clock read per part asked, for both kinds of lookup.
+            let now = Utc::now();
+            let fetched = match t.alternate {
+                None => fetch_one(client.as_ref(), t, now).map(|u| report.updates.push(u)),
+                Some(i) => fetch_alternate(client.as_ref(), t, i, now)
+                    .map(|u| report.alternate_updates.push(u)),
+            };
+            if let Err((kind, detail)) = fetched {
+                if matches!(kind, FailureKind::Auth | FailureKind::RateLimited) {
+                    halted = Some((kind, detail.clone()));
                 }
+                report.failures.push(failure(t, kind, detail));
             }
         }
     }
@@ -228,17 +272,26 @@ pub fn refresh_library_pricing(
     if cancel.load(Ordering::Relaxed) {
         report.cancelled = true;
         report.updates.clear();
+        report.alternate_updates.clear();
     }
-    if !report.updates.is_empty() {
-        let n = report.updates.len();
-        report.store = adapter.store_pricing(
+    // Prices and alternate records go back as one save and one commit.
+    let (n, m) = (report.updates.len(), report.alternate_updates.len());
+    if n + m > 0 {
+        let msg = if m == 0 {
+            format!("pricing: refresh {n} cached price(s)")
+        } else {
+            format!("pricing: refresh {n} cached price(s) and {m} alternate stock record(s)")
+        };
+        report.store = adapter.store_supply(
             report.updates.clone(),
+            report.alternate_updates.clone(),
             cancel,
-            &format!("pricing: refresh {n} cached price(s)"),
+            &msg,
         )?;
     }
     // The flag may also have been raised inside the store, under the lock.
-    if report.store.stored == 0 && !report.updates.is_empty() && cancel.load(Ordering::SeqCst) {
+    let fetched = n + m;
+    if report.store.stored == 0 && fetched > 0 && cancel.load(Ordering::SeqCst) {
         report.cancelled = true;
     }
     Ok(report)
@@ -247,6 +300,7 @@ pub fn refresh_library_pricing(
 fn fetch_one(
     client: &dyn DistributorAdapter,
     t: &Target<'_>,
+    now: DateTime<Utc>,
 ) -> Result<PricingUpdate, (FailureKind, String)> {
     let mpn = t.row.primary_mpn.mpn.trim();
     // Both SKU lookups need only the SKU; the MPN is required to price a
@@ -254,7 +308,6 @@ fn fetch_one(
     if mpn.is_empty() && t.sku.is_none() {
         return Err((FailureKind::NoMpn, "no MPN on this row".into()));
     }
-    let now = Utc::now();
     let part = DistributorPart {
         mpn: mpn.to_string(),
         manufacturer: t.row.primary_mpn.manufacturer.clone(),
@@ -282,6 +335,54 @@ fn fetch_one(
         row_id: t.row.row_id,
         distributor: client.name().to_string(),
         pricing,
+    })
+}
+
+/// Ask `client` for the stock and lifecycle of alternate `index` of the
+/// target's row, by its MPN and manufacturer.
+fn fetch_alternate(
+    client: &dyn DistributorAdapter,
+    t: &Target<'_>,
+    index: usize,
+    now: DateTime<Utc>,
+) -> Result<AlternateSupplyUpdate, (FailureKind, String)> {
+    let alternate = &t.row.alternates[index];
+    let mpn = alternate.mpn.trim();
+    let part = DistributorPart {
+        mpn: mpn.to_string(),
+        manufacturer: alternate.manufacturer.clone(),
+        description: String::new(),
+        datasheet_url: None,
+        footprint_hint: None,
+        parameters: ParamMap::new(),
+        pricing: None,
+        stock: None,
+        source: client.source(),
+        captured_at: now,
+        extra: BTreeMap::new(),
+    };
+    let named =
+        |(kind, detail): (FailureKind, String)| (kind, format!("alternate {mpn}: {detail}"));
+    let snapshot = client
+        .refresh_pricing(&part)
+        .map_err(|e| named(classify(&e, client.name())))?;
+    let fetched = FetchedSupply {
+        stock: snapshot.stock,
+        lifecycle: snapshot.lifecycle,
+        fetched_at: snapshot.captured_at,
+    };
+    if fetched.is_empty() {
+        return Err(named((
+            FailureKind::NotFound,
+            format!("{} reported no stock or lifecycle", client.name()),
+        )));
+    }
+    Ok(AlternateSupplyUpdate {
+        table: t.table.to_string(),
+        row_id: t.row.row_id,
+        distributor: client.name().to_string(),
+        mpn: alternate.mpn.clone(),
+        fetched,
     })
 }
 

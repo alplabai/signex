@@ -381,6 +381,7 @@ impl Signex {
                 // writes must not unmount it later.
                 self.library
                     .cancel_pending_close(&confirm.library_path, "the close prompt was cancelled");
+                self.drop_library_removal(&confirm.library_path);
             }
             CloseLibraryChoice::DiscardAll => {
                 // Discard only what the user was shown: an edit made since

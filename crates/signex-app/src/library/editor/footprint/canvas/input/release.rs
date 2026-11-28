@@ -19,6 +19,32 @@ use super::super::hit_test::{sketch_glyph_at, sketch_hit_other, sketch_snap};
 use super::super::{DragState, FootprintCanvas, FootprintCanvasState};
 
 impl FootprintCanvas<'_> {
+    /// A bare click (no drag) on a pad of a multi-pad selection: the press
+    /// kept the selection for a drag, so the click now selects that pad
+    /// alone (#2726). `None` when Ctrl/Cmd or Shift was held at the press,
+    /// which edited the selection then, even if the key is up by now.
+    pub(in crate::library::editor::footprint::canvas) fn released_on_group_pad(
+        &self,
+        drag: &DragState,
+    ) -> Option<canvas::Action<LibraryMessage>> {
+        let modifiers = drag.press_modifiers;
+        let pad_idx = drag.pad_idx;
+        let selected = self.state.selected_pad_indices();
+        if modifiers.command()
+            || modifiers.shift()
+            || selected.len() < 2
+            || !selected.contains(&pad_idx)
+        {
+            return None;
+        }
+        Some(canvas::Action::publish(LibraryMessage::EditorEvent {
+            library_path: self.address.library_path.clone(),
+            table: self.address.table.clone(),
+            row_id: self.address.row_id,
+            msg: EditorMsg::Footprint(FootprintEditorMsg::SelectPad(Some(pad_idx))),
+        }))
+    }
+
     /// A right-click that did not pan, in sketch mode with the Select tool
     /// (mockup row 188): on a constraint glyph or value it opens the constraint menu,
     /// on a pattern glyph or value the pattern menu, at the click. `None`
@@ -333,11 +359,15 @@ impl FootprintCanvas<'_> {
             Some(SketchInference::Off) | None if !snapped_off_point => snap_id,
             _ => None,
         };
+        // An armed centre pick never gets here: its press took the click
+        // (`try_centre_pick`).
         let msg = match self.state.active_tool {
-            SketchTool::Select => EditorMsg::Footprint(FootprintEditorMsg::SketchSelect {
-                id: select_id,
-                shift: false,
-            }),
+            SketchTool::Select => {
+                EditorMsg::Footprint(FootprintEditorMsg::SketchSelect {
+                    id: select_id,
+                    shift: false,
+                })
+            }
             // #361 — Drag Track End arms its endpoint grab on PRESS
             // (`try_drag_track_end_grab`); a release reaching here means
             // the press missed every line, so an un-moved empty click is

@@ -1,7 +1,8 @@
 //! The Parameters column of the Edit Component modal (mockup row 130): the
 //! section header with "+ Add Parameter", the missing-template-slot offer,
 //! and a boxed dense table Key | Value | Unit | ✕. Template rows carry a
-//! "template" pill and no ✕; a measurement's number and its menu are one
+//! "template" pill and no ✕ (but a slot added in this edit keeps one while
+//! untouched); a measurement's number and its menu are one
 //! measurement slot (mockup row 139).
 
 use iced::widget::{Column, Row, Space, column, container, row};
@@ -311,22 +312,28 @@ fn param_row<'a>(
     row![
         cell(key_cell, KEY_SHARE),
         cell(value_cell, VALUE_SHARE + UNIT_SHARE),
-        remove_cell(slot.is_some(), key_owned, tokens, send),
+        remove_cell(
+            slot.is_none() || edit.is_untouched_added_slot(key),
+            key_owned,
+            tokens,
+            send,
+        ),
     ]
     .align_y(Alignment::Center)
     .padding([SP.xs, 0.0])
     .boxed()
 }
 
-/// The ✕ that removes a custom row. A template row keeps the column empty:
-/// its parameters come from the class.
+/// The ✕ that removes a row. A template row keeps the column empty, its
+/// parameters come from the class, except a slot added in this edit and
+/// not yet edited, which can be taken back (#2648).
 fn remove_cell<'a>(
-    is_template: bool,
+    removable: bool,
     key: String,
     tokens: &ThemeTokens,
     send: &(impl Fn(BrowserEditMsg) -> LibraryMessage + Clone + 'a),
 ) -> Element<'a, LibraryMessage> {
-    if is_template {
+    if !removable {
         return Space::new().width(REMOVE_COL_W).boxed();
     }
     let send = send.clone();

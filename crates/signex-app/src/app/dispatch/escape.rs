@@ -56,6 +56,11 @@ impl Signex {
         if self.cancel_floating_drag() {
             return Task::none();
         }
+        // An open Components panel table popover takes Esc before anything
+        // else Esc does in the panel (Caner, delegated 2026-11-27).
+        if let Some(dismiss) = self.components_popover_escape(window) {
+            return self.update(dismiss);
+        }
         // Esc mid-drag of a Components panel row drops nothing.
         if let Some(drag) = self.library.components_panel.drag.take() {
             if drag.armed {
@@ -234,6 +239,38 @@ impl Signex {
         }
         let had_preview = dock.drop_preview.take().is_some();
         dragging || had_preview
+    }
+
+    /// Esc closes the Components panel table's open popover (Columns,
+    /// Filter, a header menu, "+ Group") while the panel is shown: in
+    /// front in the dock, or the detached window the key was typed in
+    /// (#3236). Not from a detached modal or a component editor window, and
+    /// not while a dialog in the window's overlay stack would take the Esc.
+    fn components_popover_escape(&self, window: Option<iced::window::Id>) -> Option<Message> {
+        use crate::app::state::WindowKind;
+        use crate::panels::PanelKind;
+        self.library.components_panel.table.popover.as_ref()?;
+        match self.input_target(window) {
+            InputTarget::DetachedModal(_) | InputTarget::ComponentEditor => return None,
+            InputTarget::DetachedPanel => {
+                let kind = window.and_then(|id| self.ui_state.windows.get(&id));
+                if !matches!(kind, Some(WindowKind::DetachedPanel(PanelKind::Components))) {
+                    return None;
+                }
+            }
+            InputTarget::Main | InputTarget::UndockedTab => {
+                if self.escape_overlay_message().is_some()
+                    || !self.document_view.dock.is_frontmost(PanelKind::Components)
+                {
+                    return None;
+                }
+            }
+        }
+        Some(Message::Library(
+            crate::library::LibraryMessage::ComponentsTable(
+                crate::library::messages::ComponentsTableMsg::PopoverDismissed,
+            ),
+        ))
     }
 
     /// Esc closes an open Components panel row menu.
@@ -518,6 +555,70 @@ mod tests {
         app.document_view.dock.show_panel(PanelKind::History);
         app.interaction_state.current_tool = Tool::Wire;
         app
+    }
+
+    /// Esc closes the Components table's popover first: the row menu that
+    /// is also open and the armed tool stay; the next Esc reaches them.
+    #[test]
+    fn esc_closes_the_components_popover_before_anything_else() {
+        let mut app = quiet_app();
+        app.document_view
+            .dock
+            .show_panel(crate::panels::PanelKind::Components);
+        app.interaction_state.current_tool = Tool::Wire;
+        app.library.components_panel.table.popover =
+            Some(crate::panels::components_panel::table::TablePopover::Filter);
+        app.library.components_panel.row_menu = Some(crate::library::state::ComponentsRowMenu {
+            key: crate::library::state::ComponentsPanelRowKey {
+                library_path: "lib.snxlib".into(),
+                table: "t".into(),
+                row_id: signex_library::RowId(uuid::Uuid::from_u128(1)),
+            },
+            x: 0.0,
+            y: 0.0,
+            window: None,
+        });
+        let _ = app.handle_escape_pressed(None);
+        assert_eq!(app.library.components_panel.table.popover, None);
+        assert!(app.library.components_panel.row_menu.is_some());
+        assert_eq!(app.interaction_state.current_tool, Tool::Wire);
+        let _ = app.handle_escape_pressed(None);
+        assert!(app.library.components_panel.row_menu.is_none());
+    }
+
+    /// #3236: a popover left open in a Components panel behind another tab
+    /// is not on screen; Esc goes on to the tool and the popover stays.
+    #[test]
+    fn esc_leaves_the_popover_of_a_hidden_components_panel_alone() {
+        use crate::panels::PanelKind;
+        let mut app = quiet_app();
+        app.document_view.dock.show_panel(PanelKind::Components);
+        app.interaction_state.current_tool = Tool::Wire;
+        app.library.components_panel.table.popover =
+            Some(crate::panels::components_panel::table::TablePopover::Columns);
+        let _ = app.document_view.dock.close_panel(PanelKind::Components);
+        assert!(!app.document_view.dock.is_frontmost(PanelKind::Components));
+        let _ = app.handle_escape_pressed(None);
+        assert!(app.library.components_panel.table.popover.is_some());
+        assert_eq!(app.interaction_state.current_tool, Tool::Select);
+
+        // In its own detached window the panel is shown, and Esc there
+        // closes the popover.
+        let id = open_window(&mut app, WindowKind::DetachedPanel(PanelKind::Components));
+        let _ = app.handle_escape_pressed(Some(id));
+        assert_eq!(app.library.components_panel.table.popover, None);
+    }
+
+    /// An Esc typed into a detached modal's window is that modal's, even
+    /// with a table popover open.
+    #[test]
+    fn esc_in_a_detached_modal_leaves_the_components_popover_open() {
+        let mut app = quiet_app();
+        app.library.components_panel.table.popover =
+            Some(crate::panels::components_panel::table::TablePopover::Columns);
+        let id = detach(&mut app, ModalId::NewProject);
+        let _ = app.handle_escape_pressed(Some(id));
+        assert!(app.library.components_panel.table.popover.is_some());
     }
 
     #[test]

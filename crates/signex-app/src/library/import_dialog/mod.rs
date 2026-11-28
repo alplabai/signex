@@ -4,8 +4,10 @@
 //!
 //! 1. Source and options ([`source`]): the files, the converter that reads
 //!    them, the database override, name, folder, mount scope, 3D models.
-//! 2. Preview ([`preview`]): a `--dry-run` into a temp folder; its counts
-//!    and report items.
+//! 2. Preview ([`preview`], [`parts`]): a new import runs the converter
+//!    into a staging folder beside the target and draws its parts (#3171);
+//!    an update's preview is a `--dry-run` into a temp folder. Both show
+//!    the counts and report items.
 //! 3. Import ([`progress`]): the run's phases, bar and current item, and
 //!    Cancel, which stops after the current item and removes what was
 //!    written. A finished import ends on its result card and loss report
@@ -22,9 +24,10 @@ use signex_i18n::Translatable;
 
 use crate::library::messages::{LibraryImportMsg, LibraryMessage};
 use crate::library_import::report::Severity;
-use crate::library_import::{Discovery, DiscoveryCache, RunOutcome};
+use crate::library_import::{Discovery, DiscoveryCache, RunOutcome, StagedLibrary};
 
 pub mod notices;
+pub mod parts;
 pub mod preview;
 pub mod progress;
 pub mod result;
@@ -33,6 +36,8 @@ mod view;
 
 #[cfg(test)]
 mod notices_tests;
+#[cfg(test)]
+mod parts_tests;
 #[cfg(test)]
 mod report_tests;
 #[cfg(test)]
@@ -65,10 +70,10 @@ pub enum SourceKind {
     Database,
 }
 
-/// The dry run of step 2.
+/// The preview run of step 2: a staged library or a dry run.
 #[derive(Debug, Clone, PartialEq)]
 pub enum PreviewState {
-    /// Running into the temp folder.
+    /// Running into the staging or temp folder.
     Running,
     /// Finished: what the converter would write.
     Ready(Box<RunOutcome>),
@@ -164,7 +169,20 @@ pub struct ImportDialogState {
     pub pending_run: Option<crate::library_import::RunMode>,
     /// The temp folder of the dry run, removed when the dialog moves on.
     pub preview_dir: Option<PathBuf>,
+    /// A new import's staged library (#3171), the dialog's to remove on
+    /// Cancel, Back, close and quit, or for Import to move into place.
+    pub staged: Option<Box<StagedLibrary>>,
     pub preview: Option<PreviewState>,
+    /// Parts or Report, for a staged preview.
+    pub preview_tab: parts::PreviewTab,
+    /// The staged library's part table.
+    pub parts: Option<parts::PartsState>,
+    pub part_filter: String,
+    /// The selected part and its drawing.
+    pub part_view: Option<parts::PartView>,
+    /// Why Import did not move the staged library (the target changed);
+    /// the preview stays for another try.
+    pub move_problem: Option<Translatable>,
     pub filter: String,
     /// Report severities the item list hides.
     pub hidden: Vec<Severity>,
@@ -213,7 +231,13 @@ impl ImportDialogState {
             checking_target: false,
             pending_run: None,
             preview_dir: None,
+            staged: None,
             preview: None,
+            preview_tab: parts::PreviewTab::Parts,
+            parts: None,
+            part_filter: String::new(),
+            part_view: None,
+            move_problem: None,
             filter: String::new(),
             hidden: Vec::new(),
             selected_item: None,
@@ -279,6 +303,24 @@ pub enum ImportDialogMsg {
     FilterEdited(String),
     SeverityToggled(Severity),
     ItemSelected(usize),
+    /// Parts or Report was picked on step 2.
+    PreviewTabPicked(parts::PreviewTab),
+    /// The staged library in `dir` was read for the part table.
+    PartsRead {
+        dir: PathBuf,
+        parts: Result<Vec<parts::PreviewPart>, String>,
+    },
+    PartFilterEdited(String),
+    /// A row of the part table was pressed, by its index.
+    PartSelected(usize),
+    /// The drawing of part `index` of the staged library in `dir` was read.
+    PartDrawingRead {
+        dir: PathBuf,
+        index: usize,
+        read: Result<parts::PartDrawing, String>,
+    },
+    /// A footprint chip of the selected part was pressed.
+    PartFootprintPicked(signex_library::primitive::PrimitiveRef),
     /// The footer's Cancel: closes steps 1 and 2, cancels a running import.
     CancelPressed,
     /// The header close, Esc or the window's close button.

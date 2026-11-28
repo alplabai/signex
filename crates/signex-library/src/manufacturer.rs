@@ -26,7 +26,69 @@ pub enum AlternateStatus {
     Disqualified,
 }
 
+/// Where a manufacturer part is in its maker's production life (#3046).
+/// Not the library row's own [`crate::LifecycleState`], which says whether
+/// the librarian released the row.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[non_exhaustive]
+pub enum ManufacturerLifecycle {
+    /// In production.
+    Active,
+    /// Not recommended for new designs.
+    #[serde(rename = "NRND")]
+    Nrnd,
+    /// End of life: last-time buy, obsolete.
+    #[serde(rename = "EOL")]
+    Eol,
+}
+
+impl ManufacturerLifecycle {
+    /// Every value, in the order a picker lists them.
+    pub const ALL: [Self; 3] = [Self::Active, Self::Nrnd, Self::Eol];
+
+    /// The token the library file writes (`Active`, `NRND`, `EOL`).
+    pub fn token(self) -> &'static str {
+        match self {
+            Self::Active => "Active",
+            Self::Nrnd => "NRND",
+            Self::Eol => "EOL",
+        }
+    }
+
+    /// Read a distributor's lifecycle text (`"Active"`, `"Not Recommended
+    /// for New Designs"`, `"Obsolete"`, ...). `None` for text that says
+    /// nothing about the maker's production, such as a distributor no longer
+    /// stocking the part.
+    pub fn from_distributor_text(text: &str) -> Option<Self> {
+        let words = text.trim().to_ascii_lowercase();
+        let has = |needle: &str| words.contains(needle);
+        if words.is_empty() || has("distributor") || has("at digi") || has("at mouser") {
+            return None;
+        }
+        if has("nrnd") || has("not recommended") || has("not for new") {
+            Some(Self::Nrnd)
+        } else if has("eol")
+            || has("end of life")
+            || has("obsolete")
+            || has("last time")
+            || has("discontinued")
+        {
+            Some(Self::Eol)
+        } else if words == "active" || words.starts_with("active ") || has("new product") {
+            Some(Self::Active)
+        } else {
+            None
+        }
+    }
+}
+
 /// One manufacturer part — primary or alternate.
+///
+/// `manual_stock` and `manual_lifecycle` are what the librarian entered in
+/// the editor's Supply tab; they win over the values a distributor refresh
+/// fetched, which live in the table's `alternate_supply` cache
+/// ([`crate::alternate_supply`]), never here. Both are written only when set,
+/// and a file that holds one is `snxlib/2.1` (`docs/LIBRARY_FORMAT.md` 2.4).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ManufacturerPart {
     pub manufacturer: String,
@@ -34,6 +96,12 @@ pub struct ManufacturerPart {
     pub status: AlternateStatus,
     #[serde(default)]
     pub notes: Option<String>,
+    /// Units in stock as entered by hand.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub manual_stock: Option<u32>,
+    /// The maker's lifecycle as entered by hand.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub manual_lifecycle: Option<ManufacturerLifecycle>,
 }
 
 impl ManufacturerPart {
@@ -44,9 +112,21 @@ impl ManufacturerPart {
             mpn: mpn.into(),
             status: AlternateStatus::Primary,
             notes: None,
+            manual_stock: None,
+            manual_lifecycle: None,
         }
     }
+
+    /// Whether the part carries a hand-entered stock or lifecycle, which only
+    /// `snxlib/2.1` holds.
+    pub fn has_manual_supply(&self) -> bool {
+        self.manual_stock.is_some() || self.manual_lifecycle.is_some()
+    }
 }
+
+/// The JSON keys of [`ManufacturerPart`]'s hand-entered values, as
+/// `serde_json` writes them into a row cell.
+pub(crate) const MANUAL_SUPPLY_KEYS: [&str; 2] = ["\"manual_stock\":", "\"manual_lifecycle\":"];
 
 /// One distributor listing — where this MPN can be sourced.
 ///
@@ -90,10 +170,81 @@ mod tests {
             mpn: "RC0805FR-0710KL".into(),
             status: AlternateStatus::Primary,
             notes: Some("preferred vendor".into()),
+            manual_stock: None,
+            manual_lifecycle: None,
         };
         let json = serde_json::to_string(&p).unwrap();
         let back: ManufacturerPart = serde_json::from_str(&json).unwrap();
         assert_eq!(p, back);
+    }
+
+    #[test]
+    fn a_part_without_manual_supply_keeps_its_old_bytes() {
+        let p = ManufacturerPart::draft("Example Corp", "EX-1");
+        assert_eq!(
+            serde_json::to_string(&p).unwrap(),
+            r#"{"manufacturer":"Example Corp","mpn":"EX-1","status":"Primary","notes":null}"#
+        );
+        assert!(!p.has_manual_supply());
+    }
+
+    #[test]
+    fn manual_supply_is_written_after_notes_and_survives_a_round_trip() {
+        let p = ManufacturerPart {
+            manual_stock: Some(1200),
+            manual_lifecycle: Some(ManufacturerLifecycle::Nrnd),
+            ..ManufacturerPart::draft("Example Corp", "EX-1")
+        };
+        let json = serde_json::to_string(&p).unwrap();
+        assert_eq!(
+            json,
+            r#"{"manufacturer":"Example Corp","mpn":"EX-1","status":"Primary","notes":null,"manual_stock":1200,"manual_lifecycle":"NRND"}"#
+        );
+        for key in MANUAL_SUPPLY_KEYS {
+            assert!(json.contains(key), "{key}");
+        }
+        assert_eq!(serde_json::from_str::<ManufacturerPart>(&json).unwrap(), p);
+        assert!(p.has_manual_supply());
+    }
+
+    #[test]
+    fn lifecycle_reads_distributor_wording() {
+        use ManufacturerLifecycle::*;
+        for (text, want) in [
+            ("Active", Some(Active)),
+            ("New Product", Some(Active)),
+            ("Not Recommended for New Designs", Some(Nrnd)),
+            ("Not For New Designs", Some(Nrnd)),
+            ("NRND", Some(Nrnd)),
+            ("End of Life", Some(Eol)),
+            ("Obsolete", Some(Eol)),
+            ("Last Time Buy", Some(Eol)),
+            ("Discontinued at Digi-Key", None),
+            ("", None),
+            ("Preliminary", None),
+            ("Inactive", None),
+        ] {
+            assert_eq!(
+                ManufacturerLifecycle::from_distributor_text(text),
+                want,
+                "{text}"
+            );
+        }
+    }
+
+    #[test]
+    fn lifecycle_tokens_are_the_spec_spelling() {
+        let tokens: Vec<String> = ManufacturerLifecycle::ALL
+            .iter()
+            .map(|l| serde_json::to_string(l).unwrap())
+            .collect();
+        assert_eq!(tokens, [r#""Active""#, r#""NRND""#, r#""EOL""#]);
+        for l in ManufacturerLifecycle::ALL {
+            assert_eq!(
+                serde_json::to_string(&l).unwrap(),
+                format!("\"{}\"", l.token())
+            );
+        }
     }
 
     #[test]
@@ -130,5 +281,6 @@ mod tests {
         assert_eq!(p.manufacturer, "Acme");
         assert_eq!(p.mpn, "ACM-001");
         assert!(p.notes.is_none());
+        assert!(p.manual_stock.is_none() && p.manual_lifecycle.is_none());
     }
 }

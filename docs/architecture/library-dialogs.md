@@ -57,8 +57,8 @@ A row click highlights the row and previews it, read off the UI thread; Pick
 confirms (decided 2026-11-22). Pick and the preview follow the highlighted row
 only while the filter shows it. A file named by a uuid lists as `<name>.<ext>`.
 Pick on a symbol outside the row's library opens the copy confirm (below) in
-place of the list. A row of a library that is not open has no button of its
-own: Link without copying and Copy into are on that confirm.
+place of the list. A row of a library that is not open carries a "Library not open" tag and has
+no button of its own: Link without copying and Copy into are on that confirm.
 
 ### Copy into library confirm
 
@@ -194,37 +194,109 @@ lines of the converter's error output, in a mono box
 with an amber line counting what was dropped or not imported, and the loss
 report lists each.
 
-**Step 2, preview.** A `--dry-run` into a new temp folder
-(`signex-library-preview-<uuid>` under the system temp folder, removed when the
-dialog moves on or closes). It shows the counts (parts, symbols, footprints,
-3D models, skipped), a chip per report severity present (a press hides or
-shows that severity in the list), a filter over the items' source name,
-message and code, the list (first 200 rows), and the selected item's kind,
-source, code, what it was written as and its detail fields. A dry run writes
-only the report (contract §2.2), so no symbol or footprint is drawn here; the
-caption says they can be looked at after the import (a drawn preview is
-follow-up #3171; approved deviation, DECISIONS.md 2026-11-27). The amber strip counts
-what will be skipped. Back cancels a running dry run. A failed dry run is
-shown in the step, not as a notice.
+**Step 2, preview.** A new import runs the converter for real (no
+`--dry-run`) into a staging folder beside the target, `.<name>.signex-preview-<id>`
+in the target's parent, so the same file system (`RunMode::Stage`,
+`library_import::staging`, #3171; decided by Caner, DECISIONS.md
+2026-11-27). The run creates that folder (an existing one is refused, never
+adopted) and records whether the target was absent or empty. The dialog
+holds the result (`ImportDialogState::staged`) and draws it: a Parts tab
+with the part table (part number, symbol, footprint, up to two alternate
+footprints, first 200 rows, a filter) read on a worker through
+`LocalGitAdapter::open_to_read`, and for the selected part its symbol and
+footprint (the Components panel's `load_details`, `symbol_preview` and
+`FootprintPreview`; a chip per footprint switches to an alternate), its
+manufacturer and part number, suppliers and parameters
+(`import_dialog::parts`, handlers in `import_dialog/staged.rs`). Under the
+counts, a Report items tab keeps the report list: severity chips, filter,
+the list and the selected item's details. An update's preview is still a `--dry-run`
+into a temp folder (`signex-library-preview-<uuid>` under the system temp
+folder), report only, with the caption that the drawings can be looked at
+after the update. The amber strip counts what will be skipped. Back cancels
+a running preview. A failed preview is shown in the step, not as a notice.
 
-**Import** checks the folder again. The run itself takes the folder
-(`library_import::output::claim_output`): it creates it with its parents,
-adopts an empty folder as it is, and refuses one that holds anything before
-the converter starts. A failed or cancelled run removes only what it
+The staging folder is removed on Cancel, Back, a failed or cancelled run,
+the dialog's close, its window vanishing, and at quit
+(`discard_import_preview_then`, after the import run's wait), through the
+identity recorded when it was made and without following a link
+(`ClaimedOutput::discard`, `empty_dir`). A staged run that ends after a stop
+was asked for is discarded instead of shown. Going back to step 1 removes
+it, so changed options always preview again; Import also compares the
+dialog's request with the previewed one and previews again when they
+differ. Staging folders a crash left are swept on a worker when the dialog
+opens (the default library folder) and on Next (the chosen folder's
+parent): only folders named with the staging mark, last changed before the
+session started and at least an hour ago, emptied through their identity
+and never through a link (`staging::sweep_stale`). A preview's owner holds
+a lock on a file beside it (`.<name>.signex-preview-<id>.lock`,
+`library_import::preview_lock`; `flock` on Unix, `LockFileEx` on Windows,
+through std) from right after the folder is made until the preview is
+discarded, moved into place or dropped, and the system lets go of it when
+the process ends, a crash included. A sweep leaves a folder whose lock it
+cannot take, whatever its age, so another running Signex's preview stays;
+it removes the lock file with a folder whose owner is gone, and a lock
+file left without its folder. A preview without a lock file (an older
+build's, or a file system that could not make one) goes by age alone. An
+Import whose staging folder has gone meanwhile does not offer another try
+(#3234).
+
+**Import** checks the folder again. For a staged preview the job adopts it
+(`ImportJob::adopt`) instead of running the converter: just before the move
+it checks the target is still absent or the same empty folder (not a link
+or other reparse point). An absent target is the staging folder renamed; an
+empty one is kept as it is, with its permissions, and each staged entry is
+renamed into it, then the emptied staging folder removed (either way a copy
+then a synced copy and a removal across file systems; a whole copy counts
+as moved even when its source cannot be removed). No rename replaces what
+is at its destination (`library_import::place`: `renameat2` with
+`RENAME_NOREPLACE` on Linux, `renameatx_np` with `RENAME_EXCL` on macOS,
+`MoveFileExW` without `MOVEFILE_REPLACE_EXISTING` on Windows; elsewhere a
+check right before the rename), and the entries move relative to the held
+target (opened without following a link on Unix, held without sharing
+delete on Windows), so a link swapped in at its path is never written
+through. Renamed and copied entries and their folders are synced before the
+staging folder goes. A move that fails half way moves what it moved back
+and keeps the preview; when the move back fails too, the library is split:
+the dialog does not offer another try, the error names both folders, and
+the staging folder is kept, renamed to `.<name>.signex-split-<id>` (or
+marked with `.signex-split`) so no sweep removes it. The library is then
+committed and mounted as an import is. A target that was created or
+changed meanwhile is refused at either check; the dialog stays on step 2
+with the reason (`move_problem`) and the preview, for another try. Step 3
+reads "Moving the previewed library into place…" while it runs. An update
+runs over its folder under the library's write lock. A run that writes a new
+folder takes it through `library_import::output::claim_output`: it creates
+it with its parents, a dry run adopts an empty one as it is (a staged run
+refuses anything already there), and one that holds anything is refused
+before the converter starts. A failed or cancelled run removes only what it
 created: a folder it made and the parents it made while they are empty, or
-what it wrote into an adopted folder, which is kept. Next waits ("The
-previous run is stopping…") while a dry run left by Back or Close has not
-ended; that dry run's temp folder is removed when it does.
+what it wrote into an adopted folder, which is kept. On Windows the run
+holds an adopted folder open until it ends, so it cannot be renamed or
+deleted meanwhile; a folder the run created (a staged preview's) is not
+held, since a hold would block its own removal and its rename into place,
+but its volume and file index are recorded and checked before it is
+removed, and an empty target is held while the staged entries move into
+it. The import's own Windows calls (`CreateFileW` for that hold and
+identity, `MoveFileExW` for the move) take the absolute path in
+extended-length form (`\\?\C:\…`, `\\?\UNC\server\share\…`;
+`library_import::long_path`), so a target near or past 260 characters,
+whose staging folder is 49 characters longer, stages, moves, is removed
+and is swept as any other, with long paths off machine-wide (#3234).
+Next waits ("The previous run is stopping…") while a preview left by
+Back or Close has not ended; its folder (a dry run's temp folder or a
+staging folder) is removed when it does.
 
-**Step 3, import.** The phase name with "done of total" and the percent, the
-bar, "Now: <item>" from the progress stream, every phase so far, and the
+**Step 3, import.** For an update (a new import only moves its staged
+preview), the phase name with "done of total" and the percent, the bar,
+"Now: <item>" from the progress stream, every phase so far, and the
 silence rule (no event for 120 s stops the run). Cancel stops after the
 current item: an item is in flight while the last event is a `progress`
 naming one, and the run is stopped on the next event that is not a repeat of
 it; with no item in flight it stops at once. While it waits the button reads
 Stop now: a second Cancel (or Esc, or Close) stops the run at once, so a
 converter stuck on one item, silent, or never exiting is always stopped.
-Quitting kills a running converter's process group. Esc and the close button cancel
+Quitting kills a running converter's process group (its Job object on
+Windows, #3134). Esc and the close button cancel
 too while the import runs; the dialog stays until it has stopped, then says
 whether the folder was removed, with Back and Close.
 

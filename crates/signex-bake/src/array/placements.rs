@@ -15,7 +15,8 @@ use uuid::Uuid;
 
 use super::MAX_ARRAY_INSTANCES;
 use super::instance_at::SAME_PLACE_MM;
-use super::links::{Place, Walk};
+use super::links::Walk;
+use super::place::Place;
 
 /// The pattern instances one whole bake may still write.
 #[derive(Debug)]

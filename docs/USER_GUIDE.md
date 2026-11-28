@@ -76,9 +76,19 @@ Hover a row for **Pin** or **Unpin**; right-click it for the same actions.
 **Projects** lists every pinned and recent project. Type in **Filter by name
 or folder** to narrow the list, and use **All**, **Pinned** or **Missing** to
 pick which projects show. **Libraries** lists the libraries loaded for every
-project, with their scope and number of components; **Open** opens a library
-in the Library Browser (the Stock library opens read-only), **Add library…**
-adds a global library, and **Open Library Browser** opens the browser.
+project, with their scope, number of components and version control;
+**Open** opens a library in the Library Browser (the Stock library opens
+read-only), **Add library…** adds a global library, and **Open Library
+Browser** opens the browser.
+
+The **Version control** column says `git` for a library under git and `off`
+for one that is not; press **off** to turn version control on for it. A
+library whose repository has uncommitted changes, or that needs `git` or
+`git-lfs` and cannot find it on your `PATH`, says **needs attention** and why.
+The row's **⋯** menu has **Remove from Signex**, for global and installed
+libraries: after you confirm, Signex closes the library (asking about unsaved
+edits first) and stops loading it. Its files stay on disk, and **Add
+library…** adds it back.
 
 When a project is open but no document is shown, the centre says so and
 offers **New sheet**, **New PCB** and **Project Options…**. A project with no
@@ -398,7 +408,10 @@ Selection By…** (type an X and a Y offset in mm, then **Move**), **Align ▸**
 single align and distribute operations, and **Align To Grid**), **Rotate
 Selection** (`Space`), **Flip Selection** (`X`), **Rectangular Pattern…**,
 **Edit Sketch**, Properties, Pad Actions, Cut, Copy, Paste (while a pad is
-on the clipboard), Find Similar, and **Delete** last. In the symbol editor the menu starts with **Place ▸**, then
+on the clipboard), Find Similar, and **Delete** last. On an empty spot the
+menu's **Selection ▸** rows run from their keys too: **Select All** (`Ctrl+A`)
+selects every pad and **Deselect All** (`Ctrl+Shift+A` in the Classic profile)
+clears the selection. In the symbol editor the menu starts with **Place ▸**, then
 **Rotate Selection** and **Align ▸ Align To Grid**, then Join into Polygon,
 Select All, Deselect All, Fit to Window and **Delete**.
 
@@ -420,27 +433,73 @@ discards the changes.
 A symbol is a part on the sheet: a resistor, a connector, a chip. Symbols come
 from libraries.
 
-**Libraries.** The Components panel (**View ▸ Components**) lists every
-mounted library in one list. Each row has an expand chevron, the library name,
-a badge for where it comes from (**STOCK**, **PROJECT**, **INSTALLED** or
-**GLOBAL**) and its component count; expanding it lists its components. The
-list runs Stock first, then Project, Installed and Global. Chips under the
-search box (**All** and each source that has a library, with its library
-count) narrow the list to one source. The **Stock** library ships with
-Signex. It is mounted on every launch; you do not add it, and its parts can be
-placed (34 component rows: resistors, capacitors, inductors, diodes, LEDs,
-transistors, connectors, 74HC logic and more). If the installer's copy cannot
-be found, the list says "Stock library not found. Reinstall Signex to restore
-the bundled parts." when you pick the Stock chip. The **+ Add** button in the
-panel header asks where to add a library (**Project**, **Installed** or
-**Global**), and **File ▸ Library ▸ Open Library…** mounts a `.snxlib`
-library. Type in the search field to narrow the components; every word must
-match. The search reads values: `100n`, `0.1u` and `0.1 µF` all find a
-100 nF part, `4k7` a 4.7 kΩ one, and a unit limits the match (`16V`).
-Prefixes are case-sensitive, so `1m` is milli and `1M` mega. A bare number
-such as `100` finds every value that shows 100 (100 pF, 100 nF, 100 µF), and a
-line under the header counts what it matched. Clicking a part row opens its
-Component Preview tab.
+**Libraries.** The Components panel (**View ▸ Components**) shows every
+mounted part in one table, one category at a time. The **Stock** library ships
+with Signex and is mounted on every launch (34 component rows: resistors,
+capacitors, inductors, diodes, LEDs, transistors, connectors, 74HC logic and
+more); **File ▸ Library ▸ Open Library…** mounts a `.snxlib` library. If the
+installer's copy of the Stock library cannot be found or does not open, the
+panel says "Stock library not found. Reinstall Signex to restore the bundled
+parts." over the table, or in the empty card. With no library mounted the
+panel offers **Add Library…** (Project, Installed or Global) and **Open
+Project…**.
+
+The tool line picks the category: **All parts**, **Recently placed** (the
+parts you placed from the panel this session, most recent first, up to five),
+or a component class such as Capacitor, each with its part count. The panel
+opens on the category you showed last. A category opens with the columns, sort
+and grouping its class template sets (the bundled capacitor view groups by
+package, then value, and sorts by voltage). A library can carry its own
+template for a class; its parts then read that one, and a column only it
+adds is marked with the library's name in the Columns picker. Each class has its own parameter
+columns:
+
+- **Sort**: click a header to sort by it (again for descending, a third time
+  for no sort). **Shift**+click adds the column as a nested sort key; the
+  header shows its arrow and, with two or more keys, its order number.
+- **Group**: right-click a header for **Group by this**, or use **+ Group** in
+  the group bar. Each level is a chip, outermost first; its arrow flips the
+  order and its ✕ removes it. Click a group line to open or close it;
+  **Expand all** and **Collapse all** do every group.
+- **Columns**: right-click a header to hide it, reset its width or open
+  **Columns…**; the **Columns** button opens the same picker. It lists the
+  category's parameters and the shared fields, each with how many parts hold
+  it; tick to show, ↑ ↓ to move. Drag the handle at a header's right edge to
+  resize a column.
+- Your changes are saved for you, per category, and come back next time. The
+  Columns picker says whether the category uses its default or your saved
+  setup; **Reset to category default** returns to the default.
+
+**Filter** holds **In stock only** and range filters on measurement columns.
+**Add range filter…** picks a column; pick an operator (≥, ≤, =, between) and
+type a number. A new filter is on **Any prefix**: `100` keeps 100 pF, 100 nF
+and 100 µF. Pick a prefix to compare the true value. A min-to-max column such
+as supply voltage filters on **Covers** (`3.3` keeps the parts that run at
+3.3 V), **Min** or **Max**. A part without a value in the column is left out,
+and the filter says how many. **Clear filters** removes them all; the status
+line under the table counts the results.
+
+A value a part does not set shows as — in the table and **Not set** in a group
+line and in Details, and sorts last. A min-to-max value with one end set shows
+that end, as "≥ 2.7 V" or "≤ 5.5 V".
+
+**Previews** in the tool line adds a symbol preview column and taller rows;
+the choice is remembered. With a popover open (Columns, Filter, a header
+menu, + Group), `Esc` closes it first.
+
+Type in the search field to narrow the table; every word must match. The
+search reads values: `100n`, `0.1u` and `0.1 µF` all find a 100 nF part, `4k7`
+a 4.7 kΩ one, and a unit limits the match (`16V`). Prefixes are
+case-sensitive, so `1m` is milli and `1M` mega. A bare number such as `100`
+finds every value that shows 100 (100 pF, 100 nF, 100 µF), and a line under the
+header counts what it matched.
+
+Click a part to select it. **List** hides the details; **Details** shows them
+under the splitter: the part's symbol and footprint, the footprint the next
+placement uses, every parameter with its value, references and part choices
+(distributor, stock, price, SKU). Pinned parameters come first; the star
+beside a parameter pins it to the top for that category, and **Show all**
+lists the rest.
 
 **The Library panel.** One panel browses what the open libraries hold. Its
 chips switch between **Symbols** (the symbols of the `.snxsym` open in the
@@ -452,8 +511,9 @@ you click holds while that tab stays in front. Under the chips sit the
 breadcrumb (library, file and count), one filter and the toolbar: **Place**,
 **Add**, **Edit** and, at the right end, **Delete**. In Parts the filter
 matches part numbers, MPNs and manufacturers and opens each library with a
-match, and the toolbar acts on the highlighted row (a greyed tool has nothing
-it can do there). The folder button in the panel's title bar is **Open
+match. In Parts and Footprints the toolbar acts on the highlighted row, and
+only while the filter shows it (a greyed tool has nothing it can do there); in
+Footprints the row the editor shows is not a target until you highlight it. The folder button in the panel's title bar is **Open
 Library…**. The **SCH Library** and **Footprint Library** rows of the panel
 list open this panel in Symbols or Footprints.
 
@@ -468,10 +528,25 @@ writable library is open, the dialog says so and offers **New Library…**.
 component row. The list is grouped: each open library, then each library that
 holds one of the project's symbol files but is not open ("In library …
 (not open)"), then "Not in a library". A click on a row picks it. A symbol of
-a library that is not open asks **Link without copying** (the library opens
+a library that is not open is tagged **Library not open** and asks **Link without copying** (the library opens
 and the row points at its symbol, so the link breaks if that library is not
 open) or **Copy into** the row's library. A symbol in no library can only be
 copied; the original file stays as it is. **Cancel** goes back to the list.
+
+**Deleting a symbol that is still in use.** The SCH Library panel's Delete
+asks first when component rows bind the symbol or sheets place it. The
+**Delete Symbol?** dialog says how many component rows will show a broken
+symbol binding, and lists the rows, open sheets, closed sheets and anything it
+could not read as key / value rows; the first six rows are listed, **Show
+all** lists the rest. **Re-bind all to…** opens the symbol picker once and
+binds the picked symbol to every listed row; a row's own **Re-bind…** does it
+for that row. A re-bound row takes the new symbol wherever it used the old one,
+as its default symbol or as an alternate, and keeps everything else. The
+dialog then comes back with the new count; once nothing uses the symbol its
+button reads **Delete**. Cancelling the picker writes nothing. A picked symbol
+is pinned at its current version, here and for a Pick Symbol in the Library
+Browser. When the listed rows are in several libraries, pick a symbol from a
+library: one from outside every library cannot be copied into them.
 
 **Typed values and the range filter.** A measurement such as a resistance or a
 capacitance is a number, an SI prefix and a unit, each chosen separately: you
@@ -482,8 +557,9 @@ Library Browser opens the **Edit Component Details** modal for a measurement
 cell, and the component editor's **Parameters** tab edits the same way. In the
 modal the number and its prefix list form one field; a unit this version does
 not know is shown as written and kept. Parameters that come from the class
-template are marked **template** and cannot be removed there; your own
-parameters keep their **✕**. If the **Internal PN** you type is already used by
+template are marked **template** and cannot be removed there, except one you
+added in this edit with its **+ name** offer and have not edited yet, which
+keeps its **✕** until you change its value, unit or prefix; your own parameters keep their **✕**. If the **Internal PN** you type is already used by
 another component in the library, the field turns red, says which table has
 it, and the footer counts the problem; **Save** waits until the PN is unique.
 A save the library refuses shows its reason in the same footer spot. In the
@@ -523,7 +599,11 @@ To place a part, open a schematic sheet, then either:
   `P` then `P` in the default profile (`A` in Classic), or the Active Bar's
   **Part** button, which all open the same picker), select a part and press
   **Place**, or press `Enter` in the search field; or
-- press **Place** at the end of a part's row in the Components panel.
+- point at a part's row in the Components panel and press **Place** in its
+  first cell, double-click the row, press **Place** in its details, or
+  right-click the row and pick **Place**. The menu shows the key that places
+  from it, the one your shortcut profile binds to accepting a placement
+  (`Enter` in the default profile; Classic binds none).
 
 The picker's header counts the open libraries and their parts. Its search
 field and **Add range filter…** share the top row, and the list shows each
@@ -596,9 +676,26 @@ library under version control from the start: the import is its first
 commit, so a later update is one change you can compare or revert.
 
 **Preview, import and the loss report.** **Next** runs the converter once
-without writing anything and lists what it would approximate, drop or skip.
-**Import** writes the library; **Cancel** stops after the current item and
-removes what was written (an empty folder you chose is kept, emptied). When
+and writes the library into a hidden folder beside the one you chose
+(`.<name>.signex-preview-…`), so step 2 shows what you will get: the parts
+with their symbol, footprint and up to two alternate footprints, and for the
+part you select its symbol and footprint drawn, its manufacturer and part
+number, its suppliers and its parameters. **Report items** lists what the
+converter approximated, dropped or skipped. Nothing goes into the folder you
+chose until **Import**, which moves the previewed library there without
+converting again. When that folder was created or changed after the preview,
+Import refuses, says why and keeps the preview: empty or remove the folder
+and press Import again, or go back. **Back**, **Cancel**, closing the dialog
+and quitting Signex remove the hidden folder, and one a crash left is
+removed the next time the dialog opens. If the move into your folder fails
+half way and cannot be undone, the dialog says the library is split
+between your folder and a `.<name>.signex-split-…` folder beside it and
+removes neither: move the files together by hand, or remove both and import
+again. Going back and changing the
+name, folder, models or database means the next **Next** previews again.
+The preview of an update only reads the source and lists the report items.
+During the conversion **Cancel** stops after the current item and removes
+what was written (an empty folder you chose is kept, emptied). When
 it finishes, the result card says how many parts were imported, where the
 library went, where it is mounted and which commit holds it. **View loss report** lists every item that did not come
 across unchanged, grouped by how much was lost and by the converter's code
@@ -635,8 +732,8 @@ good, copy it into a library of your own.
 **Quitting during an import.** Quitting Signex stops a running import at
 once. Signex waits up to 10 s for the converter to stop, then for the
 clean-up to finish: an update is put back to its last import, and a new
-import removes what it wrote, before Signex exits. On Windows, a process
-the converter started may keep running after it is stopped (#3134).
+import removes what it wrote, before Signex exits. Whatever the converter
+started is stopped with it, on Windows too.
 
 **Licences of imported libraries.** An imported library keeps the licence of
 its source. A converter records it in the library's manifest (the `license`

@@ -16,6 +16,8 @@ signex-expr = { workspace = true }
 signex-sketch = { workspace = true }
 signex-library = { workspace = true }
 signex-types = { workspace = true }
+# #2598: a footprint sketch pour bakes its corners by the board pour rule.
+pcb-geom = { path = "../pcb-geom" }
 # GH #599 — bake warnings reach the Properties panel through the
 # `warnings` vec; the ones that change what the netlist binds to also
 # go to the log. signex-app installs a `log` sink and enables

@@ -231,6 +231,7 @@ fn patterned() -> (SketchData, ArrayId, ArrayId, ArrayId) {
                     count_expr: "4".into(),
                     dx_expr: "1mm".into(),
                     dy_expr: "0mm".into(),
+                    depopulation: None,
                 },
                 numbering: NumberingScheme::default(),
             },

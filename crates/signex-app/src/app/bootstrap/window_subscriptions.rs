@@ -32,6 +32,23 @@ pub(super) fn net_color_chooser_presses(is_open: bool) -> Subscription<Message> 
     })
 }
 
+/// The end of a Components panel column resize, while one is in progress:
+/// a release anywhere, captured or not, or the window losing the pointer
+/// (#3236). The table's own `on_release` only sees releases over the
+/// table.
+pub(super) fn column_resize_end(is_resizing: bool) -> Subscription<Message> {
+    if !is_resizing {
+        return Subscription::none();
+    }
+    iced::event::listen_with(|event, _status, _window| {
+        crate::panels::components_panel::table::ends_column_resize(&event).then_some(
+            Message::Library(crate::library::LibraryMessage::ComponentsTable(
+                crate::library::messages::ComponentsTableMsg::ResizeEnded,
+            )),
+        )
+    })
+}
+
 /// The end of the Esc press that resumed a dimension, while it is held.
 /// Captured events count: a widget taking the release must not leave it held.
 pub(super) fn held_escape_end(is_held: bool) -> Subscription<Message> {

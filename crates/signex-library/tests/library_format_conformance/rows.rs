@@ -144,6 +144,7 @@ pub(crate) fn table(columns: Vec<String>, rows: &[&ComponentRow]) -> LibraryTabl
             .collect(),
         column_types: BTreeMap::new(),
         pricing: BTreeMap::new(),
+        alternate_supply: Default::default(),
     }
 }
 
@@ -179,6 +180,19 @@ pub(crate) fn library_file() -> LibraryFile {
         BTreeMap::from([(
             "ExampleDistributor".to_string(),
             BTreeMap::from([("ED-123".to_string(), price)]),
+        )]),
+    );
+    // What a refresh fetched for the alternate of R10K (#3046).
+    let fetched = FetchedSupply {
+        stock: Some(1200),
+        lifecycle: Some(ManufacturerLifecycle::Active),
+        fetched_at: Utc.with_ymd_and_hms(2026, 1, 3, 10, 0, 0).unwrap(),
+    };
+    resistors.alternate_supply.insert(
+        ROW_R10K.into(),
+        BTreeMap::from([(
+            "ExampleDistributor".to_string(),
+            BTreeMap::from([("SI-10K-0603".to_string(), fetched)]),
         )]),
     );
     let logic = table(header(false), &[&rows[2]]);

@@ -348,6 +348,10 @@ pub struct EditRowModalState {
     /// modal stays open meanwhile, and the result closes it only if the
     /// draft still equals this.
     pub saving: Option<SavingSnapshot>,
+    /// Template slots added through their "+ name" offer in this edit, each
+    /// with whether an edit message has touched it since (#2648): while one
+    /// is untouched its row keeps a ✕.
+    pub added_slots: HashMap<String, bool>,
 }
 
 /// What the Edit Component Details modal held when Save was pressed.
@@ -418,6 +422,21 @@ impl EditRowModalState {
             reload_confirming: false,
             opened_primary,
             saving: None,
+            added_slots: HashMap::new(),
+        }
+    }
+
+    /// Whether the row `key` is a template slot added in this edit and still
+    /// at its default, whatever its kind, so it can be taken back (#2648).
+    pub fn is_untouched_added_slot(&self, key: &str) -> bool {
+        self.added_slots.get(key) == Some(&false)
+    }
+
+    /// An edit message reached the row `key`: an added slot stops being
+    /// untouched, even when the value it sets is the default again.
+    pub fn touch_slot(&mut self, key: &str) {
+        if let Some(touched) = self.added_slots.get_mut(key) {
+            *touched = true;
         }
     }
 }
@@ -465,62 +484,7 @@ impl CopyTarget {
     pub fn is_open_in(&self, picker: &PrimitivePickerState) -> bool {
         picker.kind == self.kind
             && std::mem::discriminant(&picker.target) == std::mem::discriminant(&self.target)
-            && picker.target.address() == self.target.address()
-    }
-}
-
-/// Where the picker should write the picked `PrimitiveRef`.
-#[derive(Debug, Clone)]
-pub enum PrimitivePickerTarget {
-    /// The user picks for an open Component Preview tab — apply +
-    /// save the row.
-    PreviewRow(EditorAddress),
-    /// The user picks while editing a row in the Library Browser
-    /// grid's Edit Component Details modal (Deliverable B).
-    EditRowModal(EditorAddress),
-    /// The user picks for the row currently selected in the Library
-    /// Browser tab — apply directly through the adapter and refresh.
-    /// F15 (2026-05-03): row binding lives next to the row, not in a
-    /// separate Component Preview tab or modal.
-    BrowserRow(EditorAddress),
-    /// The user picks a symbol to add as an alternate of the row open in a
-    /// Component Preview tab (#1230).
-    PreviewAlternate(EditorAddress),
-    /// Update PCB's Choose footprint (#2371): the footprint of a part of the
-    /// design, by its sheet placement and anchor unit, set on the schematic.
-    DesignPart {
-        sheet: signex_types::schematic::InstancePath,
-        part: Uuid,
-    },
-    /// A board footprint swap (#2366): the footprints of `board` to replace,
-    /// and the footprints their library parts offer, listed first.
-    BoardFootprint {
-        board: std::path::PathBuf,
-        footprints: Vec<Uuid>,
-        suggested: Vec<signex_library::PrimitiveRef>,
-    },
-    /// Import from another footprint (mockup row 189): the sketch editor at
-    /// `editor` lists the picked footprint's parameters. Reads only.
-    SketchParameters { editor: std::path::PathBuf },
-}
-
-impl PrimitivePickerTarget {
-    /// The row the pick is for; `None` for a pick that writes no row.
-    pub fn address(&self) -> Option<&EditorAddress> {
-        match self {
-            Self::PreviewRow(a)
-            | Self::EditRowModal(a)
-            | Self::BrowserRow(a)
-            | Self::PreviewAlternate(a) => Some(a),
-            Self::DesignPart { .. }
-            | Self::BoardFootprint { .. }
-            | Self::SketchParameters { .. } => None,
-        }
-    }
-
-    /// Directory of the library whose row this pick writes.
-    pub fn library_path(&self) -> Option<&std::path::Path> {
-        self.address().map(|a| a.library_path.as_path())
+            && picker.target.rows() == self.target.rows()
     }
 }
 
@@ -649,6 +613,9 @@ pub struct LibraryState {
     /// stock library that fails to open is never mounted, so only this
     /// field lets the open-failure recovery flows recognise it (#814).
     pub stock_library_root: Option<PathBuf>,
+    /// Bootstrap looked for the bundled stock library, so the Components
+    /// panel says so when it is not mounted (`is_stock_missing`).
+    pub stock_expected: bool,
     /// The stock library mounts writable so a maintainer edits what ships
     /// (#1892). Only a source checkout's `assets/stock-library` with
     /// `SIGNEX_EDIT_STOCK=1`; see `components_panel::stock`. Set once at
@@ -730,6 +697,10 @@ pub struct LibraryState {
     /// Libraries unmounted since the last `finish_update`, which drains
     /// this to close their Library Browser and Component Preview tabs.
     pub unmounted: Vec<PathBuf>,
+    /// Libraries opened again while still mounted since the last
+    /// `finish_update`: the re-open cancels a pending close and a pending
+    /// Remove from Signex (#2592). Drained there.
+    pub reopened: Vec<PathBuf>,
     /// "Now" as `view` may use it, for the age of cached prices. `view` is
     /// pure and cannot ask the clock, so `update` sets this on the poll tick
     /// and whenever a library's caches are refreshed.
@@ -794,7 +765,8 @@ pub struct LibraryState {
     pub symbol_props: HashMap<PathBuf, crate::library::editor::symbol::state::SymbolPropsUi>,
     /// The open Mirror card of each sketch editor (mockup row 191), by the
     /// editor's path: the `.snxfpt` of a footprint, the board of a board
-    /// sketch. Session only, never saved or undone.
+    /// sketch. Session only, never saved or undone; an entry goes when its
+    /// tab closes or its board sketch session ends (#2859).
     pub mirror_cards:
         HashMap<PathBuf, crate::library::editor::footprint::sketch_mode::mirror_card::MirrorCard>,
 }
@@ -958,6 +930,9 @@ pub struct ComponentsPanelState {
     pub recent: crate::panels::components_panel::recent::RecentlyPlaced,
     /// Row symbol thumbnails read so far, by symbol reference.
     pub thumbs: crate::panels::components_panel::thumbs::SymbolThumbs,
+    /// The table: category, saved setups, filters and the cache `update`
+    /// builds (mockup row 52).
+    pub table: crate::panels::components_panel::table::ComponentsTable,
 }
 
 impl Default for ComponentsPanelState {
@@ -983,6 +958,7 @@ impl Default for ComponentsPanelState {
             row_style: ComponentsRowStyle::default(),
             recent: Default::default(),
             thumbs: Default::default(),
+            table: Default::default(),
         }
     }
 }
@@ -1099,6 +1075,7 @@ mod picker_cache;
 #[cfg(test)]
 mod picker_cache_tests;
 mod picker_preview;
+mod picker_target;
 mod placed_part;
 mod preview;
 mod preview_history;
@@ -1126,6 +1103,7 @@ pub use panel_kind::{
 pub use panel_rows::PanelRows;
 pub use picker_cache::{PickerEntry, PickerRows};
 pub use picker_preview::{PickerSelection, PrimitiveChoice, PrimitiveDrawing};
+pub use picker_target::PrimitivePickerTarget;
 pub use placed_part::{
     ChangeFilter, ChangeFilters, ChangePreview, ChangeScope, ChangeSession, CompareField,
     CompareKind, CompareRow, DatasheetChoice, PickerMode, PinMatch, PlacedNow,

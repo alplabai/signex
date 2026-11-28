@@ -68,6 +68,7 @@ impl DistributorAdapter for FakeClient {
                 currency: "USD".into(),
                 stock: Some(42),
                 part_number: self.claims.map(str::to_string),
+                lifecycle: None,
                 by_distributor: BTreeMap::from([(
                     self.name.to_string(),
                     vec![
@@ -712,4 +713,115 @@ fn a_sku_less_listing_keeps_only_its_newest_priced_part_across_refreshes() {
         ["311-C-ND"],
         "older priced parts are replaced, not piled up"
     );
+}
+
+// ── Alternate stock and lifecycle (#3046) ───────────────────────────────
+
+/// A row listed at DigiKey with two alternates; `ALT-A` carries a stock the
+/// librarian entered.
+fn row_with_alternates(adapter: &LocalGitAdapter, lib: Uuid) -> Uuid {
+    let mut r = row("R-ALT", lib, &[("DigiKey", "DK-9")]);
+    r.alternates = vec![
+        ManufacturerPart {
+            manual_stock: Some(5),
+            ..ManufacturerPart::draft("Sample Inc", "ALT-A")
+        },
+        ManufacturerPart::draft("Other Co", "ALT-B"),
+    ];
+    let id = r.row_id;
+    adapter.insert_row("R", r, "seed").unwrap();
+    id
+}
+
+#[test]
+fn each_alternate_is_asked_by_mpn_and_cached_apart_from_its_manual_values() {
+    let dir = tempfile::tempdir().unwrap();
+    let (adapter, lib) = library(dir.path());
+    let id = row_with_alternates(&adapter, lib);
+    let client = fake(
+        "DigiKey",
+        &[("R-ALT", Ok(0.1)), ("ALT-A", Ok(0.2)), ("ALT-B", Ok(0.3))],
+    );
+    let before = commit_count(&adapter);
+    let report =
+        refresh_library_pricing(&adapter, &mut only(&client), &AtomicBool::new(false)).unwrap();
+
+    assert_eq!(
+        commit_count(&adapter),
+        before + 1,
+        "prices and alternate records are ONE commit"
+    );
+    assert_eq!(*client.calls.lock().unwrap(), ["R-ALT", "ALT-A", "ALT-B"]);
+    assert!(report.failures.is_empty(), "{:?}", report.failures);
+    assert_eq!(
+        report.store.stored, 3,
+        "one price and two alternate records"
+    );
+    let supply = adapter.table_alternate_supply("R").unwrap();
+    assert_eq!(supply[&id]["DigiKey"]["ALT-A"].stock, Some(42));
+    assert_eq!(supply[&id]["DigiKey"]["ALT-B"].stock, Some(42));
+    // The refresh never writes the row: the hand-entered stock stays, and
+    // it is the value in effect.
+    let stored = adapter.read_row("R", RowId::from_uuid(id)).unwrap();
+    assert_eq!(stored.alternates[0].manual_stock, Some(5));
+    let in_effect = signex_library::AlternateSupply::of(&stored.alternates[0], supply.get(&id));
+    assert_eq!(in_effect.stock(), Some(5));
+    assert_eq!(in_effect.fetched_stock.map(|f| f.value), Some(42));
+    assert!(adapter.table_pricing("R").unwrap().contains_key(&id));
+}
+
+#[test]
+fn an_alternate_the_distributor_does_not_know_is_named_and_the_rest_stored() {
+    let dir = tempfile::tempdir().unwrap();
+    let (adapter, lib) = library(dir.path());
+    let id = row_with_alternates(&adapter, lib);
+    let client = fake("DigiKey", &[("R-ALT", Ok(0.1)), ("ALT-A", Ok(0.2))]);
+    let report =
+        refresh_library_pricing(&adapter, &mut only(&client), &AtomicBool::new(false)).unwrap();
+
+    assert_eq!(report.failures.len(), 1, "{:?}", report.failures);
+    let failure = &report.failures[0];
+    assert_eq!(failure.kind, FailureKind::NotFound);
+    assert!(
+        failure.detail.starts_with("alternate ALT-B: "),
+        "{}",
+        failure.detail
+    );
+    let supply = adapter.table_alternate_supply("R").unwrap();
+    assert_eq!(supply[&id]["DigiKey"].keys().collect::<Vec<_>>(), ["ALT-A"]);
+}
+
+#[test]
+fn an_unreachable_distributor_reports_the_row_once_not_per_alternate() {
+    let dir = tempfile::tempdir().unwrap();
+    let (adapter, lib) = library(dir.path());
+    row_with_alternates(&adapter, lib);
+    let mut resolve = |_: &str| -> Result<Arc<dyn DistributorAdapter>, ClientUnavailable> {
+        Err(ClientUnavailable::NotConfigured("off".into()))
+    };
+    let report = refresh_library_pricing(&adapter, &mut resolve, &AtomicBool::new(false)).unwrap();
+    assert_eq!(report.failures.len(), 1, "{:?}", report.failures);
+}
+
+#[test]
+fn removing_an_alternate_or_the_row_drops_its_fetched_records() {
+    let dir = tempfile::tempdir().unwrap();
+    let (adapter, lib) = library(dir.path());
+    let id = row_with_alternates(&adapter, lib);
+    let client = fake(
+        "DigiKey",
+        &[("R-ALT", Ok(0.1)), ("ALT-A", Ok(0.2)), ("ALT-B", Ok(0.3))],
+    );
+    refresh_library_pricing(&adapter, &mut only(&client), &AtomicBool::new(false)).unwrap();
+
+    let mut edited = adapter.read_row("R", RowId::from_uuid(id)).unwrap();
+    edited.alternates.truncate(1);
+    adapter.update_row("R", edited, "edit").unwrap();
+    let supply = adapter.table_alternate_supply("R").unwrap();
+    assert_eq!(supply[&id]["DigiKey"].keys().collect::<Vec<_>>(), ["ALT-A"]);
+
+    adapter
+        .delete_row("R", RowId::from_uuid(id), None, "delete")
+        .unwrap();
+    assert!(adapter.table_alternate_supply("R").unwrap().is_empty());
 }

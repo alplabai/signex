@@ -216,6 +216,7 @@ fn a_picked_pattern_mirrors_its_sources_shape_and_the_source_once() {
         count_expr: "2".into(),
         dx_expr: "0mm".into(),
         dy_expr: "3mm".into(),
+        depopulation: None,
     };
     let (pattern, state) = with_pattern(&mut d, kind);
     let picked = vec![MirrorObject::Entity(d.line), MirrorObject::Pattern(pattern)];

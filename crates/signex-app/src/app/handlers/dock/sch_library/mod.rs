@@ -610,6 +610,9 @@ impl Signex {
             PanelMsg::FpEditorBeginRepickPolarCenter { array_id } => {
                 self.fp_editor_begin_repick_polar_center(*array_id)
             }
+            PanelMsg::FpEditorPatternKindPicked(array_id, kind) => {
+                self.fp_editor_pattern_kind_picked(*array_id, *kind)
+            }
             PanelMsg::FpEditorToggleArrayInstance {
                 array_id,
                 i,
@@ -669,6 +672,11 @@ impl Signex {
                 self.sch_library_confirm_delete_symbol(*idx)
             }
             PanelMsg::SchLibraryDeleteCancelled => self.sch_library_cancel_delete_symbol(),
+            PanelMsg::SchLibraryDeleteRebind(scope) => {
+                follow = self.sch_library_rebind_delete_rows(*scope);
+                true
+            }
+            PanelMsg::SchLibraryDeleteShowAllRows => self.sch_library_show_all_delete_rows(),
             PanelMsg::SymEditorSetPinNumber { pin_idx, value } => {
                 self.sym_editor_set_pin_number(*pin_idx, value.clone())
             }

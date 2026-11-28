@@ -271,6 +271,7 @@ library-row-footprint-reading = Reading footprint…
 library-symbol-delete-checking = Checking whether symbol "{ $name }" is in use
 library-symbol-delete-may-be-in-use = Symbol "{ $name }" may still be in use
 library-symbol-delete-in-use = Symbol "{ $name }" is still in use
+library-symbol-delete-not-in-use = Symbol "{ $name }" is no longer in use
 
 ## Library dialog buttons (#2225)
 library-create-options-create = Create Library
@@ -281,7 +282,7 @@ library-edit-row-reload-saved = Reload saved version
 # Change Component: go on to the pin preview.
 library-picker-next = Next
 library-primitive-picker-browse = Browse filesystem…
-library-primitive-picker-open-library = Open library
+library-primitive-picker-library-not-open = Library not open
 library-recovery-remove-from-project = Remove from project
 library-recovery-locate = Locate…
 library-recovery-restore-remote = Restore from remote
@@ -597,6 +598,8 @@ library-primitive-picker-no-libraries = No libraries open. Use Browse filesystem
 library-primitive-picker-no-match = No primitives match. Only primitives saved inside an open `.snxlib` are listed: save the symbol into `<lib>.snxlib/symbols/`, or use Browse filesystem…
 # The library the row belongs to, when its name is not known.
 library-primitive-picker-this-library = this library
+# The rows a Re-bind is for are in several libraries, so a symbol from outside every library has no one library to be copied into (#2572).
+library-primitive-picker-several-libraries = These rows are in several libraries, so a symbol from outside every library cannot be copied into them. Pick a symbol from a library.
 # Title of the confirm shown before a symbol is copied or linked.
 library-primitive-picker-copy-title = Copy into library?
 # The symbol is in no library. $name is the symbol, $library the row's library.
@@ -797,6 +800,24 @@ library-range-filter-done = Done
 # symbol-delete-modal
 # Title of the confirm a Delete of a symbol still in use opens (mockup row 137).
 library-symbol-delete-title = Delete Symbol?
+# What Delete anyway does to the rows that bind the symbol (#2572). $count is a whole number.
+library-symbol-delete-consequence = { $count ->
+        [one] { $count } component row will show a broken symbol binding.
+       *[other] { $count } component rows will show a broken symbol binding.
+    }
+# Keys of the in-use box: the rows, open sheets and closed sheets that use the symbol, and what could not be read.
+library-symbol-delete-key-rows = Component rows
+library-symbol-delete-key-open-sheets = Open sheets
+library-symbol-delete-key-closed-sheets = Closed sheets
+library-symbol-delete-key-not-checked = Not checked
+# Closed sheets value while they are still being read from disk.
+library-symbol-delete-checking-closed = Checking closed sheets of the open projects…
+# Opens the symbol picker for one affected row, then returns to the confirm.
+library-symbol-delete-rebind-row = Re-bind…
+# Opens the symbol picker once and binds the picked symbol to every affected row.
+library-symbol-delete-rebind-all = Re-bind all to…
+# Lists every affected row. $count is how many rows are listed then.
+library-symbol-delete-show-all = Show all { $count }
 # picker-and-change-component
 # Change Component header note: $reference is the part's designator, $sheet the sheet's file name.
 library-change-component-note = { $reference } · { $sheet }
@@ -940,6 +961,14 @@ library-import-update-restored = The update failed, and the library was restored
 library-import-update-not-restored = The update failed: { $error } The library could not be restored to its last import ({ $reason }); check its folder before using it.
 # $path is the imported library, $other the mounted library with the same id.
 library-import-id-clash = The imported library { $path } has the same library id as { $other }, which is already open, so it was not added. Close the other library first.
+# $path is the staging folder a preview would create.
+library-import-staging-exists = Something is already at { $path }, where the preview would be written. Remove it or choose another folder.
+# $path is the library folder.
+library-import-target-changed = { $path } was created or changed after the preview, so the library was not moved there. The preview is kept: empty or remove that folder and press Import again, or go back and choose another folder.
+# $path is the library folder, $error the system's reason.
+library-import-move-failed = The previewed library could not be moved to { $path }: { $error }
+# $target is the library folder, $staging the folder the rest was kept in, $error the system's reason.
+library-import-library-split = Moving the library into { $target } failed ({ $error }) and what had moved could not all be moved back, so the library is split between { $target } and { $staging }. Neither folder is complete; both are kept and nothing will be removed. Move the files of { $staging } into { $target } by hand, or remove both and import again.
 # Import Library dialog (mockup row 211, #3117–#3120).
 # $step is 1, 2 or 3, $name the step's name.
 library-import-dialog-step-note = Step { $step } of 3 · { $name }
@@ -1017,7 +1046,39 @@ library-import-dialog-detail-code = Code
 library-import-dialog-detail-written = Written as
 library-import-dialog-detail-not-written = Not written
 library-import-dialog-detail-hint = Select an item to see what happens to it.
-library-import-dialog-no-drawing = A preview writes only the report, so the symbols and footprints can be looked at once the library is imported.
+library-import-dialog-no-drawing = An update's preview writes only the report, so the symbols and footprints can be looked at once the library is updated.
+# Drawn preview of a new import (#3171).
+library-import-dialog-tab-parts = Parts
+library-import-dialog-tab-items = Report items
+library-import-dialog-stage-running = Converting the library for the preview; nothing goes into the library folder until Import…
+library-import-dialog-staged-note = The preview waits in a hidden folder beside the library folder. Import moves it there without converting again.
+library-import-dialog-parts-reading = Reading the previewed library…
+# $error is why the previewed library could not be read.
+library-import-dialog-parts-failed = The previewed library could not be read: { $error }
+library-import-dialog-parts-filter = Filter by part number, symbol, footprint or manufacturer part number
+library-import-dialog-parts-empty = The converter wrote no parts.
+library-import-dialog-parts-none-match = No part matches the filter.
+# $shown and $count are whole numbers.
+library-import-dialog-parts-caption = { $shown } of { $count } parts · alternates are the extra footprints a part may use
+library-import-dialog-col-part = Part number
+library-import-dialog-col-symbol = Symbol
+library-import-dialog-col-footprint = Footprint
+# $n is 1 or 2.
+library-import-dialog-col-alternate = Alternate { $n }
+library-import-dialog-none-mark = —
+library-import-dialog-part-hint = Select a part to see its symbol, footprint and parameters.
+library-import-dialog-part-reading = Reading the part…
+# $error is why the part could not be read.
+library-import-dialog-part-failed = The part could not be read: { $error }
+library-import-dialog-part-no-symbol = No symbol
+library-import-dialog-part-no-footprint = No footprint
+library-import-dialog-part-manufacturer = Manufacturer
+library-import-dialog-part-suppliers = Suppliers
+library-import-dialog-part-parameters = Parameters
+# $first and $second are a name and its part number.
+library-import-dialog-part-pair = { $first } · { $second }
+library-import-dialog-part-none-listed = None listed
+library-import-dialog-moving = Moving the previewed library into place…
 # $count is a whole number.
 library-import-dialog-skipped-banner = { $count ->
         [one] 1 item will be skipped. It is listed in the loss report after the import.
@@ -1144,3 +1205,18 @@ library-import-dialog-partial = { $count ->
 library-import-dialog-unreadable-hint = Install a library converter that reads this kind of file, then press Look again.
 # The Library Browser's LIBRARIES header (#3122).
 library-browser-import = Import…
+# A manufacturer part's lifecycle as its maker states it (#3046); not the
+# library row's own Draft / Released state.
+library-mfr-lifecycle-active = Active
+library-mfr-lifecycle-nrnd = NRND
+library-mfr-lifecycle-eol = EOL
+library-mfr-lifecycle-unknown = Unknown
+# Where an alternate's stock or lifecycle comes from. $distributor is the
+# distributor that reported it, $when the time it was fetched.
+library-supply-manual = Entered by hand in the library
+library-supply-fetched = From { $distributor }, { $when }
+# A hand-entered value hides a fetched one: $value is what the distributor reported.
+library-supply-manual-over-fetched = Entered by hand in the library; { $distributor } reported { $value } on { $when }
+library-supply-none = No value yet: Refresh All Pricing asks the distributors the row lists
+# The Supply tab's lifecycle picker: no hand-entered value, the fetched one is used.
+library-supply-lifecycle-fetched = From distributor

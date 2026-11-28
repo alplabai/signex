@@ -124,6 +124,7 @@ fn passives() -> OpenLibrary {
         observed_stamp: None,
         dangling: Default::default(),
         pricing: Default::default(),
+        alternate_supply: Default::default(),
         own_edit_stamp: None,
         display: Default::default(),
         provenance: Default::default(),
@@ -346,35 +347,146 @@ fn edit_and_delete_are_off_while_the_filter_hides_the_highlighted_footprint() {
     assert!(matches!(tools(&app), (Some(_), Some(_))));
 }
 
-/// Mockup row 119: the row the editor shows draws selected, so Edit is live
-/// on it with no separate highlight; Delete still waits for one.
+/// #2747: Place, Edit and Delete on the Parts kind act only on a highlighted
+/// row the filter shows. Filtering R-10K out leaves all three sending
+/// nothing; showing it again brings them back. The library is expanded, as
+/// it is when a click highlights one of its rows.
 #[test]
-fn edit_follows_the_footprint_the_editor_shows() {
-    let app = app_with_one_footprint();
+fn parts_tools_are_off_while_the_filter_hides_the_highlighted_row() {
+    let (mut app, _boot) = Signex::new();
+    let lib = passives();
+    let r10k = signex_library::RowId::from_uuid(lib.tables["res"][0].row_id);
+    app.library.open_libraries.push(lib);
+    let root = PathBuf::from(LIB_ROOT);
+    app.library.panel_expanded.insert(root.clone());
+    app.library.library_browsers.insert(
+        root.clone(),
+        crate::library::state::LibraryBrowserState::new(root.clone()),
+    );
+    app.library.panel_selected = Some(crate::library::state::ComponentsPanelRowKey {
+        library_path: root,
+        table: "res".into(),
+        row_id: r10k,
+    });
+    app.library.touch_data();
+    app.library.sync_view_caches();
+    app.refresh_panel_ctx();
+    let tools = |app: &Signex| {
+        let mut ctx = app.document_view.panel_ctx.clone();
+        ctx.has_schematic = true;
+        let tools = parts::view(&app.library, &ctx).tools;
+        (tools.place, tools.edit, tools.delete)
+    };
+    assert!(
+        matches!(tools(&app), (Some(_), Some(_), Some(_))),
+        "with no filter the tools act on the highlighted R-10K"
+    );
+    let search = |s: &str| {
+        Message::Library(LibraryMessage::Picker(PickerMsg::PanelSearchChanged(
+            s.into(),
+        )))
+    };
+    let _task = app.update(search("GRM"));
+    assert!(
+        matches!(tools(&app), (None, None, None)),
+        "the filter shows only C-100N: no tool acts on the hidden R-10K"
+    );
+    let _task = app.update(search("ERA"));
+    assert!(matches!(tools(&app), (Some(_), Some(_), Some(_))));
+}
+
+/// #3236: a row inside a collapsed library is not drawn, so Place, Edit
+/// and Delete are off for it, as for a row the filter hides; expanding the
+/// library again brings them back.
+#[test]
+fn parts_tools_are_off_while_the_highlighted_rows_library_is_collapsed() {
+    let (mut app, _boot) = Signex::new();
+    let lib = passives();
+    let r10k = signex_library::RowId::from_uuid(lib.tables["res"][0].row_id);
+    app.library.open_libraries.push(lib);
+    let root = PathBuf::from(LIB_ROOT);
+    app.library.panel_expanded.insert(root.clone());
+    app.library.library_browsers.insert(
+        root.clone(),
+        crate::library::state::LibraryBrowserState::new(root.clone()),
+    );
+    app.library.panel_selected = Some(crate::library::state::ComponentsPanelRowKey {
+        library_path: root.clone(),
+        table: "res".into(),
+        row_id: r10k,
+    });
+    app.library.touch_data();
+    app.library.sync_view_caches();
+    app.refresh_panel_ctx();
+    let tools = |app: &Signex| {
+        let mut ctx = app.document_view.panel_ctx.clone();
+        ctx.has_schematic = true;
+        let tools = parts::view(&app.library, &ctx).tools;
+        (tools.place, tools.edit, tools.delete)
+    };
+    assert!(matches!(tools(&app), (Some(_), Some(_), Some(_))));
+    let toggle = || {
+        Message::Library(LibraryMessage::Picker(PickerMsg::PanelLibraryToggled(
+            root.clone(),
+        )))
+    };
+    let _task = app.update(toggle());
+    assert!(!app.library.panel_expanded.contains(&root), "collapsed");
+    assert!(
+        matches!(tools(&app), (None, None, None)),
+        "no tool acts on a row inside a collapsed library"
+    );
+    let _task = app.update(toggle());
+    assert!(matches!(tools(&app), (Some(_), Some(_), Some(_))));
+}
+
+/// Mockup row 119 (decided 2026-11-27): Place and Edit follow the
+/// highlighted footprint, not the one the editor shows. With nothing
+/// highlighted they are off, Place saying a row is needed; a highlight
+/// turns them on for that row.
+#[test]
+fn place_and_edit_follow_the_highlighted_footprint() {
+    let mut app = app_with_one_footprint();
     let ctx = &app.document_view.panel_ctx;
     let fp = ctx.footprint_editor.as_ref().expect("footprint editor");
     assert_eq!(fp.internal_selected_idx, None, "nothing highlighted");
     assert!(fp.internal_footprints[0].is_active);
     let tools = footprints::view(&app.library, ctx).tools;
+    assert!(tools.edit.is_none(), "the shown row alone is no target");
+    assert!(tools.place.is_none());
+    assert_eq!(tools.place_blocked, Some(ids::LIBRARY_PANEL_PLACE_NO_ROW));
+    assert!(tools.delete.is_none());
+
+    let _task = app.update(Message::Dock(DockMessage::Panel(
+        PanelMsg::FpLibrarySelectInternal(0),
+    )));
+    let tools = footprints::view(&app.library, &app.document_view.panel_ctx).tools;
     assert!(matches!(
         tools.edit,
         Some(DockMessage::Panel(PanelMsg::FpLibraryEditInternal(0)))
     ));
-    assert!(tools.delete.is_none());
+    assert!(matches!(
+        tools.delete,
+        Some(DockMessage::Panel(PanelMsg::FpLibraryDeleteInternal(0)))
+    ));
 }
 
 /// Mockup row 119: with no way to place, Place sends nothing and its tooltip
 /// gives the reason, in Footprints and in Symbols.
 #[test]
 fn place_is_off_with_its_reason_in_footprints_and_symbols() {
-    let app = app_with_one_footprint();
+    let mut app = app_with_one_footprint();
+    if let Some(doc) = app.document_state.footprint_editors.values_mut().next() {
+        doc.panel_selected_idx = Some(0);
+    }
+    app.refresh_panel_ctx();
     let ctx = &app.document_view.panel_ctx;
     let tools = footprints::view(&app.library, ctx).tools;
     assert!(tools.place.is_none());
     assert_eq!(
         tools.place_blocked,
         Some(ids::LIBRARY_PANEL_PLACE_NOT_IN_LIBRARY),
-        "this file is in no open library"
+        "the highlighted SOIC-8 is in no open library"
     );
 
     let app = app_with_one_symbol();

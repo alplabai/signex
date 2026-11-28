@@ -14,29 +14,28 @@ pub struct CompiledKeymap {
     /// for; lookups compare resolved strokes only.
     platform: Platform,
     bindings: Vec<CompiledBinding>,
+    /// Per command, the index into `bindings` of the binding its menu hint
+    /// names; a claim that must accept exactly the hinted key reads it.
+    shown: BTreeMap<AppCommandId, usize>,
     /// Per-command menu label, derived from `bindings` at compile time so
     /// `shortcut_label` is a map hit instead of a reverse scan plus a
     /// `String` join per menu row per frame (#1380).
     labels: BTreeMap<AppCommandId, String>,
 }
 
-/// Per command, the label of its last `Command` binding that no later
-/// `Unbind` of the same command, context and strokes shadows. A command
-/// with no such binding has no entry.
+/// Per command, the index of its last `Command` binding that no later
+/// `Unbind` of the same command, context and strokes shadows: the binding
+/// its menu hint names. A command with no such binding has no entry.
 ///
 /// The hint is context-free: it does not know which context the menu is
 /// shown in, and an `Unbind` shadows a binding only in its own context
 /// (the same rule `shortcut_label_linear` states independently).
-fn label_index(
-    bindings: &[CompiledBinding],
-    platform: Platform,
-    i18n: &I18n,
-) -> BTreeMap<AppCommandId, String> {
-    let mut labels = BTreeMap::new();
+fn shown_index(bindings: &[CompiledBinding]) -> BTreeMap<AppCommandId, usize> {
+    let mut shown = BTreeMap::new();
     // Reverse scan; `unbinds` holds the unbinds that come after the
     // binding under inspection.
     let mut unbinds: BTreeSet<(&AppCommandId, ShortcutContext, &[KeyStroke])> = BTreeSet::new();
-    for binding in bindings.iter().rev() {
+    for (index, binding) in bindings.iter().enumerate().rev() {
         match &binding.action {
             ShortcutBindingAction::Unbind(command) => {
                 unbinds.insert((command, binding.context, &binding.sequence));
@@ -44,17 +43,30 @@ fn label_index(
             ShortcutBindingAction::Command(command) => {
                 let shadowed =
                     unbinds.contains(&(command, binding.context, binding.sequence.as_slice()));
-                if !shadowed && !labels.contains_key(command) {
-                    labels.insert(
-                        command.clone(),
-                        display_sequence(&binding.sequence, platform, i18n),
-                    );
+                if !shadowed && !shown.contains_key(command) {
+                    shown.insert(command.clone(), index);
                 }
             }
             ShortcutBindingAction::NoAction => {}
         }
     }
-    labels
+    shown
+}
+
+/// Per command, the label of the binding [`shown_index`] picks.
+fn label_index(
+    bindings: &[CompiledBinding],
+    shown: &BTreeMap<AppCommandId, usize>,
+    platform: Platform,
+    i18n: &I18n,
+) -> BTreeMap<AppCommandId, String> {
+    shown
+        .iter()
+        .map(|(command, &index)| {
+            let label = display_sequence(&bindings[index].sequence, platform, i18n);
+            (command.clone(), label)
+        })
+        .collect()
 }
 
 fn display_sequence(sequence: &[KeyStroke], platform: Platform, i18n: &I18n) -> String {
@@ -103,7 +115,7 @@ impl CompiledKeymap {
     /// a language switch relabels the live keymap, whatever profile built it.
     pub fn labelled_in(&self, i18n: &I18n) -> Self {
         Self {
-            labels: label_index(&self.bindings, self.platform, i18n),
+            labels: label_index(&self.bindings, &self.shown, self.platform, i18n),
             ..self.clone()
         }
     }
@@ -133,10 +145,12 @@ impl CompiledKeymap {
                 }
             }
         }
-        let labels = label_index(&bindings, platform, i18n);
+        let shown = shown_index(&bindings);
+        let labels = label_index(&bindings, &shown, platform, i18n);
         Self {
             platform,
             bindings,
+            shown,
             labels,
         }
     }
@@ -184,6 +198,15 @@ impl CompiledKeymap {
             .ok()
             .and_then(|command| self.shortcut_label(&command))
             .unwrap_or_default()
+    }
+
+    /// The resolved strokes of the binding `command_id`'s menu hint names,
+    /// so a surface that shows the hint accepts exactly that key. `None`
+    /// when the hint is empty (unparsable, unbound or unbound-by-the-user).
+    pub fn shown_sequence_for_id(&self, command_id: &str) -> Option<&[KeyStroke]> {
+        let command = AppCommandId::new(command_id).ok()?;
+        let index = *self.shown.get(&command)?;
+        Some(self.bindings[index].sequence.as_slice())
     }
 
     /// The label for `command_id`, but `preferred` when the profile binds the

@@ -111,6 +111,29 @@ pub enum ImportError {
     OutputIsLink {
         path: PathBuf,
     },
+    /// Something is already at the path a staged preview (#3171) would
+    /// create; a staging folder is never adopted.
+    StagingExists {
+        path: PathBuf,
+    },
+    /// The target folder was created or changed after the preview was
+    /// staged, so the preview was not moved there.
+    TargetChanged {
+        path: PathBuf,
+    },
+    /// The staged preview could not be moved into the target folder.
+    MoveFailed {
+        path: PathBuf,
+        detail: String,
+    },
+    /// A move into the target failed half way and what had moved could not
+    /// all be moved back: the library is split between the two folders,
+    /// both kept.
+    LibrarySplit {
+        target: PathBuf,
+        staging: PathBuf,
+        detail: String,
+    },
 }
 
 /// How many uncommitted paths the refusal names.
@@ -215,6 +238,25 @@ impl ImportError {
             }
             Self::OutputIsLink { path: p } => {
                 Translatable::new(ids::LIBRARY_IMPORT_DIALOG_TARGET_LINK).arg("path", path(p))
+            }
+            Self::StagingExists { path: p } => {
+                Translatable::new(ids::LIBRARY_IMPORT_STAGING_EXISTS).arg("path", path(p))
+            }
+            Self::TargetChanged { path: p } => {
+                Translatable::new(ids::LIBRARY_IMPORT_TARGET_CHANGED).arg("path", path(p))
+            }
+            Self::LibrarySplit {
+                target,
+                staging,
+                detail,
+            } => Translatable::new(ids::LIBRARY_IMPORT_LIBRARY_SPLIT)
+                .arg("target", path(target))
+                .arg("staging", path(staging))
+                .arg("error", detail.as_str()),
+            Self::MoveFailed { path: p, detail } => {
+                Translatable::new(ids::LIBRARY_IMPORT_MOVE_FAILED)
+                    .arg("path", path(p))
+                    .arg("error", detail.as_str())
             }
             Self::OutputUnusable { path: p, detail } => {
                 Translatable::new(ids::LIBRARY_IMPORT_DIALOG_TARGET_UNREADABLE)

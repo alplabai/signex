@@ -53,13 +53,24 @@ pub fn find_signex_cli() -> Option<PathBuf> {
 }
 
 fn find_signex_cli_in(path_var: Option<&OsStr>, app_dir: Option<&Path>) -> Option<PathBuf> {
+    find_executable_in(path_var, app_dir, CLI_NAME)
+}
+
+/// The executable `name` in an absolute entry of `path_var` (a `PATH`
+/// value), else in `extra_dir`. Relative entries are skipped: they depend on
+/// the working directory. Blocking: stats every candidate.
+pub(crate) fn find_executable_in(
+    path_var: Option<&OsStr>,
+    extra_dir: Option<&Path>,
+    name: &str,
+) -> Option<PathBuf> {
     let on_path = path_var
         .into_iter()
         .flat_map(std::env::split_paths)
         .filter(|dir| dir.is_absolute());
     on_path
-        .chain(app_dir.map(Path::to_path_buf))
-        .map(|dir| dir.join(CLI_NAME))
+        .chain(extra_dir.map(Path::to_path_buf))
+        .map(|dir| dir.join(name))
         .find(|candidate| is_executable(candidate))
 }
 
@@ -122,6 +133,18 @@ pub fn read_snapshot_state(root: &Path) -> Result<SnapshotState, LibraryError> {
         return Ok(SnapshotState::default());
     }
     let repo = git2::Repository::open(root).map_err(|e| backend("git open", e))?;
+    let (has_import, local_commits) = count_local_commits(&repo)?;
+    Ok(SnapshotState {
+        has_repo: true,
+        uncommitted: uncommitted_paths(&repo)?,
+        local_commits,
+        has_import,
+    })
+}
+
+/// Working-tree paths of `repo` that differ from the last commit, untracked
+/// ones included and Signex's write-lock files left out.
+pub(crate) fn uncommitted_paths(repo: &git2::Repository) -> Result<Vec<String>, LibraryError> {
     let mut options = git2::StatusOptions::new();
     options
         .include_untracked(true)
@@ -130,19 +153,19 @@ pub fn read_snapshot_state(root: &Path) -> Result<SnapshotState, LibraryError> {
     let statuses = repo
         .statuses(Some(&mut options))
         .map_err(|e| backend("git status", e))?;
-    let uncommitted = statuses
+    Ok(statuses
         .iter()
         .filter(|entry| entry.status() != git2::Status::CURRENT)
         .filter_map(|entry| entry.path().ok().map(str::to_owned))
         .filter(|path| !is_write_lock_file(Path::new(path)))
-        .collect();
-    let (has_import, local_commits) = count_local_commits(&repo)?;
-    Ok(SnapshotState {
-        has_repo: true,
-        uncommitted,
-        local_commits,
-        has_import,
-    })
+        .collect())
+}
+
+/// Whether the library at `root` stores files with Git LFS: its
+/// `.gitattributes` routes some path through the `lfs` filter. Blocking.
+pub(crate) fn uses_lfs(root: &Path) -> bool {
+    std::fs::read_to_string(root.join(".gitattributes"))
+        .is_ok_and(|attributes| attributes.contains("filter=lfs"))
 }
 
 /// Whether HEAD's history holds an import commit, and the commits on HEAD
@@ -180,8 +203,7 @@ fn count_local_commits(repo: &git2::Repository) -> Result<(bool, usize), Library
 /// untracked files the run added are removed; ignored files stay. Refused
 /// for a library that uses Git LFS, whose checkout would write pointers.
 pub fn restore_to_head(root: &Path) -> Result<(), LibraryError> {
-    let attributes = std::fs::read_to_string(root.join(".gitattributes")).unwrap_or_default();
-    if attributes.contains("filter=lfs") {
+    if uses_lfs(root) {
         return Err(LibraryError::Conflict(
             "the library uses Git LFS, so it was not restored automatically".into(),
         ));

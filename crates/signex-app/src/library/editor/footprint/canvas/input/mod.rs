@@ -11,8 +11,10 @@
 //!   the file-size cap).
 //! - [`keys`] — modifier tracking + keyboard handling.
 //! - [`middle_zoom`] — the middle-button drag zoom.
+//! - [`centre_pick`] — the press that answers an armed centre pick.
 
 mod camera;
+mod centre_pick;
 #[cfg(test)]
 pub(super) use camera::chrome_insets;
 mod keys;

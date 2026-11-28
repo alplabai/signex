@@ -6,7 +6,7 @@ use crate::library_symbol_missing::{open_container_editor, panel, symbol_count};
 use iced::Task;
 use signex_app::app::{LoadedProject, Message, Signex};
 use signex_app::dock::DockMessage;
-use signex_app::panels::{PanelMsg, SymbolDeleteWarning};
+use signex_app::panels::{PanelMsg, SymbolDeleteWarning, SymbolUsageKey};
 use signex_library::PrimitiveRef;
 use signex_types::format::SnxSchematic;
 use signex_types::project::{ProjectData, SheetEntry};
@@ -107,6 +107,16 @@ fn rename_sibling(app: &mut Signex, path: &Path, name: &str) {
         .name = name.into();
 }
 
+/// Every name the warning's in-use box lists, one per line.
+pub(crate) fn details(warning: &SymbolDeleteWarning) -> String {
+    warning
+        .entries
+        .iter()
+        .flat_map(|e| e.items.iter().map(String::as_str))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 fn logged(needle: &str) -> bool {
     let _ = signex_app::diagnostics::init_logging();
     signex_app::diagnostics::recent_entries()
@@ -164,18 +174,16 @@ fn a_closed_sheet_that_places_the_symbol_is_named_when_the_scan_lands() {
     let task = delete(&mut app, 0);
     let shown = warning(&app).expect("the row already warns");
     assert!(shown.checking, "the scan is still running");
-    assert!(shown.lines.join("\n").contains("Checking closed sheets"));
+    assert!(shown.items(SymbolUsageKey::ClosedSheets).is_empty());
     assert_eq!(symbol_count(&app, &path), 2);
 
     run(&mut app, task);
     let shown = warning(&app).expect("still warned");
-    let text = shown.lines.join("\n");
-    assert!(!shown.checking, "{text}");
-    assert!(
-        text.contains("Closed sheets with placed parts: closed.snxsch: U9"),
-        "{text}"
+    assert!(!shown.checking, "{}", details(&shown));
+    assert_eq!(
+        shown.items(SymbolUsageKey::ClosedSheets),
+        ["closed.snxsch: U9"]
     );
-    assert!(!text.contains("Checking closed sheets"), "{text}");
     assert_eq!(symbol_count(&app, &path), 2);
 }
 
@@ -194,11 +202,8 @@ fn an_unreadable_closed_sheet_is_unchecked_never_unused() {
     run(&mut app, task);
 
     let shown = warning(&app).expect("a failed read does not let the delete through");
-    let text = shown.lines.join("\n");
-    assert!(
-        text.contains("Closed sheets not checked: broken.snxsch"),
-        "{text}"
-    );
+    let text = shown.items(SymbolUsageKey::NotChecked).join("\n");
+    assert!(text.contains("broken.snxsch"), "{text}");
     assert!(shown.only_unknown, "nothing is confirmed in use");
     assert_eq!(symbol_count(&app, &path), 2);
 }
@@ -357,7 +362,7 @@ fn a_closed_child_sheet_reached_only_by_a_sheet_symbol_is_scanned() {
     let task = delete(&mut app, 1);
     run(&mut app, task);
 
-    let text = warning(&app).expect("the child keeps it").lines.join("\n");
+    let text = details(&warning(&app).expect("the child keeps it"));
     assert!(text.contains("child.snxsch: U7"), "{text}");
     assert_eq!(symbol_count(&app, &path), 2);
 }
@@ -424,7 +429,7 @@ fn a_symbol_placed_on_an_open_sheet_during_the_scan_stops_the_delete() {
     run(&mut app, task);
 
     let shown = warning(&app).expect("the placement keeps it");
-    assert!(shown.lines.join("\n").contains("U5"), "{:?}", shown.lines);
+    assert!(details(&shown).contains("U5"), "{}", details(&shown));
     assert!(!shown.checking);
     assert_eq!(symbol_count(&app, &path), 2);
 }
@@ -465,7 +470,7 @@ fn a_project_opened_during_the_scan_is_not_assumed_clean() {
     open_project(&mut s.app, late.path(), &["late.snxsch"]);
     run(&mut s.app, task);
 
-    let text = warning(&s.app).expect("held, not deleted").lines.join("\n");
+    let text = details(&warning(&s.app).expect("held, not deleted"));
     assert!(
         text.contains("late.snxsch was added while the check ran"),
         "{text}"
@@ -486,7 +491,7 @@ fn an_open_sheet_closed_during_the_scan_is_listed_unchecked() {
     s.app.document_state.engines.remove(&open);
     run(&mut s.app, task);
 
-    let text = warning(&s.app).expect("held, not deleted").lines.join("\n");
+    let text = details(&warning(&s.app).expect("held, not deleted"));
     let name = open.file_name().unwrap().to_string_lossy();
     assert!(
         text.contains(&format!("{name} was closed while the check ran")),
@@ -515,7 +520,7 @@ fn a_scan_whose_worker_died_leaves_everything_unchecked_and_unlabelled() {
     ));
     run(&mut s.app, task);
 
-    let text = warning(&s.app).expect("not deleted").lines.join("\n");
+    let text = details(&warning(&s.app).expect("not deleted"));
     assert!(text.contains("closed sheets (boom)"), "{text}");
     assert!(!text.contains("was added"), "{text}");
     assert_eq!(symbol_count(&s.app, &s.path), 2);
@@ -539,10 +544,7 @@ fn a_child_referenced_only_by_an_open_sheet_is_scanned() {
     let task = delete(&mut s.app, 1);
     run(&mut s.app, task);
 
-    let text = warning(&s.app)
-        .expect("the child keeps it")
-        .lines
-        .join("\n");
+    let text = details(&warning(&s.app).expect("the child keeps it"));
     assert!(text.contains("kid.snxsch: U3"), "{text}");
     assert_eq!(symbol_count(&s.app, &s.path), 2);
 }

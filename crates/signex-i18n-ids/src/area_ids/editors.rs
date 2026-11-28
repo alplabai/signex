@@ -308,6 +308,11 @@ define_ids! {
     EDITORS_ROLE_POUR_FILL_OUTLINE = "editors-role-pour-fill-outline";
     EDITORS_ROLE_POUR_FILL_CALLOUT = "editors-role-pour-fill-callout";
     EDITORS_ROLE_POUR_PRIORITY_CALLOUT = "editors-role-pour-priority-callout";
+    EDITORS_ROLE_POUR_CORNERS = "editors-role-pour-corners";
+    EDITORS_ROLE_POUR_CORNER_SHARP = "editors-role-pour-corner-sharp";
+    EDITORS_ROLE_POUR_CORNER_ROUNDED = "editors-role-pour-corner-rounded";
+    EDITORS_ROLE_POUR_CORNER_CHAMFER = "editors-role-pour-corner-chamfer";
+    EDITORS_ROLE_POUR_CORNER_SIZE = "editors-role-pour-corner-size";
     EDITORS_ROLE_KEEPOUT_TITLE = "editors-role-keepout-title";
     EDITORS_ROLE_KEEPOUT_KINDS = "editors-role-keepout-kinds";
     EDITORS_ROLE_KEEPOUT_NO_COPPER = "editors-role-keepout-no-copper";
@@ -529,6 +534,12 @@ define_ids! {
     EDITORS_PIN_TABLE_LENGTH_REFUSED = "editors-pin-table-length-refused";
     // library-dialog-polish
     EDITORS_SYMBOL_BAR_PIN_TYPE = "editors-symbol-bar-pin-type";
+    // #2596
+    EDITORS_ROLE_PATTERN_KIND_DROPPED_SKIPS = "editors-role-pattern-kind-dropped-skips";
+    EDITORS_ROLE_PATTERN_KIND_DROPPED_OVERRIDES = "editors-role-pattern-kind-dropped-overrides";
+    // #3232
+    EDITORS_ROLE_PATTERN_KIND_REFUSED_MISSING = "editors-role-pattern-kind-refused-missing";
+    EDITORS_ROLE_PATTERN_KIND_REFUSED_SAME = "editors-role-pattern-kind-refused-same";
     // pin-text-control-characters (#3129)
     EDITORS_SYMBOL_REPAIRED_ON_OPEN = "editors-symbol-repaired-on-open";
     EDITORS_SYMBOL_REPAIRED_MORE = "editors-symbol-repaired-more";

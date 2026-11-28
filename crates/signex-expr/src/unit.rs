@@ -246,7 +246,8 @@ pub fn parse_quantity(s: &str) -> Result<Quantity, UnitError> {
 
 /// [`parse_quantity`] in an explicit context: a bare `m` reads differently
 /// (see [`crate::symbols::bare_m_meaning`]), and
-/// [`LiteralContext::Geometry`] refuses prefix-only and RKM literals.
+/// every context but [`LiteralContext::General`] refuses prefix-only and RKM
+/// literals.
 pub fn parse_quantity_with(s: &str, context: LiteralContext) -> Result<Quantity, UnitError> {
     let trimmed = s.trim();
     let (num_part, suffix) = split_suffix(trimmed);

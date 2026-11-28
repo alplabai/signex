@@ -524,7 +524,10 @@ fn moved_dialog_button_labels_keep_their_english() {
             ids::LIBRARY_PRIMITIVE_PICKER_BROWSE,
             "Browse filesystem\u{2026}",
         ),
-        (ids::LIBRARY_PRIMITIVE_PICKER_OPEN_LIBRARY, "Open library"),
+        (
+            ids::LIBRARY_PRIMITIVE_PICKER_LIBRARY_NOT_OPEN,
+            "Library not open",
+        ),
         (
             ids::LIBRARY_RECOVERY_REMOVE_FROM_PROJECT,
             "Remove from project",

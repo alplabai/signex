@@ -94,6 +94,7 @@ fn open_library(
         own_edit_stamp: None,
         display: LibraryDisplaySettings::default(),
         pricing: Default::default(),
+        alternate_supply: Default::default(),
         provenance: Default::default(),
     });
 }

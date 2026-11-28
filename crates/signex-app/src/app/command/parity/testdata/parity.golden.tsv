@@ -1891,7 +1891,7 @@ unlock_board_items	operand_handler	run_operands: named document	core	origin	hand
 unlock_board_items	in_window_rewrite	document_window	gui	window	routing
 unlock_board_items	refusal_needs	Pcb	core	active document	routing
 unlock_board_items	headless_missing_operand	needs `document`	core	none	routing
-unselect_all	bridge	Selection(ClearAll)	gui	selection	handler
+unselect_all	bridge	Selection(ClearAll)	gui	active document,selection	handler
 unselect_all	in_window_rewrite	document_window	gui	window	routing
 untile_documents	bridge	Window(UntileRequested)	gui	window	gate
 untile_documents	in_window_rewrite	document_window	gui	window	routing

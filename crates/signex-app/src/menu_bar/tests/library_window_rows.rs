@@ -54,6 +54,7 @@ fn mounted_library(app: &mut Signex, dir: &std::path::Path, name: &str) -> std::
             own_edit_stamp: None,
             display: Default::default(),
             pricing: Default::default(),
+            alternate_supply: Default::default(),
             provenance: Default::default(),
         });
     file

@@ -226,27 +226,44 @@ impl Signex {
     /// A run ended. The Import Library dialog shows the result of a run it
     /// waits for (a dry run, a failed import, a finished import with its
     /// report); no notice repeats it.
-    fn finish_library_import(&mut self, finished: ImportFinished) -> Task<Message> {
+    fn finish_library_import(&mut self, mut finished: ImportFinished) -> Task<Message> {
         let run = self.library.import.running.take();
         let mode = run.as_ref().map(|run| run.mode);
+        let preview = mode.is_some_and(RunMode::is_preview);
+        // A staged preview that ended after a stop was asked for (quitting,
+        // Back, Close) is nobody's to keep: it is removed, never shown.
+        let stopped = run
+            .as_ref()
+            .is_some_and(|run| run.cancel.load(Ordering::Relaxed));
+        let unwanted = match &mut finished.result {
+            Ok(outcome) if stopped => outcome.staged.take(),
+            _ => None,
+        };
         let shown = self.import_dialog_run_finished(&finished, mode);
-        // A dry run the dialog stopped waiting for (Back, Close) leaves its
-        // temp folder; a failed one was removed by the engine already.
-        let leftover = match (&run, shown) {
-            (Some(run), false) if run.mode == RunMode::Preview => {
+        // A preview the dialog stopped waiting for (Back, Close) leaves its
+        // folder; a failed one was removed by the engine already.
+        let leftover = match (&run, shown, &mut finished.result) {
+            (Some(run), false, _) if run.mode == RunMode::Preview => {
                 super::import_dialog::remove_preview_dir(run.output.clone())
             }
+            (_, false, Ok(outcome)) => outcome.staged.take().map_or_else(Task::none, |staged| {
+                super::import_dialog::discard_staged(*staged)
+            }),
             _ => Task::none(),
         };
+        let unwanted = unwanted.map_or_else(Task::none, |staged| {
+            super::import_dialog::discard_staged(*staged)
+        });
+        let parts = self.read_preview_parts();
         let task = match &finished.result {
             Err(failure) if *failure.error == ImportError::Cancelled => {
                 log::info!("Library import: cancelled");
-                if !shown && mode != Some(RunMode::Preview) {
+                if !shown && !preview {
                     self.report_library_import_failure(failure);
                 }
                 Task::none()
             }
-            Err(failure) if shown || mode == Some(RunMode::Preview) => {
+            Err(failure) if shown || preview => {
                 crate::diagnostics::log_error(
                     "Library import",
                     &anyhow::anyhow!("{}\n{}", failure.error, failure.stderr_tail.trim()),
@@ -267,7 +284,7 @@ impl Signex {
             }
         };
         self.library.import.last = Some(Box::new(finished));
-        Task::batch([task, leftover])
+        Task::batch([task, leftover, unwanted, parts])
     }
 
     /// Quitting: the worker and its converter would outlive the window, so

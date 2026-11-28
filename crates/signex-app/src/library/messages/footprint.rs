@@ -94,11 +94,14 @@ pub enum FootprintEditorMsg {
     /// `editor.state.selection_filter` directly.
     ToggleSelectionFilter(crate::library::editor::footprint::state::SelectionFilterKind),
 
-    /// Drag the pad at `idx` to a new world position.
+    /// Drag the pad at `idx` to a new world position. With
+    /// `with_selection` and `idx` selected, the other selected pads move
+    /// by the same offset (#2726); an Alt drag sends `false`.
     MovePad {
         idx: usize,
         x_mm: f64,
         y_mm: f64,
+        with_selection: bool,
     },
 
     /// Cursor moved over the canvas — drives the footer X/Y readout.

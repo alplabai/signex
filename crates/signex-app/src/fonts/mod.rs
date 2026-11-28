@@ -753,6 +753,7 @@ mod board_views;
 pub mod bundled;
 pub mod catalog;
 mod component_class;
+mod components_views;
 mod dock_layout;
 pub mod document_report;
 mod erc;
@@ -792,6 +793,7 @@ pub use prefs_file::{
 };
 
 pub use board_views::*;
+pub use components_views::*;
 pub use dock_layout::*;
 pub use erc::*;
 pub use extension_prefs::*;

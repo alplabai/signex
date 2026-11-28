@@ -323,7 +323,11 @@ fn writes_through_adapter(msg: &LibraryMessage) -> bool {
         | L::BrowserCellCommit { .. }
         | L::LibraryUpdatesApply
         | L::DocumentOptionsApply
-        | L::PrimitivePicker(PrimitivePickerMsg::Pick(_) | PrimitivePickerMsg::CopyConfirmed)
+        | L::PrimitivePicker(
+            PrimitivePickerMsg::Pick(_)
+            | PrimitivePickerMsg::CopyConfirmed
+            | PrimitivePickerMsg::SymbolVersionRead { .. },
+        )
         | L::CloseLibraryConfirm(_)
         | L::ComponentsPanelPromoteToGlobal(_)
         | L::BrowserCommitPending { .. }

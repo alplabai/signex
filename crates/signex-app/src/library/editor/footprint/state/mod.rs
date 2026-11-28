@@ -218,6 +218,10 @@ pub struct FootprintEditorState {
     pub sketch_solver: signex_sketch::solver::Solver,
     /// Output of the most recent solve.
     pub last_solve: Option<signex_sketch::solver::FullSolveOutput>,
+    /// The solve a failed one cleared from `last_solve`, kept for the
+    /// parameters preview to draw dimmed as the last good bake (#2856).
+    /// Nothing else reads it; a successful bake drops it.
+    pub last_good_solve: Option<signex_sketch::solver::FullSolveOutput>,
     /// Bookkeeping for the off-thread drag solve (#1047).
     pub sketch_solve: super::sketch_solve_task::SketchSolveSlot,
     /// Last solve's audit / over-constraint warnings.
@@ -225,6 +229,12 @@ pub struct FootprintEditorState {
     /// Bake warnings already sent to the Messages panel, so a re-solve
     /// during a drag does not repeat the same line on every frame.
     pub logged_solve_warnings: Vec<String>,
+    /// Centre Points a switch to Polar minted (#2596), removed again when
+    /// the pattern leaves Polar and nothing uses them. Each undo step keeps
+    /// the set as it was (`selection_memo`), so undo and redo give it back
+    /// (#3232). Session only: after a reload such a centre counts as drawn
+    /// and stays.
+    pub switch_minted_centres: std::collections::HashSet<signex_sketch::id::SketchEntityId>,
     /// #1073 — set on open when every sketch pad carries the pre-#1052
     /// all-false pad stack, so the Properties panel offers to restore it.
     /// Cleared when the user dismisses the offer; whether the offer still
@@ -375,15 +385,16 @@ impl FootprintEditorState {
         pads_tool || sketch_tool || self.edge_pan.is_dragging()
     }
 
-    /// Keep the current pad and sketch picks as the selection the undo
-    /// step `step` gives back.
+    /// Keep the current pad and sketch picks, and the centres the kind
+    /// switch minted, as what the undo step `step` gives back.
     pub fn remember_selection(&mut self, step: &std::sync::Arc<u64>) {
         let selection = selection_memo::StepSelection {
             pad: self.selected_pad,
             sketch: self.selected_sketch,
             sketch_secondary: self.selected_sketch_secondary,
         };
-        self.selection_memo.remember(step, selection);
+        self.selection_memo
+            .remember(step, selection, self.switch_minted_centres.clone());
     }
 
     /// [`Self::from_footprint`] for a switch to another footprint of the
@@ -452,9 +463,11 @@ impl FootprintEditorState {
                 ..Default::default()
             },
             last_solve: None,
+            last_good_solve: None,
             sketch_solve: super::sketch_solve_task::SketchSolveSlot::default(),
             solve_warnings: Vec::new(),
             logged_solve_warnings: Vec::new(),
+            switch_minted_centres: std::collections::HashSet::new(),
             legacy_pad_stack_offered: false,
             conflict: conflict::ConflictHighlight::default(),
             conflicts_row_hovered: None,

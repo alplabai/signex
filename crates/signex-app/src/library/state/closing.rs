@@ -67,6 +67,14 @@ impl LibraryState {
         }
     }
 
+    /// A mounted library was opened again: a close waiting for its writes is
+    /// cancelled, and the re-open is recorded so `finish_update` drops a
+    /// pending Remove from Signex too (#2592).
+    pub fn note_reopened(&mut self, root: &Path) {
+        self.cancel_pending_close(root, "it was opened again");
+        self.reopened.push(root.to_path_buf());
+    }
+
     /// Drop the library backing `root` — unmounts it from `set` and drops
     /// every Component Preview editor pointing at it. The dispatcher asks
     /// about dirty editors first (`dirty_editors_for_library`), both when

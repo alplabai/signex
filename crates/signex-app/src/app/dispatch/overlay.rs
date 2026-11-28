@@ -831,7 +831,7 @@ impl Signex {
                 outcome,
             } => {
                 self.handle_enable_version_control_finished(scope, project_dir, outcome);
-                Task::none()
+                self.refresh_start_library_vcs()
             }
             EnableVersionControlMsg::Close => {
                 self.close_enable_version_control_dialog();

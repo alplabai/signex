@@ -43,6 +43,7 @@ fn job(dir: &Path, mode: RunMode) -> ImportJob {
         limits: FAST,
         group: Default::default(),
         stage: Default::default(),
+        adopt: None,
     }
 }
 

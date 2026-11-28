@@ -142,3 +142,61 @@ fn geometry_context_refuses_prefix_only_literals() {
     );
     assert!(signex_expr::parse_with("1u + 1mm", LiteralContext::Geometry).is_err());
 }
+
+#[test]
+fn angle_context_refuses_si_multipliers() {
+    assert_eq!(bare_m_meaning(LiteralContext::Angle), BareM::Refused);
+    for literal in ["4k7", "10m", "1u", "5k", "2n2"] {
+        assert!(
+            parse_quantity_with(literal, LiteralContext::Angle).is_err(),
+            "{literal} must be refused as an angle"
+        );
+    }
+    let deg = parse_quantity_with("90deg", LiteralContext::Angle).unwrap();
+    assert_eq!(deg.unit, Unit::Deg);
+    assert_eq!(
+        parse_quantity_with("45", LiteralContext::Angle).unwrap(),
+        Quantity::count(45.0),
+        "a plain number stays a number; the host reads it as degrees"
+    );
+}
+
+#[test]
+fn count_context_refuses_si_multipliers() {
+    assert_eq!(bare_m_meaning(LiteralContext::Count), BareM::Refused);
+    for literal in ["4k7", "1k", "10m", "2n"] {
+        assert!(
+            parse_quantity_with(literal, LiteralContext::Count).is_err(),
+            "{literal} must be refused as a count"
+        );
+    }
+    assert_eq!(
+        parse_quantity_with("16", LiteralContext::Count).unwrap(),
+        Quantity::count(16.0)
+    );
+    assert!(signex_expr::parse_with("2 * 4k7", LiteralContext::Count).is_err());
+}
+
+/// Caner (2026-11-27): a length refuses an RKM or prefix-only literal, as a
+/// count and an angle do; a bare `m` stays metres and a prefixed named unit
+/// stays what it is.
+#[test]
+fn length_context_refuses_rkm_and_prefix_only_literals() {
+    for literal in ["4k7", "1k", "1u", "2n2", "5k"] {
+        assert!(
+            parse_quantity_with(literal, LiteralContext::Length).is_err(),
+            "{literal} must be refused as a length"
+        );
+    }
+    assert!(signex_expr::parse_with("1mm + 4k7", LiteralContext::Length).is_err());
+    assert_eq!(
+        parse_quantity_with("2.54m", LiteralContext::Length).unwrap(),
+        Quantity::length(2540.0)
+    );
+    assert_eq!(
+        parse_quantity_with("0.65", LiteralContext::Length).unwrap(),
+        Quantity::count(0.65)
+    );
+    assert!(parse_quantity_with("10mV", LiteralContext::Length).is_ok());
+    assert!(parse_quantity("4k7").is_ok(), "General still reads RKM");
+}

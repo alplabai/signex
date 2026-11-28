@@ -44,6 +44,7 @@ mod commit_pending;
 mod component_preview;
 mod components_panel;
 mod components_panel_rows;
+mod components_table;
 #[cfg(test)]
 mod datasheet_open_tests;
 mod datasheet_save;
@@ -103,6 +104,7 @@ mod settings;
 mod settings_tests;
 #[cfg(test)]
 mod stale_row_tests;
+mod start_libraries;
 mod stock_copy;
 mod updates;
 mod use_site;
@@ -664,7 +666,16 @@ impl Signex {
                 self.handle_components_panel_add_library(source)
             }
             LibraryMessage::ComponentsPanelAddLibraryAt { source, path } => {
-                self.handle_components_panel_add_library_at(source, path)
+                // A library added while the Libraries page shows gets its
+                // version control read like the rest (#2591).
+                let picked = path.is_some();
+                let added = self.handle_components_panel_add_library_at(source, path);
+                let read = if picked {
+                    self.refresh_start_library_vcs()
+                } else {
+                    Task::none()
+                };
+                Task::batch([added, read])
             }
             LibraryMessage::ComponentsPanelPromoteToGlobal(path) => {
                 self.handle_components_panel_promote_to_global(path)
@@ -698,6 +709,7 @@ impl Signex {
             LibraryMessage::ComponentsPanelOpenProjectClicked => {
                 Task::done(Message::Menu(crate::menu_bar::MenuMessage::OpenProject))
             }
+            LibraryMessage::ComponentsTable(msg) => self.handle_components_table(msg),
             LibraryMessage::BrowserPreviewLoaded {
                 key,
                 generation,

@@ -418,7 +418,7 @@ save_project_as	OpenProject	ee0317ecaf5bfb5b
 save_snippet	Schematic	f8bd7a5cb84e915b
 save_workspace_layout	-	f2929686b07ef725
 search_parts	-	f2929686b07ef725
-select_all	SelectAllTarget	ac2868db6f01027f
+select_all	SelectAllTarget	ae6d834f43e3d9d4
 select_board_net	Pcb	119d310e454dd5e4
 select_connection	-	f2929686b07ef725
 select_expand_connection	-	f2929686b07ef725

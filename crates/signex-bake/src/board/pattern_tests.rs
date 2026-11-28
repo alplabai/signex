@@ -109,6 +109,7 @@ fn row(source: SketchEntityId, count: &str, dx: &str, dy: &str) -> ArrayKind {
         count_expr: count.into(),
         dx_expr: dx.into(),
         dy_expr: dy.into(),
+        depopulation: None,
     }
 }
 
@@ -149,6 +150,8 @@ fn pour() -> PourAttr {
         clearance_expr: None,
         min_thickness_expr: None,
         priority: 2,
+        corners: Default::default(),
+        corner_size: 0.0,
     }
 }
 

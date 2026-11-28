@@ -228,7 +228,7 @@ fn rows_view<'a>(
                     Choice::Loose(symbol) => symbol
                         .library
                         .is_some()
-                        .then(|| t!(i18n, ids::LIBRARY_PRIMITIVE_PICKER_OPEN_LIBRARY)),
+                        .then(|| t!(i18n, ids::LIBRARY_PRIMITIVE_PICKER_LIBRARY_NOT_OPEN)),
                 };
                 let on_press = msg(PrimitivePickerMsg::RowHighlighted(choice.clone()));
                 let is_highlighted = highlighted == Some(choice);
@@ -574,7 +574,7 @@ mod tests {
             }
             for meta in [
                 None,
-                Some(t!(i18n, ids::LIBRARY_PRIMITIVE_PICKER_OPEN_LIBRARY)),
+                Some(t!(i18n, ids::LIBRARY_PRIMITIVE_PICKER_LIBRARY_NOT_OPEN)),
             ] {
                 let _ = primitive_row(
                     row_label(i18n, "resistor.snxsym", Some("R")),

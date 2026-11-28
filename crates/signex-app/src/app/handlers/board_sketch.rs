@@ -49,7 +49,7 @@ impl Signex {
                 self.refresh_board_sketch_preview();
             }
             BoardSketchMsg::DiscardRequested => self.request_board_sketch_discard(),
-            BoardSketchMsg::DiscardConfirmed => self.interaction_state.board_sketch = None,
+            BoardSketchMsg::DiscardConfirmed => self.close_board_sketch_session(),
             BoardSketchMsg::DiscardCancelled => {
                 if let Some(session) = self.interaction_state.board_sketch.as_mut() {
                     session.editor.state.sketch_exit.confirming_discard = false;
@@ -58,6 +58,14 @@ impl Signex {
         }
         self.refresh_panel_ctx();
         Task::none()
+    }
+
+    /// End the board sketch session. Its Mirror card goes with it, since
+    /// the card is keyed by the board path and would outlive it (#2859).
+    fn close_board_sketch_session(&mut self) {
+        if let Some(session) = self.interaction_state.board_sketch.take() {
+            self.library.mirror_cards.remove(&session.board_path);
+        }
     }
 
     /// Discard changes: leave at once when the board already has what the
@@ -69,7 +77,7 @@ impl Signex {
         if session.has_changes() {
             session.editor.state.sketch_exit.confirming_discard = true;
         } else {
-            self.interaction_state.board_sketch = None;
+            self.close_board_sketch_session();
         }
     }
 
@@ -204,7 +212,7 @@ impl Signex {
                     .into_string(),
             );
         }
-        self.interaction_state.board_sketch = None;
+        self.close_board_sketch_session();
     }
 
     /// The board whose sketch has changes the board has not taken: unsaved
@@ -373,7 +381,7 @@ impl Signex {
         if session.has_changes() && !self.commit_board_sketch() {
             return false;
         }
-        self.interaction_state.board_sketch = None;
+        self.close_board_sketch_session();
         true
     }
 

@@ -7,7 +7,7 @@ use super::{Footprint, FootprintEditorMsg, indexed_header, menu_entries, silk_de
 use crate::app::FootprintDocument;
 use crate::keymap::{
     AppCommandId, CompiledKeymap, ShortcutBinding, ShortcutBindingAction, ShortcutContext,
-    ShortcutProfile, ShortcutProfileKind, ShortcutTrigger,
+    ShortcutProfile, ShortcutProfileKind, ShortcutProfileSet, ShortcutTrigger,
 };
 use crate::library::editor::footprint::state::context_menu::SelectionAction;
 use crate::library::editor::footprint::state::{
@@ -267,4 +267,117 @@ fn the_empty_canvas_menu_is_unchanged() {
             "Properties...",
         ]
     );
+}
+
+/// Each row as (label, command it runs, key it shows), headers and
+/// dividers left out.
+fn keyed_rows(
+    editor: &FootprintDocument,
+    keymap: &CompiledKeymap,
+) -> Vec<(String, Option<&'static str>, String)> {
+    let en = signex_i18n::I18n::en_us_ref();
+    menu_entries(editor, Path::new("t.snxfpt"), false, keymap, en)
+        .expect("the menu is open")
+        .into_iter()
+        .filter_map(|entry| match entry {
+            DropdownEntry::Item(item) => Some((
+                item.label,
+                item.command_id,
+                item.shortcut.unwrap_or_default(),
+            )),
+            _ => None,
+        })
+        .collect()
+}
+
+fn built_in_keymaps() -> Vec<(String, CompiledKeymap)> {
+    let set = ShortcutProfileSet::built_ins().expect("the built-in profiles load");
+    set.profiles()
+        .map(|profile| (profile.id.clone(), CompiledKeymap::compile(profile)))
+        .collect()
+}
+
+/// #2603: Move Selection By shows the key the keymap binds to it, and no
+/// command opens it in either built-in profile ("M M" is Move Object's),
+/// so it shows none.
+#[test]
+fn move_selection_by_shows_no_key_while_nothing_binds_it() {
+    let editor = editor_with_menu(FootprintContextTarget::Pad(0), None);
+    for (profile, keymap) in built_in_keymaps() {
+        let rows = keyed_rows(&editor, &keymap);
+        let (_, command, keys) = rows
+            .iter()
+            .find(|(label, ..)| label == "Move Selection By…")
+            .unwrap_or_else(|| panic!("{profile}: no Move Selection By row in {rows:?}"));
+        assert_eq!(*command, None, "{profile}");
+        assert_eq!(keys, "", "{profile}: Move Selection By shows {keys:?}");
+    }
+}
+
+/// #2603: every key a footprint menu shows is the key the active keymap
+/// binds to the row's command, or the canvas's own Space and X; a row no
+/// key runs shows none.
+#[test]
+fn every_key_the_menus_show_is_one_the_keymap_or_the_canvas_binds() {
+    let en = signex_i18n::I18n::en_us_ref();
+    let space = en.message_plain(signex_i18n::key_ids::KEY_SPACE, &[]);
+    let canvas_keys = [space.as_str(), "X"];
+    let menus = [
+        (FootprintContextTarget::Pad(0), None),
+        (
+            FootprintContextTarget::Pad(0),
+            Some(FootprintContextSubmenu::Align),
+        ),
+        (
+            FootprintContextTarget::Pad(0),
+            Some(FootprintContextSubmenu::PadActions),
+        ),
+        (
+            FootprintContextTarget::Empty,
+            Some(FootprintContextSubmenu::Place),
+        ),
+        (
+            FootprintContextTarget::Empty,
+            Some(FootprintContextSubmenu::Selection),
+        ),
+        (
+            FootprintContextTarget::Empty,
+            Some(FootprintContextSubmenu::View),
+        ),
+    ];
+    for (profile, keymap) in built_in_keymaps() {
+        for (target, submenu) in menus {
+            let editor = editor_with_menu(target, submenu);
+            for (label, command, keys) in keyed_rows(&editor, &keymap) {
+                match command {
+                    Some(id) => assert_eq!(
+                        keys,
+                        keymap.shortcut_label_for_id(id),
+                        "{profile}: {label:?} runs {id}"
+                    ),
+                    None => assert!(
+                        keys.is_empty() || canvas_keys.contains(&keys.as_str()),
+                        "{profile}: {label:?} shows {keys:?}, which nothing binds"
+                    ),
+                }
+            }
+        }
+    }
+}
+
+/// A binding the user adds shows on the menu row of its command.
+#[test]
+fn a_selection_row_shows_the_key_the_user_binds() {
+    let editor = editor_with_menu(
+        FootprintContextTarget::Empty,
+        Some(FootprintContextSubmenu::Selection),
+    );
+    let keymap = keymap_with(vec![(command("unselect_all"), "F7")]);
+    let rows = keyed_rows(&editor, &keymap);
+    let (_, command, keys) = rows
+        .iter()
+        .find(|(label, ..)| label == "  Deselect All")
+        .unwrap_or_else(|| panic!("no Deselect All row in {rows:?}"));
+    assert_eq!(*command, Some("unselect_all"));
+    assert_eq!(keys, "F7");
 }

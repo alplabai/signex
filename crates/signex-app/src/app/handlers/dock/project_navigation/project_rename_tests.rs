@@ -589,6 +589,7 @@ fn a_library_under_the_folder_refuses_the_folder_move_whatever_holds_it() {
                     observed_stamp: None,
                     dangling: Default::default(),
                     pricing: Default::default(),
+                    alternate_supply: Default::default(),
                     own_edit_stamp: None,
                     display: Default::default(),
                     provenance: Default::default(),

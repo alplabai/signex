@@ -49,7 +49,7 @@ pub(crate) enum Needs {
     /// Paste and Paste Special: board objects on the clipboard on a board,
     /// a sheet otherwise.
     PasteTarget,
-    /// Select All: a sheet or a board.
+    /// Select All: a sheet, a board or a footprint editor (#3233).
     SelectAllTarget,
     DrawingSelection,
     SelectedObject,
@@ -161,7 +161,7 @@ impl Needs {
             Self::Document => ctx.has_document,
             Self::Undo => ctx.can_undo,
             Self::Redo => ctx.can_redo,
-            Self::SelectAllTarget => ctx.has_schematic || ctx.pcb.shown,
+            Self::SelectAllTarget => ctx.has_schematic || ctx.pcb.shown || ctx.has_footprint_editor,
             Self::Schematic => ctx.has_schematic,
             // These assemble the project's sheets, not only the active tab's.
             Self::Sheets => ctx.has_schematic || ctx.has_sheets,

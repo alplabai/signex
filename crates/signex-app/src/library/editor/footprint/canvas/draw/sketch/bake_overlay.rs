@@ -11,7 +11,7 @@
 use iced::widget::canvas::{self, LineDash, Path, Stroke};
 use iced::{Color, Point};
 use signex_gfx::style::ColorSlot;
-use signex_library::primitive::footprint::{LayerId, Polygon};
+use signex_library::primitive::footprint::{Footprint, LayerId, Polygon};
 use signex_renderer::theme::ResolvedTheme;
 use signex_sketch::SketchData;
 use signex_sketch::entity::EntityKind;
@@ -28,7 +28,7 @@ use super::super::super::{FootprintCanvas, FootprintCanvasState};
 use super::super::cursor_ink::CursorInk;
 use super::super::layers::{LayerInput, draw_courtyard, draw_pads, draw_silk};
 use super::super::pad::PadLabels;
-use crate::library::editor::footprint::layers::LayerPalette;
+use crate::library::editor::footprint::layers::{FpLayer, LayerPalette};
 use crate::library::editor::footprint::state::{EditorMode, FootprintEditorState};
 use crate::pcb_canvas::layer_style::board_layer_colour;
 use crate::styles::TypeScale;
@@ -144,6 +144,48 @@ impl FootprintCanvas<'_> {
         }
         draw_pads(frame, cstate, &input);
     }
+}
+
+/// The board layers the footprint bake preview draws something on, as
+/// `draw_footprint_bake` draws them: the visible pads and silk, the
+/// visible courtyard and the baked regions, in no order and possibly
+/// repeated. The layer legend lists them (mockup row 190).
+pub(crate) fn footprint_bake_layers(
+    state: &FootprintEditorState,
+    footprint: &Footprint,
+) -> Vec<PcbLayer> {
+    let visible = state.layer_visibility;
+    let mut layers: Vec<PcbLayer> = state
+        .pads
+        .iter()
+        .map(|pad| pad.primary_layer())
+        .filter(|layer| visible.get(*layer))
+        .map(FpLayer::board_layer)
+        .collect();
+    for (silk, layer) in [
+        (&footprint.silk_f, FpLayer::FSilks),
+        (&footprint.silk_b, FpLayer::BSilks),
+    ] {
+        if visible.get(layer) && !silk.is_empty() {
+            layers.push(layer.board_layer());
+        }
+    }
+    // As `draw_courtyard`: the outline when there is one, else the box.
+    let courtyard = match state.courtyard_outline() {
+        Some(outline) => outline.len() >= 3,
+        None => state.courtyard_mm.is_some(),
+    };
+    if visible.get(FpLayer::EdgeCuts) && courtyard {
+        layers.push(PcbLayer::Technical(TechnicalLayer::CourtyardTop));
+    }
+    if let (Some(sketch), Some(solve)) = (footprint.sketch.as_ref(), state.last_solve.as_ref()) {
+        layers.extend(
+            footprint_regions(sketch, solve)
+                .into_iter()
+                .map(|(_, layer)| layer),
+        );
+    }
+    layers
 }
 
 /// The mask, paste, pour, keepout and cutout regions a bake of `sketch` at

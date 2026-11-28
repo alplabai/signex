@@ -2,6 +2,8 @@ use iced::Task;
 
 use super::super::*;
 use crate::active_bar::SelectionFilter;
+use crate::library::editor::footprint::FootprintContextAction as FpAction;
+use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
 
 /// Return `true` iff the currently active filter set allows selecting the
 /// given hit. When no filters are active (empty set), selection is blocked
@@ -169,12 +171,27 @@ fn valid_selection_items(
 }
 
 impl Signex {
+    /// On a footprint editor tab, Select All and Deselect All run the
+    /// footprint canvas menu's row of the same name, so the key the row
+    /// shows does what the row does (#3233). `None` on any other tab.
+    fn run_footprint_selection_row(&mut self, action: FpAction) -> Option<Task<Message>> {
+        let path = self.active_footprint_editor_path()?;
+        let row = LibraryMessage::PrimitiveEditorEvent {
+            path,
+            msg: PrimitiveEdit::Footprint(FootprintEditorMsg::ContextMenuAction(action)),
+        };
+        Some(self.update(Message::Library(row)))
+    }
+
     pub(crate) fn handle_selection_request(
         &mut self,
         request: selection_request::SelectionRequest,
     ) -> Task<Message> {
         match request {
             selection_request::SelectionRequest::SelectAll => {
+                if let Some(task) = self.run_footprint_selection_row(FpAction::SelectAllPads) {
+                    return task;
+                }
                 // A board selects its own items (#2361).
                 if !self.select_all_on_pcb()
                     && let Some(snapshot) = self.active_render_snapshot()
@@ -184,6 +201,9 @@ impl Signex {
                 }
             }
             selection_request::SelectionRequest::ClearAll => {
+                if let Some(task) = self.run_footprint_selection_row(FpAction::DeselectAll) {
+                    return task;
+                }
                 self.replace_selection(Vec::new());
             }
             selection_request::SelectionRequest::StoreSlot { slot } => {

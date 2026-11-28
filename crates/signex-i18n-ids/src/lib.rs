@@ -683,6 +683,8 @@ define_ids! {
     EDITORS_COMPONENT_COLUMN_MANUFACTURER = "editors-component-column-manufacturer";
     EDITORS_COMPONENT_COLUMN_MPN = "editors-component-column-mpn";
     EDITORS_COMPONENT_COLUMN_NOTES = "editors-component-column-notes";
+    EDITORS_COMPONENT_COLUMN_STOCK = "editors-component-column-stock";
+    EDITORS_COMPONENT_COLUMN_LIFECYCLE = "editors-component-column-lifecycle";
     EDITORS_COMPONENT_COLUMN_DISTRIBUTOR = "editors-component-column-distributor";
     EDITORS_COMPONENT_COLUMN_SKU = "editors-component-column-sku";
     EDITORS_COMPONENT_COLUMN_LINK = "editors-component-column-link";

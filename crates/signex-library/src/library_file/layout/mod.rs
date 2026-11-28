@@ -64,10 +64,14 @@ impl SourceLayout {
         if !has_unknown_keys(untyped, file)? {
             return Ok(Self::default());
         }
+        let mut base: toml::Table = toml::from_str(&file.write_canonical()?)?;
+        // The token as read, not as the content selects it: a write whose
+        // content needs another token then edits it in.
+        base.insert("format".into(), Value::String(file.manifest.format.clone()));
         Ok(Self(Some(Arc::new(Source {
             doc: parse_doc(text)?,
             text: untyped.clone(),
-            base: toml::from_str(&file.write_canonical()?)?,
+            base,
         }))))
     }
 
@@ -201,9 +205,22 @@ fn has_unknown_keys(doc: &toml::Table, file: &LibraryFile) -> Result<bool, Libra
         let (Value::Table(body), Some(table)) = (body, file.tables.get(name)) else {
             continue;
         };
-        let modelled = |k: &str| matches!(k, "tsv" | "column_types" | "pricing");
+        let modelled =
+            |k: &str| matches!(k, "tsv" | "column_types" | "pricing" | "alternate_supply");
         if body.keys().any(|k| !modelled(k)) {
             return Ok(true);
+        }
+        for (row, distributor, mpn, record) in price_records(body.get("alternate_supply")) {
+            let typed = table
+                .alternate_supply
+                .get(row)
+                .and_then(|d| d.get(distributor))
+                .and_then(|m| m.get(mpn));
+            if let Some(typed) = typed
+                && has_unknown(record, &Value::try_from(typed)?)
+            {
+                return Ok(true);
+            }
         }
         for (row, distributor, sku, record) in price_records(body.get("pricing")) {
             let typed = table
@@ -221,7 +238,8 @@ fn has_unknown_keys(doc: &toml::Table, file: &LibraryFile) -> Result<bool, Libra
     Ok(false)
 }
 
-/// Every `(row, distributor, sku, record)` under a `pricing` value.
+/// Every `(row, distributor, part number, record)` under a `pricing` or
+/// `alternate_supply` value.
 fn price_records(pricing: Option<&Value>) -> impl Iterator<Item = (&str, &str, &str, &Value)> {
     pricing.into_iter().flat_map(entries).flat_map(|(row, d)| {
         entries(d).flat_map(move |(dist, s)| {

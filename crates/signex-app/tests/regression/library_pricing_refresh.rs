@@ -56,6 +56,7 @@ impl DistributorAdapter for Lcsc {
             currency: "USD".into(),
             stock: Some(1200),
             part_number: None,
+            lifecycle: None,
             by_distributor: BTreeMap::from([(
                 "LCSC".to_string(),
                 vec![PriceBreak {

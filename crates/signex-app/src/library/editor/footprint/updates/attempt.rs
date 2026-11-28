@@ -21,7 +21,8 @@ pub(super) struct EditAttempt {
     is_drag_tick: bool,
     /// A message that may be refused without changing anything (deleting
     /// sketch-owned silk, #1718; a constraint the selection cannot take,
-    /// mockup row 188): then it is not an edit either.
+    /// mockup row 188; a centre pick that no longer applies, #3232): then
+    /// it is not an edit either.
     may_be_refused: bool,
 }
 
@@ -37,6 +38,20 @@ fn leaves_owed_solve_alone(msg: &FootprintEditorMsg) -> bool {
             | FootprintEditorMsg::RedundancyChecked { .. }
             | FootprintEditorMsg::CursorAt { .. }
             | FootprintEditorMsg::ViewScaleChanged { .. }
+    )
+}
+
+/// A click that answers an armed centre pick, which changes nothing when
+/// the pick no longer applies (#3232).
+fn answers_centre_pick(editor: &FootprintDocument, msg: &FootprintEditorMsg) -> bool {
+    use crate::library::editor::footprint::state::ToolPending;
+    matches!(
+        msg,
+        FootprintEditorMsg::SketchToolClick { .. }
+            | FootprintEditorMsg::SketchToolClickInferred { .. }
+    ) && matches!(
+        editor.state.tool_pending,
+        ToolPending::RepickPolarCenter { .. }
     )
 }
 
@@ -71,7 +86,7 @@ impl EditAttempt {
                 msg,
                 FootprintEditorMsg::DeleteSilkF
                     | FootprintEditorMsg::SketchAddConstraintForSelection(_)
-            ),
+            ) || answers_centre_pick(editor, msg),
         }
     }
 
