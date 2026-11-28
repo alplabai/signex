@@ -24,12 +24,12 @@ fn path(sha: &str) -> String {
 
 fn project() -> ProjectData {
     let text = r#"{"name": "p", "dir": "", "schematic_root": null, "pcb_file": null}"#;
-    parse_project_bytes(Path::new("/p/p.snxprj"), text.as_bytes()).expect("a project")
+    parse_project_bytes(Path::new("/p/p.snxprj"), text.as_bytes(), |_| false).expect("a project")
 }
 
 fn reread(data: &ProjectData) -> ProjectData {
     let bytes = encode_project(data).expect("encodes");
-    parse_project_bytes(Path::new("/p/p.snxprj"), &bytes).expect("reads back")
+    parse_project_bytes(Path::new("/p/p.snxprj"), &bytes, |_| false).expect("reads back")
 }
 
 #[test]
@@ -211,7 +211,8 @@ fn keys_of_a_newer_build_survive_an_edit() {
         "fonts": [{"family": "House", "future": 1,
                    "files": [{"path": "assets/fonts/aa.otf", "embedding": "editable",
                               "hinting": "full"}]}]}"#;
-    let mut data = parse_project_bytes(Path::new("/p/p.snxprj"), text.as_bytes()).unwrap();
+    let mut data =
+        parse_project_bytes(Path::new("/p/p.snxprj"), text.as_bytes(), |_| false).unwrap();
     data.set_project_font_license("House", "OFL-1.1").unwrap();
     let raw = reread(&data).project_fonts_raw().cloned().unwrap();
     assert_eq!(raw[0]["future"], json!(1));
@@ -223,7 +224,8 @@ fn keys_of_a_newer_build_survive_an_edit() {
 fn an_unreadable_list_is_kept_as_written_and_refuses_edits() {
     let text = r#"{"name": "p", "dir": "", "schematic_root": null, "pcb_file": null,
         "fonts": {"House": "assets/fonts/aa.otf"}}"#;
-    let mut data = parse_project_bytes(Path::new("/p/p.snxprj"), text.as_bytes()).unwrap();
+    let mut data =
+        parse_project_bytes(Path::new("/p/p.snxprj"), text.as_bytes(), |_| false).unwrap();
     assert_eq!(data.project_fonts(), Err(ProjectFontProblem::Unreadable));
     assert_eq!(
         data.add_project_font_file(&path(SHA), &[face("A", "")], FontEmbedding::Installable),

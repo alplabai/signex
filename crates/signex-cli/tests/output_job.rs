@@ -5,8 +5,15 @@
 mod support;
 
 use serde_json::{Value, json};
-use signex_types::output_job::{JobOutput, OutputJob, OutputKind, write_output_job};
+use signex_types::output_job::{JobOutput, OutputJob, OutputKind, encode_output_job};
 use support::{jsonl, pins_fixture, run_cli, snapshot, temp_root};
+
+/// Writes the job file as the app does: the domain encodes, the host writes
+/// (#2431).
+fn write_output_job(path: &std::path::Path, job: &OutputJob) -> std::io::Result<()> {
+    let text = encode_output_job(job).map_err(std::io::Error::other)?;
+    std::fs::write(path, text)
+}
 
 fn job() -> OutputJob {
     let mut pages = JobOutput::new("Pages", OutputKind::SchematicPng);
