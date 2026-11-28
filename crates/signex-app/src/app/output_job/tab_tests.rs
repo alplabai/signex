@@ -6,14 +6,13 @@
 
 use std::path::Path;
 
-use signex_types::output_job::{
-    BeforeClose, OnErrors, OutputJob, OutputKind, RunTrigger, read_output_job,
-};
+use signex_types::output_job::{BeforeClose, OnErrors, OutputJob, OutputKind, RunTrigger};
 
 use super::pipeline_tests::{profile_job, tree, write_job};
 use super::tab::{JobTabMsg, NamingMode, PackagingSwitch, TabPage, TriggerEdit};
 use super::tests::project_app;
 use crate::app::handlers::menu::export::settle;
+use crate::app::output_job::file::read_output_job;
 use crate::app::{Message, Signex};
 use crate::menu_bar::MenuMessage;
 use crate::panels::PanelKind;

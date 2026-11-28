@@ -10,13 +10,14 @@ use iced::Task;
 use serde_json::{Value, json};
 use signex_types::output_job::{
     BeforeClose, JobOutput, JobProfile, MAX_SAVE_WAIT_SECONDS, OnErrors, OnWarnings, OutputJob,
-    OutputKind, read_output_job, write_output_job,
+    OutputKind,
 };
 
 use super::JobDocMsg;
 use super::operands::{check_job_file, job_refusal, path_operand, text_operand};
 use super::tab::edit::{fresh_output_name, kind_base_name};
 use crate::app::command::{CommandArgs, CommandOutcome, OperandValue};
+use crate::app::output_job::file::{read_output_job, write_output_job};
 use crate::app::{Message, Signex};
 use crate::keymap::AppCommandId;
 

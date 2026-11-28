@@ -13,6 +13,7 @@ mod auto;
 mod board_work;
 mod commands;
 mod document;
+pub(crate) mod file;
 mod gerber_commands;
 mod operands;
 mod pipeline;

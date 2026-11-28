@@ -17,7 +17,7 @@ pub use gerber::{
     parse_gerber_layers,
 };
 pub use history::{
-    MAX_HISTORY, MAX_RECORD_WARNINGS, RunRecord, RunResult, RunTrigger, append_run_record,
+    MAX_HISTORY, MAX_RECORD_WARNINGS, RunRecord, RunResult, RunTrigger, with_run_record,
 };
 pub use kind::{OutputGroup, OutputKind};
 pub use profile::{
@@ -505,28 +505,17 @@ pub fn parse_output_job(text: &str) -> Result<OutputJob, OutputJobError> {
         .map_err(|e: toml::de::Error| OutputJobError::Parse(e.to_string()))
 }
 
-/// Read the job file at `path`. Blocking IO: the app calls it from a task.
-pub fn read_output_job(path: &Path) -> Result<OutputJob, OutputJobError> {
-    let size = std::fs::metadata(path)
-        .map_err(|e| OutputJobError::Io(format!("{}: {e}", path.display())))?
-        .len();
+/// Refuse a job file at `path` of `size` bytes, larger than an Export Job
+/// reads. The host reads the file (`app::output_job::file`); this crate does
+/// no IO (#2431).
+pub fn check_output_job_size(path: &Path, size: u64) -> Result<(), OutputJobError> {
     if size > MAX_OUTPUT_JOB_BYTES {
         return Err(OutputJobError::Io(format!(
             "{} is {size} bytes, more than the {MAX_OUTPUT_JOB_BYTES} an Export Job reads",
             path.display()
         )));
     }
-    let text = std::fs::read_to_string(path)
-        .map_err(|e| OutputJobError::Io(format!("{}: {e}", path.display())))?;
-    parse_output_job(&text)
-}
-
-/// Write the job to `path` atomically. Blocking IO: the app calls it from a
-/// task.
-pub fn write_output_job(path: &Path, job: &OutputJob) -> Result<(), OutputJobError> {
-    let text = encode_output_job(job)?;
-    crate::atomic_io::atomic_write(path, text.as_bytes())
-        .map_err(|e| OutputJobError::Io(e.to_string()))
+    Ok(())
 }
 
 #[cfg(test)]

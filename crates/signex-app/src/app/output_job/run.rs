@@ -7,12 +7,13 @@ use std::path::{Path, PathBuf};
 
 use iced::Task;
 use signex_i18n::{Translatable, ids};
-use signex_types::output_job::{OUTPUT_JOB_EXTENSION, RunTrigger, read_output_job};
+use signex_types::output_job::{OUTPUT_JOB_EXTENSION, RunTrigger};
 
 use super::pipeline::StartRun;
 use super::write::JobReport;
 use super::{JobRead, OutputJobMsg};
 use crate::app::agent::WaitingCommand;
+use crate::app::output_job::file::read_output_job;
 use crate::app::{Message, Signex};
 
 /// The project a job belongs to and the open sheet its outputs are built

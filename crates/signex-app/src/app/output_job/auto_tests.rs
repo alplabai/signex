@@ -4,13 +4,14 @@
 //! the profiles with out-of-date outputs (Always) or names them (Ask).
 
 use signex_types::output_job::{
-    BeforeClose, JobOutput, JobProfile, OutputJob, OutputKind, RunTrigger, read_output_job,
+    BeforeClose, JobOutput, JobProfile, OutputJob, OutputKind, RunTrigger,
 };
 
 use super::auto::AutoMsg;
 use super::pipeline_tests::{tree, write_job};
 use super::tests::project_app;
 use crate::app::handlers::menu::export::settle;
+use crate::app::output_job::file::read_output_job;
 use crate::app::{Message, Signex};
 
 /// A PDF and a Gerber output; profile `Auto` ticks both, with no Validate

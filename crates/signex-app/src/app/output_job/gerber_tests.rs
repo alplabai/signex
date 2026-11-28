@@ -10,7 +10,7 @@ use std::path::Path;
 use iced::Size;
 use signex_types::output_job::{
     GerberApertures, GerberFormat, GerberSettings, GerberUnits, GerberZeros, JobOutput, OutputJob,
-    OutputKind, read_output_job,
+    OutputKind,
 };
 
 use super::pipeline_tests::{profile_job, write_job};
@@ -18,6 +18,7 @@ use super::tab::{GerberEdit, JobTabMsg};
 use super::tests::{headless, project_app, refusal};
 use crate::app::command::CommandOutcome;
 use crate::app::handlers::menu::export::settle;
+use crate::app::output_job::file::read_output_job;
 use crate::app::{Message, Signex};
 use crate::layout_probe::lay_out_texts;
 

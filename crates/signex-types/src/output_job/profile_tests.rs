@@ -240,12 +240,10 @@ fn the_history_keeps_the_newest_runs_and_a_record_leaves_the_rest_of_the_file() 
         record(MAX_HISTORY as u32 + 4).started
     );
 
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("fab.snxout");
+    // The file's text as the host reads it; the host writes the answer back.
     let saved = self::job();
-    write_output_job(&path, &saved).unwrap();
-    append_run_record(&path, record(7)).unwrap();
-    let read = read_output_job(&path).unwrap();
+    let text = encode_output_job(&saved).unwrap();
+    let read = parse_output_job(&with_run_record(&text, record(7)).unwrap()).unwrap();
     assert_eq!(read.history, vec![record(7)]);
     assert_eq!(read.profiles, saved.profiles);
     assert_eq!(read.outputs, saved.outputs);

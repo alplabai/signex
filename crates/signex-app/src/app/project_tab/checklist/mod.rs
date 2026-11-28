@@ -17,6 +17,7 @@ mod commands;
 mod detail;
 mod empty;
 mod history_view;
+mod library_file;
 mod link_card;
 mod links;
 mod run;

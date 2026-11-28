@@ -10,12 +10,13 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use iced::Task;
-use signex_types::output_job::{BeforeClose, OutputJob, OutputKind, RunTrigger, read_output_job};
+use signex_types::output_job::{BeforeClose, OutputJob, OutputKind, RunTrigger};
 
 use super::OutputJobMsg;
 use super::document::list_jobs;
 use super::pipeline::StartRun;
 use super::run::RunAsk;
+use crate::app::output_job::file::read_output_job;
 use crate::app::state::ProjectId;
 use crate::app::{Message, Signex};
 

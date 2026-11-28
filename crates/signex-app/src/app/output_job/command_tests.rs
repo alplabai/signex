@@ -5,12 +5,13 @@
 
 use std::path::Path;
 
-use signex_types::output_job::{BeforeClose, OnWarnings, OutputKind, read_output_job};
+use signex_types::output_job::{BeforeClose, OnWarnings, OutputKind};
 
 use super::pipeline_tests::{profile_job, write_job};
 use super::tests::{headless, project_app, refusal};
 use crate::app::Signex;
 use crate::app::command::CommandOutcome;
+use crate::app::output_job::file::read_output_job;
 
 fn answered(outcome: CommandOutcome) -> serde_json::Value {
     match outcome {

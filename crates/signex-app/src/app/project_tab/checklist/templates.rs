@@ -15,10 +15,11 @@ use signex_engine::ProjectChecklistCommand;
 use signex_i18n::{Translatable, ids};
 use signex_types::project::{
     CHECKLIST_TEMPLATES, ChecklistProblem, ChecklistStage, ChecklistTemplate, SavedTemplate,
-    TEMPLATE_LIBRARY_FILE, TemplateLibrary, TemplateRef,
+    TEMPLATE_LIBRARY_FILE, TemplateRef,
 };
 
 use super::commands::{Ran, edit, edit_in_tab, named_project, refused, required};
+use super::library_file::{read_library_file, save_into_library_file};
 use super::words::problem_refusal;
 use super::{ChecklistMsg, ChecklistNotice, SavedTemplates, message};
 use crate::app::agent::WaitingCommand;
@@ -60,7 +61,7 @@ pub(super) fn read_library(
     Task::perform(
         async move {
             crate::app::path_op_jobs::run_blocking(|| {
-                TemplateLibrary::read(&library_path()?).map(|library| library.templates)
+                read_library_file(&library_path()?).map(|library| library.templates)
             })
             .await
             .and_then(std::convert::identity)
@@ -86,8 +87,7 @@ fn save_template(
     Task::perform(
         async move {
             crate::app::path_op_jobs::run_blocking(move || {
-                TemplateLibrary::save_into(&library_path()?, template)
-                    .map(|library| library.templates)
+                save_into_library_file(&library_path()?, template).map(|library| library.templates)
             })
             .await
             .and_then(std::convert::identity)

@@ -9,13 +9,12 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use iced::Task;
-use signex_types::output_job::{
-    OUTPUT_JOB_EXTENSION, OutputJob, encode_output_job, read_output_job, write_output_job,
-};
+use signex_types::output_job::{OUTPUT_JOB_EXTENSION, OutputJob, encode_output_job};
 
 use super::OutputJobMsg;
 use crate::app::agent::WaitingCommand;
 use crate::app::command::CommandOutcome;
+use crate::app::output_job::file::{read_output_job, write_output_job};
 use crate::app::{Message, Signex, TabInfo, TabKind};
 
 /// One job's write in flight, and whether the draft changed since.

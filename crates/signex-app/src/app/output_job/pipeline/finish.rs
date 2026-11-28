@@ -7,12 +7,13 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use iced::Task;
-use signex_types::output_job::{RunRecord, RunResult, RunTrigger, append_run_record};
+use signex_types::output_job::{RunRecord, RunResult, RunTrigger};
 
 use super::package::{Packaged, write_package};
 use super::{JobRun, NodeState, RunMsg, RunStage, Stopped};
 use crate::app::agent::WaitingCommand;
 use crate::app::command::CommandOutcome;
+use crate::app::output_job::file::append_run_record;
 use crate::app::output_job::write::JobReport;
 use crate::app::{Message, Signex};
 

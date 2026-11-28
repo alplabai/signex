@@ -212,12 +212,13 @@ fn two_outputs_on_one_file_or_none_enabled_write_nothing() {
 }
 
 #[test]
-fn the_file_is_written_atomically_and_read_back() {
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("fab.snxout");
-    assert!(matches!(read_output_job(&path), Err(OutputJobError::Io(_))));
-    write_output_job(&path, &sample()).unwrap();
-    assert_eq!(read_output_job(&path).unwrap(), sample());
+fn a_job_file_larger_than_an_export_job_reads_is_refused() {
+    let path = std::path::Path::new("fab.snxout");
+    assert_eq!(check_output_job_size(path, MAX_OUTPUT_JOB_BYTES), Ok(()));
+    assert!(matches!(
+        check_output_job_size(path, MAX_OUTPUT_JOB_BYTES + 1),
+        Err(OutputJobError::Io(_))
+    ));
 }
 
 /// The Gerber settings round-trip, a job without them reads the writer's

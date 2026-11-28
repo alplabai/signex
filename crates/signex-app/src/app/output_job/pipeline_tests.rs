@@ -10,8 +10,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use signex_types::output_job::{
-    JobOutput, JobProfile, OnErrors, OutputJob, OutputKind, RunResult, RunTrigger, read_output_job,
-    write_output_job,
+    JobOutput, JobProfile, OnErrors, OutputJob, OutputKind, RunResult, RunTrigger,
 };
 use signex_types::pcb::{PcbBoard, Point};
 use signex_types::project::SetupProfile;
@@ -21,6 +20,7 @@ use super::run::RunAsk;
 use super::tests::{headless, project_app, refusal};
 use crate::app::command::CommandOutcome;
 use crate::app::handlers::menu::export::settle;
+use crate::app::output_job::file::{read_output_job, write_output_job};
 use crate::app::{Message, Signex};
 
 /// Every file under `folder`, by its path below it with `/`.

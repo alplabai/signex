@@ -6,11 +6,12 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use signex_i18n::RenderTranslatable;
-use signex_types::output_job::{JobOutput, OutputJob, OutputKind, write_output_job};
+use signex_types::output_job::{JobOutput, OutputJob, OutputKind};
 
 use crate::app::command::{CommandArgs, CommandOutcome};
 use crate::app::handlers::menu::export::settle;
 use crate::app::handlers::menu::export::tests::{app_workspace, open_with, sheet_with_net};
+use crate::app::output_job::file::write_output_job;
 use crate::app::{Message, Signex};
 use crate::io_ports::{HeadlessAnswers, IoPorts};
 use crate::keymap::AppCommandId;

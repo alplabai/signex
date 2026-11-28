@@ -160,9 +160,13 @@ fn a_template_ref_reads_back_and_a_saved_template_starts_the_same_items() {
 
 #[test]
 fn the_library_file_keeps_unknown_keys_replaces_by_name_and_refuses_a_bad_file() {
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("config").join(TEMPLATE_LIBRARY_FILE);
-    assert_eq!(TemplateLibrary::read(&path), Ok(TemplateLibrary::default()));
+    // The file's contents as the host reads them (the host test in
+    // signex-app's checklist `library_file` writes them to disk).
+    let path = std::path::Path::new("config").join(TEMPLATE_LIBRARY_FILE);
+    assert_eq!(
+        TemplateLibrary::from_file(&path, None),
+        Ok(TemplateLibrary::default())
+    );
     let template = |name: &str, title: &str| SavedTemplate {
         name: name.into(),
         saved_from: None,
@@ -174,23 +178,25 @@ fn the_library_file_keeps_unknown_keys_replaces_by_name_and_refuses_a_bad_file()
         }],
         unknown: UnknownJson::default(),
     };
-    TemplateLibrary::save_into(&path, template("A", "one")).unwrap();
-    let mut value: serde_json::Value =
-        serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    let (_, bytes) = TemplateLibrary::with_template(&path, None, template("A", "one")).unwrap();
+    let mut value: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     value["synced_at"] = json!("2026-11-01");
-    std::fs::write(&path, serde_json::to_vec(&value).unwrap()).unwrap();
-    let library = TemplateLibrary::save_into(&path, template("A", "two")).unwrap();
+    let file = serde_json::to_vec(&value).unwrap();
+    let (library, bytes) =
+        TemplateLibrary::with_template(&path, Some(file.as_slice()), template("A", "two")).unwrap();
     assert_eq!(library.templates.len(), 1, "same name: replaced");
     assert_eq!(library.find(" A ").unwrap().items[0].title, "two");
-    let library = TemplateLibrary::save_into(&path, template("B", "three")).unwrap();
+    let (library, bytes) =
+        TemplateLibrary::with_template(&path, Some(bytes.as_slice()), template("B", "three"))
+            .unwrap();
     assert_eq!(library.templates.len(), 2);
-    let written: serde_json::Value =
-        serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    let written: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     assert_eq!(written["synced_at"], "2026-11-01");
 
-    std::fs::write(&path, b"[not a library").unwrap();
-    assert!(TemplateLibrary::save_into(&path, template("C", "four")).is_err());
-    assert_eq!(std::fs::read(&path).unwrap(), b"[not a library");
+    assert!(
+        TemplateLibrary::with_template(&path, Some(&b"[not a library"[..]), template("C", "four"))
+            .is_err()
+    );
 }
 
 #[test]

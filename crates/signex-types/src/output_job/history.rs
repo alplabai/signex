@@ -2,11 +2,9 @@
 //! per run from the window, newest first, at most [`MAX_HISTORY`]. A
 //! headless or agent run leaves the file as it is.
 
-use std::path::Path;
-
 use serde::{Deserialize, Serialize};
 
-use super::{OutputJob, OutputJobError, read_output_job, write_output_job};
+use super::{OutputJob, OutputJobError, encode_output_job, parse_output_job};
 use crate::format::UnknownFields;
 
 /// The most runs a job keeps.
@@ -108,10 +106,10 @@ impl OutputJob {
     }
 }
 
-/// Add `record` to the history of the job file at `path`, keeping the rest
-/// of the file as it is on disk. Blocking IO: the app calls it from a task.
-pub fn append_run_record(path: &Path, record: RunRecord) -> Result<(), OutputJobError> {
-    let mut job: OutputJob = read_output_job(path)?;
+/// The job file `text` with `record` added to its history and the rest as it
+/// is. The host reads and writes the file (`app::output_job::file`).
+pub fn with_run_record(text: &str, record: RunRecord) -> Result<String, OutputJobError> {
+    let mut job: OutputJob = parse_output_job(text)?;
     job.record_run(record);
-    write_output_job(path, &job)
+    encode_output_job(&job)
 }

@@ -122,13 +122,13 @@ impl TemplateLibrary {
         Ok(bytes)
     }
 
-    /// The library file at `path`; an empty library when there is no file.
-    /// Reads the disk: run it off the UI thread.
-    pub fn read(path: &Path) -> Result<Self, String> {
-        match std::fs::read(path) {
-            Ok(bytes) => Self::parse(&bytes).map_err(|why| format!("{}: {why}", path.display())),
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(Self::default()),
-            Err(error) => Err(format!("{}: {error}", path.display())),
+    /// The library the file at `path` holds, from its `contents` as the host
+    /// read them (`None`: there is no file, so an empty library). `path` only
+    /// names the file in a refusal; this crate reads no file (#2431).
+    pub fn from_file(path: &Path, contents: Option<&[u8]>) -> Result<Self, String> {
+        match contents {
+            Some(bytes) => Self::parse(bytes).map_err(|why| format!("{}: {why}", path.display())),
+            None => Ok(Self::default()),
         }
     }
 
@@ -150,17 +150,19 @@ impl TemplateLibrary {
         }
     }
 
-    /// Add `template` to the library file at `path` and write it back
-    /// atomically; the library as written. A file that does not read as a
-    /// library is refused, never written over. Reads and writes the disk:
-    /// run it off the UI thread.
-    pub fn save_into(path: &Path, template: SavedTemplate) -> Result<Self, String> {
-        let mut library = Self::read(path)?;
+    /// The library file at `path` with `template` added, from the file's
+    /// `contents` (`None`: no file yet): the library and the bytes the host
+    /// writes back atomically. A file that does not read as a library is
+    /// refused, so the host never writes over it.
+    pub fn with_template(
+        path: &Path,
+        contents: Option<&[u8]>,
+        template: SavedTemplate,
+    ) -> Result<(Self, Vec<u8>), String> {
+        let mut library = Self::from_file(path, contents)?;
         library.upsert(template);
         let bytes = library.encode()?;
-        crate::atomic_io::atomic_write(path, &bytes)
-            .map_err(|error| format!("{}: {error}", path.display()))?;
-        Ok(library)
+        Ok((library, bytes))
     }
 }
 
