@@ -290,6 +290,17 @@ fn a_minted_centre_goes_when_the_pattern_leaves_polar() {
         has_entity(&app, &path, centre),
         "undo brings the centre back"
     );
+    // #3232: the undo brings back that the switch minted it, too.
+    app.fp_editor_pattern_kind_picked(array_id, PatternKind::Linear);
+    assert!(
+        !has_entity(&app, &path, centre),
+        "the centre goes after the undo"
+    );
+    assert_eq!(sketch(&app, &path).entities.len(), entities);
+    let doc = app.document_state.footprint_editors.get_mut(&path).unwrap();
+    assert!(doc.undo());
+    assert!(doc.redo());
+    assert!(!has_entity(&app, &path, centre), "redo removes it again");
 }
 
 /// A centre the user drew and then picked stays.

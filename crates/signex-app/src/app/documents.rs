@@ -612,7 +612,8 @@ pub type FieldEditKey = (&'static str, u128);
 /// - the active footprint index,
 /// - the canvas-side `EditorPad` cache,
 /// - the step's id, under which the editor's view state keeps the
-///   selection the step gives back (`state::selection_memo`).
+///   selection the step gives back and the centres a kind switch had
+///   minted (`state::selection_memo`).
 ///
 /// Stored by-value (not by-Arc) so undo/redo never aliases the live
 /// state. Memory cost: ~5 KB × `HISTORY_DEPTH` = ~500 KB per editor.
@@ -952,6 +953,15 @@ impl FootprintDocument {
         self.state.selected_pad = selection.pad;
         self.state.selected_sketch = selection.sketch;
         self.state.selected_sketch_secondary = selection.sketch_secondary;
+        self.state.switch_minted_centres = self.state.selection_memo.minted_centres(&snap.step_id);
+        // An armed centre pick names a pattern of the state that is gone
+        // (#3232).
+        if matches!(
+            self.state.tool_pending,
+            crate::library::editor::footprint::ToolPending::RepickPolarCenter { .. }
+        ) {
+            self.state.tool_pending = crate::library::editor::footprint::ToolPending::Idle;
+        }
         // Bakes shift hand-entry indices and the snapshot keeps no silk
         // selection, so a stale index would point at another entry.
         self.state.clear_silk_selection();

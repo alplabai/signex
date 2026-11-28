@@ -168,6 +168,37 @@ fn under_chamfer_the_pick_takes_a_click_on_a_point() {
     the_pick_takes_a_click_on_a_point(SketchTool::Chamfer, "chamfer");
 }
 
+/// An undo drops an armed pick: the next click is an ordinary Select
+/// click, which adds no Point, records no step and leaves the document
+/// as it was.
+#[test]
+fn an_undo_drops_an_armed_pick() {
+    let path = PathBuf::from("kind-pick-undo.snxfpt");
+    let (mut app, array_id, _) = sketching_with(&path, SketchTool::Select);
+    app.fp_editor_pattern_kind_picked(array_id, PatternKind::Grid);
+    app.fp_editor_pattern_kind_picked(array_id, PatternKind::Polar);
+    let doc = app.document_state.footprint_editors.get_mut(&path).unwrap();
+    assert!(doc.undo());
+    assert!(is_idle(&app, &path), "the undo drops the pick");
+    let entities = sketch(&app, &path).entities.len();
+    let dirty = editor(&app, &path).is_dirty();
+
+    click_canvas(&mut app, &path, (5.0, 6.0));
+
+    assert!(matches!(
+        kind(&app, &path, array_id),
+        ArrayKind::Linear { .. }
+    ));
+    assert_eq!(
+        sketch(&app, &path).entities.len(),
+        entities,
+        "no stray Point"
+    );
+    assert_eq!(editor(&app, &path).is_dirty(), dirty);
+    assert!(!dirty, "back at the saved state");
+    assert_eq!(editor(&app, &path).history.undo_len(), 0, "no undo step");
+}
+
 /// A pick whose pattern is gone mints no centre and records no step.
 #[test]
 fn a_pick_for_a_pattern_that_is_gone_changes_nothing() {
