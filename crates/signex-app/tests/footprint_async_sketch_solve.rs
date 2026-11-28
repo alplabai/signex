@@ -1562,3 +1562,119 @@ fn an_exhausted_work_budget_in_the_async_solve_is_reported_and_keeps_the_edit() 
         "a budget failure is not a conflict: the edit is kept, as inline"
     );
 }
+
+// ---- the selection a step gives back, through drag batches (#2326) ----
+
+type Picks = (
+    Option<usize>,
+    Option<SketchEntityId>,
+    Option<SketchEntityId>,
+);
+
+fn pick(app: &mut Signex, path: &Path, picks: Picks) {
+    let state = &mut app
+        .document_state
+        .footprint_editors
+        .get_mut(path)
+        .unwrap()
+        .state;
+    state.selected_pad = picks.0;
+    state.selected_sketch = picks.1;
+    state.selected_sketch_secondary = picks.2;
+}
+
+fn picks(app: &Signex, path: &Path) -> Picks {
+    let state = &editor(app, path).state;
+    (
+        state.selected_pad,
+        state.selected_sketch,
+        state.selected_sketch_secondary,
+    )
+}
+
+#[test]
+fn undo_after_a_collapsed_drag_gives_back_the_pre_drag_selection() {
+    let Fixture {
+        mut app,
+        path,
+        p2,
+        _dir,
+    } = fixture("collapse-picks");
+    let p1 = editor(&app, &path)
+        .primitive()
+        .sketch
+        .as_ref()
+        .unwrap()
+        .entities[0]
+        .id;
+    let pre_drag = (Some(0), Some(p2), Some(p1));
+    pick(&mut app, &path, pre_drag);
+    dispatch(&mut app, &path, drag(p2, 0.1));
+    pick(&mut app, &path, (Some(1), Some(p1), None));
+    dispatch(&mut app, &path, drag(p2, 0.1));
+    pick(&mut app, &path, (Some(2), None, Some(p2)));
+    let answer = solve_now(&app, &path);
+    dispatch(&mut app, &path, answer);
+    assert_eq!(editor(&app, &path).history.undo_len(), 1, "one drag step");
+    let at_undo = picks(&app, &path);
+
+    let e = app.document_state.footprint_editors.get_mut(&path).unwrap();
+    assert!(e.undo());
+    assert_eq!(picks(&app, &path), pre_drag);
+
+    let e = app.document_state.footprint_editors.get_mut(&path).unwrap();
+    assert!(e.redo());
+    assert_eq!(picks(&app, &path), at_undo, "the pick held when undo ran");
+}
+
+#[test]
+fn a_rejected_drag_gives_back_the_selection_of_every_step_it_put_back() {
+    let Fixture {
+        mut app,
+        path,
+        p2,
+        _dir,
+    } = fixture("reject-picks");
+    let depth = FootprintDocument::HISTORY_DEPTH;
+    {
+        let e = app.document_state.footprint_editors.get_mut(&path).unwrap();
+        for i in 0..depth {
+            e.state.selected_pad = Some(i);
+            e.file.footprints[0].name = format!("n{i}");
+            e.push_history();
+        }
+        // One undone step waits to be redone, with the pick held at undo.
+        e.state.selected_pad = Some(500);
+        assert!(e.undo());
+        e.set_dirty(false);
+    }
+    let before_drag = (Some(depth - 1), Some(p2), None);
+    pick(&mut app, &path, before_drag);
+
+    // Two ticks: the second pushes step 0 off the full history.
+    dispatch(&mut app, &path, drag(p2, 6.0));
+    dispatch(&mut app, &path, drag(p2, 6.0));
+    let answer = solve_now(&app, &path);
+    dispatch(&mut app, &path, answer);
+    assert_eq!(
+        picks(&app, &path),
+        before_drag,
+        "the rejection keeps the selection"
+    );
+    // Land the re-solve of the restored sketch, so redo has nothing to settle.
+    let again = solve_now(&app, &path);
+    dispatch(&mut app, &path, again);
+    let at_redo = picks(&app, &path);
+
+    let e = app.document_state.footprint_editors.get_mut(&path).unwrap();
+    assert!(e.redo(), "the redo step is back");
+    assert_eq!(e.state.selected_pad, Some(500));
+    assert!(e.undo());
+    assert_eq!(picks(&app, &path), at_redo, "the pick held when redo ran");
+    let e = app.document_state.footprint_editors.get_mut(&path).unwrap();
+    for i in (0..depth - 1).rev() {
+        assert!(e.undo());
+        assert_eq!(e.state.selected_pad, Some(i), "step {i} kept its pick");
+    }
+    assert!(!e.undo());
+}

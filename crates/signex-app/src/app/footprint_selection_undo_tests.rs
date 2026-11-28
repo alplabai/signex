@@ -188,3 +188,29 @@ fn coalesced_typing_gives_back_the_selection_before_the_first_keystroke() {
     assert_eq!(picks(&editor), before);
     assert_eq!(editor.history.undo_len(), 0, "one coalesced step");
 }
+
+#[test]
+fn undo_after_switching_footprint_gives_back_the_selection_of_the_step() {
+    use crate::library::editor::footprint::updates::apply_footprint_primitive_edit;
+    use crate::library::messages::FootprintEditorMsg;
+
+    let mut editor = editor_with_three_pads();
+    editor.file.footprints.push(Footprint::empty("Other"));
+    let on_first = select(&mut editor, Some(1));
+    rename(&mut editor, "A");
+    let at_undo = select(&mut editor, Some(2));
+    apply_footprint_primitive_edit(&mut editor, FootprintEditorMsg::SelectActiveIdx(1));
+    assert_eq!(editor.active_idx, 1);
+    assert_eq!(
+        editor.state.selected_pad, None,
+        "the switch clears the pick"
+    );
+
+    assert!(editor.undo());
+
+    assert_eq!(editor.active_idx, 0);
+    assert_eq!(picks(&editor), on_first);
+    assert!(editor.redo());
+    assert_eq!(picks(&editor), (None, None, None), "the pick held at undo");
+    assert_ne!(picks(&editor), at_undo);
+}
