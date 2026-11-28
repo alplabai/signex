@@ -767,7 +767,7 @@ pub struct UiState {
     /// severity map.
     pub pin_matrix_overrides: std::collections::HashMap<(u8, u8), signex_erc::Severity>,
     /// The ERC dialog rule editor's list filter (#1289).
-    pub erc_rule_list: Box<crate::app::core::rule_list_filter::RuleListFilter>,
+    pub erc_rule_list: Box<crate::preferences::RuleListFilter>,
     /// Symbols whose designator the user locked against reannotation.
     /// Exposed as per-row checkboxes in the Annotate dialog; the engine
     /// skips these uuids in `annotate_with_seed_and_locks`.

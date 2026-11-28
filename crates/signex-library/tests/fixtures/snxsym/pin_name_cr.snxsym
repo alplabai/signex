@@ -1,0 +1,30 @@
+format = "snxsym/v1"
+file_uuid = "0190a1b2-0000-7000-8000-000000003129"
+display_name = "Broken pin name"
+created = "2026-11-01T10:00:00Z"
+updated = "2026-11-01T10:00:00Z"
+
+[[symbols]]
+uuid = "0190a1b2-0000-7000-8000-000000000001"
+name = "OPAMP"
+anchor = [
+    0.0,
+    0.0,
+]
+pins_tsv = '''
+number	name	electrical	pos_x	pos_y	orientation	length	description	function	pin_package_length	propagation_delay_ns	designator_visible	name_visible	inside_symbol	inside_edge_symbol	outside_edge_symbol	outside_symbol	hidden	locked	part_number
+1	OUTA	Output	-5.08	0	Right	2.54					true	true	None	None	None	None	false	false	1
+2	IN	Input	5.08	0	Left	2.54					true	true	None	None	None	None	false	false	1
+'''
+designator = "U?"
+comment = "*"
+description = "Written by a build before #3129."
+component_type = "Standard"
+mirrored = false
+version = "0.0.1"
+released = false
+part_count = 1
+created = "2026-11-01T10:00:00Z"
+updated = "2026-11-01T10:00:00Z"
+
+[symbols.schematic_params]

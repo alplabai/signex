@@ -310,13 +310,9 @@ impl LibraryFile {
 }
 
 /// True for tab (the TSV separator) and every control character TOML
-/// forbids inside a literal multi-line string: U+0000-U+001F (newline
-/// included, a lone `\r` is not allowed either) and U+007F.
-///
-/// Scans bytes: each such character is one UTF-8 byte, and every byte of a
-/// multi-byte character is 0x80 or above, so this matches a `char` scan.
+/// forbids inside a literal multi-line string (see [`crate::toml_literal`]).
 fn has_disallowed_char(text: &str) -> bool {
-    text.bytes().any(|b| b < 0x20 || b == 0x7f)
+    crate::toml_literal::first_unstorable_in_cell(text).is_some()
 }
 
 /// Render `name` as a TOML key: bare when it only uses `A-Za-z0-9_-`,

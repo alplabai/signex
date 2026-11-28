@@ -2,8 +2,8 @@
 //! `step/<hash>.step` embeds the model; the `step/` file stays.
 
 use crate::app::FootprintDocument;
-use crate::app::core::new_library_defaults::NewLibraryDefaults;
 use crate::app::handlers::menu::export::tests::app_workspace;
+use crate::library::NewLibraryDefaults;
 use signex_library::{Footprint, FootprintFile, StepAttachment, step_model_hash};
 
 #[test]

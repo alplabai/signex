@@ -28,6 +28,17 @@ enum PostSaveRefresh<'a> {
     Inline,
 }
 
+/// Who asked for a primitive save. Only an explicit Save of the document
+/// writes a file that opened repaired (#3129); Save All, closes, follow-ups
+/// and command or agent saves are refused for it until then.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SaveCause {
+    /// The person's Save (Ctrl+S, the editor's Save button) or Save As.
+    Explicit,
+    /// Any other write: Save All, a close prompt, a follow-up, a command.
+    Other,
+}
+
 /// How long the blocking save waits for the reads queued ahead of it.
 const BLOCKING_SAVE_WAIT: std::time::Duration = std::time::Duration::from_secs(2);
 
@@ -43,6 +54,23 @@ impl Signex {
     pub(crate) fn save_primitive_tab_at(
         &mut self,
         path: &std::path::Path,
+    ) -> anyhow::Result<Task<Message>> {
+        self.save_primitive_tab_for(path, SaveCause::Other)
+    }
+
+    /// [`Self::save_primitive_tab_at`] for the person's own Save of this
+    /// document, the one save that writes a load repair (#3129).
+    pub(crate) fn save_primitive_tab_explicitly(
+        &mut self,
+        path: &std::path::Path,
+    ) -> anyhow::Result<Task<Message>> {
+        self.save_primitive_tab_for(path, SaveCause::Explicit)
+    }
+
+    fn save_primitive_tab_for(
+        &mut self,
+        path: &std::path::Path,
+        cause: SaveCause,
     ) -> anyhow::Result<Task<Message>> {
         self.refuse_save_while_restoring(path)?;
         if self.document_state.document_saves.is_saving(path) {
@@ -64,7 +92,7 @@ impl Signex {
             }
             return Ok(Task::none());
         }
-        self.begin_primitive_save(path, ContainerWrite::Merge, None)
+        self.begin_primitive_save(path, ContainerWrite::Merge, None, cause)
     }
 
     /// Save As: write the editor's container to `path` whole, replacing
@@ -82,7 +110,12 @@ impl Signex {
                 path.display()
             );
         }
-        self.begin_primitive_save(path, ContainerWrite::Replace, Some(origin))
+        self.begin_primitive_save(
+            path,
+            ContainerWrite::Replace,
+            Some(origin),
+            SaveCause::Explicit,
+        )
     }
 
     fn begin_primitive_save(
@@ -90,8 +123,9 @@ impl Signex {
         path: &std::path::Path,
         mode: ContainerWrite,
         save_as: Option<SaveAsOrigin>,
+        cause: SaveCause,
     ) -> anyhow::Result<Task<Message>> {
-        let (mut write, generation, guard) = self.prepare_primitive_save(path, mode)?;
+        let (mut write, generation, guard) = self.prepare_primitive_save(path, mode, cause)?;
         write.origin = save_as.as_ref().map(|origin| origin.from.clone());
         let target = path.to_path_buf();
         Ok(Task::perform(
@@ -133,6 +167,24 @@ impl Signex {
         path: &std::path::Path,
         limit: std::time::Duration,
     ) -> anyhow::Result<()> {
+        self.save_primitive_tab_blocking_for(path, limit, SaveCause::Other)
+    }
+
+    /// The person's own Save, on this thread, for tests of the repair write.
+    #[cfg(test)]
+    pub(crate) fn save_primitive_tab_blocking_explicitly(
+        &mut self,
+        path: &std::path::Path,
+    ) -> anyhow::Result<()> {
+        self.save_primitive_tab_blocking_for(path, BLOCKING_SAVE_WAIT, SaveCause::Explicit)
+    }
+
+    fn save_primitive_tab_blocking_for(
+        &mut self,
+        path: &std::path::Path,
+        limit: std::time::Duration,
+        cause: SaveCause,
+    ) -> anyhow::Result<()> {
         // This write runs on the UI thread, so it cannot wait for a library
         // write a worker still has: refuse instead of freezing the window.
         if let Some(library) = self
@@ -146,7 +198,7 @@ impl Signex {
             );
         }
         let (write, generation, guard) =
-            self.prepare_primitive_save(path, ContainerWrite::Merge)?;
+            self.prepare_primitive_save(path, ContainerWrite::Merge, cause)?;
         let result = {
             let _in_flight = guard;
             write.run_within(limit)
@@ -181,6 +233,7 @@ impl Signex {
         &mut self,
         path: &std::path::Path,
         mode: ContainerWrite,
+        cause: SaveCause,
     ) -> anyhow::Result<(PrimitiveWrite, u64, crate::persist::InFlight)> {
         // A rename or delete still moving this file would recreate it (#859).
         self.refuse_while_path_op(path, "saved")?;
@@ -193,6 +246,12 @@ impl Signex {
         // adapter, so the read-only mount is enforced here (#329).
         if let Some(error) = self.read_only_write_error(path) {
             return Err(error);
+        }
+        // A file that opened repaired is written only by the person's Save.
+        if cause != SaveCause::Explicit
+            && let Some(refusal) = self.repaired_symbol_write_refusal(path)
+        {
+            anyhow::bail!(refusal);
         }
         let now = chrono::Utc::now();
         let generation = self.document_state.document_saves.mint_generation();
@@ -260,6 +319,8 @@ impl Signex {
             editor.mark_saved();
             editor.draft.save_generation = generation;
             let snapshot = Snapshot::Symbol {
+                // Only an explicit Save reaches here for a repaired draft.
+                write_repair: editor.draft.is_read_only(),
                 file: editor.draft.file.clone(),
                 baseline: editor.draft.baseline.clone(),
                 name: editor.primitive().name.clone(),
@@ -373,6 +434,12 @@ impl Signex {
             Ok(written) => {
                 let docs = &mut self.document_state;
                 docs.document_saves.clear_failure(&path);
+                // The repair is on disk now: the draft takes edits again.
+                if let Some(editor) = docs.symbol_editors.get_mut(&path)
+                    && editor.draft.save_generation == generation
+                {
+                    editor.draft.repair_written();
+                }
                 // A Save As moved the draft off `from`: a failure recorded
                 // there (a save refused over a changed file) is not its own.
                 if let Some(from) = save_as.as_ref().map(|origin| &origin.from)

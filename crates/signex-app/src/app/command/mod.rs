@@ -284,7 +284,7 @@ impl Signex {
         let targets = self.command_targets(command, args.has_operands(), window);
         if let Some(targets) = &targets {
             operands.insert(
-                crate::app::core::command_log::RECORDED_TARGETS.to_string(),
+                crate::panels::command_log::RECORDED_TARGETS.to_string(),
                 targets.to_operand(),
             );
         }

@@ -9,7 +9,7 @@ use signex_types::part::FootprintSourceRef;
 use uuid::Uuid;
 
 use super::board_3d::read_models;
-use crate::app::core::new_library_defaults::NewLibraryDefaults;
+use crate::library::NewLibraryDefaults;
 
 /// One triangle: the smallest STEP the importer tessellates.
 const TRIANGLE_STEP: &str = "ISO-10303-21;
