@@ -42,6 +42,7 @@ pub mod properties_view;
 pub mod selection;
 pub mod selection_filter;
 mod selection_filter_draft;
+pub mod selection_memo;
 pub mod silk_selection;
 pub mod sketch_overlay;
 pub mod snap_options;
@@ -350,6 +351,8 @@ pub struct FootprintEditorState {
     pub pad_scope: Option<Box<pad_scope::PadScopePrompt>>,
     /// The mode the 3D toggle returns to (mockup row 187); set when 3D is entered.
     pub mode_before_3d: EditorMode,
+    /// The selection each undo step of the document gives back (#2326).
+    pub selection_memo: selection_memo::SelectionMemo,
 }
 
 /// Pixels per mm at the canvas's "100%" zoom, picked so a 5x5 mm SOT-23
@@ -372,12 +375,25 @@ impl FootprintEditorState {
         pads_tool || sketch_tool || self.edge_pan.is_dragging()
     }
 
+    /// Keep the current pad and sketch picks as the selection the undo
+    /// step `step` gives back.
+    pub fn remember_selection(&mut self, step: &std::sync::Arc<u64>) {
+        let selection = selection_memo::StepSelection {
+            pad: self.selected_pad,
+            sketch: self.selected_sketch,
+            sketch_secondary: self.selected_sketch_secondary,
+        };
+        self.selection_memo.remember(step, selection);
+    }
+
     /// [`Self::from_footprint`] for a switch to another footprint of the
     /// same document. The zoom pill's request carries over, so the canvas
-    /// never sees its number go back and swallow a click.
+    /// never sees its number go back and swallow a click, and so does the
+    /// selection memo, which serves the document's whole history.
     pub fn switched_to(fp: &Footprint, previous: &Self) -> Self {
         Self {
             zoom_request: previous.zoom_request,
+            selection_memo: previous.selection_memo.clone(),
             ..Self::from_footprint(fp)
         }
     }
@@ -486,6 +502,7 @@ impl FootprintEditorState {
             pad_link: None,
             pad_scope: None,
             mode_before_3d: EditorMode::Normal,
+            selection_memo: Default::default(),
         }
     }
 
