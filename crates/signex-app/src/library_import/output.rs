@@ -16,6 +16,7 @@ use super::empty_dir::FolderHold;
 use super::empty_dir::folder_id;
 use super::empty_dir::{FolderId, empty_folder, folder_id_at};
 use super::error::ImportError;
+use super::preview_lock::PreviewLock;
 use super::run::{LibraryRunRequest, RunMode};
 
 /// How the run holds its output folder.
@@ -45,6 +46,11 @@ pub struct ClaimedOutput {
     /// was made (volume and file index on Windows); `None` when it could
     /// not be read, and then `discard` removes nothing.
     created_id: Option<FolderId>,
+    /// A staged preview's lock (#3234), held from right after the folder
+    /// was made until it is discarded or the last clone drops, so another
+    /// Signex's sweep leaves the folder alone. `None` for any other run, or
+    /// when the lock file could not be made (the sweep then goes by age).
+    preview_lock: Option<PreviewLock>,
 }
 
 /// Take `--output` for a new import or a dry run. An absent folder is
@@ -62,6 +68,7 @@ pub fn claim_output(request: &LibraryRunRequest) -> Result<ClaimedOutput, Import
         #[cfg(windows)]
         hold: None,
         created_id: None,
+        preview_lock: None,
     };
     if request.mode == RunMode::Update {
         return Ok(claimed(Held::NotOwned, None));
@@ -123,7 +130,23 @@ pub fn claim_output(request: &LibraryRunRequest) -> Result<ClaimedOutput, Import
     // shares no delete, so it would block the run's own removal of it and
     // a staged preview's rename into place.
     held.created_id = folder_id_at(out).ok();
+    if request.mode == RunMode::Stage {
+        held.preview_lock = take_preview_lock(out);
+    }
     Ok(held)
+}
+
+/// The lock of the staging folder `out`, just made. A file system that
+/// cannot make or lock it is logged and the preview staged without one.
+fn take_preview_lock(out: &Path) -> Option<PreviewLock> {
+    PreviewLock::take(out)
+        .inspect_err(|e| {
+            log::warn!(
+                "library import: the preview {} is not locked: {e}",
+                out.display()
+            );
+        })
+        .ok()
 }
 
 /// Hold the empty folder a run adopts, before it is checked for entries.
@@ -198,6 +221,7 @@ impl ClaimedOutput {
                 }
             },
         };
+        self.release_preview_lock();
         self.remove_created_parents();
         gone
     }
@@ -219,6 +243,7 @@ impl ClaimedOutput {
             },
             Held::Adopted(id) => self.empty_adopted(&id),
         };
+        self.release_preview_lock();
         self.remove_created_parents();
         released
     }
@@ -232,6 +257,15 @@ impl ClaimedOutput {
                 log::error!("library import: {} not emptied: {e}", self.folder.display());
                 false
             }
+        }
+    }
+
+    /// Let go of a staged preview's lock once its folder is removed or
+    /// moved: the lock file goes first, so the parent folders the run made
+    /// can.
+    pub(super) fn release_preview_lock(&self) {
+        if let Some(lock) = &self.preview_lock {
+            lock.release();
         }
     }
 

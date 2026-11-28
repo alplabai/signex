@@ -10,7 +10,8 @@
 //! removed without following a link ([`StagedLibrary::discard`]). An empty
 //! target folder the user chose is kept, with its permissions; the staged
 //! entries are moved into it. Staging folders a crash left are swept when
-//! the dialog opens ([`sweep_stale`]).
+//! the dialog opens ([`sweep_stale`]); one whose owner still holds its lock
+//! ([`super::preview_lock`]) never is.
 
 use std::ffi::{OsStr, OsString};
 use std::io::ErrorKind;
@@ -23,6 +24,7 @@ use super::output::ClaimedOutput;
 use super::place::{
     HeldDir, copy_across, copy_tree, remove_source, rename_entry, rename_no_replace, sync_dir,
 };
+use super::preview_lock::{LOCK_SUFFIX, Owner, owner_of};
 use super::run::{LibraryRunRequest, RunOutcome};
 
 /// What a staging folder's name holds after the library's name.
@@ -160,10 +162,17 @@ impl StagedLibrary {
         if !self.target_before.unchanged(&self.target) {
             return Err(kept(self.changed()));
         }
-        match self.target_before {
+        let moved = match self.target_before {
             TargetBefore::Absent => self.rename_whole(),
             TargetBefore::Empty(id) => self.move_contents(id, move_one),
+        };
+        // No preview is left at the staging path to guard (moved, split
+        // or gone), so its lock file goes now, not when the last clone of
+        // the outcome drops.
+        if !matches!(&moved, Err(failure) if failure.preview_kept) {
+            self.claimed.release_preview_lock();
         }
+        moved
     }
 
     fn changed(&self) -> ImportError {
@@ -189,10 +198,22 @@ impl StagedLibrary {
             {
                 Err(kept(self.changed()))
             }
-            Err(e) => Err(kept(ImportError::MoveFailed {
+            Err(e) => Err(self.not_moved(ImportError::MoveFailed {
                 path: self.target.clone(),
                 detail: e.to_string(),
             })),
+        }
+    }
+
+    /// A move that failed before anything reached the target: the preview
+    /// is kept for another try only while its folder is still there (a
+    /// sweep or someone else may have removed it, #3234).
+    fn not_moved(&self, error: ImportError) -> MoveFailure {
+        let whole = std::fs::symlink_metadata(self.dir())
+            .is_ok_and(|meta| meta.is_dir() && !is_link(&meta));
+        MoveFailure {
+            error,
+            preview_kept: whole,
         }
     }
 
@@ -216,7 +237,7 @@ impl StagedLibrary {
             _ => return Err(kept(self.changed())),
         };
         let unreadable = |e: std::io::Error| {
-            kept(ImportError::MoveFailed {
+            self.not_moved(ImportError::MoveFailed {
                 path: self.dir().to_path_buf(),
                 detail: e.to_string(),
             })
@@ -330,7 +351,7 @@ impl StagedLibrary {
                     self.target.display()
                 );
             }
-            return Err(kept(failed(e)));
+            return Err(self.not_moved(failed(e)));
         }
         self.sync_parent();
         if !self.discard() {
@@ -432,7 +453,10 @@ pub(super) fn move_entry(from: &HeldDir, to: &HeldDir, name: &OsStr) -> std::io:
 }
 
 /// How long a staging folder must have gone unchanged before a sweep takes
-/// it, so a preview another running Signex holds is left alone.
+/// it. A preview another running Signex holds is left alone whatever its
+/// age, by its lock ([`super::preview_lock`]); the age covers a preview
+/// without a lock file (an older build's, or one whose lock could not be
+/// made), and a sweep never takes one of this session.
 pub const STALE_AFTER: std::time::Duration = std::time::Duration::from_secs(3600);
 
 /// What a sweep takes as stale: changed before this session `started` and
@@ -446,9 +470,12 @@ pub fn stale_cutoff(started: SystemTime) -> SystemTime {
 /// Remove the staging folders a crash left (#3171): in each of `roots`,
 /// the folders whose name holds [`STAGING_MARK`] and that were last changed
 /// before `started` (callers pass [`stale_cutoff`] of this session's start),
-/// so no preview of this session is touched. A link, a file, a split library's folder (renamed out of the
-/// pattern, or holding [`SPLIT_MARKER`]) is left alone; a folder is emptied
-/// through its identity, never following a link. Returns how many went.
+/// so no preview of this session is touched. A folder whose lock a running
+/// process holds is left alone, however old (#3234). A link, a file, a
+/// split library's folder (renamed out of the pattern, or holding
+/// [`SPLIT_MARKER`]) is left alone; a folder is emptied through its
+/// identity, never following a link. A lock file whose folder is gone and
+/// whose owner is gone goes too. Returns how many previews went.
 pub fn sweep_stale(roots: &[PathBuf], started: SystemTime) -> usize {
     let mut removed = 0;
     for root in roots {
@@ -457,15 +484,56 @@ pub fn sweep_stale(roots: &[PathBuf], started: SystemTime) -> usize {
         };
         for entry in entries.flatten() {
             let name = entry.file_name();
-            let ours = name
+            let Some(name) = name
                 .to_str()
-                .is_some_and(|n| n.starts_with('.') && n.contains(STAGING_MARK));
-            if ours && is_stale(&entry.path(), started) && remove_stale(&entry.path()) {
+                .filter(|n| n.starts_with('.') && n.contains(STAGING_MARK))
+            else {
+                continue;
+            };
+            if let Some(folder) = name.strip_suffix(LOCK_SUFFIX) {
+                remove_orphan_lock(&root.join(folder), &entry.path(), started);
+            } else if is_stale(&entry.path(), started) && sweep_one(&entry.path()) {
                 removed += 1;
             }
         }
     }
     removed
+}
+
+/// Remove the stale preview `path` unless its owner is still running.
+fn sweep_one(path: &Path) -> bool {
+    match owner_of(path) {
+        Owner::Alive => {
+            log::info!(
+                "library import: the preview {} is in use, not swept",
+                path.display()
+            );
+            false
+        }
+        Owner::Unknown => remove_stale(path),
+        // The lock file goes when `lock` drops, after the folder.
+        Owner::Gone(lock) => {
+            let removed = remove_stale(path);
+            drop(lock);
+            removed
+        }
+    }
+}
+
+/// A lock file left without its folder (a crash between the two): removed
+/// once it is older than `started` and nobody holds it.
+fn remove_orphan_lock(folder: &Path, lock_file: &Path, started: SystemTime) {
+    let old_plain_file = std::fs::symlink_metadata(lock_file).is_ok_and(|meta| {
+        meta.is_file() && !is_link(&meta) && meta.modified().is_ok_and(|at| at < started)
+    });
+    let folder_gone =
+        std::fs::symlink_metadata(folder).is_err_and(|e| e.kind() == ErrorKind::NotFound);
+    if old_plain_file
+        && folder_gone
+        && let Owner::Gone(lock) = owner_of(folder)
+    {
+        drop(lock);
+    }
 }
 
 fn is_stale(path: &Path, started: SystemTime) -> bool {
