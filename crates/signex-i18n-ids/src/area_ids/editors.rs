@@ -537,4 +537,10 @@ define_ids! {
     // #2596
     EDITORS_ROLE_PATTERN_KIND_DROPPED_SKIPS = "editors-role-pattern-kind-dropped-skips";
     EDITORS_ROLE_PATTERN_KIND_DROPPED_OVERRIDES = "editors-role-pattern-kind-dropped-overrides";
+    // pin-text-control-characters (#3129)
+    EDITORS_SYMBOL_REPAIRED_ON_OPEN = "editors-symbol-repaired-on-open";
+    EDITORS_SYMBOL_REPAIRED_MORE = "editors-symbol-repaired-more";
+    EDITORS_SYMBOL_READ_ONLY_REPAIRED = "editors-symbol-read-only-repaired";
+    EDITORS_SYMBOL_PIN_TEXT_REFUSED = "editors-symbol-pin-text-refused";
+    EDITORS_SYMBOL_REPAIRED_WRITE_REFUSED = "editors-symbol-repaired-write-refused";
 }

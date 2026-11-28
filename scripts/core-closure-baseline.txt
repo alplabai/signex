@@ -1,0 +1,18 @@
+# Core closure baseline (scripts/check_core_closure.sh, #2326). Unreachable core types
+# known today, `path Name`. It may only shrink; delete a line when its type moves out.
+# Regenerate with: bash scripts/check_core_closure.sh --generate
+crates/signex-app/src/app/core/block_diagram_editor.rs Camera
+crates/signex-app/src/app/core/block_diagram_editor.rs DiagramTool
+crates/signex-app/src/app/core/block_diagram_editor.rs PropertyField
+crates/signex-app/src/app/core/block_diagram_panes.rs DiagramView
+crates/signex-app/src/app/core/block_diagram_panes.rs ExportDraft
+crates/signex-app/src/app/core/block_diagram_panes.rs ExportKind
+crates/signex-app/src/app/core/block_diagram_panes.rs ExportPage
+crates/signex-app/src/app/core/block_diagram_panes.rs ExportPaper
+crates/signex-app/src/app/core/block_diagram_panes.rs PowerTreeRead
+crates/signex-app/src/app/core/block_diagram_panes.rs PowerTreeView
+crates/signex-app/src/app/core/block_diagram_panes.rs ResyncReview
+crates/signex-app/src/app/core/block_diagram_panes.rs UnlinkRow
+crates/signex-app/src/app/core/block_diagram_view.rs BlockDiagramViewState
+crates/signex-app/src/app/core/branch_switch.rs SwitchRequest
+crates/signex-app/src/app/core/branch_switch.rs SwitchSurface

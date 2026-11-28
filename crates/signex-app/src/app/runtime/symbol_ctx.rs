@@ -182,6 +182,7 @@ pub(super) fn build_symbol_editor_panel_ctx(
         ),
         props,
         display,
+        pin_text_refusal: editor.gui.pin_text_refusal.clone(),
     })
 }
 

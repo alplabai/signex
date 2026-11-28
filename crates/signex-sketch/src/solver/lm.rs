@@ -46,7 +46,7 @@
 //! `stalled` flag lets [`crate::solver::Solver`] retry it and decide
 //! whether a named conflict is the cause.
 
-use std::time::Instant;
+use std::time::Duration;
 
 use crate::error::{SketchError, SolveError};
 use crate::sketch::SketchData;
@@ -110,8 +110,18 @@ pub struct SolveResult {
     pub index: EntityIndex,
     pub iterations: usize,
     pub final_residual_norm: f64,
+    /// Time spent in the LM runs, read from the host's [`Clock`]; 0 under
+    /// [`NO_CLOCK`].
     pub elapsed_ms: u64,
 }
+
+/// The host's monotonic clock: time since a fixed point of the host's
+/// choosing. The solver reads no clock of its own (#2431); time comes in from
+/// the host like any other value.
+pub type Clock = fn() -> Duration;
+
+/// A clock that stands still, for hosts that do not time the solve.
+pub const NO_CLOCK: Clock = || Duration::ZERO;
 
 /// Levenberg–Marquardt solve.
 ///
@@ -130,7 +140,7 @@ pub fn solve_lm(
     max_iters: usize,
 ) -> Result<SolveResult, SolveError> {
     let mut meter = WorkMeter::new(work_budget);
-    solve_lm_keeping_state(sketch, params, &mut meter, tolerance, max_iters)
+    solve_lm_keeping_state(sketch, params, &mut meter, tolerance, max_iters, NO_CLOCK)
         .map_err(|failure| failure.error)
 }
 
@@ -168,8 +178,17 @@ pub fn solve_lm_keeping_state(
     meter: &mut WorkMeter,
     tolerance: f64,
     max_iters: usize,
+    clock: Clock,
 ) -> Result<SolveResult, Box<LmFailure>> {
-    run_lm(sketch, params, meter, tolerance, max_iters, Start::Seed)
+    run_lm(
+        sketch,
+        params,
+        meter,
+        tolerance,
+        max_iters,
+        Start::Seed,
+        clock,
+    )
 }
 
 /// [`solve_lm_keeping_state`] from a slightly moved start. A start on a
@@ -182,6 +201,7 @@ pub fn solve_lm_perturbed(
     meter: &mut WorkMeter,
     tolerance: f64,
     max_iters: usize,
+    clock: Clock,
 ) -> Result<SolveResult, Box<LmFailure>> {
     run_lm(
         sketch,
@@ -190,6 +210,7 @@ pub fn solve_lm_perturbed(
         tolerance,
         max_iters,
         Start::Perturbed,
+        clock,
     )
 }
 
@@ -246,6 +267,7 @@ pub fn undo_retry_offset(
     tolerance: f64,
     max_iters: usize,
     result: SolveResult,
+    clock: Clock,
 ) -> Result<SolveResult, SolveError> {
     let original = pack(sketch).vector;
     let extent = original.iter().fold(1.0_f64, |m, v| m.max(v.abs()));
@@ -299,6 +321,7 @@ pub fn undo_retry_offset(
             tolerance,
             max_iters,
             Start::From(start),
+            clock,
         ) {
             Ok(next) => next,
             Err(failure) => {
@@ -378,8 +401,9 @@ fn run_lm(
     tolerance: f64,
     max_iters: usize,
     start: Start,
+    clock: Clock,
 ) -> Result<SolveResult, Box<LmFailure>> {
-    let started = Instant::now();
+    let started = clock();
     let dangling = sketch.dangling_refs();
     if !dangling.is_empty() {
         // The caller reports the error; this stays at debug so a stuck
@@ -432,7 +456,7 @@ fn run_lm(
             index: packed.index,
             iterations,
             final_residual_norm,
-            elapsed_ms: started.elapsed().as_millis() as u64,
+            elapsed_ms: clock().saturating_sub(started).as_millis() as u64,
         }),
         Err(exit) => {
             let (error, stalled) = match exit {

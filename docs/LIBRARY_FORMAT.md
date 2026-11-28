@@ -567,8 +567,11 @@ the header has 20 columns. The choice is per symbol, while the token is per
 file, so one envelope may hold both header widths (the fixture does).
 
 Text cells may not contain a tab, a line break, `'''` or any other control
-character (the writer refuses tab, LF and `'''`; see Open points for the
-rest). There is no escaping.
+character (U+0000 to U+001F, U+007F); the writer refuses every one of them,
+naming the symbol, the pin and the character, and the Symbol Editor refuses
+them as they are typed or pasted (#3129). There is no escaping. A file an
+older build wrote with such a character opens in the Symbol Editor with the
+character removed, read-only until saved (Open points, 3).
 
 ### 3.3 Units
 
@@ -909,6 +912,10 @@ printer (0.8), so its layout is part of the format:
 
 - The `.snxlib` table blocks and the `pins_tsv` / `pads_tsv` values are
   written by Signex itself as shown in 2.2 and 3.1, not by the printer.
+  They, the `.snxsim` `body` and the embedded model `data` are TOML literal
+  strings, which hold no control character but tab and line breaks; a
+  writer refuses text with any other (and tab inside a table cell) rather
+  than write a file no reader opens (#3129).
 
 ### 5.4 Times
 
@@ -967,7 +974,9 @@ a converter must store the right one.
 ## 7. `.snxsim`
 
 `sims/<uuid>.snxsim`, token `snxsim/v1`, one model per file as for
-footprints. Its content is not specified here.
+footprints. Its content is not specified here, except that the `body` is a
+TOML literal string: tab, LF and CRLF are kept, and a save refuses any other
+control character, naming the model and the character (#3129).
 
 ## 8. Embedded 3D models (format 1.4, #3107, #3108)
 
@@ -1041,12 +1050,16 @@ Things the code does not pin, or where it surprises:
    display only and writes nothing. A converter from a source whose +y is up
    negates every y and every angle, and swaps each arc's start and end
    angles so the arc keeps its sweep.
-3. **Pin cells and control characters.** The pin writer refuses only tab,
-   LF and `'''` (`primitive/symbol/serde_tsv.rs`, `pin_to_tsv_row`); a pin
-   name with another control character (CR, U+0001) is written into a TOML
-   literal string that then fails to parse, so the symbol file no longer
-   opens. Pads refuse every control character. Converters must not write
-   them.
+3. **Pin cells and control characters.** Builds before #3129 refused only
+   tab, LF and `'''` in a pin cell, so a pin name with another control
+   character (CR, U+0001) was written into a TOML literal string that then
+   fails to parse. Such a file is refused by name by a strict read
+   (`RepairableControlChars`); `SymbolFile::from_bytes_repairing`, which the
+   Symbol Editor uses, removes the characters from the pin tables, says in
+   Messages which symbol, pin and character, and opens the file read-only
+   until the user saves it: only that Save writes the file (Save All,
+   autosave, commands and agents are refused for it). Pads refuse every control character. Converters
+   must not write them.
 4. **`[users]` default.** A `.snxlib` without a `[users]` table reads
    `default_role` as `""`; one with `[users]` but no `default_role` reads
    `"Designer"` (`manifest.rs`, `UsersConfig` derives `Default` while the

@@ -11,6 +11,9 @@
 *.wrl binary
 *.png binary
 
+# A .snxsym written before #3129, a raw CR in its pin table: never converted.
+crates/signex-library/tests/fixtures/snxsym/pin_name_cr.snxsym -text
+
 # Native-format fixture corpus: byte-for-byte goldens, never converted.
 crates/signex-types/tests/corpus/** text eol=lf
 

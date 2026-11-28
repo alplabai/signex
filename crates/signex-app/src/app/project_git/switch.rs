@@ -42,8 +42,12 @@ fn run_switch(job: SwitchJob) -> Result<SwitchDone, SwitchRefusal> {
             || SwitchRefusal::ProjectFileUnreadable(rel.to_string_lossy().replace('\\', "/"));
         let bytes =
             repo_branches::file_on_branch(&job.root, &job.target, rel)?.ok_or_else(unreadable)?;
-        signex_types::project::parse_project_bytes(&job.root.join(rel), &bytes)
-            .map_err(|_| unreadable())?;
+        signex_types::project::parse_project_bytes(
+            &job.root.join(rel),
+            &bytes,
+            signex_types::project::files_on_disk(&job.root.join(rel)),
+        )
+        .map_err(|_| unreadable())?;
     }
     let branch = repo_branches::switch_branch(&job.root, &job.target, &job.held)?;
     Ok(SwitchDone {

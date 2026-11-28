@@ -58,6 +58,7 @@ pub mod search;
 pub mod search_index;
 pub mod tables;
 pub mod templates;
+pub mod toml_literal;
 pub mod validate;
 #[cfg(feature = "local-git")]
 mod vcs_init_files;
@@ -149,9 +150,9 @@ pub use primitive::{
     DuplicatedUuid, EmbeddedModel, EmbeddedModels, Footprint, FootprintFile, FootprintFileError,
     FpGraphic, FpGraphicKind, LayerId, LoadRepair, ModelError, ModelFault, Pad, PadKind, PadShape,
     PinDirection, PinOrientation, PinSymbolKind, Polygon, PrimitiveKind, PrimitiveRef, SimKind,
-    SimModel, StepAttachment, Symbol, SymbolFile, SymbolGraphic, SymbolGraphicKind, SymbolPin,
-    chain_into_closed_contour, normalize_arc_endpoints_deg, step_model_hash,
-    textconv_footprint_text, unique_copy_name,
+    SimModel, StepAttachment, Symbol, SymbolFile, SymbolGraphic, SymbolGraphicKind,
+    SymbolLoadRepair, SymbolPin, UnstorablePinText, chain_into_closed_contour,
+    normalize_arc_endpoints_deg, step_model_hash, textconv_footprint_text, unique_copy_name,
 };
 pub use range_filter::{
     EQUALS_RELATIVE_TOLERANCE, FilterBound, RangeFilter, RangeOn, RangeOp, RangeVerdict,

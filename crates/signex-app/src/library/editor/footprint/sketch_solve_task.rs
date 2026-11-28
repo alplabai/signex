@@ -21,7 +21,8 @@
 
 use std::collections::HashMap;
 use std::path::Path;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
+use std::time::{Duration, Instant};
 
 use iced::Task;
 use signex_expr::ExprError;
@@ -101,6 +102,13 @@ pub fn run_solve_inline(request: SketchSolveRequest) -> FootprintEditorMsg {
 /// The real solve: resolve the parameters, then run the solver.
 fn solve_sketch(sketch: &SketchData, solver: &Solver) -> SolveOutcome {
     solve_resolved(sketch, |resolved| solver.solve(sketch, resolved))
+}
+
+/// The desktop clock the editor's solver reads its LM time from: the solver
+/// reads no clock itself (#2431). Monotonic, since the first call.
+pub(crate) fn host_clock() -> Duration {
+    static EPOCH: OnceLock<Instant> = OnceLock::new();
+    EPOCH.get_or_init(Instant::now).elapsed()
 }
 
 fn solve_resolved(

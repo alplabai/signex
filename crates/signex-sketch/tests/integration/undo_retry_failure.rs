@@ -10,7 +10,7 @@ use signex_sketch::SketchData;
 use signex_sketch::constraint::{Constraint, ConstraintKind, DimTarget};
 use signex_sketch::error::SolveError;
 use signex_sketch::id::{ConstraintId, SketchEntityId};
-use signex_sketch::solver::lm::{SolveResult, solve_lm_keeping_state, undo_retry_offset};
+use signex_sketch::solver::lm::{NO_CLOCK, SolveResult, solve_lm_keeping_state, undo_retry_offset};
 use signex_sketch::solver::residual::ResolvedParams;
 use signex_sketch::solver::work::WorkMeter;
 
@@ -49,6 +49,7 @@ fn solved(data: &SketchData) -> SolveResult {
         &mut meter,
         solver.tolerance,
         solver.max_iters,
+        NO_CLOCK,
     )
     .expect("the circle sketch converges")
 }
@@ -66,6 +67,7 @@ fn undo(
         common::solver().tolerance,
         max_iters,
         result,
+        NO_CLOCK,
     )
 }
 

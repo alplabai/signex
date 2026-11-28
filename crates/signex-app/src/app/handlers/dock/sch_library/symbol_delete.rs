@@ -20,6 +20,12 @@ impl Signex {
             );
             return Task::none();
         };
+        // A file that opened repaired takes no edit until it is saved (#3129).
+        if editor.draft.is_read_only() {
+            crate::library::editor::symbol::refuse_read_only(editor);
+            self.refresh_panel_ctx();
+            return Task::none();
+        }
         if editor.draft.file.symbols.len() <= 1 {
             crate::diagnostics::log_warning(format!(
                 "{}: refused to delete the last symbol in the file",
@@ -501,7 +507,8 @@ impl Signex {
         let Some(editor) = self.document_state.symbol_editors.get_mut(path) else {
             return true;
         };
-        if editor.draft.file.symbols.len() <= 1
+        if editor.draft.is_read_only()
+            || editor.draft.file.symbols.len() <= 1
             || editor.draft.file.symbols.get(idx).map(|s| s.uuid) != Some(symbol)
         {
             return true;

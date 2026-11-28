@@ -207,11 +207,21 @@ fn pins_to_tsv_empty_emits_header_only() {
 fn pins_to_tsv_rejects_tab_in_cell() {
     let mut pin = SymbolPin::new("1", "name");
     pin.description = "tab\there".into();
+    // #3129: tab separates the cells, so it is refused like every other
+    // control character, naming the pin and the character.
     match pins_to_tsv(std::slice::from_ref(&pin)) {
-        Err(SymbolFileError::InvalidTsvCell { column, .. }) => {
-            assert_eq!(column, "description");
+        Err(SymbolFileError::ControlCharInPinCell {
+            pin,
+            column,
+            character,
+            ..
+        }) => {
+            assert_eq!(
+                (pin.as_str(), column, character),
+                ("1", "description", '\t')
+            );
         }
-        other => panic!("expected InvalidTsvCell, got {other:?}"),
+        other => panic!("expected ControlCharInPinCell, got {other:?}"),
     }
 }
 
@@ -220,10 +230,12 @@ fn pins_to_tsv_rejects_newline_in_cell() {
     let mut pin = SymbolPin::new("1", "multi\nline");
     pin.description = String::new();
     match pins_to_tsv(std::slice::from_ref(&pin)) {
-        Err(SymbolFileError::InvalidTsvCell { column, .. }) => {
-            assert_eq!(column, "name");
+        Err(SymbolFileError::ControlCharInPinCell {
+            column, character, ..
+        }) => {
+            assert_eq!((column, character), ("name", '\n'));
         }
-        other => panic!("expected InvalidTsvCell, got {other:?}"),
+        other => panic!("expected ControlCharInPinCell, got {other:?}"),
     }
 }
 

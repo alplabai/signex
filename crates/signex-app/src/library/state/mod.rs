@@ -1093,10 +1093,10 @@ mod tests;
 mod uncommitted;
 mod under_folder;
 
-pub use crate::app::core::new_library_defaults::NewLibraryDefaults;
 pub use browser_preview::BrowserPreviewError;
 pub use id_precedence::IdClashNotice;
 pub use methods::*;
+pub use new_library_defaults::NewLibraryDefaults;
 pub use panel_kind::{
     LibraryPanelKind, LibraryPanelPick, LibraryPanelState, LibraryPanelTab, LibraryRowStyle,
 };

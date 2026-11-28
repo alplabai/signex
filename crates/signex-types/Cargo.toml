@@ -16,6 +16,11 @@ uuid = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 
+# The browser has no OS randomness; uuid takes it from JS there (#2431). Cargo
+# unifies the feature, so this covers every crate that builds on signex-types.
+[target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dependencies]
+uuid = { workspace = true, features = ["js"] }
+
 [dev-dependencies]
 tempfile = "3"
 
