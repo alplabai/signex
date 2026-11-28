@@ -14,7 +14,7 @@ use uuid::Uuid;
 
 use super::{DocumentSaveJob, SaveOutcome};
 use crate::app::core::case_fold::CaseFold;
-use crate::app::core::new_library_defaults::NewLibraryDefaults;
+use crate::library::NewLibraryDefaults;
 use crate::library::commands::{
     PendingLibrarySpec, create_pending_library, register_library_entry,
 };

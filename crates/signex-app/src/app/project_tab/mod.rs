@@ -92,8 +92,8 @@ pub(crate) use variants::{
     project_set_variant_fit, project_set_variant_override, variant_parameters_command,
 };
 
-pub use crate::app::core::row_drag::RowDrag;
 use crate::app::state::ProjectId;
+pub use row_drag::RowDrag;
 
 /// A section of the Project tab, in list order (#1084).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -199,14 +199,8 @@ pub struct ProjectTabState {
     /// Base does.
     pub variants_only_differ: bool,
     /// The parts by variants matrix last read, or why it could not be read.
-    pub variant_parts: Option<
-        std::sync::Arc<
-            Result<
-                signex_output::VariantMatrix,
-                crate::app::core::parts_read_error::PartsReadError,
-            >,
-        >,
-    >,
+    pub variant_parts:
+        Option<std::sync::Arc<Result<signex_output::VariantMatrix, variants::PartsReadError>>>,
     /// `DocumentState::sheet_edit_epoch` when `variant_parts` was read.
     pub variant_parts_epoch: u64,
     /// The project parameters the newest parts read evaluates values with
@@ -218,7 +212,7 @@ pub struct ProjectTabState {
     pub variant_parts_reading: bool,
     /// The Variant Manager tab's selected cell and typed value (mockup row
     /// 32).
-    pub variant_manager: crate::app::core::variant_cell::VariantManagerUi,
+    pub variant_manager: variants::VariantManagerUi,
     /// The Requirements section's drafts, refusal and last run (#2339).
     pub requirements: RequirementsTabState,
     /// The Design Checklist tab's filter, selection, drafts and last run
@@ -424,12 +418,7 @@ pub enum ProjectTabMsg {
         project_id: ProjectId,
         generation: u64,
         epoch: u64,
-        parts: std::sync::Arc<
-            Result<
-                signex_output::VariantMatrix,
-                crate::app::core::parts_read_error::PartsReadError,
-            >,
-        >,
+        parts: std::sync::Arc<Result<signex_output::VariantMatrix, variants::PartsReadError>>,
     },
     /// A Move up / Move down button of the Libraries table (#1691), with the
     /// library's path as the project stores it.

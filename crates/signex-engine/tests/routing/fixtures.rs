@@ -103,9 +103,13 @@ pub fn load(path: &Path) -> Option<Fixture> {
     let project = path.with_extension("snxprj");
     let classes = match std::fs::read(&project) {
         Ok(bytes) => {
-            parse_project_bytes(&project, &bytes)
-                .unwrap_or_else(|e| panic!("{name}.snxprj: {e:?}"))
-                .net_classes
+            parse_project_bytes(
+                &project,
+                &bytes,
+                signex_types::project::files_on_disk(&project),
+            )
+            .unwrap_or_else(|e| panic!("{name}.snxprj: {e:?}"))
+            .net_classes
         }
         Err(_) => Vec::new(),
     };

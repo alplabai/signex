@@ -13,7 +13,7 @@ use signex_output::{ExportContext, MatrixChannels, ProjectMetadata, VariantMatri
 
 use super::super::ProjectTabMsg;
 use super::super::general::tab_message;
-use crate::app::core::parts_read_error::PartsReadError;
+use super::PartsReadError;
 use crate::app::handlers::menu::export::export_metadata_with;
 use crate::app::handlers::menu::export::placements::{
     netlist_placements, stamp_channel_designators,

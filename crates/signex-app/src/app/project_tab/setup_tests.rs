@@ -399,8 +399,12 @@ fn an_unreadable_section_is_kept_and_the_section_still_builds() {
         signex_types::project::encode_project(&app.document_state.projects[0].data).unwrap();
     let mut json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     json["project_defaults"] = serde_json::json!({"pcb": {"copper_layers": 300}});
-    let reread =
-        signex_types::project::parse_project_bytes(&path, json.to_string().as_bytes()).unwrap();
+    let reread = signex_types::project::parse_project_bytes(
+        &path,
+        json.to_string().as_bytes(),
+        signex_types::project::files_on_disk(&path),
+    )
+    .unwrap();
     app.document_state.projects[0].data = reread;
     assert!(
         app.document_state.projects[0]

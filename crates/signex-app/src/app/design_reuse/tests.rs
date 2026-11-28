@@ -304,7 +304,12 @@ fn a_new_project_from_a_template_takes_its_settings_and_frame() {
     let template = tmp.path().join("power");
     std::fs::create_dir_all(&template).expect("template folder");
     let file = template.join("power.snxprj");
-    let mut data = signex_types::project::parse_project_bytes(&file, b"").expect("blank");
+    let mut data = signex_types::project::parse_project_bytes(
+        &file,
+        b"",
+        signex_types::project::files_on_disk(&file),
+    )
+    .expect("blank");
     data.parameters
         .insert("company".to_string(), "Alp Lab".to_string());
     data.schematic_root = Some("power.snxsch".to_string());

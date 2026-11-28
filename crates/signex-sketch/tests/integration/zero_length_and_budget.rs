@@ -10,7 +10,9 @@ use signex_sketch::constraint::{Constraint, ConstraintKind, DimTarget};
 use signex_sketch::error::SolveError;
 use signex_sketch::id::ConstraintId;
 use signex_sketch::solver::FullSolveOutput;
-use signex_sketch::solver::lm::{DEFAULT_WORK_BUDGET, solve_lm_keeping_state, solve_lm_perturbed};
+use signex_sketch::solver::lm::{
+    DEFAULT_WORK_BUDGET, NO_CLOCK, solve_lm_keeping_state, solve_lm_perturbed,
+};
 use signex_sketch::solver::state::point_xy;
 use signex_sketch::solver::work::WorkMeter;
 use signex_sketch::solver::{Solver, residual::ResolvedParams};
@@ -252,6 +254,7 @@ fn lone_run_work(sketch: &SketchData, perturbed: bool) -> u64 {
             &mut meter,
             solver.tolerance,
             solver.max_iters,
+            NO_CLOCK,
         )
     } else {
         solve_lm_keeping_state(
@@ -260,6 +263,7 @@ fn lone_run_work(sketch: &SketchData, perturbed: bool) -> u64 {
             &mut meter,
             solver.tolerance,
             solver.max_iters,
+            NO_CLOCK,
         )
     };
     meter.spent()

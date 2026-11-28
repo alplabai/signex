@@ -66,8 +66,7 @@ impl SaveProfileDialog {
     }
 }
 
-pub use crate::app::core::rule_list_filter::RuleListFilter;
-pub use crate::app::core::rule_profile_page::{ProfileEditorTab, ProfileNameAction};
+pub use crate::preferences::{ProfileEditorTab, ProfileNameAction, RuleListFilter};
 
 /// Preferences ▸ Rule Profiles. Edits apply at once, like the ERC dialog's:
 /// each one is written to the profile's file, not held as a draft.

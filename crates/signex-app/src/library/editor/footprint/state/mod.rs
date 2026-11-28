@@ -434,7 +434,10 @@ impl FootprintEditorState {
             cursor_mm: None,
             view_px_per_mm: DEFAULT_PX_PER_MM,
             mode: EditorMode::Normal,
-            sketch_solver: signex_sketch::solver::Solver::default(),
+            sketch_solver: signex_sketch::solver::Solver {
+                clock: super::sketch_solve_task::host_clock,
+                ..Default::default()
+            },
             last_solve: None,
             sketch_solve: super::sketch_solve_task::SketchSolveSlot::default(),
             solve_warnings: Vec::new(),

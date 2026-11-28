@@ -7,7 +7,7 @@ client of the agent socket. Open it with **View ▸ Command Log** or from the
 status bar's panel list (group Verify). It docks at the bottom by default and
 can be moved like any panel; its saved layout key is `command_log`.
 
-The model is `app::core::command_log` (UI-free); the app records rows in
+The model is `panels::command_log::model` (UI-free); the app records rows in
 `app::handlers::command_log` and the panel is `panels::command_log`.
 
 ## What is logged

@@ -7,6 +7,7 @@ mod detail;
 #[cfg(test)]
 mod fit_tests;
 mod layout;
+mod model;
 mod table;
 mod toolbar;
 
@@ -27,10 +28,11 @@ use crate::styles::{
 
 pub(crate) use toolbar::title_actions;
 
-pub use crate::app::core::command_log::{
+pub use model::{
     CLI_CLIENT, CommandLog, JumpTarget, LogCounts, LogFilters, LogOutcome, LogRow, LogSource,
     MAX_ROWS, ResultFilter, SourceKind, failure_code, operand_text,
 };
+pub(crate) use model::{RECORDED_INPUT, RECORDED_TARGETS, RecordedTargets};
 
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;

@@ -211,7 +211,8 @@ fn a_section_command_round_trips_as_json() {
 #[test]
 fn an_unreadable_schematic_design_section_refuses_every_edit() {
     let text = br#"{"name":"P","dir":"","schematic_root":null,"pcb_file":null,"schematic_design":"garbled"}"#;
-    let mut data = signex_types::project::parse_project_bytes(Path::new("P.snxprj"), text).unwrap();
+    let mut data =
+        signex_types::project::parse_project_bytes(Path::new("P.snxprj"), text, |_| false).unwrap();
     assert!(data.has_unreadable_schematic_design());
     let mut history = ProjectGeneralHistory::default();
     let naming = signex_types::project::ChannelNaming {
@@ -239,7 +240,8 @@ fn an_unreadable_schematic_design_section_refuses_every_edit() {
 #[test]
 fn clearing_the_annotate_choice_over_an_unreadable_section_records_nothing() {
     let text = br#"{"name":"P","dir":"","schematic_root":null,"pcb_file":null,"annotation":{"designator_standard":"iso9999"}}"#;
-    let mut data = signex_types::project::parse_project_bytes(Path::new("P.snxprj"), text).unwrap();
+    let mut data =
+        signex_types::project::parse_project_bytes(Path::new("P.snxprj"), text, |_| false).unwrap();
     assert!(data.has_unreadable_annotation());
     let mut history = ProjectGeneralHistory::default();
     let clear = ProjectSectionCommand::SetAnnotateUndo { choice: None };
@@ -418,7 +420,8 @@ fn the_numbering_scheme_is_one_step_and_keeps_an_unreadable_section() {
     assert!(data.annotation.is_none());
 
     let text = br#"{"name":"P","dir":"","schematic_root":null,"pcb_file":null,"annotation":{"numbering":"per_sheet_start"}}"#;
-    let mut data = signex_types::project::parse_project_bytes(Path::new("P.snxprj"), text).unwrap();
+    let mut data =
+        signex_types::project::parse_project_bytes(Path::new("P.snxprj"), text, |_| false).unwrap();
     let mut history = ProjectGeneralHistory::default();
     let continuous = ProjectSectionCommand::SetAnnotateNumbering {
         scheme: NumberingScheme::Continuous,

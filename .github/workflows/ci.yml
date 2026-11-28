@@ -158,6 +158,16 @@ jobs:
           rustup target add wasm32-unknown-unknown
           cargo build -p signex-mcad --target wasm32-unknown-unknown
 
+      # The core a browser viewer needs must compile for wasm32 (#2431, draft
+      # ADR-0007 D7). uuid takes its `js` feature on wasm32 only, through
+      # signex-types; `--locked` keeps Cargo.lock as it is.
+      - name: Check the viewer core for wasm32
+        if: runner.os == 'Linux'
+        run: >-
+          cargo check --locked --target wasm32-unknown-unknown
+          -p signex-types -p signex-net -p pcb-geom -p signex-sketch
+          -p signex-bom -p signex-output -p signex-gfx -p signex-renderer
+
       # No `-W clippy::all`. `clippy::all` is already the default lint set, so
       # the flag bought nothing — but a *group-level* `-W` sets every lint in
       # the group to warn, and that group contains the 67 deny-by-default
@@ -188,6 +198,14 @@ jobs:
       # with a real reason is the escape hatch, and it has to survive review.
       - name: Clippy
         run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+
+      # DOMAIN crates do no IO and read no clock or randomness (#2431, #2326
+      # S3): clippy with scripts/domain-clippy/clippy.toml over their
+      # production code; the sites not moved yet are in
+      # scripts/domain-io-allowlist.txt, which may only shrink. Hard gate.
+      - name: Domain IO gate
+        if: runner.os == 'Linux'
+        run: bash scripts/check_domain_io.sh
 
       # vendor/iced_aw is excluded from the workspace, so the step above never
       # lints it, and cargo applies `-- -D warnings` to workspace members only.
@@ -530,6 +548,12 @@ jobs:
       - name: Engine id gate controls
         if: ${{ !cancelled() }}
         run: bash scripts/test_check_engine_ids.sh
+
+      # The Domain IO gate itself needs a build and runs in `check` (Linux);
+      # its ratchet rules are checked here on canned clippy output.
+      - name: Domain IO gate controls
+        if: ${{ !cancelled() }}
+        run: bash scripts/test_check_domain_io.sh
 
       # Structural lint rules (sgconfig.yml, ast-grep/rules): shapes a text
       # grep cannot see, e.g. a discarded Task wrapped over several lines.
