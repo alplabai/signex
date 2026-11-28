@@ -411,3 +411,26 @@ fn a_second_removal_keeps_the_one_waiting_on_writes() {
         );
     }
 }
+
+/// Review #3235: the page reads a library folder whose `.git` git cannot
+/// open (no HEAD) as needing attention, never off, so its row offers no
+/// Enable Version Control that would refuse the existing `.git`.
+#[test]
+fn a_damaged_repository_reads_as_needing_attention_not_off() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _startup) = Signex::new();
+    let file = mounted_library(&mut app, dir.path(), "Parts");
+    let folder = file.parent().unwrap().to_path_buf();
+    git2::Repository::init(&folder).expect("init");
+    std::fs::remove_file(folder.join(".git").join("HEAD")).unwrap();
+
+    send(&mut app, StartScreenMsg::PageSelected(StartPage::Libraries));
+    let read = app.ui_state.start_screen.library_vcs.get(&folder);
+    assert!(
+        matches!(read, Some(LibraryVcsState::NeedsAttention(_))),
+        "{read:?}"
+    );
+
+    send(&mut app, StartScreenMsg::LibraryVcsEnableClicked(file));
+    assert!(app.ui_state.enable_version_control.is_none());
+}

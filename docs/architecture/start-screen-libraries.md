@@ -22,6 +22,13 @@ folder. It is read when the Libraries page opens, and again while the page shows
 after Enable Version Control finishes or Add library… adds a library. Each read carries a
 generation; an older read that lands late is dropped.
 
+The app checks the `.git` entry (`std::fs::symlink_metadata`) and passes its
+presence to `read_library_vcs_state`, since the library crate does no file
+IO. Only a missing `.git` reads `off`. A `.git` git cannot open (HEAD,
+objects or refs missing) reads needs attention, "cannot be read", so its row
+never offers Enable Version Control, which refuses a folder that has a
+`.git` (#3235).
+
 ## Remove from Signex (#2592)
 
 A Global or Installed row has a ⋯ button; its menu holds Remove from

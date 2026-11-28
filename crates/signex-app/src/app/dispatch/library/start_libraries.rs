@@ -35,7 +35,7 @@ impl Signex {
                 let tools = ToolsOnPath::find();
                 dirs.into_iter()
                     .map(|dir| {
-                        let vcs = read_library_vcs_state(&dir, tools);
+                        let vcs = read_library_vcs_state(&dir, has_git_dir(&dir), tools);
                         (dir, vcs)
                     })
                     .collect::<Vec<_>>()
@@ -201,6 +201,16 @@ impl Signex {
             Err(e) => self.report_global_libraries_save_failure("remove library", &e),
         }
     }
+}
+
+/// Whether the folder `dir` has a `.git` entry (a directory, or the file
+/// of a linked worktree). Only a missing one reads off; any other answer,
+/// a denied stat included, lets git say what is wrong. Blocking.
+fn has_git_dir(dir: &Path) -> bool {
+    !matches!(
+        std::fs::symlink_metadata(dir.join(".git")),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound
+    )
 }
 
 /// Remove every one of `paths` from `global_libraries.toml`, one locked
