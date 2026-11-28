@@ -53,7 +53,6 @@ const GOLDEN_DAY: (i32, u32, u32) = (2026, 11, 27);
 fn project() -> Signex {
     let mut app = fixture();
     app.ui_state.io.clock = Clock::Fixed(fixture_noon(GOLDEN_DAY));
-    app.document_state.times.now = Some(fixture_noon(GOLDEN_DAY));
     let top = app
         .document_state
         .active_path

@@ -261,6 +261,7 @@ pub(crate) fn export_schematic_pdf(app: &mut Signex, args: &CommandArgs) -> Ran 
     // A Properties field still being typed on a sheet of the scope prints
     // as typed, as Export PDF in the dialog commits it (#2663).
     app.commit_drafts_in_scope_of(Some(&source));
+    app.read_clock();
     let Some((ctx, issues)) = super::build_export_scope_for_source(&app.document_state, &source)
     else {
         return refused(Translatable::new(ids::PDF_PREVIEW_COMMAND_SHEET_CLOSED));

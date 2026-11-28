@@ -15,6 +15,8 @@ impl Signex {
         if self.has_active_pcb() {
             return self.dispatch_board_output_message(crate::app::BoardOutputMsg::PrintRequested);
         }
+        // The date the pages print is the time of this action (`read_clock`).
+        self.read_clock();
         let anchor = self.document_state.active_path.clone();
         self.commit_drafts_in_scope_of(anchor.as_deref());
         if !self.document_state.has_active_engine() {
@@ -344,6 +346,7 @@ impl Signex {
     /// invalidate every earlier one. `None` when no preview is open or the
     /// file picker leaves nothing to render.
     pub(super) fn preview_raster_job(&mut self) -> Option<PreviewRasterJob> {
+        self.read_clock();
         let (pdf_opts, preview_dpi, source) = {
             let preview = self.document_view.preview.as_ref()?;
             (

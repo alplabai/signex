@@ -50,6 +50,8 @@ impl Signex {
             }
         };
 
+        // The pages print the date of this export (`read_clock`).
+        self.read_clock();
         let (mut ctx, issues) =
             match super::build_export_scope_for_source(&self.document_state, &source) {
                 Some(c) => c,

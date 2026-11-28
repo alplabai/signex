@@ -322,12 +322,20 @@ impl Signex {
         self.refresh_window_panel_ctxs(None);
     }
 
+    /// Stamp the clock port's time into state (`document_state.times`), which
+    /// `${CurrentDate}` and an empty title-block Date print. The panel refresh
+    /// and every export action call it first, so a printed date is the
+    /// time of the action, not of the last refresh.
+    pub(crate) fn read_clock(&mut self) {
+        self.document_state.times.now = Some(self.ui_state.io.clock.now());
+    }
+
     /// Rebuild the context in the main slot from the active document.
     pub(crate) fn refresh_main_panel_ctx(&mut self) {
         // The clock is read here, in the runtime layer, and kept in state:
         // `${CurrentTime}` shows the time the panel was last built, to the
         // minute, and `view` never reads the clock.
-        self.document_state.times.now = Some(self.ui_state.io.clock.now());
+        self.read_clock();
         // The app-wide requests (project probe, row summaries, Navigator
         // assembly, a pending profile update) belong to the main window. A
         // window's refresh runs with its sheet swapped in and must not
