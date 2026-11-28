@@ -229,7 +229,8 @@ pub fn config_root_for_dir(base: &std::path::Path) -> PathBuf {
 /// directory shared by every test thread, so two tests that write the same
 /// config file race on it. A test that needs a file of its own takes an
 /// [`isolated::IsolatedConfigRoot`]: while it lives, the resolvers that
-/// consult it (today only `crate::keymap::config_path`) answer with a
+/// consult it (`crate::keymap::config_path` and
+/// `components_panel::global_prefs::prefs_path`) answer with a
 /// private directory on that thread. [`config_root`] itself is deliberately
 /// not redirected: `fonts::prefs_path` caches its answer for the whole
 /// process, and a per-thread root must never leak into that cache. Only the

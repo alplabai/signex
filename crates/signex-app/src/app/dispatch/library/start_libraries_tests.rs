@@ -352,6 +352,10 @@ fn opening_the_library_again_cancels_its_pending_removal() {
 #[test]
 fn a_second_removal_keeps_the_one_waiting_on_writes() {
     use crate::panels::components_panel::global_prefs::{self, GlobalLibraryEntry};
+    // A global_libraries.toml of this test's own, so no other test's app
+    // loads First or Second; the worker's write follows it (the path is
+    // resolved in update).
+    let _prefs = crate::config_root::isolated::IsolatedConfigRoot::new();
     let dir = tempfile::tempdir().unwrap();
     let (mut app, _startup) = Signex::new();
     let first = mounted_library(&mut app, dir.path(), "First");

@@ -180,9 +180,12 @@ impl Signex {
         if global.is_empty() {
             return Task::none();
         }
+        // Resolved here, not on the worker, so the write goes to the file
+        // this update reads (a test's isolated config root included).
+        let prefs = global_prefs::prefs_path();
         Task::perform(
             async move {
-                crate::app::path_op_jobs::run_blocking(move || remove_global_paths(&global))
+                crate::app::path_op_jobs::run_blocking(move || remove_global_paths(prefs, &global))
                     .await
                     .and_then(|saved| saved)
             },
@@ -213,14 +216,18 @@ fn has_git_dir(dir: &Path) -> bool {
     )
 }
 
-/// Remove every one of `paths` from `global_libraries.toml`, one locked
-/// write each, so a failed one does not keep the others. The saved list
-/// after the last write, or the first failure. Blocking.
-fn remove_global_paths(paths: &[PathBuf]) -> Result<Vec<GlobalLibraryEntry>, String> {
+/// Remove every one of `paths` from the `global_libraries.toml` at `prefs`,
+/// one locked write each, so a failed one does not keep the others. The
+/// saved list after the last write, or the first failure. Blocking.
+fn remove_global_paths(
+    prefs: Option<PathBuf>,
+    paths: &[PathBuf],
+) -> Result<Vec<GlobalLibraryEntry>, String> {
+    let prefs = prefs.ok_or_else(|| "no user config dir available".to_string())?;
     let mut saved = Err(String::new());
     let mut failure = None;
     for path in paths {
-        match global_prefs::remove_path(path) {
+        match global_prefs::remove_path_at(&prefs, path) {
             Ok(list) => saved = Ok(list),
             Err(e) => {
                 failure.get_or_insert(e);
