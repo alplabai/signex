@@ -250,9 +250,13 @@ pub fn load_document(recovery_dir: &Path, document: &Path) -> Result<RestoredDoc
                 .map(|file| RestoredDocument::Footprint(Box::new(file)))
                 .map_err(|e| unreadable("footprint", &e))
         }
-        Some("snxprj") => signex_types::project::parse_project_bytes(document, &bytes)
-            .map(|data| RestoredDocument::Project(Box::new(data)))
-            .map_err(|e| unreadable("project", &e)),
+        Some("snxprj") => signex_types::project::parse_project_bytes(
+            document,
+            &bytes,
+            signex_types::project::files_on_disk(document),
+        )
+        .map(|data| RestoredDocument::Project(Box::new(data)))
+        .map_err(|e| unreadable("project", &e)),
         Some("snxpcb" | "standard_pcb") => {
             let text = String::from_utf8(bytes).map_err(|e| unreadable("PCB", &e))?;
             signex_types::format::SnxPcb::parse(&text)

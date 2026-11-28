@@ -13,7 +13,7 @@ fn project(rails: Option<Value>) -> ProjectData {
         file["rails"] = rails;
     }
     let bytes = serde_json::to_vec(&file).unwrap();
-    parse_project_bytes(std::path::Path::new("P.snxprj"), &bytes).unwrap()
+    parse_project_bytes(std::path::Path::new("P.snxprj"), &bytes, |_| false).unwrap()
 }
 
 fn saved(data: &ProjectData) -> Value {

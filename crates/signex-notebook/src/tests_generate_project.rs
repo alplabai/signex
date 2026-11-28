@@ -9,7 +9,8 @@ use crate::generate::{notebook_blocks, revision_of, sheets_of, variant_of, varia
 use crate::{AnnotationKind, NotebookSources};
 
 fn project(json: &str) -> ProjectData {
-    parse_project_bytes(Path::new("buck-3v3.snxprj"), json.as_bytes()).expect("a project")
+    parse_project_bytes(Path::new("buck-3v3.snxprj"), json.as_bytes(), |_| false)
+        .expect("a project")
 }
 
 const PROJECT: &str = r#"{

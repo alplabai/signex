@@ -22,7 +22,8 @@ fn team(users: &mut Vec<UserProfile>) -> String {
 }
 
 fn opened(json: &str) -> ProjectData {
-    parse_project_bytes(std::path::Path::new("P.snxprj"), json.as_bytes()).expect("opens")
+    parse_project_bytes(std::path::Path::new("P.snxprj"), json.as_bytes(), |_| false)
+        .expect("opens")
 }
 
 #[test]

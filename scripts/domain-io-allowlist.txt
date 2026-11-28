@@ -1,0 +1,77 @@
+# Domain IO allowlist for scripts/check_domain_io.sh (#2431): this list may only shrink, never grow.
+# `<file> <hits>  # reason`; <hits> is how many disallowed calls clippy finds in the file's production code.
+# Each entry is IO, a clock or id minting not yet moved behind a host port (ADR-0006); blank lines and `#` comments are ignored.
+
+# signex-3d-model-importer: reads model files and keeps the on-disk model cache.
+crates/signex-3d-model-importer/src/cache.rs 10  # on-disk model cache: read, prune, mtime
+crates/signex-3d-model-importer/src/gltf/mod.rs 1  # size probe before loading a glTF file
+crates/signex-3d-model-importer/src/gltf/wrap.rs 2  # resolves a glTF buffer path against its folder
+crates/signex-3d-model-importer/src/lib.rs 3  # model file probe before import
+crates/signex-3d-model-importer/src/read.rs 2  # opens a model file for reading
+
+# signex-engine: id minting is gated by scripts/check_engine_ids.sh (#2429), not here.
+crates/signex-engine/src/lib.rs 1  # Engine::open reads a .snxsch from disk
+
+# signex-library: the library adapters (LibraryAdapter, DistributorAdapter) and the writer are its disk side (#893).
+crates/signex-library/src/adapter.rs 11  # file-system LibraryAdapter: reads and lists the library folder; commit time fallback
+crates/signex-library/src/adapters/database_row_schema.rs 2  # times the schema probe of a database row adapter
+crates/signex-library/src/adapters/local_git/adapter.rs 1  # local-git adapter: repo probe
+crates/signex-library/src/adapters/local_git/branch_switch.rs 13  # local-git adapter: branch switch rewrites the work tree
+crates/signex-library/src/adapters/local_git/commit_lock.rs 5  # local-git adapter: commit lock file and its wait clock
+crates/signex-library/src/adapters/local_git/disk_sync.rs 2  # local-git adapter: compares work tree with the index
+crates/signex-library/src/adapters/local_git/helpers.rs 7  # local-git adapter: work-tree reads and lock wait clock
+crates/signex-library/src/adapters/local_git/index_lock.rs 6  # local-git adapter: index.lock handling
+crates/signex-library/src/adapters/local_git/lfs.rs 11  # local-git adapter: Git LFS objects and hooks
+crates/signex-library/src/adapters/local_git/mod.rs 9  # local-git adapter: repo open and init
+crates/signex-library/src/adapters/local_git/pinned_assets.rs 4  # local-git adapter: pinned asset files
+crates/signex-library/src/adapters/local_git/plain_token.rs 1  # local-git adapter: resolves the token file path
+crates/signex-library/src/adapters/local_git/primitives.rs 21  # local-git adapter: reads and writes primitive files, stamps their update time
+crates/signex-library/src/adapters/local_git/project.rs 4  # local-git adapter: project folder probe
+crates/signex-library/src/adapters/local_git/reinit_tree.rs 8  # local-git adapter: walks the work tree on re-init
+crates/signex-library/src/adapters/local_git/symbol_index.rs 1  # local-git adapter: reads the symbol index
+crates/signex-library/src/adapters/local_git/tree_path.rs 1  # local-git adapter: symlink check on a tree path
+crates/signex-library/src/adapters/local_git/uncommitted.rs 3  # local-git adapter: uncommitted file probe
+crates/signex-library/src/adapters/local_git/write_lock.rs 9  # local-git adapter: write lock file and its wait clock
+crates/signex-library/src/board_footprint.rs 2  # mints ids for a board footprint copy (#2429)
+crates/signex-library/src/check/mod.rs 4  # library check reads the library folder
+crates/signex-library/src/check/primitives.rs 4  # library check reads primitive files
+crates/signex-library/src/distributors/cache.rs 6  # distributor response cache on disk and its age check
+crates/signex-library/src/distributors/digikey.rs 3  # distributor token expiry clock; quote timestamp of a DigiKey price
+crates/signex-library/src/distributors/jlcpcb.rs 1  # quote timestamp of a JLCPCB price for the distributor price cache
+crates/signex-library/src/distributors/lcsc.rs 1  # quote timestamp of an LCSC price for the distributor price cache
+crates/signex-library/src/distributors/mouser.rs 1  # quote timestamp of a Mouser price for the distributor price cache
+crates/signex-library/src/distributors/price.rs 1  # quote timestamp of a price snapshot for the distributor price cache
+crates/signex-library/src/cascade.rs 1  # stamps the update time of a row a cascade bumps
+crates/signex-library/src/pricing_refresh.rs 1  # timestamp of a pricing refresh
+crates/signex-library/src/distributors/throttle.rs 1  # distributor request throttle clock
+crates/signex-library/src/git_identity.rs 2  # writes the git identity file
+crates/signex-library/src/identity.rs 1  # mints a library identity id (#2429)
+crates/signex-library/src/import_snapshot.rs 7  # import snapshot files
+crates/signex-library/src/lib.rs 3  # library folder creation and probe
+crates/signex-library/src/primitive/copy_for_library.rs 4  # mints ids for a primitive copied into a library (#2429)
+crates/signex-library/src/primitive/footprint/mod.rs 4  # mints footprint ids (#2429) and stamps their creation time
+crates/signex-library/src/primitive/footprint/models.rs 1  # opens a 3D model file
+crates/signex-library/src/primitive/sim.rs 4  # mints simulation model ids (#2429) and stamps their creation time
+crates/signex-library/src/primitive/symbol/mod.rs 5  # mints symbol ids (#2429) and stamps their creation and update time
+crates/signex-library/src/search_index.rs 7  # on-disk search index
+crates/signex-library/src/vcs_init_files.rs 3  # version-control init files
+crates/signex-library/src/vcs_target_guard.rs 4  # version-control target folder guard
+crates/signex-library/src/writer/dir_swap.rs 15  # library writer: atomic folder swap
+crates/signex-library/src/writer/ledger.rs 6  # library writer: update ledger
+crates/signex-library/src/writer/update_guard.rs 5  # library writer: stale-write guard
+crates/signex-library/src/writer/update.rs 7  # library writer: in-place update and its default update time
+
+# signex-types: desktop helpers and id constructors that predate the host ports.
+crates/signex-types/src/atomic_io.rs 13  # the crash-safe document writer (temp + fsync + rename)
+crates/signex-types/src/block_diagram/file.rs 1  # reads a block diagram file
+crates/signex-types/src/document_id.rs 1  # mints a document id (#2429)
+crates/signex-types/src/material_library.rs 1  # reads the material library file
+crates/signex-types/src/object_id.rs 1  # the UUID v7 IdSource (#2429)
+crates/signex-types/src/project_vcs_files.rs 3  # reads project files for version control
+crates/signex-types/src/project.rs 3  # parse_project and files_on_disk (the desktop listing), retarget_library_entry
+crates/signex-types/src/project/setup.rs 1  # mints a setup profile id (#2429)
+crates/signex-types/src/reuse/mod.rs 5  # lists the design reuse folder
+crates/signex-types/src/schematic/sheet.rs 1  # mints a sheet id (#2429)
+crates/signex-types/src/sketch/array.rs 1  # mints a sketch array id (#2429)
+crates/signex-types/src/sketch/id.rs 2  # mints sketch ids (#2429)
+crates/signex-types/src/sketch/plane.rs 1  # mints a sketch plane id (#2429)
