@@ -241,7 +241,10 @@ are `updates/sketch/pattern_kind.rs`.
   `nx` wide is instance `j × nx + i` of a line. An entry with no place in
   the new kind (past the count, past the last row such as a mirrored
   instance, or in a later row of a grid whose width does not resolve) is
-  dropped, and a Messages line names the dropped instances. The mask
+  dropped, and a Messages line names the dropped instances. A pattern
+  that repeats another pattern keys its overrides by (outer slot, inner
+  instance), the outer slot already numbered in walk order, so they keep
+  their key; only one whose outer slot is past the count is dropped. The mask
   expression carries over as written (the bake warns where it does not
   fit) and the numbering scheme is kept; the numbers follow the new walk.
 - **Undo.** The switch is one undo step; for Polar it is the step of the

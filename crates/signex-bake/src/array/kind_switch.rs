@@ -94,7 +94,9 @@ enum Line {
 /// Switch pattern `array_id` to `target`, in place. The count, spacing,
 /// mask expression and numbering carry over; the suppression list and the
 /// pattern's pad overrides are re-indexed in walk order, and the entries
-/// with no place in the new kind are dropped and returned.
+/// with no place in the new kind are dropped and returned. A linked
+/// pattern's override keeps its key: its outer slot is already a walk
+/// place, and only one past the slot count is dropped.
 pub fn switch_pattern_kind(
     sketch: &mut SketchData,
     array_id: ArrayId,
@@ -136,11 +138,24 @@ pub fn switch_pattern_kind(
             });
         }
     }
+    // A linked pattern keys an override by (outer slot, inner instance),
+    // the outer slot numbered in walk order, which the switch keeps.
+    let is_linked = sketch
+        .pattern_source_of(array_id)
+        .is_some_and(|s| sketch.is_pattern(s));
+    let slot_count = layout.cols.zip(layout.rows).map(|(c, r)| c.saturating_mul(r));
+    let remap_key = |(i, j): (u32, u32)| {
+        if is_linked {
+            slot_count.is_none_or(|n| i < n).then_some((i, j))
+        } else {
+            remap((i, j))
+        }
+    };
     sketch.pad_overrides.retain_mut(|o| {
         if o.array != array_id {
             return true;
         }
-        match remap((o.i, o.j)) {
+        match remap_key((o.i, o.j)) {
             Some((i, j)) => {
                 (o.i, o.j) = (i, j);
                 true
