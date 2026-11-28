@@ -14,6 +14,7 @@
 //! - [`output`] — the folder a new run takes, and what a failed one removes.
 //! - [`snapshot`] — git setup, the import commit, the default location.
 //! - [`staging`] — a new import's staged preview and its move into place.
+//! - [`preview_lock`] — the lock a staged preview's owner holds against a sweep.
 //! - [`run_state`] — what the app keeps about a run.
 //! - [`error`] — every refusal, as translatable text.
 
@@ -25,12 +26,15 @@ mod empty_dir;
 mod empty_dir_tests;
 pub mod error;
 pub mod events;
+#[cfg(any(windows, test))]
+mod long_path;
 #[cfg(windows)]
 mod job;
 #[cfg(all(test, windows))]
 mod job_tests;
 pub mod output;
 mod place;
+mod preview_lock;
 mod process;
 pub mod report;
 pub mod run;

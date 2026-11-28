@@ -10,6 +10,7 @@ use super::error::ImportError;
 use super::events::{Counts, ExitKind, Summary};
 use super::output::claim_output;
 use super::place::{HeldDir, copy_across, rename_entry, rename_no_replace};
+use super::preview_lock::{PreviewLock, lock_path_for};
 use super::run::{LibraryRunRequest, ModelsMode, RunMode, RunOutcome};
 use super::staging::{
     SPLIT_MARK, STAGING_MARK, StagedLibrary, TargetBefore, move_entry, staging_dir_for, sweep_stale,
@@ -94,6 +95,10 @@ fn a_staged_preview_moves_into_place_with_its_paths() {
     let staging = staged.dir().to_path_buf();
     staged.move_into_place().unwrap();
     assert!(!staging.exists(), "moved, not copied");
+    assert!(
+        !lock_path_for(&staging).exists(),
+        "no lock is left beside the library"
+    );
     assert_eq!(
         std::fs::read_to_string(target.join("symbols").join("R.snxsym")).unwrap(),
         "symbol"
@@ -469,4 +474,171 @@ fn stale_staging_folders_are_swept_and_nothing_else() {
         assert_eq!(sweep_stale(std::slice::from_ref(&root), far_future()), 0);
         assert!(outside.join("keep").is_file() && link.exists());
     }
+}
+
+/// A target of `length` characters inside `root`, its parent created.
+#[cfg(windows)]
+fn deep_target(root: &Path, length: usize) -> PathBuf {
+    let mut parent = root.to_path_buf();
+    let name = "Passives";
+    loop {
+        let left = length.saturating_sub(parent.as_os_str().len() + 2 + name.len());
+        if left == 0 {
+            break;
+        }
+        parent.push("d".repeat(left.min(60)));
+    }
+    std::fs::create_dir_all(&parent).unwrap();
+    parent.join(name)
+}
+
+/// Windows (#3234): a target of 230 characters puts its staging folder past
+/// 260. The folder's identity is still read, so the preview moves into
+/// place, is discarded, and is swept like any other.
+#[cfg(windows)]
+#[test]
+fn a_deep_target_past_the_windows_path_limit_still_stages_moves_and_discards() {
+    let dir = tempfile::tempdir().unwrap();
+    let target = deep_target(dir.path(), 230);
+    assert!(target.as_os_str().len() >= 228, "{}", target.display());
+    let moved = staged(&target);
+    assert!(moved.dir().as_os_str().len() > 260);
+    moved.move_into_place().unwrap();
+    assert!(target.join("P.snxlib").is_file(), "moved into place");
+
+    let other = deep_target(&dir.path().join("b"), 230);
+    let discarded = staged(&other);
+    assert!(discarded.discard(), "a deep preview is removed");
+    assert!(!discarded.dir().exists());
+
+    let third = deep_target(&dir.path().join("c"), 230);
+    let left = staged(&third);
+    let stale = left.dir().to_path_buf();
+    drop(left);
+    let swept = sweep_stale(&[third.parent().unwrap().to_path_buf()], far_future());
+    assert_eq!(swept, 1, "a deep stale preview is swept");
+    assert!(!stale.exists());
+}
+
+/// Windows (#3234): an empty target folder longer than 260 characters is
+/// read and receives the library, as it did before the staging work.
+#[cfg(windows)]
+#[test]
+fn an_empty_target_past_the_windows_path_limit_receives_the_library() {
+    let dir = tempfile::tempdir().unwrap();
+    let target = deep_target(dir.path(), 270);
+    std::fs::create_dir(&target).unwrap();
+    assert!(matches!(
+        TargetBefore::read(&target),
+        Ok(TargetBefore::Empty(_))
+    ));
+    let staged = staged(&target);
+    staged.move_into_place().unwrap();
+    assert!(target.join("symbols").join("R.snxsym").is_file());
+}
+
+/// Set `path`'s last change `by` ago (a folder or a file).
+fn age(path: &Path, by: Duration) {
+    let mut options = std::fs::OpenOptions::new();
+    #[cfg(unix)]
+    options.read(true);
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt as _;
+        // FILE_WRITE_ATTRIBUTES; FILE_FLAG_BACKUP_SEMANTICS opens a folder.
+        options.access_mode(0x100).custom_flags(0x0200_0000);
+    }
+    let file = options.open(path).unwrap();
+    file.set_modified(SystemTime::now() - by).unwrap();
+}
+
+/// Two hours: past [`super::staging::STALE_AFTER`].
+const LONG_AGO: Duration = Duration::from_secs(2 * 3600);
+
+/// The cutoff a sweep started now uses.
+fn sweep_now(root: &Path) -> usize {
+    let cutoff = super::staging::stale_cutoff(SystemTime::now());
+    sweep_stale(&[root.to_path_buf()], cutoff)
+}
+
+/// #3234: a preview whose owner holds its lock is never swept, however long
+/// its folder went unchanged; once discarded its lock file goes too.
+#[test]
+fn a_held_preview_older_than_stale_after_is_never_swept() {
+    let dir = tempfile::tempdir().unwrap();
+    let staged = staged(&dir.path().join("Passives"));
+    let lock_file = lock_path_for(staged.dir());
+    assert!(lock_file.is_file(), "the run locks its preview");
+    age(staged.dir(), LONG_AGO);
+    assert_eq!(sweep_now(dir.path()), 0);
+    assert!(staged.dir().join("P.snxlib").is_file(), "the preview stays");
+    assert!(lock_file.is_file(), "and so does its lock");
+    assert!(staged.discard());
+    assert!(!lock_file.exists(), "discard lets go of the lock");
+}
+
+/// #3234: a preview whose owner is gone (its lock file left, nobody holding
+/// it) is swept once past STALE_AFTER, with its lock file; one without a
+/// lock file is swept by age alone.
+#[test]
+fn an_unheld_preview_older_than_stale_after_is_swept_with_its_lock_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let crashed = dir.path().join(format!(".Passives{STAGING_MARK}0001"));
+    std::fs::create_dir_all(crashed.join("symbols")).unwrap();
+    std::fs::write(crashed.join("symbols").join("R.snxsym"), "x").unwrap();
+    std::fs::write(lock_path_for(&crashed), "").unwrap();
+    age(&crashed, LONG_AGO);
+    let unlocked = dir.path().join(format!(".Caps{STAGING_MARK}0002"));
+    std::fs::create_dir(&unlocked).unwrap();
+    age(&unlocked, LONG_AGO);
+    assert_eq!(sweep_now(dir.path()), 2);
+    assert!(!crashed.exists() && !unlocked.exists());
+    assert!(!lock_path_for(&crashed).exists(), "the lock file goes too");
+}
+
+/// A preview changed within STALE_AFTER is kept, lock or no lock.
+#[test]
+fn a_fresh_unheld_preview_is_kept() {
+    let dir = tempfile::tempdir().unwrap();
+    let fresh = dir.path().join(format!(".Passives{STAGING_MARK}0001"));
+    std::fs::create_dir(&fresh).unwrap();
+    std::fs::write(lock_path_for(&fresh), "").unwrap();
+    assert_eq!(sweep_now(dir.path()), 0);
+    assert!(fresh.is_dir() && lock_path_for(&fresh).is_file());
+}
+
+/// A lock file left without its folder goes once old and unheld; a held
+/// one stays.
+#[test]
+fn an_old_lock_file_without_its_folder_goes_unless_held() {
+    let dir = tempfile::tempdir().unwrap();
+    let gone = dir.path().join(format!(".Passives{STAGING_MARK}0001"));
+    std::fs::write(lock_path_for(&gone), "").unwrap();
+    age(&lock_path_for(&gone), LONG_AGO);
+    let live = dir.path().join(format!(".Caps{STAGING_MARK}0002"));
+    let lock = PreviewLock::take(&live).unwrap();
+    age(&lock_path_for(&live), LONG_AGO);
+    assert_eq!(sweep_now(dir.path()), 0, "no preview to count");
+    assert!(!lock_path_for(&gone).exists(), "the orphan goes");
+    assert!(lock_path_for(&live).is_file(), "a held lock stays");
+    lock.release();
+    assert!(!lock_path_for(&live).exists());
+}
+
+/// #3234: an Import whose preview folder vanished meanwhile does not offer
+/// another try.
+#[test]
+fn a_move_whose_preview_folder_is_gone_does_not_keep_the_preview() {
+    let dir = tempfile::tempdir().unwrap();
+    let target = dir.path().join("Passives");
+    let staged = staged(&target);
+    std::fs::remove_dir_all(staged.dir()).unwrap();
+    let failure = staged.move_into_place().unwrap_err();
+    assert!(
+        matches!(failure.error, ImportError::MoveFailed { .. }),
+        "{:?}",
+        failure.error
+    );
+    assert!(!failure.preview_kept, "nothing left to try again");
+    assert!(!target.exists());
 }

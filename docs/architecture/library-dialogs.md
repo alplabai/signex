@@ -226,9 +226,19 @@ dialog's request with the previewed one and previews again when they
 differ. Staging folders a crash left are swept on a worker when the dialog
 opens (the default library folder) and on Next (the chosen folder's
 parent): only folders named with the staging mark, last changed before the
-session started and at least an hour ago (so another running Signex's
-preview stays), emptied through their identity and never through a link
-(`staging::sweep_stale`).
+session started and at least an hour ago, emptied through their identity
+and never through a link (`staging::sweep_stale`). A preview's owner holds
+a lock on a file beside it (`.<name>.signex-preview-<id>.lock`,
+`library_import::preview_lock`; `flock` on Unix, `LockFileEx` on Windows,
+through std) from right after the folder is made until the preview is
+discarded, moved into place or dropped, and the system lets go of it when
+the process ends, a crash included. A sweep leaves a folder whose lock it
+cannot take, whatever its age, so another running Signex's preview stays;
+it removes the lock file with a folder whose owner is gone, and a lock
+file left without its folder. A preview without a lock file (an older
+build's, or a file system that could not make one) goes by age alone. An
+Import whose staging folder has gone meanwhile does not offer another try
+(#3234).
 
 **Import** checks the folder again. For a staged preview the job adopts it
 (`ImportJob::adopt`) instead of running the converter: just before the move
@@ -266,7 +276,13 @@ deleted meanwhile; a folder the run created (a staged preview's) is not
 held, since a hold would block its own removal and its rename into place,
 but its volume and file index are recorded and checked before it is
 removed, and an empty target is held while the staged entries move into
-it. Next waits ("The previous run is stopping…") while a preview left by
+it. The import's own Windows calls (`CreateFileW` for that hold and
+identity, `MoveFileExW` for the move) take the absolute path in
+extended-length form (`\\?\C:\…`, `\\?\UNC\server\share\…`;
+`library_import::long_path`), so a target near or past 260 characters,
+whose staging folder is 49 characters longer, stages, moves, is removed
+and is swept as any other, with long paths off machine-wide (#3234).
+Next waits ("The previous run is stopping…") while a preview left by
 Back or Close has not ended; its folder (a dry run's temp folder or a
 staging folder) is removed when it does.
 

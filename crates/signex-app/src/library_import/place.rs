@@ -352,20 +352,18 @@ mod unix {
 #[cfg(windows)]
 mod windows {
     use std::io;
-    use std::os::windows::ffi::OsStrExt as _;
     use std::path::Path;
 
     use windows_sys::Win32::Storage::FileSystem::MoveFileExW;
 
-    fn wide(path: &Path) -> Vec<u16> {
-        path.as_os_str().encode_wide().chain([0]).collect()
-    }
+    use crate::library_import::long_path::wide;
 
     /// Move `from` to `to` on the same volume; without
     /// `MOVEFILE_REPLACE_EXISTING` it fails when `to` exists, and without
-    /// `MOVEFILE_COPY_ALLOWED` across volumes (`CrossesDevices`).
+    /// `MOVEFILE_COPY_ALLOWED` across volumes (`CrossesDevices`). Both
+    /// paths go in extended-length form, so a deep folder moves too (#3234).
     pub(super) fn move_no_replace(from: &Path, to: &Path) -> io::Result<()> {
-        let (from, to) = (wide(from), wide(to));
+        let (from, to) = (wide(from)?, wide(to)?);
         // SAFETY: both are NUL-terminated and outlive the call.
         if unsafe { MoveFileExW(from.as_ptr(), to.as_ptr(), 0) } == 0 {
             return Err(io::Error::last_os_error());
