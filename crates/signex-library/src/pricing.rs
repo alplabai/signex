@@ -302,6 +302,17 @@ pub fn current_pricing<'a>(
     out
 }
 
+/// The largest stock the current offers of `row` report, from any of its
+/// distributors; `None` when no offer reports one. A part is in stock when
+/// this is above zero, as the Components table and the Change Part
+/// session's In stock filter both read it (#3236).
+pub fn best_stock(row: &crate::component::ComponentRow, cached: &RowPricing) -> Option<u32> {
+    current_pricing(row, cached)
+        .iter()
+        .filter_map(|(_, price)| price.stock)
+        .max()
+}
+
 /// Drop the records of `cached` that no longer describe `row`, and keep only
 /// the newest record a SKU-less listing accounts for; returns whether
 /// anything was removed.
@@ -667,5 +678,33 @@ mod tests {
             cached["Mouser"].keys().collect::<Vec<_>>(),
             ["603-A", "603-C"]
         );
+    }
+
+    /// #3236: a part one distributor is out of and another has stocked
+    /// reports the larger stock; none reported reads as `None`.
+    #[test]
+    fn best_stock_reads_every_distributor() {
+        let row = row_listing(&[("Mouser", "M-1"), ("DigiKey", "D-1")]);
+        let now = Utc::now();
+        let stocked = |sku: &str, stock| CachedPricing {
+            stock,
+            ..price(sku, now)
+        };
+        let mut cached = RowPricing::new();
+        cached
+            .entry("Mouser".into())
+            .or_default()
+            .insert("M-1".into(), stocked("M-1", Some(0)));
+        cached
+            .entry("DigiKey".into())
+            .or_default()
+            .insert("D-1".into(), stocked("D-1", Some(5000)));
+        assert_eq!(best_stock(&row, &cached), Some(5000));
+        for per_sku in cached.values_mut() {
+            for p in per_sku.values_mut() {
+                p.stock = None;
+            }
+        }
+        assert_eq!(best_stock(&row, &cached), None);
     }
 }

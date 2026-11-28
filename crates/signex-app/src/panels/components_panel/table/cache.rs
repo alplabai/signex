@@ -443,16 +443,17 @@ fn names_by_uuid(listing: &[signex_library::PrimitiveSummary]) -> HashMap<Uuid, 
         .collect()
 }
 
-/// The first cached offer's stock and quantity-1 price.
+/// The part's stock, the largest any distributor reports (so In stock
+/// only keeps a part any distributor has, as the Change Part session does,
+/// #3236), and the first cached offer's quantity-1 price.
 fn supply_facts(lib: &OpenLibrary, row: &ComponentRow) -> (Option<u64>, Option<f64>) {
     let Some(cached) = lib.pricing.get(&row.row_id) else {
         return (None, None);
     };
+    let stock = signex_library::best_stock(row, cached).map(u64::from);
     let offers = signex_library::current_pricing(row, cached);
-    let Some((_, offer)) = offers.first() else {
-        return (None, None);
-    };
-    (offer.stock.map(u64::from), offer.unit_price_at(1))
+    let price = offers.first().and_then(|(_, offer)| offer.unit_price_at(1));
+    (stock, price)
 }
 
 /// The rows the search keeps, as `(library, table, index)`; `None` without

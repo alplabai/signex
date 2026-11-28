@@ -240,11 +240,54 @@ fn columns_move_by_drag_and_among_their_peers() {
     let before = s.clone();
     s.move_column_by(&col("rate"), -1);
     assert_eq!(s, before);
-    // A row field swaps with the next row field, skipping parameters.
+    // A row field swaps with the next row field, skipping parameters; a
+    // hidden row field swaps with the next hidden one (#3236: Stock, the
+    // only visible row field, has no visible peer to swap with).
+    let before = s.clone();
     s.move_column_by(&ColumnKey::Stock, 1);
-    let at = |c: &ColumnKey| s.order.iter().position(|x| x == c).unwrap();
-    assert_eq!((at(&ColumnKey::LibraryRef), at(&ColumnKey::Stock)), (6, 8));
-    assert_eq!(at(&col("tolerance")), 7);
+    assert_eq!(s, before);
+    let at = |s: &ViewSetup, c: &ColumnKey| s.order.iter().position(|x| x == c).unwrap();
+    let (library_ref, description) = (
+        at(&s, &ColumnKey::LibraryRef),
+        at(&s, &ColumnKey::Description),
+    );
+    s.move_column_by(&ColumnKey::LibraryRef, 1);
+    assert_eq!(
+        (
+            at(&s, &ColumnKey::LibraryRef),
+            at(&s, &ColumnKey::Description)
+        ),
+        (description, library_ref)
+    );
+    assert_eq!(at(&s, &col("tolerance")), at(&before, &col("tolerance")));
+}
+
+/// #3236: Up and Down in the Columns picker move a visible column among
+/// the visible ones; a hidden column between them is skipped, so every
+/// press changes the visible order.
+#[test]
+fn moving_a_column_skips_hidden_columns_between() {
+    let mut s = ViewSetup {
+        order: vec![
+            ColumnKey::PartNumber,
+            col("value"),
+            col("tolerance"),
+            col("power"),
+        ],
+        hidden: [col("tolerance")].into_iter().collect(),
+        ..ViewSetup::default()
+    };
+    s.move_column_by(&col("power"), -1);
+    assert_eq!(
+        s.visible_columns(),
+        [ColumnKey::PartNumber, col("power"), col("value")]
+    );
+    assert_eq!(s.column_choices().last(), Some(&(col("tolerance"), false)));
+    s.move_column_by(&col("power"), 1);
+    assert_eq!(
+        s.visible_columns(),
+        [ColumnKey::PartNumber, col("value"), col("power")]
+    );
 }
 
 /// Header clicks as mockup row 52 draws them: a click sorts by that
@@ -383,4 +426,35 @@ fn details_list_pinned_parameters_first() {
     );
     let names: Vec<&str> = bare.iter().map(|e| e.name.as_str()).collect();
     assert_eq!(names, ["a", "b"]);
+}
+
+/// #3236: an edit made while a column is not offered (its library is
+/// unmounted) keeps that column's place, hidden flag, width and the saved
+/// sort; the setup as shown is exactly the edit.
+#[test]
+fn an_edit_keeps_the_columns_not_offered_now() {
+    let (mut saved, _, offered) = ic_setup();
+    let esr = col("esr");
+    let at = saved.order.iter().position(|c| *c == col("rate")).unwrap() + 1;
+    saved.order.insert(at, esr.clone());
+    saved.widths.insert(esr.clone(), 80.0);
+    saved.sort.insert(0, SortKey::ascending(esr.clone()));
+    let shown = saved.clone().fitted(&offered);
+    assert!(!shown.order.contains(&esr));
+
+    let mut edited = shown.clone();
+    edited.set_width(&col("rate"), 90.0);
+    let kept = edited.clone().keeping_unoffered(&saved, &shown, &offered);
+    assert_eq!(kept.order[at - 1..=at], [col("rate"), esr.clone()]);
+    assert_eq!(kept.widths.get(&esr), Some(&80.0));
+    assert_eq!(kept.widths.get(&col("rate")), Some(&90.0));
+    assert_eq!(kept.sort, saved.sort);
+    assert_eq!(kept.clone().fitted(&offered), edited);
+
+    // A sort the user changes is theirs: the hidden key does not return.
+    let mut sorted = shown.clone();
+    sorted.click_sort(&col("package"), false);
+    let kept = sorted.clone().keeping_unoffered(&saved, &shown, &offered);
+    assert_eq!(kept.sort, sorted.sort);
+    assert!(kept.order.contains(&esr));
 }

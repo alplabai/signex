@@ -49,4 +49,5 @@ pub(crate) use details::{DetailLine, detail_lines, details_extras};
 pub(crate) use header::HEADER_SCROLL;
 pub use state::{CategoryKey, ComponentsTable, TableFilters, TablePopover};
 pub use update::TableEffects;
+pub(crate) use update::ends_column_resize;
 pub(crate) use view::{table_block, toolbar};

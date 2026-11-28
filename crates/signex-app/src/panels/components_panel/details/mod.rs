@@ -386,17 +386,7 @@ pub(crate) fn view<'a>(
         );
     }
 
-    // Every parameter with its value, pinned ones first (mockup row 52).
-    let (lines, more) = crate::panels::components_panel::table::detail_lines(&panel.table, i18n);
-    col = col.push(title(ids::PANELS_COMPONENTS_DETAILS_PARAMETERS));
-    col = col.push(graphite::parameter_table(lines, tokens, i18n));
-    col = col.push(crate::panels::components_panel::table::details_extras(
-        &panel.table,
-        more,
-        title,
-        tokens,
-        i18n,
-    ));
+    col = col.push(parameters_section(&panel.table, tokens, i18n));
     col = col.push(Space::new().height(SP.m).boxed());
 
     scrollable(container(col).padding([SP.s, 10.0]).width(Length::Fill))
@@ -404,6 +394,32 @@ pub(crate) fn view<'a>(
         .height(Length::Fill)
         .style(crate::panels::form_look::scrollbar_style)
         .boxed()
+}
+
+/// The Parameters section (mockup row 52): its label, the pinned
+/// parameters (all of them under Show all), then Show all and the
+/// References and Part Choices. When the part has parameters but none is
+/// pinned, the table is left out and the Show all line stands alone: "No
+/// parameters." is only for a part that has none (#3236).
+pub(crate) fn parameters_section<'a>(
+    table: &'a crate::panels::components_panel::table::ComponentsTable,
+    tokens: &'a ThemeTokens,
+    i18n: &signex_i18n::I18n,
+) -> Element<'a, LibraryMessage> {
+    use signex_i18n::{ids, t};
+    let title = |label| graphite::section_label(t!(i18n, label), tokens);
+    let (lines, more) = crate::panels::components_panel::table::detail_lines(table, i18n);
+    let mut col: Column<Element<'a, LibraryMessage>> =
+        column![title(ids::PANELS_COMPONENTS_DETAILS_PARAMETERS)]
+            .spacing(SP.s)
+            .width(Length::Fill);
+    if !lines.is_empty() || more.is_none() {
+        col = col.push(graphite::parameter_table(lines, tokens, i18n));
+    }
+    col.push(crate::panels::components_panel::table::details_extras(
+        table, more, title, tokens, i18n,
+    ))
+    .boxed()
 }
 
 /// Border width of the preview box, px.
