@@ -75,8 +75,12 @@ fn app() -> Signex {
     let (mut app, _task) = Signex::new();
     app.ui_state.first_run_tour_open = false;
     let prj = Path::new("/w/P.snxprj");
-    let data =
-        signex_types::project::parse_project_bytes(prj, PROJECT.as_bytes()).expect("project");
+    let data = signex_types::project::parse_project_bytes(
+        prj,
+        PROJECT.as_bytes(),
+        signex_types::project::files_on_disk(prj),
+    )
+    .expect("project");
     let id = app.document_state.mint_project_id();
     app.document_state.projects.push(LoadedProject {
         id,
@@ -796,8 +800,12 @@ fn another_project_in_the_main_window_lists_and_exports_none_of_ps_closed_sheets
     let mut app = with_closed_b_read();
     let p_read = app.ui_state.parameter_table.closed.generation;
     let prj = Path::new("/v/Q.snxprj");
-    let data =
-        signex_types::project::parse_project_bytes(prj, PROJECT_Q.as_bytes()).expect("project");
+    let data = signex_types::project::parse_project_bytes(
+        prj,
+        PROJECT_Q.as_bytes(),
+        signex_types::project::files_on_disk(prj),
+    )
+    .expect("project");
     let q = app.document_state.mint_project_id();
     app.document_state.projects.push(LoadedProject {
         id: q,

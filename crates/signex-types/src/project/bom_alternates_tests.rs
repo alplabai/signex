@@ -103,7 +103,7 @@ fn an_unknown_key_on_a_line_survives_a_round_trip() {
         "bom_alternates":[{{"line":"{LINE}","rows":["{ALT_A}"],"note":"from the buyer"}}]}}"#
     );
     let path = std::path::Path::new("P.snxprj");
-    let data = parse_project_bytes(path, text.as_bytes()).expect("the project opens");
+    let data = parse_project_bytes(path, text.as_bytes(), |_| false).expect("the project opens");
     assert_eq!(data.bom_alternates_of(LINE), [ALT_A]);
     let written: serde_json::Value =
         serde_json::from_slice(&encode_project(&data).unwrap()).unwrap();
@@ -121,7 +121,8 @@ fn a_malformed_alternates_value_still_opens_the_project_and_is_kept() {
         "bom_alternates":{{"not":"a list"}}}}"#
     );
     let path = std::path::Path::new("P.snxprj");
-    let mut data = parse_project_bytes(path, text.as_bytes()).expect("the project opens");
+    let mut data =
+        parse_project_bytes(path, text.as_bytes(), |_| false).expect("the project opens");
     assert!(data.bom_alternates.is_empty());
     assert!(data.has_unreadable_bom_alternates());
     assert_eq!(

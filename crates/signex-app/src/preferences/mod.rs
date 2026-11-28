@@ -45,7 +45,6 @@ mod system_general;
 mod theme_cards;
 mod widgets;
 
-pub use crate::app::core::rule_profile_page::{ProfileEditorTab, ProfileNameAction};
 use annotation::content_annotation;
 use appearance::content_appearance;
 use component_classes::content_component_classes;
@@ -62,6 +61,7 @@ pub use pcb_defaults::PcbDefaultsMsg;
 use pcb_defaults::content_pcb_defaults;
 use profiles::content_profiles;
 pub use profiles::{ProfileAction, ProfilePageMsg, ProfilesMsg};
+pub use profiles::{ProfileEditorTab, ProfileNameAction, RuleListFilter};
 pub use schematic_display::BodyFillMsg;
 use schematic_display::{DisplayPage, content_schematic_display};
 

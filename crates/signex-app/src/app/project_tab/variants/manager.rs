@@ -4,8 +4,7 @@
 //! values, Duplicate, Set as default) and its top bar actions (Compare
 //! variants, Open in BOM Studio, #2949).
 
-// The tab's view state is plain data, kept in the UI-free core (ADR-0006).
-pub use crate::app::core::variant_cell::{CompareSides, OverrideDraft, VariantCell};
+pub use super::view_state::{CompareSides, OverrideDraft, VariantCell};
 use signex_types::pcb::SymbolLink;
 
 /// Messages of the Variant Manager tab, namespaced under

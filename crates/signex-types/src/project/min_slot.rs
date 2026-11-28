@@ -73,7 +73,7 @@ mod tests {
 }"#;
 
     fn opened(json: &str) -> ProjectData {
-        parse_project_bytes(Path::new("P.snxprj"), json.as_bytes()).unwrap()
+        parse_project_bytes(Path::new("P.snxprj"), json.as_bytes(), |_| false).unwrap()
     }
 
     fn written(data: &ProjectData) -> String {

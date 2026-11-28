@@ -82,8 +82,12 @@ pub(crate) fn dropped_from_file(
         .map_err(|e| format!("{} is not UTF-8: {e}", source_file.display()))?;
     let source: Value = serde_json::from_str(text.trim_start_matches('\u{feff}'))
         .map_err(|e| format!("could not read {}: {e}", source_file.display()))?;
-    let as_read = parse_project_bytes(source_file, &read)
-        .map_err(|e| format!("could not read {}: {e}", source_file.display()))?;
+    let as_read = parse_project_bytes(
+        source_file,
+        &read,
+        signex_types::project::files_on_disk(source_file),
+    )
+    .map_err(|e| format!("could not read {}: {e}", source_file.display()))?;
     let bytes = copy_bytes(&as_read, name, folder)?;
     let copy: Value = serde_json::from_slice(&bytes).map_err(|e| e.to_string())?;
     Ok(dropped_keys(&source, &copy))

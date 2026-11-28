@@ -117,9 +117,12 @@ fn ok_over_an_unreadable_section_is_refused() {
     let mut app = app_with_project(Vec::new());
     let garbled = serde_json::json!("garbled");
     let text = br#"{"name":"dcdc-buck","dir":"","schematic_root":null,"pcb_file":null,"schematic_design":"garbled"}"#;
-    app.document_state.projects[0].data =
-        signex_types::project::parse_project_bytes(std::path::Path::new("dcdc-buck.snxprj"), text)
-            .expect("a project");
+    app.document_state.projects[0].data = signex_types::project::parse_project_bytes(
+        std::path::Path::new("dcdc-buck.snxprj"),
+        text,
+        signex_types::project::files_on_disk(std::path::Path::new("dcdc-buck.snxprj")),
+    )
+    .expect("a project");
     assert!(
         app.document_state.projects[0]
             .data

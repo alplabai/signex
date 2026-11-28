@@ -529,4 +529,10 @@ define_ids! {
     EDITORS_PIN_TABLE_LENGTH_REFUSED = "editors-pin-table-length-refused";
     // library-dialog-polish
     EDITORS_SYMBOL_BAR_PIN_TYPE = "editors-symbol-bar-pin-type";
+    // pin-text-control-characters (#3129)
+    EDITORS_SYMBOL_REPAIRED_ON_OPEN = "editors-symbol-repaired-on-open";
+    EDITORS_SYMBOL_REPAIRED_MORE = "editors-symbol-repaired-more";
+    EDITORS_SYMBOL_READ_ONLY_REPAIRED = "editors-symbol-read-only-repaired";
+    EDITORS_SYMBOL_PIN_TEXT_REFUSED = "editors-symbol-pin-text-refused";
+    EDITORS_SYMBOL_REPAIRED_WRITE_REFUSED = "editors-symbol-repaired-write-refused";
 }

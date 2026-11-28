@@ -20,9 +20,13 @@ fn load(name: &str) -> (PcbBoard, Vec<NetClass>) {
     let board = SnxPcb::parse(&text).expect("board parses").board;
     let project = real_dir().join(format!("{name}.snxprj"));
     let bytes = std::fs::read(&project).unwrap();
-    let classes = parse_project_bytes(&project, &bytes)
-        .expect("project parses")
-        .net_classes;
+    let classes = parse_project_bytes(
+        &project,
+        &bytes,
+        signex_types::project::files_on_disk(&project),
+    )
+    .expect("project parses")
+    .net_classes;
     (board, classes)
 }
 

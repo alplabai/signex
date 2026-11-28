@@ -48,6 +48,8 @@ pub mod command_log;
 pub use command_log::{CommandLogMsg, CommandLogState};
 mod context;
 mod drafts;
+mod drawing_field;
+pub(crate) use drawing_field::LiveDrawingEdit;
 mod drc;
 mod drc_results;
 pub use drafts::PanelDrafts;
