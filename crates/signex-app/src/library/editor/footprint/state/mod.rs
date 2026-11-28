@@ -375,6 +375,17 @@ impl FootprintEditorState {
         pads_tool || sketch_tool || self.edge_pan.is_dragging()
     }
 
+    /// Keep the current pad and sketch picks as the selection the undo
+    /// step `step` gives back.
+    pub fn remember_selection(&mut self, step: &std::sync::Arc<u64>) {
+        let selection = selection_memo::StepSelection {
+            pad: self.selected_pad,
+            sketch: self.selected_sketch,
+            sketch_secondary: self.selected_sketch_secondary,
+        };
+        self.selection_memo.remember(step, selection);
+    }
+
     /// [`Self::from_footprint`] for a switch to another footprint of the
     /// same document. The zoom pill's request carries over, so the canvas
     /// never sees its number go back and swallow a click, and so does the

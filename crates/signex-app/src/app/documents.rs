@@ -924,12 +924,7 @@ impl FootprintDocument {
     fn snapshot(&mut self) -> FootprintHistorySnapshot {
         self.last_step_id += 1;
         let step_id = std::sync::Arc::new(self.last_step_id);
-        let selection = crate::library::editor::footprint::state::selection_memo::StepSelection {
-            pad: self.state.selected_pad,
-            sketch: self.state.selected_sketch,
-            sketch_secondary: self.state.selected_sketch_secondary,
-        };
-        self.state.selection_memo.remember(&step_id, selection);
+        self.state.remember_selection(&step_id);
         FootprintHistorySnapshot {
             file: self.file.clone(),
             active_idx: self.active_idx,

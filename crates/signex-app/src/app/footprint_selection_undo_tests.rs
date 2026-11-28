@@ -191,7 +191,7 @@ fn coalesced_typing_gives_back_the_selection_before_the_first_keystroke() {
 
 #[test]
 fn undo_after_switching_footprint_gives_back_the_selection_of_the_step() {
-    use crate::library::editor::footprint::updates::apply_footprint_primitive_edit;
+    use crate::library::editor::footprint::apply_footprint_primitive_edit;
     use crate::library::messages::FootprintEditorMsg;
 
     let mut editor = editor_with_three_pads();
