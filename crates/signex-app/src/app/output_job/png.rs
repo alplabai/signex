@@ -74,6 +74,7 @@ impl Signex {
             .file_stem()
             .map(|stem| stem.to_string_lossy().into_owned())
             .unwrap_or_else(|| "sheet".to_string());
+        self.read_clock();
         let (work, variant) = self.sheet_png_work(source, &format!("{stem}.png"), dpi)?;
         self.refuse_while_project_moves(&folder, "export PNG pages to")
             .map_err(|e| e.to_string())?;

@@ -103,6 +103,8 @@ impl Signex {
             )
         })?;
         let folder = job_dir.join(relative);
+        // The pages print the date of this run (`read_clock`).
+        self.read_clock();
         let build = self.output_job_work(&scope.source, &run_plan.plan.outputs, &variant)?;
         let checks_job = run_plan.validate.then(|| {
             let board = run_plan

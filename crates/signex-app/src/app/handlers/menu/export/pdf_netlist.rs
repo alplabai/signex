@@ -167,6 +167,7 @@ impl Signex {
             }
         };
 
+        self.read_clock();
         let (ctx, issues) =
             match super::build_export_scope_for_source(&self.document_state, &source) {
                 Some(c) => c,

@@ -57,6 +57,7 @@ impl Signex {
         variant: Option<String>,
     ) -> Task<Message> {
         self.commit_drafts_in_scope_of(Some(&source));
+        self.read_clock();
         self.report_part_field_issues_in_scope_of(&source);
         let variants = self
             .document_state
@@ -503,6 +504,8 @@ impl Signex {
             }
         };
 
+        // The BOM prints the date of this export (`read_clock`).
+        self.read_clock();
         let (mut ctx, issues) =
             match super::build_bom_export_scope_for_source(&self.document_state, &source) {
                 Some(c) => c,

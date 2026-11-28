@@ -180,6 +180,8 @@ impl Signex {
         if let Some(missing) = missing_required(command, args) {
             return Some(refused(format!("`{id}` needs the operand `{missing}`")));
         }
+        // A computed token (`${CurrentDate}`) answers the time of the query.
+        self.read_clock();
         // Ids are made unique before anything is listed or addressed.
         self.reconcile_document_ids();
         match id {

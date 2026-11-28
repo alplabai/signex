@@ -324,3 +324,32 @@ fn the_row_needs_an_open_project() {
     let (outcome, _) = app.dispatch_command_reporting(&command, CommandArgs::none(), None);
     assert_eq!(outcome, CommandOutcome::Ran);
 }
+
+/// An Export Job's PDF prints the date of the run by the host clock
+/// (`IoPorts::clock`), read when the run builds its pages: two days give two
+/// PDFs, and the first day again gives the first PDF.
+#[test]
+fn the_job_pdf_prints_the_date_of_the_host_clock() {
+    use crate::app::handlers::menu::export::tests::exit_fixtures::fixture_noon;
+    use crate::io_ports::Clock;
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = project_app(dir.path());
+    let pdf_only = OutputJob {
+        outputs: vec![JobOutput::new("PDF", OutputKind::SchematicPdf)],
+        ..OutputJob::default()
+    };
+    let job = write_job(&dir.path().join("fab.snxout"), &pdf_only);
+    let operand = format!("path={}", job.display());
+    let mut pdf_on = |day| {
+        app.ui_state.io.clock = Clock::Fixed(fixture_noon(day));
+        let ran = headless(&mut app, "run_output_job", &[&operand]);
+        assert!(matches!(ran, CommandOutcome::Answered(_)), "{ran:?}");
+        files_in(&dir.path().join("out"))
+            .remove("ProjectA.pdf")
+            .expect("the PDF")
+    };
+    let first = pdf_on((2026, 11, 27));
+    let next = pdf_on((2026, 11, 28));
+    assert_ne!(first, next, "another day prints another date");
+    assert_eq!(pdf_on((2026, 11, 27)), first, "the same day, the same PDF");
+}
