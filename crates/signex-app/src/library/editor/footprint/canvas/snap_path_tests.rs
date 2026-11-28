@@ -414,6 +414,65 @@ fn a_click_on_a_pad_of_a_selection_selects_that_pad_alone() {
     }
 }
 
+/// Pads A (0) and B (1) with A selected; press on B under `modifiers`,
+/// apply what the press published, lift every key, release unmoved, and
+/// apply what the release published (#3233).
+fn click_b_lifting_the_key_first(modifiers: iced::keyboard::Modifiers) -> (Option<Msg>, Session) {
+    let mut s = Session::new(Footprint::empty("snap"));
+    s.add_pad((2.0, 2.0));
+    s.add_pad((6.0, 2.0));
+    s.apply(Msg::SelectPad(Some(0)));
+    s.cstate.current_modifiers = modifiers;
+    let pressed = s.press((6.1, 2.1));
+    if let Some(msg) = pressed.clone() {
+        s.apply(msg);
+    }
+    s.cstate.current_modifiers = iced::keyboard::Modifiers::empty();
+    if let Some(msg) = s.release((6.1, 2.1)) {
+        s.apply(msg);
+    }
+    (pressed, s)
+}
+
+#[test]
+fn a_shift_click_extends_even_when_shift_comes_up_before_the_button() {
+    let (pressed, s) = click_b_lifting_the_key_first(iced::keyboard::Modifiers::SHIFT);
+    assert!(
+        matches!(&pressed, Some(Msg::SelectPads(v)) if v == &vec![0, 1]),
+        "got {pressed:?}"
+    );
+    assert_eq!(s.editor.state.selected_pad_indices(), vec![0, 1]);
+}
+
+#[test]
+fn a_ctrl_click_toggles_even_when_ctrl_comes_up_before_the_button() {
+    let (pressed, mut s) = click_b_lifting_the_key_first(iced::keyboard::Modifiers::COMMAND);
+    assert!(
+        matches!(&pressed, Some(Msg::SelectPads(v)) if v == &vec![0, 1]),
+        "got {pressed:?}"
+    );
+    assert_eq!(s.editor.state.selected_pad_indices(), vec![0, 1]);
+    // And back out: a second Ctrl-click on B, key lifted first, drops it.
+    s.cstate.current_modifiers = iced::keyboard::Modifiers::COMMAND;
+    let pressed = s.press((6.1, 2.1)).expect("the press toggles B out");
+    s.apply(pressed);
+    s.cstate.current_modifiers = iced::keyboard::Modifiers::empty();
+    if let Some(msg) = s.release((6.1, 2.1)) {
+        s.apply(msg);
+    }
+    assert_eq!(s.editor.state.selected_pad_indices(), vec![0]);
+}
+
+#[test]
+fn a_plain_click_on_another_pad_replaces_the_selection() {
+    let (pressed, s) = click_b_lifting_the_key_first(iced::keyboard::Modifiers::empty());
+    assert!(
+        matches!(pressed, Some(Msg::SelectPad(Some(1)))),
+        "got {pressed:?}"
+    );
+    assert_eq!(s.editor.state.selected_pad_indices(), vec![1]);
+}
+
 #[test]
 fn placing_a_pad_on_a_pad_stacks_a_new_one() {
     let mut s = Session::new(Footprint::empty("snap"));

@@ -1214,6 +1214,11 @@ selected; Cut also needs no selected footprint to be locked. Paste and Paste
 Special are live once board objects were copied. Select All is live on any
 board and selects every footprint, track and via on a shown layer.
 
+On a footprint editor tab (#3233) Select All and Deselect All, from the Edit
+menu or their keys, run the footprint canvas menu's Selection ▸ rows: Select
+All selects every pad, Deselect All clears the editor's selection. The keys
+are the ones the active keymap binds and the canvas menu shows.
+
 Paste puts the copy on the pointer, on the board grid, and a click places it;
 Esc or a right-click drops it. Paste Special and Duplicate place the copy at
 once, shifted from where it was copied. Each edit is one undo step, and the

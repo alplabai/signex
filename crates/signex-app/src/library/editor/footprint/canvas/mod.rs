@@ -179,6 +179,10 @@ struct DragState {
     /// A pad drag carries the rest of the selection (#2726); `false` for
     /// an Alt drag and every other drag.
     with_selection: bool,
+    /// The modifiers held at the press. The release of an unmoved pad
+    /// click reads these, not the live ones, so a Shift or Ctrl lifted
+    /// before the button keeps the extend or toggle the press applied.
+    press_modifiers: keyboard::Modifiers,
 }
 
 impl Default for FootprintCanvasState {

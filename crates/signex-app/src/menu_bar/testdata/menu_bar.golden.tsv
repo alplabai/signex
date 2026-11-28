@@ -64,7 +64,7 @@ Edit/Origin/Set	item	Set	-	-	SetBoardOrigin	01100000	cmd:set_board_origin
 Edit/Origin/Reset	item	Reset	-	-	ResetBoardOrigin	01100000	cmd:reset_board_origin
 Edit/Origin/Snap to Outline Corner	item	Snap to Outline Corner	-	-	SnapBoardOriginToCorner	01100000	cmd:snap_board_origin_to_corner
 Edit/---	separator	-	-	-	-	-	-
-Edit/Select All	item	Select All	select_all	Mod+A	SelectAll	01100000	cmd:select_all
+Edit/Select All	item	Select All	select_all	Mod+A	SelectAll	01100010	cmd:select_all
 Edit/---	separator	-	-	-	-	-	-
 Edit/Find	item	Find	find	Mod+F	Find	11111111	cmd:find
 Edit/Find and Replace	item	Find and Replace	find_and_replace	Ctrl+H	Replace	11111111	cmd:find_and_replace

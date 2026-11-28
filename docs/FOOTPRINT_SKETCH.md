@@ -618,7 +618,9 @@ Options are session state, never saved, as on a board.
 A drag of a pad that is part of a multi-pad selection moves the whole
 selection by the grabbed pad's snapped offset, and the carried pads are no
 snap targets; Alt drags the grabbed pad alone. A press on such a pad keeps
-the selection; releasing it without a drag selects that pad alone. Place
+the selection; releasing it without a drag selects that pad alone.
+Ctrl/Cmd (toggle) and Shift (extend) act on the press, so a key lifted
+before the button keeps what the press did. Place
 Pad, Place Via and Place Hole over an existing pad place a new one there
 (stacked on the pad's centre when Pad Centers is on); Shift grabs the
 existing pad instead.

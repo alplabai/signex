@@ -21,14 +21,14 @@ use super::super::{DragState, FootprintCanvas, FootprintCanvasState};
 impl FootprintCanvas<'_> {
     /// A bare click (no drag) on a pad of a multi-pad selection: the press
     /// kept the selection for a drag, so the click now selects that pad
-    /// alone (#2726). `None` for a held Ctrl/Cmd or Shift, which edited the
-    /// selection on the press.
+    /// alone (#2726). `None` when Ctrl/Cmd or Shift was held at the press,
+    /// which edited the selection then, even if the key is up by now.
     pub(in crate::library::editor::footprint::canvas) fn released_on_group_pad(
         &self,
-        cstate: &FootprintCanvasState,
-        pad_idx: usize,
+        drag: &DragState,
     ) -> Option<canvas::Action<LibraryMessage>> {
-        let modifiers = cstate.current_modifiers;
+        let modifiers = drag.press_modifiers;
+        let pad_idx = drag.pad_idx;
         let selected = self.state.selected_pad_indices();
         if modifiers.command()
             || modifiers.shift()
