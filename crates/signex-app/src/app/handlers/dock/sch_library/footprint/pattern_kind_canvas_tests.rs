@@ -15,8 +15,8 @@ use signex_sketch::id::SketchEntityId;
 
 use super::tests::{app_on_a_linear, editor, is_idle, kind, send, sketch, sketch_mut};
 use crate::app::Signex;
-use crate::library::editor::footprint::canvas::{FootprintCanvas, FootprintCanvasState};
 use crate::library::editor::footprint::{EditorMode, SketchTool};
+use crate::library::editor::footprint::{FootprintCanvas, FootprintCanvasState};
 use crate::library::messages::{EditorMsg, LibraryMessage};
 use crate::library::state::EditorAddress;
 

@@ -2,7 +2,7 @@ use iced::Task;
 
 use super::super::*;
 use crate::active_bar::SelectionFilter;
-use crate::library::editor::footprint::state::FootprintContextAction as FpAction;
+use crate::library::editor::footprint::FootprintContextAction as FpAction;
 use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
 
 /// Return `true` iff the currently active filter set allows selecting the

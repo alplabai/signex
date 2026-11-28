@@ -50,11 +50,16 @@ fn symbol_editor_on_part_two() -> Signex {
 fn footprint_editor_with_history() -> Signex {
     let mut app = footprint_editor_app();
     let path = std::path::PathBuf::from("/w/menu-rows.snxfpt");
-    app.document_state
-        .footprint_editors
-        .get_mut(&path)
-        .unwrap()
-        .push_history();
+    // One pad, so Select All has something to select (#3233).
+    let mut footprint = signex_library::Footprint::empty("f");
+    footprint.pads.push(signex_library::Pad {
+        number: "1".into(),
+        ..signex_library::Pad::default()
+    });
+    let file = signex_library::FootprintFile::from_footprint(footprint);
+    let editor = app.document_state.footprint_editors.get_mut(&path).unwrap();
+    *editor = crate::app::FootprintDocument::new(path.clone(), file);
+    editor.push_history();
     app
 }
 
@@ -171,10 +176,11 @@ const KNOWN_INERT: &[(&str, &[&str])] = &[];
 /// window canvas, the symbols of every sheet, the revisions of every sheet
 /// and board, which a rotate or a mirror moves while it keeps the counts
 /// (#2240), the board selection, which Select All moves (#2361), and the
-/// board's 3D view, which View ▸ 3D View opens (#2390).
+/// board's 3D view, which View ▸ 3D View opens (#2390), and the pads a
+/// footprint editor has selected, which Select All moves there (#3233).
 /// Compared before and after within one app only: revisions are
 /// process-wide counters.
-fn window_state(app: &Signex) -> (Vec<(usize, f64)>, usize, u64, usize, bool) {
+fn window_state(app: &Signex) -> (Vec<(usize, f64)>, usize, u64, usize, bool, usize) {
     let canvases = app
         .interaction_state
         .canvases
@@ -196,7 +202,20 @@ fn window_state(app: &Signex) -> (Vec<(usize, f64)>, usize, u64, usize, bool) {
         .sum();
     let board_selected = app.interaction_state.pcb_selection.selection().len();
     let board_3d = app.interaction_state.board_3d.is_some();
-    (canvases, symbols, revisions, board_selected, board_3d)
+    let footprint_pads_selected = app
+        .document_state
+        .footprint_editors
+        .values()
+        .map(|editor| editor.state.selected_pad_indices().len())
+        .sum();
+    (
+        canvases,
+        symbols,
+        revisions,
+        board_selected,
+        board_3d,
+        footprint_pads_selected,
+    )
 }
 
 /// Live rows of `build`'s app whose click moved nothing and said nothing in
