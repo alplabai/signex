@@ -1,10 +1,12 @@
 # ADR-0007 — The application core carries no cloud vocabulary; what a hosted service may rely on
 
 - **Status:** Proposed
+- **Amended 2026-11-27** ([maintainer decision](https://github.com/alplabai/signex/issues/2326#issuecomment-7219395928), Hakan): the core is shell-agnostic; whatever shell hosts it (the desktop app, a hosted service's server, a future web or mobile front end) wraps it with its own adapters (D7). D4, D5 and the Consequences carry a note where they read otherwise. D7 is decided; the rest of the record stays proposed.
 - **Scope:** what the shared code, and the application core of ADR-0006 in particular, may and may not contain so that a hosted service built outside this repository can use it:
   - no account, plan, licence or AI type in the core
   - git as the only remote-storage path
-  - a hosted agent entering through the agent path
+  - a hosted agent entering through the agent path (in a desktop window; in another shell, see D7)
+  - the core hosted by any shell, a hosted server among them, each with its own adapters (amended 2026-11-27, D7)
   - a read-only browser viewer built from the DOMAIN crates
   - what the core must keep possible for real-time co-editing later
 - **Builds on:** [ADR-0006](adr-0006-application-core.md) (one application core, driving and driven ports; accepted, #2327), [ADR-0003](adr-0003-deferred-work-and-consistent-history.md) (owed work, late results, undo snapshots), [ADR-0001](adr-0001-app-structure-and-boundaries.md) A3.2 (tool ports) and D8 (the agent channel)
@@ -19,7 +21,7 @@ Signex Community (FSL-1.1-ALv2) is offline forever: nothing is locked and there 
 
 `docs/REPOSITORY_AND_CODEBASE.md` §3.3 already states the hard rule: "Hosted services, paid infrastructure and account-backed multi-user state are not part of this repository, and the editor engine must not depend on them."
 
-A hosted service will still build on the code this repository ships: the command vocabulary, the agent path, the version-control capability and the DOMAIN crates. Without a recorded boundary, each feature such a service needs could add a port, a type or a check to the code every user runs.
+A hosted service will still build on the code this repository ships: the command vocabulary, the agent path, the version-control capability and the DOMAIN crates, and, per D7, the core crate itself. Without a recorded boundary, each feature such a service needs could add a port, a type or a check to the code every user runs.
 
 ADR-0006 already says where outside concerns belong:
 - **Driven side:** "The core defines the port types: `Effect`, `EffectResult`, and the storage, version-control, network and clock capabilities they name. A *host* implements them" (Driven ports).
@@ -55,6 +57,7 @@ This record applies those clauses to a hosted service.
 ### D4. A hosted agent is a driving adapter, with no privileges a person lacks
 
 - A hosted agent's tool calls enter the GUI loop exactly as the agent socket's do: `execute` and `query` with an agent origin, through the ADR-0001 D8 channel.
+  - *Amended 2026-11-27 (D7): this holds for an agent working in a running desktop window. Where another shell hosts the core, a hosted server for example, a hosted agent is one of that shell's driving adapters. It calls the same driving ports with the same meaning (ADR-0006 H4), with no GUI loop in between.*
 - The core gains no AI type. The allowlist of commands an agent may run stays policy, as in ADR-0006.
 - **Provenance.** Every command carries its origin: a person, an agent or, once the plugin host exists, an extension. The origin also names the acting user, the person on whose behalf the command runs. Agent work is attributed to that user:
   - a commit made from agent changes uses the user's git identity, never a bot identity;
@@ -79,6 +82,7 @@ This record applies those clauses to a hosted service.
   - **#2431** keeps them that way: no disk, clock or randomness in DOMAIN crates, enforced by `disallowed-methods` and the `wasm32` check gate.
 - **Storage access from the browser is coarse-grained.** The viewer asks for "the project at commit X" in one request, as a pack or archive of that commit, not as per-file reads.
 - **The same rule binds a future browser host.** If a browser host for `AppCore` is ever scheduled, its storage effect is that same project fetch. ADR-0006's `Effect` / `EffectResult` + `complete` model is already asynchronous, so such a host would fit without core changes. This record schedules no such host.
+- *Amended 2026-11-27 (D7): D5 does not schedule a browser host now. The core stays shell-agnostic, so a browser, mobile or server host stays possible (D7).*
 
 ### D6. Real-time co-editing is not designed here; the core keeps it possible
 
@@ -94,6 +98,16 @@ How co-editing works, and who builds it, is outside this repository. These point
    - **Why it is not a cloud port (D2):** it is a value that names where a command came from, as the agent origin does. It names no service, transport or account, carries only opaque peer and session ids, and any relay can fill it in, including a test or a LAN one. The core still never calls out.
 5. **Leases and provenance** as D4 states them hold for every peer, person or agent.
 6. **Undo becomes origin-scoped inverse deltas** instead of whole-document snapshots. Restoring a snapshot in a shared document would undo other people's work. This changes ADR-0003 D3, so **it is a separate ADR**; this record does not amend ADR-0003.
+
+### D7. The core is shell-agnostic (amended 2026-11-27)
+
+[Maintainer decision 2026-11-27](https://github.com/alplabai/signex/issues/2326#issuecomment-7219395928) (Hakan). ADR-0006, "Core and adapter state", holds the rules (H1–H9, S1–S4).
+- **One core, any shell.** The core crate is embedded by whatever shell hosts it: the desktop app, a hosted service's server, a future web or mobile front end. Each shell wraps it with its own adapters. A hosted server is one such shell, and a REST API over the core is just another shell.
+- **Which shells ship, and when, is a product decision,** not this record's. ADR-0006 epic D10 still holds: no web front end is scheduled.
+- **Each shell is the configurator** (ADR-0006 H6). It creates the core instances and its adapters and connects them. Instances are independent and share no global state (S2).
+- **What the core needs for it** is already in ADR-0006: a separate crate with no GUI, GPU or runtime dependency (S1, slice 9), no host assumptions (S3) and locale-neutral output (S4).
+- **What stays with the hosting service.** Multi-user editing, presence and authorisation are part of the hosting service's design and out of scope here. D1 and D2 still hold: that service's adapters hold accounts, plans and entitlements, and the core names none of them. D6 lists what the core keeps possible for co-editing.
+- A hosted service's code is built outside this repository. This repository ships the core crate it embeds; the licence note under "Consequences" says which way the dependency points.
 
 ## Changes to ADR-0006
 
@@ -142,10 +156,11 @@ The PR also adds an "Amended" header line to ADR-0006. If this record is not acc
 
 - **The licence boundary is the process boundary.**
   - This repository stays FSL-1.1-ALv2 and complete offline, and it never links code from a hosted service.
+  - *Amended 2026-11-27 (D7): a shell that hosts the core, a hosted server included, links the core crate in its own process. The boundary is the dependency direction: the shell depends on this repository's crates, and this repository never depends on or links a hosted service's code.*
   - Community users can use git remotes on any host with a token.
 - `AppCore` stays free of account, plan and AI types. The ADR-0006 guard needs no new rule for this record.
 - A modified client gains nothing, because only the service that grants an entitlement can enforce it.
-- Agents, hosted or local, reuse the command vocabulary and the agent path, with the same leases and the same attribution as a person. Neither adds an event bus (ADR-0006 epic D12).
+- Agents, hosted or local, reuse the command vocabulary and the agent path (in a desktop window; in another shell, see D7), with the same leases and the same attribution as a person. Neither adds an event bus (ADR-0006 epic D12).
 - **What the shared code must carry:**
   - the D6 points 1–4, added by the ADR-0006 slices that first need them;
   - a follow-up ADR for origin-scoped undo;
