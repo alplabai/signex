@@ -71,7 +71,10 @@ fn executable_name(stem: &str) -> String {
 /// Read the state of the library folder `dir` against `tools`. Blocking:
 /// stats the folder and runs a `git status`.
 pub fn read_library_vcs_state(dir: &Path, tools: ToolsOnPath) -> LibraryVcsState {
-    if !dir.join(".git").exists() {
+    // A folder git finds no repository in is off; any other open failure
+    // is a repository that needs attention.
+    let opened = git2::Repository::open(dir);
+    if matches!(&opened, Err(e) if e.code() == git2::ErrorCode::NotFound) {
         return LibraryVcsState::Off;
     }
     let attention = LibraryVcsState::NeedsAttention;
@@ -81,7 +84,7 @@ pub fn read_library_vcs_state(dir: &Path, tools: ToolsOnPath) -> LibraryVcsState
     if uses_lfs(dir) && !tools.git_lfs {
         return attention(VcsAttention::LfsNotFound);
     }
-    let changed = git2::Repository::open(dir)
+    let changed = opened
         .map_err(|e| e.message().to_owned())
         .and_then(|repo| uncommitted_paths(&repo).map_err(|e| e.to_string()));
     match changed {

@@ -21,7 +21,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 
 use crate::adapter::{LibraryAdapter, LibraryError};
 use crate::alternate_supply::{AlternateSupplyUpdate, FetchedSupply};
@@ -236,11 +236,12 @@ pub fn refresh_pricing_for_rows(
                 }
                 continue;
             }
+            // One clock read per part asked, for both kinds of lookup.
+            let now = Utc::now();
             let fetched = match t.alternate {
-                None => fetch_one(client.as_ref(), t).map(|u| report.updates.push(u)),
-                Some(i) => {
-                    fetch_alternate(client.as_ref(), t, i).map(|u| report.alternate_updates.push(u))
-                }
+                None => fetch_one(client.as_ref(), t, now).map(|u| report.updates.push(u)),
+                Some(i) => fetch_alternate(client.as_ref(), t, i, now)
+                    .map(|u| report.alternate_updates.push(u)),
             };
             if let Err((kind, detail)) = fetched {
                 if matches!(kind, FailureKind::Auth | FailureKind::RateLimited) {
@@ -299,6 +300,7 @@ pub fn refresh_library_pricing(
 fn fetch_one(
     client: &dyn DistributorAdapter,
     t: &Target<'_>,
+    now: DateTime<Utc>,
 ) -> Result<PricingUpdate, (FailureKind, String)> {
     let mpn = t.row.primary_mpn.mpn.trim();
     // Both SKU lookups need only the SKU; the MPN is required to price a
@@ -306,7 +308,6 @@ fn fetch_one(
     if mpn.is_empty() && t.sku.is_none() {
         return Err((FailureKind::NoMpn, "no MPN on this row".into()));
     }
-    let now = Utc::now();
     let part = DistributorPart {
         mpn: mpn.to_string(),
         manufacturer: t.row.primary_mpn.manufacturer.clone(),
@@ -343,6 +344,7 @@ fn fetch_alternate(
     client: &dyn DistributorAdapter,
     t: &Target<'_>,
     index: usize,
+    now: DateTime<Utc>,
 ) -> Result<AlternateSupplyUpdate, (FailureKind, String)> {
     let alternate = &t.row.alternates[index];
     let mpn = alternate.mpn.trim();
@@ -356,7 +358,7 @@ fn fetch_alternate(
         pricing: None,
         stock: None,
         source: client.source(),
-        captured_at: Utc::now(),
+        captured_at: now,
         extra: BTreeMap::new(),
     };
     let named =
