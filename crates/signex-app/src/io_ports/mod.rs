@@ -6,9 +6,11 @@
 //! (`scripts/check_io_ports.sh`). A headless run takes picker answers from
 //! plain arguments and refuses every launch, reporting why.
 
+mod clock;
 mod native;
 mod picker;
 
+pub use clock::Clock;
 pub(crate) use picker::replace_refusal;
 pub use picker::{FileDialog, HeadlessAnswers, Picker};
 
@@ -28,6 +30,8 @@ pub struct IoPorts {
     pub picker: Picker,
     pub opener: Opener,
     pub git: GitCommits,
+    /// The wall clock the runtime reads (`Clock::System` but in a test).
+    pub clock: Clock,
 }
 
 impl IoPorts {
@@ -38,6 +42,7 @@ impl IoPorts {
             picker: Picker::Headless(answers),
             opener: Opener::Refuse,
             git: GitCommits::Skip,
+            clock: Clock::System,
         }
     }
 }

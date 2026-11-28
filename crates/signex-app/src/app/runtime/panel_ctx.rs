@@ -327,7 +327,7 @@ impl Signex {
         // The clock is read here, in the runtime layer, and kept in state:
         // `${CurrentTime}` shows the time the panel was last built, to the
         // minute, and `view` never reads the clock.
-        self.document_state.times.now = Some(chrono::Local::now());
+        self.document_state.times.now = Some(self.ui_state.io.clock.now());
         // The app-wide requests (project probe, row summaries, Navigator
         // assembly, a pending profile update) belong to the main window. A
         // window's refresh runs with its sheet swapped in and must not

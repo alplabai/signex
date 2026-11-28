@@ -18,9 +18,11 @@ use std::path::{Path, PathBuf};
 use signex_types::schematic::{HAlign, Point, TextNote, VAlign};
 
 use super::base_variant::export;
+use super::exit_fixtures::fixture_noon;
 use super::open_with;
 use super::variant_bom::fixture;
 use crate::app::Signex;
+use crate::io_ports::Clock;
 
 const GOLDEN_DIR: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
@@ -43,9 +45,15 @@ const DRAWING_OPERATORS: &[&str] = &[
     "ET", "Tf", "Td", "TD", "Tm", "T*", "BDC", "EMC", "Do",
 ];
 
-/// The fixture project with a note on `top` that prints the variant.
+/// The day the goldens were made: the title block's empty Date prints it.
+const GOLDEN_DAY: (i32, u32, u32) = (2026, 11, 27);
+
+/// The fixture project with a note on `top` that prints the variant, its
+/// clock pinned at [`GOLDEN_DAY`].
 fn project() -> Signex {
     let mut app = fixture();
+    app.ui_state.io.clock = Clock::Fixed(fixture_noon(GOLDEN_DAY));
+    app.document_state.times.now = Some(fixture_noon(GOLDEN_DAY));
     let top = app
         .document_state
         .active_path
@@ -180,6 +188,33 @@ fn each_variant_exports_its_golden_pdf() {
         assert_eq!(pdf, again, "the {name} PDF is not deterministic");
         assert_golden(name, &pdf);
     }
+}
+
+/// The date the PDF prints is the host clock's (`IoPorts::clock`), never the
+/// wall clock read inside the export: two days give two dates, the other
+/// lines otherwise the same, and the golden's day prints its golden.
+#[test]
+fn the_printed_date_comes_from_the_host_clock() {
+    let on = |day| {
+        let mut app = project();
+        app.ui_state.io.clock = Clock::Fixed(fixture_noon(day));
+        golden_text(&export(&mut app, None))
+    };
+    let golden_day = on(GOLDEN_DAY);
+    let next_day = on((2026, 11, 28));
+    let changed: Vec<(&str, &str)> = golden_day
+        .lines()
+        .zip(next_day.lines())
+        .filter(|(a, b)| a != b)
+        .collect();
+    assert!(!changed.is_empty(), "another day prints another date");
+    // Only the date moves: each changed line keeps its glyph count.
+    assert!(
+        changed.iter().all(|(a, b)| a.len() == b.len()),
+        "{changed:#?}"
+    );
+    assert_eq!(golden_day.lines().count(), next_day.lines().count());
+    assert_golden("base", &golden_day);
 }
 
 /// The goldens say what the variants are for, so a regenerated golden that

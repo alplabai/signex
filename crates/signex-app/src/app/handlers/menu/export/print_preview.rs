@@ -81,7 +81,7 @@ impl Signex {
         let page_setup = crate::app::state::PageSetupInputs::from_options(&pdf_opts);
         let mut dialog = crate::app::state::PdfDialogState::default();
         dialog.watermark.revision = ctx.metadata.revision.clone();
-        dialog.watermark.date = export_date();
+        dialog.watermark.date = export_date(&self.ui_state.io.clock);
         if let Some(rgb) = remembered_colour {
             dialog.watermark.pick_colour(rgb);
         }
@@ -222,7 +222,7 @@ impl Signex {
         // The watermark's date line carries the day of the export.
         if let Some(preview) = self.document_view.preview.as_mut() {
             preview.export_status = None;
-            preview.dialog.watermark.date = export_date();
+            preview.dialog.watermark.date = export_date(&self.ui_state.io.clock);
         }
         // Pull the (possibly edited) options out of the live preview
         // and drive the OS save-file dialog directly. The intermediate
@@ -616,9 +616,10 @@ impl Signex {
     }
 }
 
-/// Today as `YYYY-MM-DD`, the date the watermark's revision line prints.
-pub(super) fn export_date() -> String {
-    chrono::Local::now().format("%Y-%m-%d").to_string()
+/// Today by `clock` as `YYYY-MM-DD`, the date the watermark's revision line
+/// prints.
+pub(super) fn export_date(clock: &crate::io_ports::Clock) -> String {
+    clock.now().format("%Y-%m-%d").to_string()
 }
 
 /// The preview placeholder for a page range that selects no printed page.

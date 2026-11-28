@@ -639,7 +639,7 @@ impl Signex {
                 tabs: vec![],
                 active_tab: 0,
                 engines: std::collections::HashMap::new(),
-                times: crate::app::state::DocumentTimes::at(chrono::Local::now()),
+                times: crate::app::state::DocumentTimes::at(crate::io_ports::Clock::System.now()),
                 symbol_editors: std::collections::HashMap::new(),
                 footprint_editors: std::collections::HashMap::new(),
                 active_path: None,

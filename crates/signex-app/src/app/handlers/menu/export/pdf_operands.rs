@@ -272,7 +272,11 @@ pub(crate) fn export_schematic_pdf(app: &mut Signex, args: &CommandArgs) -> Ran 
         return refused(Translatable::new(ids::PDF_PREVIEW_COMMAND_NO_SHEET));
     }
     let revision = ctx.metadata.revision.clone();
-    let watermark = match watermark_of(args, revision, super::print_preview::export_date()) {
+    let watermark = match watermark_of(
+        args,
+        revision,
+        super::print_preview::export_date(&app.ui_state.io.clock),
+    ) {
         Ok(watermark) => watermark,
         Err(reason) => return refused(reason),
     };
