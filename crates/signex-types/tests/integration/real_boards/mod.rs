@@ -230,7 +230,9 @@ fn real_board_projects_round_trip_and_carry_net_classes() {
     for real in generate() {
         let path = real_dir().join(format!("{}.snxprj", real.name));
         let bytes = fs::read(&path).expect("project file");
-        let mut data = parse_project_bytes(&path, &bytes).expect("project parses");
+        let mut data =
+            parse_project_bytes(&path, &bytes, signex_types::project::files_on_disk(&path))
+                .expect("project parses");
         data.dir = String::new();
         assert_eq!(encode_project(&data).unwrap(), bytes, "{}", real.name);
         assert!(

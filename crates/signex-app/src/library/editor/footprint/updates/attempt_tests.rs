@@ -80,7 +80,7 @@ fn a_rejected_edit_leaves_undo_redo_and_dirty_untouched() {
     for _ in 0..FootprintDocument::HISTORY_DEPTH {
         editor.push_history();
     }
-    editor.history.undo_steps_mut()[0].selected_pad = Some(7);
+    editor.history.undo_steps_mut()[0].active_idx = 7;
     let spare = editor.begin_edit();
     editor.history.redo_steps_mut().push(spare);
     editor.set_dirty(false);
@@ -90,8 +90,8 @@ fn a_rejected_edit_leaves_undo_redo_and_dirty_untouched() {
     assert!(!editor.state.conflict.is_empty(), "the edit was rejected");
     assert_eq!(editor.history.undo_len(), FootprintDocument::HISTORY_DEPTH);
     assert_eq!(
-        editor.history.undo_steps()[0].selected_pad,
-        Some(7),
+        editor.history.undo_steps()[0].active_idx,
+        7,
         "the oldest undo step was not evicted"
     );
     assert_eq!(

@@ -62,6 +62,9 @@ pub struct Solver {
     /// `|r|² < tolerance²` declares convergence (the linear residual norm is
     /// compared against `tolerance`). Default 1e-12.
     pub tolerance: f64,
+    /// The host's clock for [`lm::SolveResult::elapsed_ms`] (#2431). Default
+    /// [`lm::NO_CLOCK`]: a host that shows the time passes its own.
+    pub clock: lm::Clock,
 }
 
 impl Default for Solver {
@@ -70,6 +73,7 @@ impl Default for Solver {
             work_budget: lm::DEFAULT_WORK_BUDGET,
             max_iters: 100,
             tolerance: 1e-12,
+            clock: lm::NO_CLOCK,
         }
     }
 }
@@ -134,7 +138,14 @@ impl Solver {
         } else {
             solve_lm_keeping_state
         };
-        solve(sketch, params, meter, self.tolerance, self.max_iters)
+        solve(
+            sketch,
+            params,
+            meter,
+            self.tolerance,
+            self.max_iters,
+            self.clock,
+        )
     }
 
     /// A stalled first run is retried from a slightly moved start (a
@@ -161,6 +172,7 @@ impl Solver {
                     self.tolerance,
                     self.max_iters,
                     result,
+                    self.clock,
                 );
             }
             Err(retry) if retry.stalled => *retry,
