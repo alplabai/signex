@@ -408,7 +408,10 @@ Selection By…** (type an X and a Y offset in mm, then **Move**), **Align ▸**
 single align and distribute operations, and **Align To Grid**), **Rotate
 Selection** (`Space`), **Flip Selection** (`X`), **Rectangular Pattern…**,
 **Edit Sketch**, Properties, Pad Actions, Cut, Copy, Paste (while a pad is
-on the clipboard), Find Similar, and **Delete** last. In the symbol editor the menu starts with **Place ▸**, then
+on the clipboard), Find Similar, and **Delete** last. On an empty spot the
+menu's **Selection ▸** rows run from their keys too: **Select All** (`Ctrl+A`)
+selects every pad and **Deselect All** (`Ctrl+Shift+A` in the Classic profile)
+clears the selection. In the symbol editor the menu starts with **Place ▸**, then
 **Rotate Selection** and **Align ▸ Align To Grid**, then Join into Polygon,
 Select All, Deselect All, Fit to Window and **Delete**.
 

@@ -738,7 +738,8 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
         ActiveBar,
         &[ActiveDocument, Selection],
     ),
-    (&["unselect_all"], Bridge, &[Selection]),
+    // A footprint editor tab clears its own selection (#3233).
+    (&["unselect_all"], Bridge, &[ActiveDocument, Selection]),
     // The placement handlers: a point must be where a click lands (grid,
     // and for a wire the electrical grid of the edited sheet's engine, #2542);
     // what the operands leave out comes from the project defaults, never the

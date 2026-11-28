@@ -43,6 +43,8 @@ pub mod editing_commands;
 pub mod erc;
 pub mod find_replace;
 pub mod find_similar;
+#[cfg(test)]
+mod footprint_select_all_tests;
 pub(crate) mod grid_snap_popover;
 mod intro_wrap;
 pub(in crate::app) mod keymap_mod_prompt;
